@@ -1,0 +1,2899 @@
+/**
+ * OWWA Inventory System — UI Theme
+ * Brand: Navy #003366 · Crimson #c41e3a
+ * Style: Clean, modern, government-grade admin panel.
+ * Design: Clear hierarchy, generous spacing, readable forms and tables.
+ */
+
+/* ═══════════════════════════════════════════════════════════
+   DESIGN TOKENS (used across inventory UI)
+═══════════════════════════════════════════════════════════ */
+:root {
+    --owwa-radius-sm: 0.5rem;
+    --owwa-radius-md: 0.75rem;
+    --owwa-radius-lg: 1rem;
+    --owwa-radius-xl: 1.25rem;
+    --owwa-shadow-card: 0 1px 3px 0 rgb(0 0 0 / 0.05), 0 1px 2px -1px rgb(0 0 0 / 0.05);
+    --owwa-shadow-card-hover: 0 4px 12px 0 rgb(0 0 0 / 0.08);
+    --owwa-space-content: 1rem;
+    --owwa-space-section: 1rem;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   BASE
+═══════════════════════════════════════════════════════════ */
+.fi-body,
+.fi-main-ctn {
+    background-color: #eef2f6 !important;
+}
+
+/* Main content area — full width so dashboard stats/charts use available space */
+.fi-main {
+    width: 100% !important;
+    min-width: 0 !important;
+    padding-left: var(--owwa-space-content) !important;
+    padding-right: var(--owwa-space-content) !important;
+    padding-bottom: 0.75rem !important;
+    padding-top: 0.5rem !important;
+    max-width: 1600px !important;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   TOPBAR
+═══════════════════════════════════════════════════════════ */
+.fi-topbar {
+    background: linear-gradient(90deg, #003366 0%, #004d99 45%, #8b1538 80%, #c41e3a 100%) !important;
+    border-bottom: none !important;
+    box-shadow: 0 1px 4px 0 rgb(0 0 0 / 0.18) !important;
+}
+
+.fi-topbar nav,
+.fi-topbar .fi-topbar-logo-ctn,
+.fi-topbar a,
+.fi-topbar button {
+    color: rgba(255,255,255,0.95) !important;
+}
+
+.fi-topbar .fi-logo {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 1rem;
+    padding-left: 3.4rem;
+    color: #fff !important;
+    font-weight: 700 !important;
+}
+
+.fi-topbar .fi-logo::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    width: 2.9rem;
+    height: 2.9rem;
+    border-radius: 9999px;
+    background-image: url('/images/owwa-4a_logo_transparent.png');
+    background-size: cover;
+    background-position: center;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   SIDEBAR
+═══════════════════════════════════════════════════════════ */
+.fi-sidebar {
+    background-color: #ffffff !important;
+    border-right: 1px solid #e2e8f0 !important;
+}
+
+.fi-sidebar .fi-sidebar-header,
+.fi-sidebar .fi-sidebar-header-ctn {
+    display: none !important;
+}
+
+.fi-sidebar .fi-sidebar-nav {
+    padding: 0.75rem 0.5rem !important;
+}
+
+.fi-sidebar a {
+    color: #374151 !important;
+    border-radius: 0.5rem !important;
+    font-size: 0.9375rem !important;
+    font-weight: 400 !important;
+}
+
+.fi-sidebar a:hover {
+    background-color: #f1f5f9 !important;
+    color: #003366 !important;
+}
+
+.fi-sidebar .fi-sidebar-item-button.fi-active,
+.fi-sidebar [aria-current="page"] {
+    background-color: #eff6ff !important;
+    color: #1d4ed8 !important;
+    font-weight: 600 !important;
+}
+
+.fi-sidebar .fi-sidebar-group-button {
+    color: #9ca3af !important;
+    font-size: 0.6875rem !important;
+    font-weight: 700 !important;
+    letter-spacing: 0.08em !important;
+    text-transform: uppercase !important;
+    padding: 0.5rem 0.75rem 0.25rem !important;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   PAGE HEADER
+═══════════════════════════════════════════════════════════ */
+.fi-header {
+    padding-top: 0.5rem !important;
+    padding-bottom: 0.5rem !important;
+}
+
+.fi-header-heading {
+    font-size: 1.25rem !important;
+    font-weight: 600 !important;
+    letter-spacing: -0.02em !important;
+    color: #111827 !important;
+}
+
+.fi-header-description,
+[class*="subheading"] {
+    font-size: 0.8125rem !important;
+    color: #6b7280 !important;
+    margin-top: 0.125rem !important;
+    font-weight: 400 !important;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   CARDS / SECTIONS (scoped to forms/resources to avoid affecting dashboard)
+═══════════════════════════════════════════════════════════ */
+.fi-fo-form .fi-section {
+    background-color: #ffffff !important;
+    border: 1px solid #e5e7eb !important;
+    border-radius: 0.5rem !important;
+    padding: 0.5rem 0.75rem !important;
+    box-shadow: none !important;
+}
+
+.fi-fo-form .fi-section-header-heading {
+    font-size: 0.875rem !important;
+    font-weight: 600 !important;
+    color: #111827 !important;
+}
+
+.fi-fo-form .fi-section-header-description {
+    font-size: 0.75rem !important;
+    color: #6b7280 !important;
+    margin-top: 0.125rem !important;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   FORM INPUTS — readable labels & placeholders, no shrinking
+═══════════════════════════════════════════════════════════ */
+.fi-input,
+.fi-fo-text-input,
+input[type="text"].fi-input,
+input[type="email"].fi-input,
+input[type="number"].fi-input,
+input[type="password"].fi-input,
+textarea.fi-input,
+select.fi-input {
+    border-color: #d1d5db !important;
+    border-radius: 0.5rem !important;
+    font-size: 0.9375rem !important;
+    line-height: 1.4 !important;
+    color: #0f172a !important;
+    background-color: #ffffff !important;
+    min-height: 2.25rem !important;
+    padding: 0.4rem 0.75rem !important;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease !important;
+}
+
+textarea.fi-input {
+    min-height: 3.5rem !important;
+    padding: 0.4rem 0.75rem !important;
+}
+
+/* Select trigger (Filament dropdown button) — readable height and text */
+[data-slot="select-trigger"],
+button[role="combobox"],
+.fi-fo-select-trigger {
+    min-height: 2.25rem !important;
+    padding: 0.4rem 0.75rem !important;
+    font-size: 0.9375rem !important;
+}
+
+.fi-input::placeholder,
+.fi-fo-text-input::placeholder {
+    font-size: 0.9375rem !important;
+    color: #9ca3af !important;
+}
+
+.fi-input:focus,
+.fi-fo-text-input:focus {
+    border-color: #003366 !important;
+    box-shadow: 0 0 0 3px rgba(0, 51, 102, 0.1) !important;
+    outline: none !important;
+}
+
+/* Labels: prevent shrinking, allow wrap */
+.fi-fo-field-wrp-label label,
+.fi-fo-field-label,
+.fi-fo-field-wrp .fi-fo-field-label {
+    font-size: 0.875rem !important;
+    font-weight: 500 !important;
+    color: #374151 !important;
+    min-height: 0 !important;
+    white-space: normal !important;
+    line-height: 1.35 !important;
+    display: block !important;
+}
+
+.fi-fo-helper-text {
+    font-size: 0.75rem !important;
+    color: #6b7280 !important;
+    margin-top: 0.2rem !important;
+}
+
+/* Field wrapper: enough space for label + input, no squashing */
+.fi-fo-field-wrp {
+    min-width: 0 !important;
+}
+
+/* Required asterisk: hidden so forms rely on section/helper text instead */
+.fi-fo-field-label-required-mark {
+    display: none !important;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   CREATE/EDIT/VIEW FORM LAYOUT — card sections, two-column grid
+═══════════════════════════════════════════════════════════ */
+/* Form wrapper: full width, sections stack vertically */
+.fi-fo-form {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 0.75rem !important;
+    max-width: none !important;
+}
+
+.fi-schema + .fi-schema,
+.fi-section + .fi-section {
+    margin-top: 0 !important;
+}
+
+/* Each section = card with left accent bar (form pages only — NOT dashboard) */
+.fi-fo-form .fi-section {
+    background-color: #ffffff !important;
+    border: 1px solid #e5e7eb !important;
+    border-radius: 0.5rem !important;
+    padding: 0.75rem 1rem !important;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.04) !important;
+    position: relative !important;
+    overflow: hidden !important;
+}
+
+.fi-fo-form .fi-section::before {
+    content: '' !important;
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    bottom: 0 !important;
+    width: 4px !important;
+    background: #1e40af !important;
+}
+
+.fi-fo-form .fi-section-header {
+    padding-bottom: 0.5rem !important;
+    margin-bottom: 0.75rem !important;
+    border-bottom: 1px solid #e5e7eb !important;
+}
+
+.fi-fo-form .fi-section-content {
+    padding-top: 0 !important;
+}
+
+/* Force two-column grid for section content in FORMS ONLY (desktop); min width so inputs don't shrink */
+.fi-fo-form .fi-section-content > div,
+.fi-fo-form .fi-section-content .grid {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(10rem, 1fr)) !important;
+    gap: 0.75rem 1rem !important;
+}
+
+@media (max-width: 768px) {
+    .fi-fo-form .fi-section-content > div,
+    .fi-fo-form .fi-section-content .grid {
+        grid-template-columns: 1fr !important;
+    }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   MODAL FORMS — compact, borderless layout
+═══════════════════════════════════════════════════════════ */
+
+/* Remove cards / borders / accent bars inside modals */
+.fi-modal .fi-fo-form .fi-section {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    overflow: visible !important;
+}
+.fi-modal .fi-fo-form .fi-section::before {
+    display: none !important;
+}
+
+/* Section titles: small, tight */
+.fi-modal .fi-fo-form .fi-section-header {
+    padding-bottom: 0.25rem !important;
+    margin-bottom: 0.375rem !important;
+    border-bottom: none !important;
+}
+.fi-modal .fi-fo-form .fi-section-header-heading {
+    font-size: 0.8125rem !important;
+    font-weight: 600 !important;
+    color: #374151 !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.04em !important;
+}
+.fi-modal .fi-fo-form .fi-section-header-description {
+    display: none !important;
+}
+
+/* Grid inside sections */
+.fi-modal .fi-fo-form .fi-section-content > div,
+.fi-modal .fi-fo-form .fi-section-content .grid {
+    gap: 0.5rem 0.75rem !important;
+}
+
+/* Spacing between sections — a subtle divider line */
+.fi-modal .fi-fo-form .fi-section + .fi-section {
+    margin-top: 0.625rem !important;
+    padding-top: 0.625rem !important;
+    border-top: 1px solid #e5e7eb !important;
+}
+
+/* Reduce field label/input gap */
+.fi-modal .fi-fo-field-wrp {
+    gap: 0.125rem !important;
+}
+
+/* Make sections flow in single column inside modal (no side-by-side sections) */
+.fi-modal .fi-fo-form > .fi-sc-has-gap,
+.fi-modal .fi-fo-form .fi-schema {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 0 !important;
+}
+
+/* Compact modal body padding */
+.fi-modal .fi-modal-content {
+    padding: 0.75rem 1rem !important;
+}
+
+/* Full-width fields (e.g. remarks, reference_code) span both columns */
+.fi-section-content [class*="columnSpanFull"],
+.fi-fo-field-wrp[class*="col-span-full"] {
+    grid-column: 1 / -1 !important;
+}
+
+.fi-fo-field-wrp {
+    margin-bottom: 0 !important;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   BUTTONS — simple solid primary
+═══════════════════════════════════════════════════════════ */
+.fi-btn-primary,
+.fi-btn-color-primary,
+button[type="submit"].fi-btn {
+    background: #2563eb !important;
+    border: none !important;
+    color: #fff !important;
+    border-radius: 0.5rem !important;
+    font-weight: 500 !important;
+    font-size: 0.875rem !important;
+    transition: background-color 0.15s ease !important;
+}
+
+.fi-btn-primary:hover,
+.fi-btn-color-primary:hover,
+button[type="submit"].fi-btn:hover {
+    background: #1d4ed8 !important;
+    color: #fff !important;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   INVENTORY LIST PAGES — toolbar + content card layout
+═══════════════════════════════════════════════════════════ */
+/* Wrap header + table in a clear “app panel” structure */
+.fi-resource-list-records-page .fi-main > div {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 0 !important;
+}
+
+/* Resource list pages — transparent section wrapper so table card stands alone */
+.fi-resource-list-records-page .fi-section {
+    padding: 0 !important;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+}
+
+/* Compact heading on list pages */
+.fi-resource-list-records-page .fi-header {
+    padding: 0 0 0.25rem !important;
+    margin-bottom: 0 !important;
+}
+.fi-resource-list-records-page .fi-header-heading {
+    font-size: 1.125rem !important;
+    font-weight: 700 !important;
+    color: #111827 !important;
+}
+
+/* Table container: standalone card */
+.fi-resource-list-records-page .fi-ta-ctn {
+    background: #ffffff !important;
+    border: 1px solid #e5e7eb !important;
+    border-radius: 0.5rem !important;
+    overflow: hidden !important;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.04) !important;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   TABLES – toolbar layout override
+   Goal: search on the left (reasonable width), filters + column manager on the right.
+═══════════════════════════════════════════════════════════ */
+.fi-ta-ctn .fi-ta-header-toolbar {
+    justify-content: flex-start !important;
+    gap: 0.75rem !important;
+}
+
+/* Second child wrapper: contains search + filters + column manager */
+.fi-ta-ctn .fi-ta-header-toolbar > :nth-child(2) {
+    margin-left: 0 !important; /* cancel Filament's ms-auto */
+    display: flex !important;
+    align-items: center !important;
+    gap: 0.75rem !important;
+    width: 100% !important;
+}
+
+/* Search: fixed, reasonable width on the left, pushes the rest to the right */
+.fi-ta-ctn .fi-ta-header-toolbar > :nth-child(2) .fi-ta-search-field {
+    flex: 0 0 auto !important;
+    max-width: 320px !important;
+    width: 260px !important;
+    margin-right: auto !important;
+}
+
+.fi-ta-header-cell {
+    font-size: 0.6875rem !important;
+    font-weight: 600 !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.05em !important;
+    color: #475569 !important;
+    background-color: #f1f5f9 !important;
+    padding: 0.4rem 0.75rem !important;
+    border-bottom: 2px solid #e2e8f0 !important;
+}
+
+.fi-ta-cell {
+    font-size: 0.8125rem !important;
+    color: #374151 !important;
+    padding: 0.4rem 0.75rem !important;
+    vertical-align: middle !important;
+}
+
+.fi-ta-row {
+    transition: background-color 0.12s ease !important;
+}
+
+/* Striped rows for data-grid look */
+.fi-ta-tbody .fi-ta-row:nth-child(even) td {
+    background-color: #fafafa !important;
+}
+
+.fi-ta-row:hover td {
+    background-color: #f1f5f9 !important;
+}
+
+.fi-ta-table {
+    border-collapse: collapse !important;
+}
+
+.fi-ta-table thead tr {
+    border-bottom: 1px solid #e5e7eb !important;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   RESOURCE LIST TABS (Active / Archived / All)
+═══════════════════════════════════════════════════════════ */
+/* Keep the tabs left-aligned (not centered) */
+.fi-resource-list-records-page .fi-tabs,
+.fi-resource-list-records-page .fi-tabs-ctn,
+.fi-resource-list-records-page .fi-tabs-items {
+    justify-content: flex-start !important;
+}
+
+/* Prevent "centered pill group" layout */
+.fi-resource-list-records-page .fi-tabs {
+    margin-left: 0 !important;
+    margin-right: auto !important;
+    justify-self: start !important;
+    align-self: flex-start !important;
+    width: fit-content !important;
+}
+
+/* Make tabs look like small buttons */
+.fi-resource-list-records-page .fi-tabs-item {
+    min-height: 1.75rem !important;
+    padding: 0.25rem 0.6rem !important;
+    border-radius: 9999px !important;
+    font-size: 0.75rem !important;
+    font-weight: 600 !important;
+}
+
+.fi-resource-list-records-page .fi-tabs-item-label {
+    font-size: 0.75rem !important;
+    line-height: 1 !important;
+}
+
+.fi-resource-list-records-page .fi-tabs-items {
+    gap: 0.4rem !important;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   CHARTS
+═══════════════════════════════════════════════════════════ */
+.fi-wi-chart .fi-wi-chart-bg-color    { background-color: #ffffff !important; color: #ffffff !important; }
+.fi-wi-chart .fi-wi-chart-text-color  { color: #64748b !important; }
+.fi-wi-chart .fi-wi-chart-grid-color  { color: #f1f5f9 !important; }
+.fi-wi-chart .fi-wi-chart-border-color { color: #e2e8f0 !important; }
+
+
+/* ═══════════════════════════════════════════════════════════
+   DASHBOARD — clean layout that works with Filament's native grid
+═══════════════════════════════════════════════════════════ */
+
+/* Dashboard gap between widgets */
+.fi-page-content .fi-sc-has-gap {
+    gap: 1.5rem !important;
+}
+
+/* Stats Section wrapper — transparent so only individual cards show */
+.fi-wi-stats-overview .fi-section {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+}
+
+/* Collapse the empty header space when heading is blank (dashboard) */
+.fi-main .fi-header-heading:empty {
+    display: none !important;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   LOGIN PAGE — full custom two-panel layout
+═══════════════════════════════════════════════════════════ */
+
+/* Override Filament simple page wrapper to be full-screen */
+.fi-simple-layout,
+.fi-simple-main {
+    min-height: 100vh !important;
+    padding: 0 !important;
+    display: flex !important;
+    align-items: stretch !important;
+    justify-content: stretch !important;
+    background: #f0f4f8 !important;
+    max-width: none !important;
+}
+
+.fi-simple-main > .fi-simple-main-ctn {
+    width: 100% !important;
+    max-width: none !important;
+    padding: 0 !important;
+}
+
+/* Wrapper: two columns side by side */
+.owwa-login-wrapper {
+    display: flex;
+    min-height: 100vh;
+    width: 100%;
+}
+
+/* ── Left brand panel ── */
+.owwa-login-brand {
+    flex: 0 0 46%;
+    background: linear-gradient(145deg, #002855 0%, #003f8a 40%, #6b1230 75%, #c41e3a 100%);
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 3rem 3.5rem;
+}
+
+.owwa-login-brand-inner {
+    position: relative;
+    z-index: 2;
+    max-width: 360px;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+}
+
+.owwa-login-logos-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    margin-bottom: 1.25rem;
+}
+
+
+.owwa-login-logo {
+    width: 5.5rem;
+    height: 5.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.owwa-login-logo-img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    mix-blend-mode: multiply;
+    filter: drop-shadow(0 2px 10px rgba(0,0,0,0.3));
+}
+
+/* Bagong Pilipinas logo has a black background — screen blend reveals it on dark panels */
+.owwa-login-logo-img--dark {
+    mix-blend-mode: screen;
+    filter: drop-shadow(0 2px 8px rgba(0,0,0,0.4));
+}
+
+.owwa-login-brand-name {
+    font-size: 1.875rem;
+    font-weight: 800;
+    color: #ffffff;
+    letter-spacing: -0.03em;
+    line-height: 1.1;
+    margin: 0 0 0.375rem;
+}
+
+.owwa-login-brand-tagline {
+    font-size: 0.8125rem;
+    color: rgba(255,255,255,0.6);
+    margin: 0;
+    font-weight: 400;
+    letter-spacing: 0.01em;
+}
+
+.owwa-login-brand-divider {
+    width: 2.5rem;
+    height: 1px;
+    background: transparent;
+    border-radius: 9999px;
+    margin: .5rem auto;
+}
+
+.owwa-login-brand-desc {
+    font-size: 0.9375rem;
+    color: rgba(255,255,255,0.75);
+    line-height: 1.65;
+    margin: 0 0 2rem;
+}
+
+.owwa-login-brand-features {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.owwa-login-feature {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    font-size: 0.875rem;
+    color: rgba(255,255,255,0.85);
+    font-weight: 500;
+}
+
+.owwa-login-feature-icon {
+    width: 2rem;
+    height: 2rem;
+    background: rgba(255,255,255,0.12);
+    border-radius: 0.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.owwa-login-feature-icon svg {
+    width: 1.125rem;
+    height: 1.125rem;
+    color: rgba(255,255,255,0.9);
+}
+
+/* Decorative circles */
+.owwa-login-deco {
+    position: absolute;
+    border-radius: 50%;
+    pointer-events: none;
+}
+
+.owwa-login-deco-1 {
+    width: 420px;
+    height: 420px;
+    top: -120px;
+    right: -120px;
+    background: radial-gradient(circle, rgba(255,255,255,0.07) 0%, transparent 70%);
+}
+
+.owwa-login-deco-2 {
+    width: 300px;
+    height: 300px;
+    bottom: -80px;
+    left: -80px;
+    background: radial-gradient(circle, rgba(255,255,255,0.05) 0%, transparent 70%);
+}
+
+/* ── Right form panel ── */
+.owwa-login-form-panel {
+    flex: 1;
+    background: #ffffff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 3rem 2rem;
+    position: relative;
+    overflow: hidden;
+}
+
+.owwa-login-watermark {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    z-index: 0;
+}
+
+.owwa-login-watermark img {
+    width: 75%;
+    max-width: 420px;
+    opacity: 0.06;
+    object-fit: contain;
+    user-select: none;
+}
+
+.owwa-login-form-inner {
+    width: 100%;
+    max-width: 400px;
+    position: relative;
+    z-index: 1;
+}
+
+.owwa-login-mobile-brand {
+    display: none;
+    align-items: center;
+    gap: 0.625rem;
+    margin-bottom: 2rem;
+}
+
+.owwa-login-mobile-logo svg {
+    width: 2rem;
+    height: 2rem;
+    display: block;
+}
+
+.owwa-login-mobile-name {
+    font-size: 1.125rem;
+    font-weight: 700;
+    color: #003366;
+}
+
+.owwa-login-form-header {
+    margin-top: -1rem;
+    margin-bottom: .5rem;
+}
+
+.owwa-login-form-title {
+    font-size: 1.625rem;
+    font-weight: 700;
+    color: #0f172a;
+    letter-spacing: -0.025em;
+    margin: 0 0 0.375rem;
+}
+
+.owwa-login-form-subtitle {
+    font-size: 0.9375rem;
+    color: #64748b;
+    margin: 0;
+}
+
+/* Material Design: Outlined text field with floating label (label breaks top border) */
+.owwa-login-form-inner .fi-fo-field:has(.fi-fo-text-input) {
+    position: relative !important;
+    padding-top: 0 !important;
+    overflow: visible !important;
+}
+
+/* Outlined box: one border, no shadow/ring; very rounded (15px) */
+.owwa-login-form-inner .fi-fo-field:has(.fi-fo-text-input) .fi-input-wrp {
+    min-height: 2.5rem !important;
+    border: 1px solid #dddfe2 !important;
+    border-radius: 15px !important;
+    background: #ffffff !important;
+    box-shadow: none !important;
+    outline: none !important;
+    --tw-ring-shadow: 0 0 #0000 !important;
+    --tw-ring-offset-width: 0px !important;
+    transition: border-color 0.15s ease !important;
+}
+
+.owwa-login-form-inner .fi-fo-field:has(.fi-fo-text-input):has(input:not(:placeholder-shown)) .fi-input-wrp {
+    border-color: #dddfe2 !important;
+    box-shadow: none !important;
+    outline: none !important;
+    min-height: 2.5rem !important;
+}
+
+/* Focus highlight: 2px border only, no box-shadow/glow */
+.owwa-login-form-inner .fi-fo-field:has(.fi-fo-text-input):focus-within .fi-input-wrp {
+    border-color: #003f8a !important;
+    border-width: 2px !important;
+    box-shadow: none !important;
+    outline: none !important;
+    min-height: 2.5rem !important;
+    transition: border-color 0.2s ease, border-width 0.2s ease !important;
+}
+
+/* Default: label as placeholder — centered inside the outlined field */
+.owwa-login-form-inner .fi-fo-field:has(.fi-fo-text-input) .fi-fo-field-label-col {
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    height: auto !important;
+    min-height: 2.5rem !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+    padding-left: 0.5rem !important;
+    pointer-events: none !important;
+    z-index: 1 !important;
+    transition: transform 0.2s ease, top 0.2s ease, font-size 0.2s ease !important;
+}
+
+.owwa-login-form-inner .fi-fo-field:has(.fi-fo-text-input) .fi-fo-field-label-ctn {
+    display: flex !important;
+    align-items: center !important;
+}
+
+.owwa-login-form-inner .fi-fo-field:has(.fi-fo-text-input) .fi-fo-field-label,
+.owwa-login-form-inner .fi-fo-field:has(.fi-fo-text-input) .fi-fo-field-label-content {
+    color: #8a8d91 !important;
+    font-size: 0.875rem !important;
+    font-weight: 400 !important;
+    transition: color 0.2s ease, font-size 0.2s ease, background 0.2s ease !important;
+}
+
+/* Focused/filled: label shrinks and moves to top border, "breaking" the outline (Material Design) */
+.owwa-login-form-inner .fi-fo-field:has(.fi-fo-text-input):focus-within .fi-fo-field-label-col,
+.owwa-login-form-inner .fi-fo-field:has(.fi-fo-text-input):has(input:not(:placeholder-shown)) .fi-fo-field-label-col {
+    bottom: auto !important;
+    min-height: auto !important;
+    height: auto !important;
+    top: -0.5rem !important;
+    align-items: center !important;
+    padding-top: 0 !important;
+    padding-left: 0.5rem !important;
+}
+
+.owwa-login-form-inner .fi-fo-field:has(.fi-fo-text-input):focus-within .fi-fo-field-content-col,
+.owwa-login-form-inner .fi-fo-field:has(.fi-fo-text-input):has(input:not(:placeholder-shown)) .fi-fo-field-content-col {
+    padding-top: 0 !important;
+}
+
+/* Floated label: clean "notch" in top border — background matches form so border is masked into a gap */
+.owwa-login-form-inner .fi-fo-field:has(.fi-fo-text-input):focus-within .fi-fo-field-label,
+.owwa-login-form-inner .fi-fo-field:has(.fi-fo-text-input):focus-within .fi-fo-field-label-content,
+.owwa-login-form-inner .fi-fo-field:has(.fi-fo-text-input):has(input:not(:placeholder-shown)) .fi-fo-field-label,
+.owwa-login-form-inner .fi-fo-field:has(.fi-fo-text-input):has(input:not(:placeholder-shown)) .fi-fo-field-label-content {
+    font-size: 0.75rem !important;
+    line-height: 1.25 !important;
+    color: #8a8d91 !important;
+    background: #ffffff !important;
+    padding: 0 0.5rem !important;
+}
+
+/* Input when focused/filled: content below the floated label */
+.owwa-login-form-inner .fi-fo-field:has(.fi-fo-text-input):focus-within input,
+.owwa-login-form-inner .fi-fo-field:has(.fi-fo-text-input):has(input:not(:placeholder-shown)) input {
+    padding-left: 0.5rem !important;
+    padding-top: 0.5rem !important;
+    padding-bottom: 0.5rem !important;
+    border: none !important;
+    background: transparent !important;
+    line-height: 1.4 !important;
+}
+
+/* ═══ Login form: fieldset/legend outlined inputs (floating label with notch) ═══ */
+.owwa-login-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+}
+
+.owwa-login-outlined-fieldset {
+    position: relative;
+    margin: 0;
+    padding: 0.5rem 0.625rem;
+    min-height: 44px;
+    border: 2px solid #dddfe2;
+    border-radius: 12px;
+    background: #ffffff;
+    transition: border-color 0.2s ease;
+    box-sizing: border-box;
+}
+
+.owwa-login-outlined-fieldset:focus-within {
+    border-color: #003f8a;
+    box-shadow: none;
+    outline: none;
+}
+
+.owwa-login-outlined-fieldset--error {
+    border-color: #dc2626;
+}
+
+/* Floating label (legend): default transparent; padding for clean spacing */
+.owwa-login-outlined-legend {
+    position: absolute;
+    left: 0.625rem;
+    margin: 0;
+    line-height: 1.25;
+    color: #8a8d91;
+    font-weight: 400;
+    max-width: calc(100% - 1.25rem);
+    background-color: transparent;
+    padding: 0 4px;
+    pointer-events: none;
+    transition: font-size 0.2s ease-in-out, color 0.2s ease-in-out, top 0.2s ease-in-out, transform 0.2s ease-in-out;
+}
+
+/* Default: label exactly where text would be typed (placeholder position) */
+.owwa-login-outlined-fieldset:not(:focus-within):not(:has(.owwa-login-outlined-input:not(:placeholder-shown))) .owwa-login-outlined-legend {
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 0.875rem;
+}
+
+/* Focused or filled: label on border with solid background to create notch (line masked behind text) */
+.owwa-login-outlined-fieldset:focus-within .owwa-login-outlined-legend,
+.owwa-login-outlined-fieldset:has(.owwa-login-outlined-input:not(:placeholder-shown)) .owwa-login-outlined-legend {
+    top: -2px;
+    transform: translateY(-50%);
+    font-size: 0.6875rem;
+    color: #8a8d91;
+    background-color: #ffffff;
+    padding: 0 4px;
+}
+
+.owwa-login-outlined-input-wrap {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    clear: both;
+    min-width: 0;
+    min-height: 1.25rem;
+}
+
+.owwa-login-outlined-input {
+    flex: 1;
+    min-width: 0;
+    min-height: 1.25rem;
+    padding: 0.25rem 0 0.25rem;
+    margin: 0;
+    border: none;
+    background: transparent;
+    font-size: 0.875rem;
+    color: #1c1e21;
+    line-height: 1.35;
+    outline: none;
+}
+
+.owwa-login-outlined-fieldset--password .owwa-login-outlined-input {
+    padding-right: 38px;
+}
+
+.owwa-login-outlined-input::placeholder {
+    color: transparent;
+}
+
+/* Password reveal: absolutely positioned right, vertically centered; visible only when focused */
+.owwa-login-password-reveal {
+    position: absolute;
+    right: 0.5rem;
+    top: 50%;
+    transform: translateY(-50%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.25rem;
+    margin: 0;
+    border: none;
+    background: transparent;
+    color: #6b7280;
+    cursor: pointer;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.15s ease, color 0.15s ease;
+}
+
+.owwa-login-outlined-fieldset--password:focus-within .owwa-login-password-reveal {
+    opacity: 1;
+    visibility: visible;
+}
+
+.owwa-login-password-reveal:hover {
+    color: #374151;
+}
+
+.owwa-login-password-reveal-icon {
+    display: block;
+    width: 1.25rem;
+    height: 1.25rem;
+}
+
+.owwa-login-password-reveal-icon svg {
+    width: 100%;
+    height: 100%;
+}
+
+.owwa-login-password-reveal-icon [x-cloak] {
+    display: none !important;
+}
+
+.owwa-login-outlined-error {
+    margin: 0.25rem 0 0;
+    font-size: 0.75rem;
+    color: #dc2626;
+}
+
+.owwa-login-remember {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.875rem;
+    color: #374151;
+    cursor: pointer;
+}
+
+.owwa-login-remember-input {
+    width: 1rem;
+    height: 1rem;
+}
+
+.owwa-login-submit-btn {
+    width: 100%;
+    min-height: 2.875rem;
+    padding: 0.5rem 1rem;
+    background: linear-gradient(135deg, #003f8a 0%, #0059c2 60%, #8b1538 100%);
+    background-color: #003f8a;
+    border: none;
+    border-radius: 0.625rem;
+    color: #ffffff;
+    font-weight: 600;
+    font-size: 0.9375rem;
+    cursor: pointer;
+    transition: opacity 0.15s ease;
+}
+
+.owwa-login-submit-btn:hover {
+    opacity: 0.9;
+}
+
+/* Password reveal (eye) icon: only visible when password field is focused — target by input wrapper */
+.owwa-login-form-inner .fi-input-wrp:has(input.fi-revealable):not(:focus-within) .fi-input-wrp-suffix {
+    visibility: hidden !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+    transition: opacity 0.15s ease !important;
+}
+
+.owwa-login-form-inner .fi-input-wrp:has(input.fi-revealable):focus-within .fi-input-wrp-suffix {
+    visibility: visible !important;
+    opacity: 1 !important;
+}
+
+/* Remove border/ring around the password reveal (eye) icon */
+.owwa-login-form-inner .fi-input-wrp-suffix .fi-btn,
+.owwa-login-form-inner .fi-input-wrp-suffix .fi-input-wrp-actions .fi-btn {
+    border: none !important;
+    box-shadow: none !important;
+    outline: none !important;
+    --tw-ring-shadow: 0 0 #0000 !important;
+    --tw-ring-offset-width: 0px !important;
+}
+
+/* Remove the line/divider between password input and eye icon */
+.owwa-login-form-inner .fi-input-wrp .fi-input-wrp-suffix {
+    border-inline-start: none !important;
+    border-left: none !important;
+    padding-inline-start: 0.5rem !important;
+}
+
+/* Style Filament's form inputs inside login — Facebook-style: border on wrapper, input borderless; left padding matches label for alignment */
+.owwa-login-form-inner .fi-fo-field:has(.fi-fo-text-input) input {
+    border: none !important;
+    border-radius: 0 !important;
+    min-height: 2.5rem !important;
+    height: auto !important;
+    padding-left: 0.5rem !important;
+    padding-right: 0.5rem !important;
+    padding-top: 0.375rem !important;
+    padding-bottom: 0 !important;
+    font-size: 0.9375rem !important;
+    color: #1c1e21 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    outline: none !important;
+}
+
+.owwa-login-form-inner .fi-fo-field:has(.fi-fo-text-input) input::placeholder {
+    color: transparent !important;
+}
+
+.owwa-login-form-inner .fi-fo-field:has(.fi-fo-text-input) input:focus {
+    border-color: transparent !important;
+    box-shadow: none !important;
+    outline: none !important;
+}
+
+/* Sign in button */
+.owwa-login-form-inner .fi-btn {
+    width: 100% !important;
+    background: linear-gradient(135deg, #003f8a 0%, #0059c2 60%, #8b1538 100%) !important;
+    background-color: #003f8a !important;
+    border: none !important;
+    color: #ffffff !important;
+    font-weight: 600 !important;
+    font-size: 0.9375rem !important;
+    border-radius: 0.625rem !important;
+    min-height: 2.875rem !important;
+    transition: opacity 0.15s ease !important;
+    box-shadow: none !important;
+}
+
+.owwa-login-form-inner .fi-btn:hover {
+    opacity: 0.9 !important;
+}
+
+/* Force the label span visible — Alpine's x-show sets display:none inline;
+   this overrides it so "Sign in" is always visible on the login button */
+.owwa-login-form-inner .fi-btn span {
+    display: inline !important;
+    color: #ffffff !important;
+}
+
+.owwa-login-form-inner .fi-btn svg {
+    color: #ffffff !important;
+}
+
+.owwa-login-footer-note {
+    text-align: center;
+    font-size: 0.75rem;
+    color: #94a3b8;
+    margin-top: 2rem;
+    line-height: 1.5;
+}
+
+/* Responsive: stack vertically on tablet/mobile */
+@media (max-width: 900px) {
+    .owwa-login-brand {
+        display: none;
+    }
+    .owwa-login-mobile-brand {
+        display: flex;
+    }
+    .owwa-login-form-panel {
+        background: #f0f4f8;
+    }
+    .owwa-login-form-inner {
+        padding: 2.5rem 2rem;
+    }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   WELCOME WIDGET
+═══════════════════════════════════════════════════════════ */
+.owwa-welcome {
+    background: linear-gradient(135deg, #002a5c 0%, #003f8a 35%, #6b1230 75%, #b5192f 100%) !important;
+    border: none !important;
+    border-radius: 1.25rem !important;
+    color: #fff !important;
+    padding: 1.75rem 2rem !important;
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 4px 20px -2px rgba(0,51,102,0.35) !important;
+}
+
+.owwa-welcome::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background:
+        radial-gradient(ellipse 60% 80% at 90% -10%, rgba(255,255,255,0.07) 0%, transparent 60%),
+        radial-gradient(ellipse 40% 60% at 10% 120%, rgba(255,255,255,0.04) 0%, transparent 60%);
+    pointer-events: none;
+}
+
+.owwa-welcome::after {
+    content: '';
+    position: absolute;
+    top: -50%;
+    right: -8%;
+    width: 380px;
+    height: 380px;
+    background: radial-gradient(circle, rgba(255,255,255,0.05) 0%, transparent 65%);
+    border-radius: 50%;
+    pointer-events: none;
+}
+
+.owwa-welcome-body {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 1.25rem;
+    position: relative;
+    z-index: 1;
+}
+
+.owwa-welcome-left {
+    display: flex;
+    align-items: center;
+    gap: 1.25rem;
+}
+
+.owwa-welcome-avatar-placeholder {
+    width: 3.25rem;
+    height: 3.25rem;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.15);
+    border: 2px solid rgba(255,255,255,0.3);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: #fff;
+    flex-shrink: 0;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+}
+
+.owwa-welcome-greeting {
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: #fff;
+    letter-spacing: -0.02em;
+    line-height: 1.2;
+}
+
+.owwa-welcome-role {
+    font-size: 0.8125rem;
+    color: rgba(255,255,255,0.65);
+    margin-top: 0.25rem;
+    font-weight: 400;
+    letter-spacing: 0.01em;
+}
+
+.owwa-welcome-right {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0.5rem;
+    position: relative;
+    z-index: 1;
+}
+
+.owwa-welcome-date {
+    font-size: 0.8125rem;
+    color: rgba(255,255,255,0.6);
+    font-weight: 500;
+    letter-spacing: 0.01em;
+}
+
+.owwa-data-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.3rem 0.8rem;
+    background: rgba(255,255,255,0.1);
+    border: 1px solid rgba(255,255,255,0.18);
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: rgba(255,255,255,0.88);
+    backdrop-filter: blur(6px);
+}
+
+.owwa-data-badge-dot {
+    width: 6px;
+    height: 6px;
+    background: #34d399;
+    border-radius: 50%;
+    flex-shrink: 0;
+    box-shadow: 0 0 4px rgba(52,211,153,0.6);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   STATS OVERVIEW — KPI cards (4-in-a-row)
+═══════════════════════════════════════════════════════════ */
+
+/* Stat card — white background, no hover effects */
+.fi-wi-stats-overview-stat {
+    background: #ffffff !important;
+    border: 1px solid #e8edf3 !important;
+    border-radius: 0.875rem !important;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05) !important;
+    overflow: hidden !important;
+    position: relative !important;
+}
+
+/* Colored top accent bar */
+.fi-wi-stats-overview-stat::before {
+    content: '' !important;
+    display: block !important;
+    height: 3px !important;
+    width: 100% !important;
+    background: #e2e8f0 !important;
+    flex-shrink: 0 !important;
+}
+
+.fi-wi-stats-overview-stat:has([class*="warning"])::before { background: linear-gradient(90deg,#f59e0b,#fbbf24) !important; }
+.fi-wi-stats-overview-stat:has([class*="success"])::before { background: linear-gradient(90deg,#10b981,#34d399) !important; }
+.fi-wi-stats-overview-stat:has([class*="primary"])::before { background: linear-gradient(90deg,#1e6fbe,#3b82f6) !important; }
+.fi-wi-stats-overview-stat:has([class*="info"])::before    { background: linear-gradient(90deg,#0284c7,#38bdf8) !important; }
+.fi-wi-stats-overview-stat:has([class*="gray"])::before    { background: linear-gradient(90deg,#64748b,#94a3b8) !important; }
+
+/* Inner content */
+.fi-wi-stats-overview-stat-content {
+    padding: 1.1rem 1.25rem 1.1rem !important;
+}
+
+/* Label */
+.fi-wi-stats-overview-stat-label-ctn {
+    display: flex !important;
+    align-items: center !important;
+    gap: 0.35rem !important;
+    margin-bottom: 0.4rem !important;
+}
+
+.fi-wi-stats-overview-stat-label {
+    font-size: 0.8125rem !important;
+    font-weight: 600 !important;
+    color: #64748b !important;
+    text-transform: none !important;
+    letter-spacing: 0 !important;
+}
+
+/* Big number */
+.fi-wi-stats-overview-stat-value {
+    font-size: 2.25rem !important;
+    font-weight: 800 !important;
+    letter-spacing: -0.05em !important;
+    color: #0f172a !important;
+    line-height: 1 !important;
+    margin-bottom: 0.5rem !important;
+}
+
+/* Description */
+.fi-wi-stats-overview-stat-description {
+    display: flex !important;
+    align-items: center !important;
+    gap: 0.3rem !important;
+    font-size: 0.75rem !important;
+    font-weight: 500 !important;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   CHART WIDGET CARDS — consistent padding, chart scaling
+═══════════════════════════════════════════════════════════ */
+.fi-wi-chart .fi-section {
+    background: #ffffff !important;
+    border: 1px solid #e2e8f0 !important;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06) !important;
+    border-radius: 1rem !important;
+    padding: 1.25rem 1.25rem 1rem !important;
+}
+
+.fi-wi-chart .fi-section-header {
+    margin-bottom: 0.75rem !important;
+}
+
+.fi-wi-chart .fi-section-header-heading {
+    font-size: 1rem !important;
+    font-weight: 700 !important;
+    color: #0f172a !important;
+    letter-spacing: -0.015em !important;
+}
+
+.fi-wi-chart .fi-section-header-description {
+    font-size: 0.8rem !important;
+    color: #94a3b8 !important;
+    margin-top: 0.1rem !important;
+}
+
+/* Chart canvas: breathing room */
+.fi-wi-chart-canvas-ctn {
+    padding: 0.75rem 1rem 0.5rem !important;
+}
+
+/* Pie chart: center the donut */
+.owwa-chart-pie .fi-wi-chart-canvas-ctn {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    padding: 1rem !important;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   KPI STAT CARDS (inside chart widget)
+═══════════════════════════════════════════════════════════ */
+.owwa-kpi-row {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.75rem;
+    margin-bottom: 1.25rem;
+    width: 100%;
+}
+
+@media (max-width: 640px) {
+    .owwa-kpi-row { grid-template-columns: 1fr; }
+}
+
+.owwa-kpi {
+    background: #f8fafc;
+    border: 1px solid #edf2f7;
+    border-radius: 0.875rem;
+    padding: 0.875rem 1.1rem;
+    position: relative;
+    overflow: hidden;
+    transition: box-shadow 0.15s ease, border-color 0.15s ease;
+}
+
+.owwa-kpi::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    background: #e2e8f0;
+    border-radius: 0.875rem 0.875rem 0 0;
+}
+
+.owwa-kpi-accent {
+    background: linear-gradient(135deg, #f0f6ff 0%, #fef0f2 100%);
+    border-color: #dce8f7;
+}
+
+.owwa-kpi-accent::before {
+    background: linear-gradient(90deg, #0057b8 0%, #003f8a 40%, #b5192f 100%);
+}
+
+.owwa-kpi:hover {
+    box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+    border-color: #cbd5e1;
+}
+
+.owwa-kpi-label {
+    font-size: 0.6875rem;
+    font-weight: 700;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    display: block;
+    margin-bottom: 0.4rem;
+}
+
+.owwa-kpi-value {
+    display: block;
+    font-size: 1.5rem;
+    font-weight: 800;
+    color: #0f172a;
+    letter-spacing: -0.04em;
+    line-height: 1.1;
+}
+
+.owwa-kpi-value-text {
+    font-size: 1.0625rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+}
+
+.owwa-kpi-unit {
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: #94a3b8;
+    letter-spacing: 0;
+}
+
+.owwa-kpi-meta {
+    display: block;
+    font-size: 0.6875rem;
+    color: #94a3b8;
+    margin-top: 0.3rem;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   EMPTY STATE (custom + Filament table empty)
+═══════════════════════════════════════════════════════════ */
+.owwa-empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100px;
+    padding: 1rem 1rem;
+    background: #f9fafb;
+    border: 1px dashed #e5e7eb;
+    border-radius: 0.5rem;
+    text-align: center;
+}
+
+.owwa-empty-state-icon {
+    width: 1.75rem;
+    height: 1.75rem;
+    color: #9ca3af;
+    margin-bottom: 0.4rem;
+}
+
+.owwa-empty-state-title {
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: #374151;
+    margin: 0 0 0.125rem;
+}
+
+.owwa-empty-state-text {
+    font-size: 0.75rem;
+    color: #6b7280;
+    max-width: 20rem;
+    margin: 0;
+    line-height: 1.4;
+}
+
+/* Filament table empty state */
+.fi-ta-empty-state {
+    padding: 2.5rem 1.5rem !important;
+}
+.fi-ta-empty-state-heading {
+    font-size: 0.9375rem !important;
+    font-weight: 600 !important;
+    color: #374151 !important;
+}
+.fi-ta-empty-state-description {
+    font-size: 0.8125rem !important;
+    color: #6b7280 !important;
+    margin-top: 0.25rem !important;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   PAGE CARDS (custom pages: stock-levels, reports, etc.)
+═══════════════════════════════════════════════════════════ */
+.owwa-page-card {
+    background: #ffffff;
+    border: 1px solid #e5e7eb;
+    border-radius: 0.5rem;
+    overflow: hidden;
+}
+
+.owwa-page-intro {
+    font-size: 0.8125rem;
+    color: #6b7280;
+    margin-top: 0;
+    margin-bottom: 0.5rem;
+    line-height: 1.45;
+    max-width: 36rem;
+}
+
+.owwa-page-note {
+    font-size: 0.8125rem;
+    color: #94a3b8;
+    margin-top: 1.25rem;
+    line-height: 1.55;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   REUSABLE TABLE CLASSES (custom pages, e.g. stock-levels)
+═══════════════════════════════════════════════════════════ */
+.owwa-table {
+    width: 100%;
+    table-layout: auto;
+    border-collapse: collapse;
+}
+
+.owwa-th {
+    padding: 0.5rem 0.75rem;
+    text-align: left;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #6b7280;
+    background-color: #f9fafb;
+    border-bottom: 1px solid #e5e7eb;
+    white-space: nowrap;
+}
+
+.owwa-th-end   { text-align: right; }
+.owwa-th-center { text-align: center; }
+
+.owwa-tr {
+    border-bottom: 1px solid #f3f4f6;
+    transition: background-color 0.12s ease;
+}
+
+.owwa-tr:hover { background-color: #f9fafb; }
+.owwa-tr:last-child { border-bottom: none; }
+
+.owwa-tr-danger { background-color: #fef2f2 !important; }
+.owwa-tr-danger:hover { background-color: #fee2e2 !important; }
+
+.owwa-td {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.8125rem;
+    vertical-align: middle;
+}
+
+.owwa-td-primary  { color: #111827; font-weight: 500; }
+.owwa-td-muted    { color: #6b7280; }
+.owwa-td-danger   { color: #dc2626; font-weight: 600; }
+.owwa-td-end      { text-align: right; font-variant-numeric: tabular-nums; }
+.owwa-td-center   { text-align: center; }
+
+.owwa-td-empty {
+    padding: 0;
+    text-align: center;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   BADGE SYSTEM
+═══════════════════════════════════════════════════════════ */
+.owwa-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.2rem;
+    padding: 0.2rem 0.5rem;
+    border-radius: 9999px;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    line-height: 1.3;
+    white-space: nowrap;
+}
+
+.owwa-badge-success {
+    background: #dcfce7;
+    color: #15803d;
+}
+
+.owwa-badge-danger {
+    background: #fee2e2;
+    color: #dc2626;
+}
+
+.owwa-badge-warning {
+    background: #fef3c7;
+    color: #b45309;
+}
+
+.owwa-badge-blue {
+    background: #dbeafe;
+    color: #1d4ed8;
+}
+
+.owwa-badge-gray {
+    background: #f3f4f6;
+    color: #4b5563;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   STOCK LEVELS PAGE — dashboard layout (KPI cards + data panel)
+═══════════════════════════════════════════════════════════ */
+.owwa-inventory-layout {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.owwa-kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.5rem;
+}
+
+@media (max-width: 640px) {
+    .owwa-kpi-grid { grid-template-columns: 1fr; }
+}
+
+.owwa-kpi-card {
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 0.5rem;
+    padding: 0.75rem 1rem;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+    position: relative;
+    overflow: hidden;
+}
+
+.owwa-kpi-card::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 4px;
+}
+
+.owwa-kpi-card-total::before { background: #1e40af; }
+.owwa-kpi-card-ok::before   { background: #059669; }
+.owwa-kpi-card-low::before  { background: #dc2626; }
+
+.owwa-kpi-card-inner {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.owwa-kpi-card-value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    letter-spacing: -0.03em;
+    line-height: 1.2;
+    color: #111827;
+}
+
+.owwa-kpi-card-ok .owwa-kpi-card-value   { color: #059669; }
+.owwa-kpi-card-low .owwa-kpi-card-value  { color: #dc2626; }
+
+.owwa-kpi-card-label {
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: #6b7280;
+}
+
+/* Data panel: card with header + body */
+.owwa-data-panel {
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 0.5rem;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+    overflow: hidden;
+}
+
+.owwa-data-panel-header {
+    padding: 0.5rem 0.75rem;
+    background: #f8fafc;
+    border-bottom: 1px solid #e5e7eb;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+}
+
+.owwa-data-panel-title {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #111827;
+    margin: 0;
+    letter-spacing: -0.01em;
+}
+
+.owwa-data-panel-alert {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.35rem 0.6rem;
+    background: #fffbeb;
+    border: 1px solid #fcd34d;
+    border-radius: 0.375rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: #92400e;
+}
+
+.owwa-alert-icon {
+    width: 1rem;
+    height: 1rem;
+    flex-shrink: 0;
+    color: #d97706;
+}
+
+.owwa-data-panel-body {
+    overflow: hidden;
+}
+
+.owwa-table-wrap {
+    overflow-x: auto;
+}
+
+.owwa-data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.8125rem;
+}
+
+.owwa-data-table thead {
+    background: #f1f5f9;
+}
+
+.owwa-data-table th {
+    padding: 0.4rem 0.75rem;
+    text-align: left;
+    font-weight: 600;
+    font-size: 0.6875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #475569;
+    border-bottom: 2px solid #e2e8f0;
+    white-space: nowrap;
+}
+
+.owwa-data-table th.owwa-num,
+.owwa-data-table th.owwa-status { text-align: right; }
+.owwa-data-table th.owwa-status { padding-right: 0.75rem; }
+
+.owwa-data-table tbody tr {
+    border-bottom: 1px solid #f1f5f9;
+    transition: background 0.15s ease;
+}
+
+.owwa-data-table tbody tr:hover {
+    background: #f8fafc;
+}
+
+.owwa-data-table tbody tr.owwa-row-low {
+    background: #fef2f2;
+}
+
+.owwa-data-table tbody tr.owwa-row-low:hover {
+    background: #fee2e2;
+}
+
+.owwa-data-table td {
+    padding: 0.4rem 0.75rem;
+    vertical-align: middle;
+    color: #475569;
+}
+
+.owwa-data-table td.owwa-cell-primary { color: #111827; font-weight: 500; }
+.owwa-data-table td.owwa-cell-muted  { color: #64748b; }
+.owwa-data-table td.owwa-cell-danger { color: #dc2626; font-weight: 600; }
+.owwa-data-table td.owwa-num        { text-align: right; font-variant-numeric: tabular-nums; }
+.owwa-data-table td.owwa-status     { text-align: right; }
+
+.owwa-status-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.25rem 0.5rem;
+    border-radius: 9999px;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+}
+
+.owwa-status-ok  { background: #dcfce7; color: #15803d; }
+.owwa-status-low { background: #fee2e2; color: #dc2626; }
+
+.owwa-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem 1rem;
+    text-align: center;
+}
+
+.owwa-empty-icon {
+    width: 2.5rem;
+    height: 2.5rem;
+    color: #94a3b8;
+    margin-bottom: 0.75rem;
+}
+
+.owwa-empty-title {
+    font-size: 0.9375rem;
+    font-weight: 600;
+    color: #475569;
+    margin: 0 0 0.25rem;
+}
+
+.owwa-empty-desc {
+    font-size: 0.8125rem;
+    color: #94a3b8;
+    margin: 0;
+}
+
+.owwa-data-panel-footer {
+    padding: 0.4rem 0.75rem;
+    border-top: 1px solid #e5e7eb;
+    background: #fafafa;
+}
+
+/* Pagination (shared) */
+.owwa-pagination {
+    padding: 0.5rem 1rem;
+    border-top: 1px solid #e5e7eb;
+    background: #fafafa;
+}
+.owwa-pagination-nav {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+}
+.owwa-pagination-list {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.25rem;
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+.owwa-pagination-item {
+    display: inline-block;
+    padding: 0.2rem 0.5rem;
+    font-size: 0.75rem;
+    border-radius: 0.25rem;
+    text-decoration: none;
+    color: #374151;
+    border: 1px solid #e5e7eb;
+    background: #fff;
+}
+.owwa-pagination a.owwa-pagination-item:hover {
+    background: #f3f4f6;
+    border-color: #d1d5db;
+}
+.owwa-pagination-item.owwa-pagination-active {
+    background: #2563eb;
+    color: #fff;
+    border-color: #2563eb;
+}
+.owwa-pagination-item.owwa-pagination-disabled {
+    color: #9ca3af;
+    background: #f3f4f6;
+    cursor: not-allowed;
+}
+.owwa-pagination-info {
+    font-size: 0.75rem;
+    color: #6b7280;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   COA REPORTS PAGE
+═══════════════════════════════════════════════════════════ */
+.owwa-report-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1.25rem;
+    margin-bottom: 0.5rem;
+}
+
+@media (max-width: 768px) {
+    .owwa-report-grid { grid-template-columns: 1fr; }
+}
+
+.owwa-report-card {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 1rem;
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.04);
+    transition: box-shadow 0.15s ease, border-color 0.15s ease;
+}
+
+.owwa-report-card:hover {
+    box-shadow: 0 4px 12px 0 rgb(0 0 0 / 0.08);
+    border-color: #cbd5e1;
+}
+
+.owwa-report-card-icon {
+    width: 2.75rem;
+    height: 2.75rem;
+    border-radius: 0.75rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.owwa-report-card-icon svg {
+    width: 1.375rem;
+    height: 1.375rem;
+}
+
+.owwa-report-icon-blue   { background: #eff6ff; color: #1d4ed8; }
+.owwa-report-icon-indigo { background: #eef2ff; color: #4338ca; }
+
+.owwa-report-card-body { flex: 1; }
+
+.owwa-report-card-title {
+    font-size: 1rem;
+    font-weight: 600;
+    color: #0f172a;
+    margin: 0 0 0.375rem;
+}
+
+.owwa-report-card-desc {
+    font-size: 0.875rem;
+    color: #64748b;
+    line-height: 1.55;
+    margin: 0;
+}
+
+.owwa-report-card-meta {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: 0.75rem;
+}
+
+.owwa-report-meta-text {
+    font-size: 0.75rem;
+    color: #94a3b8;
+    font-weight: 500;
+}
+
+.owwa-report-card-action { margin-top: auto; }
+
+.owwa-report-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.5rem 1rem;
+    background: linear-gradient(135deg, #004d99 0%, #0066cc 60%, #993344 100%);
+    color: #ffffff !important;
+    border-radius: 0.5rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    text-decoration: none !important;
+    transition: opacity 0.15s ease;
+}
+
+.owwa-report-btn:hover { opacity: 0.9; }
+
+.owwa-report-btn svg {
+    width: 1rem;
+    height: 1rem;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   PROCUREMENT / AI PAGE
+═══════════════════════════════════════════════════════════ */
+.owwa-code {
+    background: #f1f5f9;
+    color: #334155;
+    padding: 0.125rem 0.375rem;
+    border-radius: 0.25rem;
+    font-size: 0.8125rem;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   PROCUREMENT RECOMMENDATIONS PAGE
+═══════════════════════════════════════════════════════════ */
+
+/* Intro banner */
+.owwa-pr-intro {
+    display: flex;
+    align-items: center;
+    gap: 1.25rem;
+    background: linear-gradient(135deg, #002a5c 0%, #003f8a 50%, #6b1230 100%);
+    border-radius: 1.25rem;
+    padding: 1.5rem 2rem;
+    margin-bottom: 1.5rem;
+    flex-wrap: wrap;
+}
+
+.owwa-pr-intro-icon {
+    width: 3rem;
+    height: 3rem;
+    background: rgba(255,255,255,0.12);
+    border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 0.75rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    flex-shrink: 0;
+}
+.owwa-pr-intro-icon svg { width: 1.5rem; height: 1.5rem; }
+
+.owwa-pr-intro-text { flex: 1; min-width: 200px; }
+
+.owwa-pr-intro-title {
+    font-size: 1rem;
+    font-weight: 700;
+    color: #fff;
+    margin: 0 0 0.25rem;
+    letter-spacing: -0.01em;
+}
+
+.owwa-pr-intro-desc {
+    font-size: 0.8125rem;
+    color: rgba(255,255,255,0.65);
+    margin: 0;
+    line-height: 1.5;
+}
+
+.owwa-pr-intro-badges {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.owwa-pr-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.25rem 0.75rem;
+    border-radius: 9999px;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+}
+
+.owwa-pr-badge-blue {
+    background: rgba(59,130,246,0.2);
+    border: 1px solid rgba(59,130,246,0.35);
+    color: #93c5fd;
+}
+
+.owwa-pr-badge-slate {
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.15);
+    color: rgba(255,255,255,0.7);
+}
+
+.owwa-pr-badge-dot {
+    width: 5px; height: 5px;
+    background: #34d399;
+    border-radius: 50%;
+    box-shadow: 0 0 4px rgba(52,211,153,0.7);
+}
+
+/* Loading state */
+.owwa-pr-loading {
+    background: #ffffff;
+    border: 1px solid #e8edf3;
+    border-radius: 1.25rem;
+    padding: 2rem;
+}
+
+.owwa-pr-loading-inner {
+    display: flex;
+    align-items: center;
+    gap: 1.25rem;
+    margin-bottom: 1.25rem;
+}
+
+.owwa-pr-spinner {
+    width: 2.5rem;
+    height: 2.5rem;
+    flex-shrink: 0;
+    color: #1e6fbe;
+    animation: owwa-spin 1s linear infinite;
+}
+.owwa-pr-spinner svg { width: 100%; height: 100%; }
+
+@keyframes owwa-spin { to { transform: rotate(360deg); } }
+
+.owwa-pr-loading-title {
+    font-size: 1rem;
+    font-weight: 700;
+    color: #0f172a;
+    margin: 0 0 0.25rem;
+}
+
+.owwa-pr-loading-sub {
+    font-size: 0.8125rem;
+    color: #64748b;
+    margin: 0;
+    line-height: 1.5;
+}
+
+.owwa-pr-loading-steps {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    padding-top: 1rem;
+    border-top: 1px solid #f1f5f9;
+}
+
+.owwa-pr-step {
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: #94a3b8;
+    padding: 0.2rem 0.6rem;
+    border-radius: 9999px;
+    background: #f8fafc;
+    border: 1px solid #e8edf3;
+}
+
+.owwa-pr-step-active {
+    color: #1e6fbe;
+    background: #eff6ff;
+    border-color: #bfdbfe;
+}
+
+.owwa-pr-step-sep {
+    font-size: 0.75rem;
+    color: #cbd5e1;
+    font-weight: 600;
+}
+
+/* Result state */
+.owwa-pr-result {
+    background: radial-gradient(circle at top left, #f1f5f9 0%, #ffffff 40%, #f9fafb 100%);
+    border: 1px solid #e2e8f0;
+    border-radius: 1.125rem;
+    overflow: hidden;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+}
+
+.owwa-pr-result-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 1.25rem 1.75rem;
+    background: linear-gradient(135deg, #002a5c 0%, #003f8a 55%, #6b1230 100%);
+    flex-wrap: wrap;
+}
+
+.owwa-pr-result-header-left {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.owwa-pr-result-icon {
+    width: 2.5rem;
+    height: 2.5rem;
+    background: rgba(255,255,255,0.12);
+    border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 0.625rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    flex-shrink: 0;
+}
+.owwa-pr-result-icon svg { width: 1.25rem; height: 1.25rem; }
+
+.owwa-pr-result-title {
+    font-size: 0.9375rem;
+    font-weight: 700;
+    color: #ffffff;
+    margin: 0;
+    letter-spacing: -0.01em;
+}
+
+.owwa-pr-result-meta {
+    font-size: 0.75rem;
+    color: rgba(255,255,255,0.55);
+    margin: 0.2rem 0 0;
+}
+
+.owwa-pr-status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.3rem 0.75rem;
+    background: rgba(52,211,153,0.15);
+    border: 1px solid rgba(52,211,153,0.3);
+    border-radius: 9999px;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    color: #34d399;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+}
+
+.owwa-pr-result-body-wrap {
+    position: relative;
+}
+
+.owwa-pr-result-body {
+    padding: 0;
+    font-size: 0.9375rem;
+    color: #1e293b;
+    line-height: 1.75;
+    display: flex;
+    flex-direction: column;
+    transition: max-height 0.3s ease;
+}
+
+/* Collapsed: cap height and clip overflow */
+.owwa-pr-result-body--collapsed {
+    max-height: 420px;
+    overflow: hidden;
+}
+
+/* Gradient fade at the bottom of collapsed state */
+.owwa-pr-expand-bar {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 7rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-end;
+    padding-bottom: 1rem;
+    cursor: pointer;
+}
+
+.owwa-pr-expand-fade {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(to bottom, rgba(255,255,255,0) 0%, rgba(255,255,255,0.97) 70%);
+    pointer-events: none;
+}
+
+.owwa-pr-expand-btn {
+    position: relative;
+    z-index: 1;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.45rem 1.125rem;
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+    border-radius: 9999px;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: #475569;
+    cursor: pointer;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+    transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.owwa-pr-expand-btn:hover {
+    background: #f1f5f9;
+    border-color: #94a3b8;
+    color: #1e293b;
+}
+
+.owwa-pr-collapse-bar {
+    display: flex;
+    justify-content: flex-end;
+    padding: 0.625rem 1.75rem 0.5rem;
+    border-top: 1px solid #f1f5f9;
+}
+
+.owwa-pr-expand-btn--collapse {
+    color: #64748b;
+    font-weight: 500;
+}
+
+/* Content block between two section labels */
+.owwa-pr-section-body {
+    padding: 1.125rem 1.75rem 1.25rem;
+    background: linear-gradient(180deg, #ffffff 0%, #f9fafb 100%);
+}
+.owwa-pr-section-body:empty { display: none; }
+
+/* Each section label starts a new visual block */
+.owwa-pr-section-label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.6875rem;
+    font-weight: 700;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    padding: 0.75rem 1.75rem 0.5rem;
+    margin: 0 !important;
+    background: #f8fafc;
+    border-top: 1px solid #e8edf3;
+    border-bottom: 1px solid #e8edf3;
+}
+
+/* First section label has no top border */
+.owwa-pr-section-label:first-child {
+    border-top: none;
+}
+
+.owwa-pr-section-body p {
+    margin: 0 0 0.625rem;
+    color: #334155;
+}
+.owwa-pr-section-body p:last-child { margin-bottom: 0; }
+
+.owwa-pr-section-body ul,
+.owwa-pr-section-body ol {
+    margin: 0;
+    padding-left: 1.4rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.owwa-pr-section-body li {
+    color: #334155;
+    line-height: 1.65;
+}
+
+.owwa-pr-section-body strong {
+    color: #0f172a;
+    font-weight: 600;
+}
+
+/* Table container */
+.owwa-pr-table-ctn {
+    margin: 0.75rem 1.75rem 1.25rem;
+    border-radius: 0.75rem;
+    border: 1px solid #e2e8f0;
+    overflow: hidden;
+    background: #ffffff;
+}
+
+.owwa-pr-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.8125rem;
+}
+
+.owwa-pr-table th {
+    padding: 0.7rem 1rem;
+    text-align: left;
+    background: #f1f5f9;
+    font-weight: 700;
+    font-size: 0.75rem;
+    color: #475569;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    border-bottom: 2px solid #e2e8f0;
+    white-space: nowrap;
+}
+
+.owwa-pr-table td {
+    padding: 0.75rem 1rem;
+    text-align: left;
+    color: #334155;
+    border-bottom: 1px solid #f1f5f9;
+    vertical-align: top;
+}
+
+.owwa-pr-table tr:last-child td {
+    border-bottom: none;
+}
+
+.owwa-pr-table tr:hover td {
+    background: #f8fafc;
+}
+
+/* Priority cell coloring */
+.owwa-pr-table td:first-child {
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.owwa-pr-result-footer {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.625rem;
+    padding: 0.875rem 1.75rem;
+    background: #fffbeb;
+    border-top: 1px solid #fde68a;
+    font-size: 0.75rem;
+    color: #92400e;
+    font-weight: 500;
+    line-height: 1.5;
+}
+.owwa-pr-result-footer svg { flex-shrink: 0; color: #f59e0b; margin-top: 0.1rem; }
+
+/* ═══════════════════════════════════════════════════════════
+   AI PROCUREMENT RUN — VIEW PAGE
+═══════════════════════════════════════════════════════════ */
+
+/* Strip the outer infolist entry wrapper so the banner fills cleanly */
+.fi-in-view-entry {
+    padding: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+    background: transparent !important;
+}
+
+.owwa-run-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    background: linear-gradient(135deg, #002a5c 0%, #003f8a 55%, #6b1230 100%);
+    border-radius: 1.125rem;
+    padding: 1.25rem 1.75rem;
+    flex-wrap: wrap;
+}
+
+.owwa-run-banner-left {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.owwa-run-banner-icon {
+    width: 2.5rem;
+    height: 2.5rem;
+    background: rgba(255,255,255,0.12);
+    border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 0.625rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    flex-shrink: 0;
+}
+.owwa-run-banner-icon svg { width: 1.25rem; height: 1.25rem; }
+
+.owwa-run-banner-title {
+    font-size: 0.9375rem;
+    font-weight: 700;
+    color: #ffffff;
+    letter-spacing: -0.01em;
+}
+
+.owwa-run-banner-meta {
+    font-size: 0.75rem;
+    color: rgba(255,255,255,0.55);
+    margin-top: 0.15rem;
+}
+
+.owwa-run-status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.35rem 0.875rem;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+}
+
+.owwa-run-status-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.owwa-run-summary {
+    background: #ffffff;
+    border: 1px solid #e8edf3;
+    border-radius: 1rem;
+    padding: 1.125rem 1.5rem;
+}
+
+.owwa-run-summary-label {
+    font-size: 0.6875rem;
+    font-weight: 700;
+    color: #94a3b8;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    margin: 0 0 0.5rem;
+}
+
+.owwa-run-summary-text {
+    font-size: 0.9375rem;
+    color: #334155;
+    line-height: 1.65;
+    margin: 0;
+}
+
+/* Category filter bar */
+.owwa-pr-filter {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem 1.25rem;
+    margin-top: 1rem;
+    padding: 1rem 1.25rem;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.75rem;
+}
+.owwa-pr-filter-label {
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: #475569;
+}
+.owwa-pr-filter-select {
+    min-width: 12rem;
+    padding: 0.5rem 2rem 0.5rem 0.75rem;
+    font-size: 0.875rem;
+    color: #1e293b;
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+    border-radius: 0.5rem;
+    cursor: pointer;
+}
+.owwa-pr-filter-select:hover,
+.owwa-pr-filter-select:focus {
+    border-color: #64748b;
+    outline: none;
+}
+.owwa-pr-filter-hint {
+    font-size: 0.75rem;
+    color: #64748b;
+}
+
+/* Fiscal year overlay & banner */
+.owwa-fy-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 60;
+    background: rgba(15, 23, 42, 0.35);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.owwa-fy-modal {
+    background: #ffffff;
+    border-radius: 1rem;
+    padding: 1.75rem 2rem 1.5rem;
+    width: 100%;
+    max-width: 460px;
+    box-shadow: 0 20px 45px rgba(15,23,42,0.25);
+}
+
+.owwa-fy-title {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: #0f172a;
+    margin: 0 0 0.5rem;
+}
+
+.owwa-fy-sub {
+    font-size: 0.875rem;
+    color: #475569;
+    margin: 0 0 1.25rem;
+}
+
+.owwa-fy-field {
+    margin-bottom: 1.25rem;
+}
+
+.owwa-fy-label {
+    display: block;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: #475569;
+    margin-bottom: 0.35rem;
+}
+
+.owwa-fy-select {
+    width: 100%;
+    padding: 0.55rem 0.8rem;
+    font-size: 0.875rem;
+    border-radius: 0.5rem;
+    border: 1px solid #cbd5e1;
+    color: #0f172a;
+}
+
+.owwa-fy-select:focus {
+    outline: none;
+    border-color: #2563eb;
+    box-shadow: 0 0 0 1px rgba(37,99,235,0.25);
+}
+
+.owwa-fy-actions {
+    display: flex;
+    justify-content: flex-end;
+}
+
+.owwa-fy-btn {
+    padding: 0.5rem 1.3rem;
+    font-size: 0.875rem;
+    border-radius: 9999px;
+    border: none;
+    background: linear-gradient(135deg, #002a5c 0%, #003f8a 55%, #6b1230 100%);
+    color: #ffffff;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.owwa-fy-note {
+    margin-top: 0.75rem;
+    font-size: 0.75rem;
+    color: #6b7280;
+}
+
+.owwa-fy-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+}
+
+.owwa-fy-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.25rem 0.7rem;
+    border-radius: 9999px;
+    background: #eff6ff;
+    border: 1px solid #bfdbfe;
+    font-size: 0.75rem;
+    color: #1d4ed8;
+}
+
+.owwa-fy-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 9999px;
+    background: #22c55e;
+}
+
+.owwa-fy-change {
+    border: none;
+    background: transparent;
+    font-size: 0.75rem;
+    color: #64748b;
+    text-decoration: underline;
+    cursor: pointer;
+}
+
+/* Idle / ready state */
+.owwa-pr-idle {
+    background: #ffffff;
+    border: 1px solid #e8edf3;
+    border-radius: 1.25rem;
+    padding: 3.5rem 2rem 3rem;
+    text-align: center;
+}
+
+.owwa-pr-idle-graphic { margin-bottom: 1.25rem; }
+
+.owwa-pr-idle-circle {
+    width: 4rem;
+    height: 4rem;
+    background: linear-gradient(135deg, #eff6ff 0%, #eef2ff 100%);
+    border: 1px solid #dbeafe;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: #3b82f6;
+}
+.owwa-pr-idle-circle svg { width: 2rem; height: 2rem; }
+
+.owwa-pr-idle-title {
+    font-size: 1.125rem;
+    font-weight: 700;
+    color: #0f172a;
+    margin: 0 0 0.5rem;
+    letter-spacing: -0.02em;
+}
+
+.owwa-pr-idle-sub {
+    font-size: 0.9375rem;
+    color: #64748b;
+    margin: 0 auto 2rem;
+    max-width: 36rem;
+    line-height: 1.6;
+}
+
+.owwa-pr-prereqs {
+    display: inline-block;
+    background: #f8fafc;
+    border: 1px solid #e8edf3;
+    border-radius: 1rem;
+    padding: 1.25rem 1.75rem;
+    text-align: left;
+    max-width: 480px;
+    width: 100%;
+}
+
+.owwa-pr-prereqs-heading {
+    font-size: 0.6875rem;
+    font-weight: 700;
+    color: #94a3b8;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    margin: 0 0 0.875rem;
+}
+
+.owwa-pr-prereqs-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.owwa-pr-prereq-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+}
+
+.owwa-pr-prereq-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    margin-top: 5px;
+}
+.owwa-pr-prereq-dot-green  { background: #10b981; }
+.owwa-pr-prereq-dot-blue   { background: #3b82f6; }
+.owwa-pr-prereq-dot-purple { background: #8b5cf6; }
+
+.owwa-pr-prereq-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #475569;
+    margin: 0 0 0.1rem;
+}
+
+.owwa-pr-prereq-val {
+    font-size: 0.8125rem;
+    color: #64748b;
+    margin: 0;
+}
+
+.owwa-pr-prereq-val code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.8125rem;
+    color: #334155;
+    background: #e2e8f0;
+    padding: 0.1rem 0.35rem;
+    border-radius: 0.25rem;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   INVENTORY PAGES — table and view polish
+═══════════════════════════════════════════════════════════ */
+
+/* Consistent spacing between infolist sections on view pages */
+.fi-resource-view-record-page .fi-sc-has-gap {
+    gap: 1.25rem !important;
+}
+
+/* Infolist sections — clean card look on view pages */
+.fi-resource-view-record-page .fi-section {
+    background-color: #ffffff !important;
+    border: 1px solid #e5e7eb !important;
+    border-radius: 0.5rem !important;
+    box-shadow: none !important;
+}
+
+/* Badge text in table disposal-type column — ensure readable sizing */
+.fi-ta-text-item-badge {
+    font-size: 0.75rem !important;
+    white-space: nowrap !important;
+}
