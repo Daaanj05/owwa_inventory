@@ -84,7 +84,7 @@ class ForcePasswordChangeTest extends TestCase
         $user = User::factory()->mustChangePassword()->create([
             'role' => User::ROLE_EMPLOYEE,
             'email_verified_at' => now(),
-            'password' => Hash::make('TempPass1'),
+            'password' => 'TempPass1',
         ]);
 
         $this->actingAs($user);
@@ -105,7 +105,7 @@ class ForcePasswordChangeTest extends TestCase
         $user = User::factory()->mustChangePassword()->create([
             'role' => User::ROLE_EMPLOYEE,
             'email_verified_at' => now(),
-            'password' => Hash::make('TempPass1'),
+            'password' => 'TempPass1',
         ]);
 
         $this->actingAs($user);
@@ -154,7 +154,7 @@ class ForcePasswordChangeTest extends TestCase
         $user = User::factory()->create([
             'role' => User::ROLE_EMPLOYEE,
             'email_verified_at' => now(),
-            'password' => Hash::make('CurrentPass1'),
+            'password' => 'CurrentPass1',
         ]);
 
         $this->actingAs($user);
@@ -175,7 +175,7 @@ class ForcePasswordChangeTest extends TestCase
         $user = User::factory()->create([
             'role' => User::ROLE_EMPLOYEE,
             'email_verified_at' => now(),
-            'password' => Hash::make('CurrentPass1'),
+            'password' => 'CurrentPass1',
         ]);
 
         $this->actingAs($user);

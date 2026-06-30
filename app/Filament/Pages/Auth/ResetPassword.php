@@ -9,7 +9,6 @@ use Illuminate\Auth\Events\PasswordReset;
 use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Contracts\Auth\CanResetPassword;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Str;
 
@@ -49,7 +48,7 @@ class ResetPassword extends BaseResetPassword
                 }
 
                 $user->forceFill([
-                    $user->getAuthPasswordName() => Hash::make($data['password']),
+                    $user->getAuthPasswordName() => $data['password'],
                     $user->getRememberTokenName() => Str::random(60),
                     'must_change_password' => false,
                 ])->save();

@@ -121,6 +121,13 @@
                     </button>
                 </form>
 
+                @if (session('panel_access_error'))
+                    <div class="owwa-login-error" role="alert">
+                        <p class="owwa-login-error-title">Wrong account for this portal</p>
+                        <p class="owwa-login-error-text">{{ session('panel_access_error') }}</p>
+                    </div>
+                @endif
+
                 @if ($errors->any())
                     <div class="owwa-login-error" role="alert">
                         <p class="owwa-login-error-title">Sign-in failed</p>

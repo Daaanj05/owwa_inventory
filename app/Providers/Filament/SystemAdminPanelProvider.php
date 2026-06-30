@@ -8,12 +8,12 @@ use App\Filament\Pages\Auth\ResetPassword;
 use App\Filament\Pages\Dashboard;
 use App\Filament\Widgets\WelcomeWidget;
 use App\Http\Middleware\AdminExecutionTimeLimit;
+use App\Http\Middleware\AuthenticateFilamentPanel;
 use App\Http\Middleware\EnsurePasswordChanged;
 use App\Http\Middleware\TouchUserSessionActivity;
 use App\Livewire\OwwaNotificationDropdown;
 use App\Support\FilamentSessionAudit;
 use Filament\Enums\ThemeMode;
-use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
 use Filament\Http\Middleware\DispatchServingFilamentEvent;
@@ -37,7 +37,7 @@ class SystemAdminPanelProvider extends PanelProvider
             ->id('system-admin')
             ->path('system-admin')
             ->brandName('OWWA Inventory System — System Admin')
-            ->favicon(asset('images/owwa-4a_logo_transparent.png'))
+            ->favicon('/images/owwa-4a_logo_transparent.png')
             ->login(Login::class)
             ->emailVerification()
             ->passwordReset(resetAction: ResetPassword::class)
@@ -84,7 +84,7 @@ class SystemAdminPanelProvider extends PanelProvider
                 TouchUserSessionActivity::class,
             ])
             ->authMiddleware([
-                Authenticate::class,
+                AuthenticateFilamentPanel::class,
                 EnsurePasswordChanged::class,
             ]);
     }

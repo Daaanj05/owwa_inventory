@@ -22,7 +22,10 @@ class Login extends BaseLogin
         // not to any previously stored "intended" URL (like /admin).
         Session::forget('url.intended');
 
-        $this->form->fill($this->data);
+        $this->form->fill(array_merge(
+            $this->form->getRawState(),
+            array_filter($this->data ?? [], fn ($value): bool => filled($value)),
+        ));
 
         $this->throwIfEmailUnverified();
 

@@ -54,6 +54,8 @@ class InventoryCategoryDashboard extends Page
             $categoryId = (int) session('active_item_category_id', 0);
         }
 
+        $categoryId = self::resolveActiveItemCategoryId($categoryId);
+
         $this->categoryRecord = ItemCategory::query()->find($categoryId);
 
         if (! $this->categoryRecord) {
@@ -78,17 +80,6 @@ class InventoryCategoryDashboard extends Page
 
     public function getSubheading(): ?string
     {
-        $user = Filament::auth()->user();
-        $slug = $this->categoryRecord?->getTemplateSlug();
-
-        if ($user instanceof User && $user->isUnitConsolidator() && in_array($slug, ['ppe', 'semi_expendable'], true)) {
-            return 'On-hand quantity at your office. Issued property you hold appears on Office property register.';
-        }
-
-        if (in_array($slug, ['ppe', 'semi_expendable'], true)) {
-            return 'On-hand quantity only. Issued property remains on PAR/ICS and property registers.';
-        }
-
         return null;
     }
 

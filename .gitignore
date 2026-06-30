@@ -29,6 +29,7 @@ Thumbs.db
 /.env
 .env.*
 !.env.example
+!.env.testing.example
 /storage/*.key
 /storage/logs/
 /storage/framework/cache/

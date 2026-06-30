@@ -7,7 +7,9 @@ use App\Filament\Resources\Items\Schemas\ItemInfolist;
 use App\Filament\Support\ConfiguresOwwaViewAction;
 use App\Filament\Support\OwwaFormModalDefaults;
 use App\Filament\Support\OwwaModalSchema;
+use App\Models\ItemCategory;
 use App\Support\OwwaTransactionViewPresenter;
+use App\Support\SemiExpendableValueCategory;
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\BulkActionGroup;
@@ -34,9 +36,10 @@ class ItemsTable
                     ->searchable(),
                 TextColumn::make('value_type')
                     ->label('Value category')
-                    ->formatStateUsing(fn (?string $state): string => \App\Support\SemiExpendableValueCategory::labelForValueType($state))
+                    ->formatStateUsing(fn (?string $state): string => SemiExpendableValueCategory::labelForValueType($state))
                     ->badge()
-                    ->color(fn (?string $state): string => $state === 'high' ? 'warning' : 'gray'),
+                    ->color(fn (?string $state): string => $state === 'high' ? 'warning' : 'gray')
+                    ->visible(fn (): bool => self::isActiveSemiExpendableCategory()),
                 TextColumn::make('reorder_level')
                     ->label('Reorder at')
                     ->numeric()
@@ -56,7 +59,8 @@ class ItemsTable
                         'low' => 'Low value',
                         'high' => 'High value',
                     ])
-                    ->placeholder('All types'),
+                    ->placeholder('All types')
+                    ->visible(fn (): bool => self::isActiveSemiExpendableCategory()),
             ])
             ->emptyStateHeading('No items yet')
             ->emptyStateDescription('Add inventory items here before recording acquisitions or issuances.')
@@ -106,5 +110,18 @@ class ItemsTable
                         ->action(fn ($records) => $records->each->update(['archived_at' => now()])),
                 ]),
             ]);
+    }
+
+    public static function isActiveSemiExpendableCategory(): bool
+    {
+        $categoryId = (int) session('active_item_category_id', 0);
+
+        if ($categoryId <= 0) {
+            return false;
+        }
+
+        $category = ItemCategory::query()->find($categoryId);
+
+        return $category?->getTemplateSlug() === 'semi_expendable';
     }
 }

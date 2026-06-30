@@ -16,6 +16,7 @@ use App\Filament\Widgets\SystemAdminStatsWidget;
 use App\Filament\Widgets\UnitConsolidatorStatsWidget;
 use App\Filament\Widgets\WelcomeWidget;
 use App\Http\Middleware\AdminExecutionTimeLimit;
+use App\Http\Middleware\AuthenticateFilamentPanel;
 use App\Http\Middleware\EnsurePasswordChanged;
 use App\Http\Middleware\TouchUserSessionActivity;
 use App\Livewire\OwwaNotificationDropdown;
@@ -23,7 +24,6 @@ use App\Models\ItemCategory;
 use App\Support\FilamentSessionAudit;
 use Filament\Enums\ThemeMode;
 use Filament\Facades\Filament;
-use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
 use Filament\Http\Middleware\DispatchServingFilamentEvent;
@@ -50,7 +50,7 @@ class AdminPanelProvider extends PanelProvider
             ->id('admin')
             ->path('admin')
             ->brandName('OWWA Region IV-A Inventory System')
-            ->favicon(asset('images/owwa-4a_logo_transparent.png'))
+            ->favicon('/images/owwa-4a_logo_transparent.png')
             ->login(Login::class)
             ->emailVerification()
             ->passwordReset(resetAction: ResetPassword::class)
@@ -124,7 +124,7 @@ class AdminPanelProvider extends PanelProvider
                 TouchUserSessionActivity::class,
             ])
             ->authMiddleware([
-                Authenticate::class,
+                AuthenticateFilamentPanel::class,
                 EnsurePasswordChanged::class,
             ]);
     }
@@ -139,6 +139,7 @@ class AdminPanelProvider extends PanelProvider
         }
 
         $categoryItems = ItemCategory::query()
+            ->whereNull('archived_at')
             ->get(['id', 'name'])
             ->sort(function (ItemCategory $left, ItemCategory $right): int {
                 $leftWeight = $this->getCategoryNavigationWeight($left->name);
@@ -188,7 +189,13 @@ class AdminPanelProvider extends PanelProvider
         return match (true) {
             in_array($normalized, ['consumables', 'consumable'], true) => 1,
             in_array($normalized, ['semi-expendable', 'semi expendable', 'semi_expendable'], true) => 2,
-            in_array($normalized, ['ppe', 'power plant equipment', 'power_plant_equipment'], true) => 3,
+            in_array($normalized, [
+                'ppe',
+                'power plant equipment',
+                'power_plant_equipment',
+                'property, plant and equipment',
+                'property plant and equipment',
+            ], true) => 3,
             default => 10,
         };
     }

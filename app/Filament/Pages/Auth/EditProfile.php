@@ -15,7 +15,6 @@ use Filament\Support\Enums\Width;
 use Filament\Support\Icons\Heroicon;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rules\Password;
 
 class EditProfile extends BaseEditProfile
@@ -98,7 +97,7 @@ class EditProfile extends BaseEditProfile
             ->helperText(PasswordRules::helperText())
             ->autocomplete('new-password')
             ->dehydrated(fn ($state): bool => filled($state))
-            ->dehydrateStateUsing(fn ($state): string => Hash::make($state))
+            ->dehydrateStateUsing(fn ($state): string => $state)
             ->live(debounce: 500)
             ->same('passwordConfirmation');
     }

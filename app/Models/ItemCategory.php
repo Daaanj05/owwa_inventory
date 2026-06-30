@@ -40,7 +40,13 @@ class ItemCategory extends Model
         if (in_array($name, ['consumables', 'consumable'], true)) {
             return 'consumables';
         }
-        if (in_array($name, ['ppe', 'power plant equipment', 'power_plant_equipment'], true)) {
+        if (in_array($name, [
+            'ppe',
+            'power plant equipment',
+            'power_plant_equipment',
+            'property, plant and equipment',
+            'property plant and equipment',
+        ], true)) {
             return 'ppe';
         }
         if (in_array($name, ['semi-expendable', 'semi expendable', 'semi_expendable'], true)) {

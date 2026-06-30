@@ -10,10 +10,9 @@ class ItemCategorySeeder extends Seeder
     public function run(): void
     {
         $categories = [
-            ['name' => 'Power Plant Equipment', 'description' => 'Equipment for power plant operations'],
-            ['name' => 'Semi-Expendable', 'description' => 'Semi-expendable properties'],
             ['name' => 'Consumables', 'description' => 'Office consumables and supplies'],
-            ['name' => 'PPE', 'description' => 'Property, plant and equipment'],
+            ['name' => 'Semi-Expendable', 'description' => 'Semi-expendable properties'],
+            ['name' => 'Property, Plant and Equipment', 'description' => 'Property, plant and equipment (PPE)'],
         ];
 
         foreach ($categories as $cat) {

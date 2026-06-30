@@ -2,6 +2,7 @@
 
 namespace App\Filament\Pages;
 
+use App\Filament\Concerns\SyncsActiveItemCategory;
 use App\Filament\Resources\Transfers\TransferResource;
 use App\Models\Item;
 use App\Models\ItemCategory;
@@ -26,6 +27,7 @@ use UnitEnum;
 
 class StockLevels extends Page
 {
+    use SyncsActiveItemCategory;
     use WithPagination;
 
     protected static bool $shouldRegisterNavigation = false;
@@ -69,13 +71,7 @@ class StockLevels extends Page
             ? (int) $this->category
             : (int) session('active_item_category_id', 0);
 
-        if ($categoryId <= 0) {
-            $categoryId = (int) (ItemCategory::query()->orderBy('name', 'asc')->first()?->id ?? 0);
-        }
-
-        if ($categoryId <= 0) {
-            abort(404);
-        }
+        $categoryId = self::resolveActiveItemCategoryId($categoryId);
 
         $this->categoryRecord = ItemCategory::query()->find($categoryId);
 
@@ -108,12 +104,6 @@ class StockLevels extends Page
 
     public function getSubheading(): string|Htmlable|null
     {
-        $slug = $this->categoryRecord?->getTemplateSlug();
-
-        if (in_array($slug, ['ppe', 'semi_expendable'], true)) {
-            return 'On-hand quantity only. Issued property remains on PAR/ICS and property registers.';
-        }
-
         return null;
     }
 

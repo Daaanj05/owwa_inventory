@@ -68,14 +68,15 @@ class UserEmailVerificationTest extends TestCase
         User::factory()->unverified()->create([
             'role' => User::ROLE_EMPLOYEE,
             'office_id' => $office->id,
-            'password' => bcrypt('password'),
+            'password' => 'password',
             'email' => 'unverified@example.com',
         ]);
 
         Livewire::test(Login::class)
-            ->fillForm([
+            ->set('data', [
                 'email' => 'unverified@example.com',
                 'password' => 'password',
+                'remember' => false,
             ])
             ->call('authenticate')
             ->assertHasFormErrors(['email' => 'Please verify your email address before signing in.']);
@@ -86,9 +87,10 @@ class UserEmailVerificationTest extends TestCase
         Filament::setCurrentPanel(Filament::getPanel('admin'));
 
         Livewire::test(Login::class)
-            ->fillForm([
+            ->set('data', [
                 'email' => 'nobody@example.com',
                 'password' => 'password',
+                'remember' => false,
             ])
             ->call('authenticate')
             ->assertHasFormErrors(['email' => __('filament-panels::auth/pages/login.messages.failed')]);
@@ -102,14 +104,15 @@ class UserEmailVerificationTest extends TestCase
         User::factory()->unverified()->create([
             'role' => User::ROLE_EMPLOYEE,
             'office_id' => $office->id,
-            'password' => bcrypt('password'),
+            'password' => 'password',
             'email' => 'unverified@example.com',
         ]);
 
         Livewire::test(Login::class)
-            ->fillForm([
+            ->set('data', [
                 'email' => 'unverified@example.com',
                 'password' => 'wrong-password',
+                'remember' => false,
             ])
             ->call('authenticate')
             ->assertHasFormErrors(['email' => __('filament-panels::auth/pages/login.messages.failed')]);

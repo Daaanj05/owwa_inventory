@@ -5,7 +5,6 @@ namespace Database\Seeders;
 use App\Models\Office;
 use App\Models\User;
 use Illuminate\Database\Seeder;
-use Illuminate\Support\Facades\Hash;
 
 class RoleAndUserSeeder extends Seeder
 {
@@ -20,7 +19,7 @@ class RoleAndUserSeeder extends Seeder
             ['email' => 'admin@owwa.gov.ph'],
             [
                 'name' => 'System Admin',
-                'password' => Hash::make('password'),
+                'password' => 'password',
                 'role' => User::ROLE_SYSTEM_ADMIN,
                 'office_id' => $regional->id,
                 'email_verified_at' => now(),
@@ -31,7 +30,7 @@ class RoleAndUserSeeder extends Seeder
             ['email' => 'custodian@owwa.gov.ph'],
             [
                 'name' => 'Supply Custodian',
-                'password' => Hash::make('password'),
+                'password' => 'password',
                 'role' => User::ROLE_SUPPLY_CUSTODIAN,
                 'office_id' => $regional->id,
                 'email_verified_at' => now(),
@@ -42,7 +41,7 @@ class RoleAndUserSeeder extends Seeder
             ['email' => 'authorized@owwa.gov.ph'],
             [
                 'name' => 'Unit Head',
-                'password' => Hash::make('password'),
+                'password' => 'password',
                 'role' => User::ROLE_UNIT_CONSOLIDATOR,
                 'office_id' => $regional->id,
                 'email_verified_at' => now(),

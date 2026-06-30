@@ -20,18 +20,29 @@ trait SyncsActiveItemCategory
             ? (int) request()->query('category')
             : (int) session('active_item_category_id', 0);
 
-        if ($categoryId <= 0) {
-            $categoryId = (int) ItemCategory::query()->orderBy('name')->value('id');
-        }
-
-        if ($categoryId <= 0) {
-            abort(404);
-        }
+        $categoryId = self::resolveActiveItemCategoryId($categoryId);
 
         session()->put('active_item_category_id', $categoryId);
 
         if ($redirectWhenMissing && ! $fromQuery && ! $hadSession) {
             $this->redirect(InventoryCategoryDashboard::getUrl(['category' => $categoryId]));
+        }
+
+        return $categoryId;
+    }
+
+    protected static function resolveActiveItemCategoryId(int $categoryId): int
+    {
+        if ($categoryId > 0 && ! ItemCategory::query()->whereKey($categoryId)->whereNull('archived_at')->exists()) {
+            $categoryId = 0;
+        }
+
+        if ($categoryId <= 0) {
+            $categoryId = (int) ItemCategory::query()->whereNull('archived_at')->orderBy('name')->value('id');
+        }
+
+        if ($categoryId <= 0) {
+            abort(404);
         }
 
         return $categoryId;

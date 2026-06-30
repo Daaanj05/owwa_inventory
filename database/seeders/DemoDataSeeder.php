@@ -18,7 +18,6 @@ use App\Models\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Event;
-use Illuminate\Support\Facades\Hash;
 
 class DemoDataSeeder extends Seeder
 {
@@ -65,34 +64,37 @@ class DemoDataSeeder extends Seeder
             ['code' => 'WSU'],
         );
 
-        // ─── Users ──────────────────────────────────────────────
-        $sc = User::where('email', 'custodian@owwa.gov.ph')->first();
-        $sc?->update(['office_id' => $regional->id, 'department_id' => $admin->id]);
+        // ─── Users (requires RoleAndUserSeeder accounts) ─────────
+        $sc = User::where('email', 'custodian@owwa.gov.ph')->firstOrFail();
+        $sc->update(['office_id' => $regional->id, 'department_id' => $admin->id]);
 
-        $uc = User::where('email', 'authorized@owwa.gov.ph')->first();
-        $uc?->update(['office_id' => $regional->id, 'department_id' => $ops->id]);
+        $uc = User::where('email', 'authorized@owwa.gov.ph')->firstOrFail();
+        $uc->update(['office_id' => $regional->id, 'department_id' => $ops->id]);
 
         $sysAdmin = User::where('email', 'admin@owwa.gov.ph')->first();
         $sysAdmin?->update(['office_id' => $regional->id]);
 
-        $joe1 = User::where('email', 'test@example.com')->first();
-        if ($joe1) {
-            $joe1->update([
+        $joe1 = User::updateOrCreate(
+            ['email' => 'maria@owwa.gov.ph'],
+            [
                 'name' => 'Maria Santos',
+                'password' => 'password',
                 'role' => User::ROLE_EMPLOYEE,
                 'office_id' => $regional->id,
                 'department_id' => $ops->id,
-            ]);
-        }
+                'email_verified_at' => now(),
+            ]
+        );
 
         $joe2 = User::updateOrCreate(
             ['email' => 'juan@owwa.gov.ph'],
             [
                 'name' => 'Juan Dela Cruz',
-                'password' => Hash::make('password'),
+                'password' => 'password',
                 'role' => User::ROLE_EMPLOYEE,
                 'office_id' => $regional->id,
                 'department_id' => $ops->id,
+                'email_verified_at' => now(),
             ]
         );
 
@@ -100,10 +102,11 @@ class DemoDataSeeder extends Seeder
             ['email' => 'anna@owwa.gov.ph'],
             [
                 'name' => 'Anna Reyes',
-                'password' => Hash::make('password'),
+                'password' => 'password',
                 'role' => User::ROLE_EMPLOYEE,
                 'office_id' => $regional->id,
                 'department_id' => $finance->id,
+                'email_verified_at' => now(),
             ]
         );
 
@@ -111,10 +114,11 @@ class DemoDataSeeder extends Seeder
             ['email' => 'consolidator2@owwa.gov.ph'],
             [
                 'name' => 'Roberto Cruz',
-                'password' => Hash::make('password'),
+                'password' => 'password',
                 'role' => User::ROLE_UNIT_CONSOLIDATOR,
                 'office_id' => $satellite->id,
                 'department_id' => $welfare->id,
+                'email_verified_at' => now(),
             ]
         );
 
@@ -128,8 +132,8 @@ class DemoDataSeeder extends Seeder
             ['description' => 'Semi-expendable properties'],
         );
         $ppe = ItemCategory::firstOrCreate(
-            ['name' => 'PPE'],
-            ['description' => 'Property, plant and equipment'],
+            ['name' => 'Property, Plant and Equipment'],
+            ['description' => 'Property, plant and equipment (PPE)'],
         );
 
         // ─── Items (unique per fiscal year + item_code) ─────────
@@ -152,7 +156,6 @@ class DemoDataSeeder extends Seeder
                     'item_category_id' => $consumables->id,
                     'name' => $ci['name'],
                     'unit' => $ci['unit'],
-                    'value_type' => 'low',
                     'reorder_level' => $ci['reorder_level'],
                 ],
             );
@@ -182,10 +185,10 @@ class DemoDataSeeder extends Seeder
 
         // PPE
         $ppeItems = [
-            ['name' => 'Laptop (ThinkPad L14)', 'unit' => 'unit', 'item_code' => 'PPE-001', 'reorder_level' => 2, 'value_type' => 'high'],
-            ['name' => 'Office Desk', 'unit' => 'unit', 'item_code' => 'PPE-002', 'reorder_level' => 2, 'value_type' => 'high'],
-            ['name' => 'Printer (Laser)', 'unit' => 'unit', 'item_code' => 'PPE-003', 'reorder_level' => 1, 'value_type' => 'high'],
-            ['name' => 'Air Conditioning Unit', 'unit' => 'unit', 'item_code' => 'PPE-004', 'reorder_level' => 1, 'value_type' => 'high'],
+            ['name' => 'Laptop (ThinkPad L14)', 'unit' => 'unit', 'item_code' => 'PPE-001', 'reorder_level' => 2],
+            ['name' => 'Office Desk', 'unit' => 'unit', 'item_code' => 'PPE-002', 'reorder_level' => 2],
+            ['name' => 'Printer (Laser)', 'unit' => 'unit', 'item_code' => 'PPE-003', 'reorder_level' => 1],
+            ['name' => 'Air Conditioning Unit', 'unit' => 'unit', 'item_code' => 'PPE-004', 'reorder_level' => 1],
         ];
 
         foreach ($ppeItems as $pi) {
@@ -195,7 +198,6 @@ class DemoDataSeeder extends Seeder
                     'item_category_id' => $ppe->id,
                     'name' => $pi['name'],
                     'unit' => $pi['unit'],
-                    'value_type' => $pi['value_type'],
                     'reorder_level' => $pi['reorder_level'],
                 ],
             );
