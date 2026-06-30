@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Events\RequisitionChanged;
 use App\Models\Acquisition;
 use App\Models\Department;
 use App\Models\Disposal;
@@ -16,12 +17,15 @@ use App\Models\Transfer;
 use App\Models\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Hash;
 
 class DemoDataSeeder extends Seeder
 {
     public function run(): void
     {
+        Event::fake([RequisitionChanged::class]);
+
         // ─── Offices (idempotent: safe to re-run) ───────────────
         $regional = Office::firstOrCreate(
             ['code' => 'OWWA-IVA'],
@@ -115,9 +119,18 @@ class DemoDataSeeder extends Seeder
         );
 
         // ─── Categories (already seeded) ─────────────────────────
-        $consumables = ItemCategory::where('name', 'Consumables')->firstOrFail();
-        $semiExpendable = ItemCategory::where('name', 'Semi-Expendable')->firstOrFail();
-        $ppe = ItemCategory::where('name', 'PPE')->firstOrFail();
+        $consumables = ItemCategory::firstOrCreate(
+            ['name' => 'Consumables'],
+            ['description' => 'Office consumables and supplies'],
+        );
+        $semiExpendable = ItemCategory::firstOrCreate(
+            ['name' => 'Semi-Expendable'],
+            ['description' => 'Semi-expendable properties'],
+        );
+        $ppe = ItemCategory::firstOrCreate(
+            ['name' => 'PPE'],
+            ['description' => 'Property, plant and equipment'],
+        );
 
         // ─── Items (unique per fiscal year + item_code) ─────────
         // Consumables
@@ -214,10 +227,10 @@ class DemoDataSeeder extends Seeder
             ['item' => 'SEM-003', 'qty' => 20, 'cost' => 250.00, 'date' => '2026-01-22', 'source' => 'National Book Store'],
             ['item' => 'SEM-004', 'qty' => 10, 'cost' => 350.00, 'date' => '2026-02-10', 'source' => 'Supplier — Clockworks Ph'],
             ['item' => 'SEM-005', 'qty' => 6, 'cost' => 1200.00, 'date' => '2026-02-10', 'source' => 'Supplier — Office Depot'],
-            ['item' => 'PPE-001', 'qty' => 10, 'cost' => 42000.00, 'date' => '2026-01-10', 'source' => 'Procurement — Lenovo Philippines'],
-            ['item' => 'PPE-002', 'qty' => 12, 'cost' => 8500.00, 'date' => '2026-01-12', 'source' => 'Procurement — Mandaue Foam'],
-            ['item' => 'PPE-003', 'qty' => 5, 'cost' => 15500.00, 'date' => '2026-01-12', 'source' => 'Procurement — Brother Philippines'],
-            ['item' => 'PPE-004', 'qty' => 4, 'cost' => 28000.00, 'date' => '2026-01-18', 'source' => 'Procurement — Carrier Aircon'],
+            ['item' => 'PPE-001', 'qty' => 10, 'cost' => 55000.00, 'date' => '2026-01-10', 'source' => 'Procurement — Lenovo Philippines'],
+            ['item' => 'PPE-002', 'qty' => 12, 'cost' => 55000.00, 'date' => '2026-01-12', 'source' => 'Procurement — Mandaue Foam'],
+            ['item' => 'PPE-003', 'qty' => 5, 'cost' => 55000.00, 'date' => '2026-01-12', 'source' => 'Procurement — Brother Philippines'],
+            ['item' => 'PPE-004', 'qty' => 4, 'cost' => 55000.00, 'date' => '2026-01-18', 'source' => 'Procurement — Carrier Aircon'],
         ];
 
         // Additional Q2 acquisitions to simulate replenishment
@@ -250,7 +263,7 @@ class DemoDataSeeder extends Seeder
             ['item' => 'CON-002', 'qty' => 50, 'cost' => 8.50, 'date' => '2026-01-20', 'source' => 'PS-DBM'],
             ['item' => 'CON-006', 'qty' => 20, 'cost' => 95.00, 'date' => '2026-02-05', 'source' => 'PS-DBM'],
             ['item' => 'SEM-001', 'qty' => 5, 'cost' => 380.00, 'date' => '2026-02-05', 'source' => 'National Book Store'],
-            ['item' => 'PPE-001', 'qty' => 3, 'cost' => 42000.00, 'date' => '2026-01-15', 'source' => 'Procurement — Lenovo Philippines'],
+            ['item' => 'PPE-001', 'qty' => 3, 'cost' => 55000.00, 'date' => '2026-01-15', 'source' => 'Procurement — Lenovo Philippines'],
         ];
 
         foreach ($satAcq as $a) {
@@ -316,21 +329,23 @@ class DemoDataSeeder extends Seeder
         ];
 
         $issSeq = 1;
-        foreach ($issData as $i) {
-            $ref = '2026-01-'.str_pad((string) $issSeq++, 4, '0', STR_PAD_LEFT);
-            Issuance::updateOrCreate(
-                ['reference_code' => $ref],
-                [
-                    'item_id' => $itemMap[$i['item']]->id,
-                    'office_id' => $regional->id,
-                    'department_id' => $i['dept']->id,
-                    'quantity' => $i['qty'],
-                    'unit_cost' => $itemMap[$i['item']]->acquisitions()->first()?->unit_cost,
-                    'issuance_date' => Carbon::parse($i['date']),
-                    'issued_by' => $sc->id,
-                ],
-            );
-        }
+        Issuance::withoutEvents(function () use ($issData, &$issSeq, $itemMap, $regional, $sc): void {
+            foreach ($issData as $i) {
+                $ref = '2026-01-'.str_pad((string) $issSeq++, 4, '0', STR_PAD_LEFT);
+                Issuance::updateOrCreate(
+                    ['reference_code' => $ref],
+                    [
+                        'item_id' => $itemMap[$i['item']]->id,
+                        'office_id' => $regional->id,
+                        'department_id' => $i['dept']->id,
+                        'quantity' => $i['qty'],
+                        'unit_cost' => $itemMap[$i['item']]->acquisitions()->first()?->unit_cost,
+                        'issuance_date' => Carbon::parse($i['date']),
+                        'issued_by' => $sc->id,
+                    ],
+                );
+            }
+        });
 
         // ─── Transfers ──────────────────────────────────────────
         // Regional → Satellite transfers

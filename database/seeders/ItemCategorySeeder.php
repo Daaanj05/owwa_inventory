@@ -13,6 +13,7 @@ class ItemCategorySeeder extends Seeder
             ['name' => 'Power Plant Equipment', 'description' => 'Equipment for power plant operations'],
             ['name' => 'Semi-Expendable', 'description' => 'Semi-expendable properties'],
             ['name' => 'Consumables', 'description' => 'Office consumables and supplies'],
+            ['name' => 'PPE', 'description' => 'Property, plant and equipment'],
         ];
 
         foreach ($categories as $cat) {

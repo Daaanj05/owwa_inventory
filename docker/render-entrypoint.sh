@@ -10,7 +10,7 @@ php artisan migrate --force
 php artisan db:seed --force
 
 if [ "$SEED_DEMO" = "true" ]; then
-    php artisan db:seed --class=DemoDataSeeder --force
+    php artisan db:seed --class=DemoDataSeeder --force || echo "WARN: DemoDataSeeder failed; continuing startup"
 fi
 
 php artisan config:cache
