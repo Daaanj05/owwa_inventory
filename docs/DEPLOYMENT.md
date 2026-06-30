@@ -197,7 +197,7 @@ Local development keeps `OLLAMA_URL=http://127.0.0.1:11434`.
 
 ## Render (Docker) + Neon (PostgreSQL)
 
-Deploy the web app on [Render](https://render.com) (Docker) and the database on [Neon](https://neon.tech) (free Postgres, no 90-day expiry). The repo [`render.yaml`](../render.yaml) defines the web service only — set Neon `DB_*` values manually in the Render dashboard (`sync: false` in the blueprint).
+Deploy the web app on [Render](https://render.com) (Docker) and the database on [Neon](https://neon.tech) (free Postgres, no 90-day expiry). The repo [`render.yaml`](../render.yaml) defines the web service only — **Neon credentials are not in the blueprint**; set `DB_HOST`, `DB_DATABASE`, `DB_USERNAME`, and `DB_PASSWORD` only in the Render dashboard so Blueprint sync never clears them.
 
 ### 1. Neon database
 
@@ -287,7 +287,7 @@ Do not change Filament paths — two panels require `/admin` and `/system-admin`
 
 - **Render web (free):** sleeps when idle; ~30s cold start; **no Shell** (Starter plan required).
 - **Neon (free):** 0.5 GB storage, scales to zero after ~5 min; no hard 90-day delete (unlike Render Postgres free).
-- **Avoid Blueprint sync** overwriting Neon `DB_*` until `render.yaml` has no `fromDatabase` links (current blueprint uses `sync: false` for secrets).
+- **Blueprint sync:** `render.yaml` intentionally omits `DB_HOST`, `DB_DATABASE`, `DB_USERNAME`, and `DB_PASSWORD`. Do **not** add them with `sync: false` and no value — a manual Blueprint sync will clear dashboard secrets. Set Neon credentials only under **Environment** in the Render dashboard.
 
 ## Default login
 
