@@ -6,6 +6,7 @@ use App\Models\Requisition;
 use App\Models\User;
 use App\Notifications\RequisitionRejectedMailNotification;
 use App\Notifications\RequisitionWorkflowDatabaseNotification;
+use App\Support\MailDelivery;
 use App\Support\RequisitionNotificationRecipients;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Notification;
@@ -155,7 +156,10 @@ class RequisitionWorkflowNotificationService
     protected function notifyUserWithRejectionMail(User $user, string $title, string $body, Requisition $requisition): void
     {
         $user->notify(new RequisitionWorkflowDatabaseNotification($title, $body, (int) $requisition->id));
-        $user->notify(new RequisitionRejectedMailNotification($requisition, $title));
+
+        MailDelivery::attempt(
+            fn (): mixed => $user->notify(new RequisitionRejectedMailNotification($requisition, $title))
+        );
     }
 
     protected function bodyFor(Requisition $requisition, bool $includeRemarks = false): string

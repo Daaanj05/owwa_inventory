@@ -22,46 +22,9 @@ class ItemsTable
     public static function configure(Table $table): Table
     {
         return $table
-            ->columns([
-                TextColumn::make('name')
-                    ->searchable()
-                    ->sortable()
-                    ->weight(\Filament\Support\Enums\FontWeight::Medium),
-                TextColumn::make('item_code')
-                    ->label('Stock No.')
-                    ->searchable()
-                    ->placeholder('—'),
-                TextColumn::make('unit')
-                    ->label('Measurement unit')
-                    ->searchable(),
-                TextColumn::make('value_type')
-                    ->label('Value category')
-                    ->formatStateUsing(fn (?string $state): string => SemiExpendableValueCategory::labelForValueType($state))
-                    ->badge()
-                    ->color(fn (?string $state): string => $state === 'high' ? 'warning' : 'gray')
-                    ->visible(fn (): bool => self::isActiveSemiExpendableCategory()),
-                TextColumn::make('reorder_level')
-                    ->label('Reorder at')
-                    ->numeric()
-                    ->sortable()
-                    ->alignEnd(),
-                TextColumn::make('status')
-                    ->label('Status')
-                    ->state(fn ($record): string => $record->archived_at ? 'Archived' : 'Active')
-                    ->badge()
-                    ->color(fn (string $state): string => $state === 'Archived' ? 'gray' : 'success'),
-            ])
+            ->columns(self::columns())
             ->defaultSort('name')
-            ->filters([
-                SelectFilter::make('value_type')
-                    ->label('Value type')
-                    ->options([
-                        'low' => 'Low value',
-                        'high' => 'High value',
-                    ])
-                    ->placeholder('All types')
-                    ->visible(fn (): bool => self::isActiveSemiExpendableCategory()),
-            ])
+            ->filters(self::filters())
             ->emptyStateHeading('No items yet')
             ->emptyStateDescription('Add inventory items here before recording acquisitions or issuances.')
             ->emptyStateIcon('heroicon-o-cube')
@@ -110,6 +73,75 @@ class ItemsTable
                         ->action(fn ($records) => $records->each->update(['archived_at' => now()])),
                 ]),
             ]);
+    }
+
+    /**
+     * @return array<int, TextColumn>
+     */
+    public static function columns(): array
+    {
+        $columns = [
+            TextColumn::make('name')
+                ->searchable()
+                ->sortable()
+                ->weight(\Filament\Support\Enums\FontWeight::Medium)
+                ->wrap()
+                ->grow(),
+            TextColumn::make('item_code')
+                ->label('Stock No.')
+                ->searchable()
+                ->placeholder('—')
+                ->grow(false),
+            TextColumn::make('unit')
+                ->label('Measurement unit')
+                ->searchable()
+                ->grow(false),
+        ];
+
+        if (self::isActiveSemiExpendableCategory()) {
+            $columns[] = TextColumn::make('value_type')
+                ->label('Value category')
+                ->formatStateUsing(fn (?string $state): string => SemiExpendableValueCategory::labelForValueType($state))
+                ->badge()
+                ->color(fn (?string $state): string => $state === 'high' ? 'warning' : 'gray')
+                ->grow(false);
+        }
+
+        $columns[] = TextColumn::make('reorder_level')
+            ->label('Reorder at')
+            ->numeric()
+            ->sortable()
+            ->width('5rem')
+            ->grow(false);
+
+        $columns[] = TextColumn::make('status')
+            ->label('Status')
+            ->state(fn ($record): string => $record->archived_at ? 'Archived' : 'Active')
+            ->badge()
+            ->color(fn (string $state): string => $state === 'Archived' ? 'gray' : 'success')
+            ->grow(false);
+
+        return $columns;
+    }
+
+    /**
+     * @return array<int, SelectFilter>
+     */
+    public static function filters(): array
+    {
+        if (! self::isActiveSemiExpendableCategory()) {
+            return [];
+        }
+
+        return [
+            SelectFilter::make('value_type')
+                ->label('Value type')
+                ->options([
+                    'low' => 'Low value',
+                    'high' => 'High value',
+                ])
+                ->placeholder('All types'),
+        ];
     }
 
     public static function isActiveSemiExpendableCategory(): bool

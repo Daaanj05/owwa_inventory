@@ -119,4 +119,19 @@ class ListItems extends ListRecords
     {
         return [];
     }
+
+    /**
+     * @return array<int, string>
+     */
+    public function getPageClasses(): array
+    {
+        return array_merge(parent::getPageClasses(), ['owwa-items-list-page']);
+    }
+
+    public function getTableColumnsSessionKey(): string
+    {
+        $categoryId = (int) session('active_item_category_id', 0);
+
+        return parent::getTableColumnsSessionKey().'_cat_'.$categoryId;
+    }
 }

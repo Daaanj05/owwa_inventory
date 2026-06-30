@@ -18,16 +18,20 @@ class ItemsTableValueCategoryTest extends TestCase
         session(['active_item_category_id' => $consumables->id]);
 
         $this->assertFalse(ItemsTable::isActiveSemiExpendableCategory());
+        $this->assertNotContains('value_type', array_map(fn ($column) => $column->getName(), ItemsTable::columns()));
 
-        $ppe = ItemCategory::factory()->create(['name' => 'Property, Plant and Equipment']);
+        $ppe = ItemCategory::query()->firstWhere('name', 'Property, Plant and Equipment')
+            ?? ItemCategory::factory()->create(['name' => 'Property, Plant and Equipment']);
         session(['active_item_category_id' => $ppe->id]);
 
         $this->assertFalse(ItemsTable::isActiveSemiExpendableCategory());
+        $this->assertNotContains('value_type', array_map(fn ($column) => $column->getName(), ItemsTable::columns()));
 
         $semi = ItemCategory::factory()->create(['name' => 'Semi-Expendable']);
         session(['active_item_category_id' => $semi->id]);
 
         $this->assertTrue(ItemsTable::isActiveSemiExpendableCategory());
+        $this->assertContains('value_type', array_map(fn ($column) => $column->getName(), ItemsTable::columns()));
     }
 
     public function test_stale_active_category_resets_to_first_active_category(): void

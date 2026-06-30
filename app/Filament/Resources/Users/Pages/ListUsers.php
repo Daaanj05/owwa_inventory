@@ -7,6 +7,7 @@ use App\Filament\Resources\Users\UserResource;
 use App\Filament\Support\OwwaFormModalDefaults;
 use App\Models\User;
 use App\Notifications\UserWelcomeNotification;
+use App\Support\MailDelivery;
 use Filament\Facades\Filament;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ListRecords;
@@ -66,6 +67,7 @@ class ListUsers extends ListRecords
     public function content(Schema $schema): Schema
     {
         $generatedPassword = null;
+        $welcomeEmailSent = false;
 
         $createAction = OwwaFormModalDefaults::createAction(OwwaFormModalDefaults::WIDTH_COMPACT)
             ->mutateDataUsing(function (array $data) use (&$generatedPassword): array {
@@ -76,27 +78,39 @@ class ListUsers extends ListRecords
 
                 return $data;
             })
-            ->after(function (User $record) use (&$generatedPassword): void {
+            ->after(function (User $record) use (&$generatedPassword, &$welcomeEmailSent): void {
                 $panel = Filament::getPanel($record->isSystemAdmin() ? 'system-admin' : 'admin');
 
-                $record->notify(new UserWelcomeNotification(
+                $welcomeEmailSent = MailDelivery::attempt(fn (): mixed => $record->notify(new UserWelcomeNotification(
                     $generatedPassword ?? '',
                     User::panelLoginUrlFor($record),
                     $panel->getVerifyEmailUrl($record),
-                ));
+                )));
             })
-            ->successNotification(function (Model $record) use (&$generatedPassword): Notification {
+            ->successNotification(function (Model $record) use (&$generatedPassword, &$welcomeEmailSent): Notification {
                 $password = $generatedPassword ?? '—';
+
+                if ($welcomeEmailSent) {
+                    return Notification::make()
+                        ->title('User created')
+                        ->success()
+                        ->body(sprintf(
+                            'Welcome email sent to %s. Temporary password (backup): %s',
+                            $record->email,
+                            $password,
+                        ))
+                        ->seconds(12);
+                }
 
                 return Notification::make()
                     ->title('User created')
-                    ->success()
+                    ->warning()
                     ->body(sprintf(
-                        'Welcome email sent to %s. Temporary password (backup): %s',
+                        'User saved, but the welcome email could not be sent (mail server unreachable). Share these credentials manually — Email: %s · Temporary password: %s',
                         $record->email,
                         $password,
                     ))
-                    ->seconds(12);
+                    ->seconds(20);
             });
 
         return $schema

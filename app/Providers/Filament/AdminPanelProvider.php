@@ -140,6 +140,7 @@ class AdminPanelProvider extends PanelProvider
 
         $categoryItems = ItemCategory::query()
             ->whereNull('archived_at')
+            ->whereNotIn('name', ['PPE', 'Power Plant Equipment'])
             ->get(['id', 'name'])
             ->sort(function (ItemCategory $left, ItemCategory $right): int {
                 $leftWeight = $this->getCategoryNavigationWeight($left->name);

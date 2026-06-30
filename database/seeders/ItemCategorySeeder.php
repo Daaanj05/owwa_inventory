@@ -21,5 +21,29 @@ class ItemCategorySeeder extends Seeder
                 ['description' => $cat['description']]
             );
         }
+
+        $canonical = ItemCategory::query()
+            ->where('name', 'Property, Plant and Equipment')
+            ->first();
+
+        if ($canonical === null) {
+            return;
+        }
+
+        $legacyIds = ItemCategory::query()
+            ->whereIn('name', ['PPE', 'Power Plant Equipment'])
+            ->pluck('id');
+
+        if ($legacyIds->isEmpty()) {
+            return;
+        }
+
+        \App\Models\Item::query()
+            ->whereIn('item_category_id', $legacyIds)
+            ->update(['item_category_id' => $canonical->id]);
+
+        ItemCategory::query()
+            ->whereIn('id', $legacyIds)
+            ->update(['archived_at' => now()]);
     }
 }

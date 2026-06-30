@@ -34,6 +34,14 @@ class ItemCategory extends Model
     /**
      * Template filename slug for OWWA forms per category (consumables.xlsx, ppe.xlsx, semi_expendable.xlsx).
      */
+    public function isLegacyPpeDuplicate(): bool
+    {
+        return in_array(strtolower(trim((string) $this->name)), [
+            'ppe',
+            'power plant equipment',
+        ], true);
+    }
+
     public function getTemplateSlug(): string
     {
         $name = strtolower(trim((string) $this->name));

@@ -7,6 +7,7 @@ use App\Filament\Support\ConfiguresOwwaViewAction;
 use App\Filament\Support\OwwaFormModalDefaults;
 use App\Filament\Support\OwwaModalSchema;
 use App\Models\User;
+use App\Support\MailDelivery;
 use App\Support\OwwaTransactionViewPresenter;
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
@@ -98,12 +99,23 @@ class UsersTable
                                 $panel = Filament::getPanel($record->isSystemAdmin() ? 'system-admin' : 'admin');
                                 $notification = app(FilamentVerifyEmail::class);
                                 $notification->url = $panel->getVerifyEmailUrl($record);
-                                $record->notify($notification);
+
+                                $sent = MailDelivery::attempt(fn (): mixed => $record->notify($notification));
+
+                                if ($sent) {
+                                    Notification::make()
+                                        ->title('Verification email sent')
+                                        ->body("A new verification link was sent to {$record->email}.")
+                                        ->success()
+                                        ->send();
+
+                                    return;
+                                }
 
                                 Notification::make()
-                                    ->title('Verification email sent')
-                                    ->body("A new verification link was sent to {$record->email}.")
-                                    ->success()
+                                    ->title('Email could not be sent')
+                                    ->body('The mail server is unreachable from this host. Configure an HTTP mail provider (e.g. Resend) in production, or share a verification link manually.')
+                                    ->warning()
                                     ->send();
                             }),
                     ],
