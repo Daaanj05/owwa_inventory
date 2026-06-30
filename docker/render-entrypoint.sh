@@ -7,6 +7,12 @@ fi
 
 php artisan package:discover --ansi
 php artisan migrate --force
+php artisan db:seed --force
+
+if [ "$SEED_DEMO" = "true" ]; then
+    php artisan db:seed --class=DemoDataSeeder --force
+fi
+
 php artisan config:cache
 
 exec php artisan serve --host=0.0.0.0 --port="${PORT:-10000}"

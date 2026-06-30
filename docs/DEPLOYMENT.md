@@ -195,25 +195,29 @@ Local development keeps `OLLAMA_URL=http://127.0.0.1:11434`.
 | 403 on an old URL | Restart tunnel → new URL → test the new URL. |
 | `__OLLAMA_UNAVAILABLE__` in app | Laptop off, Ollama stopped, tunnel down, or PaaS still has `OLLAMA_URL=http://127.0.0.1:11434`. |
 
-## Render (Docker + PostgreSQL)
+## Render (Docker) + Neon (PostgreSQL)
 
-Deploy the app on [Render](https://render.com) using the repo [`Dockerfile`](Dockerfile) at the project root. Choose **Docker** as the runtime (not Node — `package.json` is only for Vite assets).
+Deploy the web app on [Render](https://render.com) (Docker) and the database on [Neon](https://neon.tech) (free Postgres, no 90-day expiry). The repo [`render.yaml`](../render.yaml) defines the web service only — set Neon `DB_*` values manually in the Render dashboard (`sync: false` in the blueprint).
 
-**Fastest path:** Render Dashboard → **New** → **Blueprint** → connect `Daaanj05/owwa_inventory` → Render reads [`render.yaml`](../render.yaml) and creates Postgres + the Docker web service. After deploy, set `APP_URL` and `OLLAMA_URL` in the service environment (Blueprint marks these `sync: false`).
+### 1. Neon database
 
-### Manual setup (alternative)
+1. [neon.tech](https://neon.tech) → **New project** → region **AWS Singapore**, **Neon Auth OFF**.
+2. **Connect** → **Direct connection**, pooling **OFF**, SSL on.
+3. Copy host, database, user, password.
 
-### 1. Push code to GitHub
+Example:
 
-Connect Render to `https://github.com/Daaanj05/owwa_inventory` on branch `main` after pushing local changes.
+```env
+DB_CONNECTION=pgsql
+DB_HOST=ep-xxxx.ap-southeast-1.aws.neon.tech
+DB_PORT=5432
+DB_DATABASE=owwa4a-database
+DB_USERNAME=neondb_owner
+DB_PASSWORD=<from Neon — Show password>
+DB_SSLMODE=require
+```
 
-### 2. Create PostgreSQL
-
-1. Render Dashboard → **New** → **PostgreSQL**.
-2. Region: **Singapore** (closest to the Philippines).
-3. Copy **Internal** connection values (`DB_HOST`, `DB_PORT`, `DB_DATABASE`, `DB_USERNAME`, `DB_PASSWORD`).
-
-### 3. Create Web Service
+### 2. Render web service
 
 | Setting | Value |
 | ------- | ----- |
@@ -221,69 +225,80 @@ Connect Render to `https://github.com/Daaanj05/owwa_inventory` on branch `main` 
 | Branch | `main` |
 | Runtime | **Docker** |
 | Region | Singapore |
-| Instance | Free (sleeps after ~15 min idle; cold start ~30s) |
 
-No custom build or start command is required — the Dockerfile and [`docker/render-entrypoint.sh`](docker/render-entrypoint.sh) handle build, migrate, and `php artisan serve` on `$PORT`.
+[`docker/render-entrypoint.sh`](docker/render-entrypoint.sh) on each deploy:
 
-### 4. Environment variables
+1. `migrate --force`
+2. `db:seed --force` (default users — no Render Shell needed)
+3. `DemoDataSeeder` when `SEED_DEMO=true`
+4. `config:cache` → `artisan serve` on `$PORT`
 
-Generate `APP_KEY` locally:
+### 3. Render environment variables
 
-```powershell
-php artisan key:generate --show
-```
-
-Set on Render:
+Set on **owwa-inventory** → **Environment**:
 
 ```env
 APP_ENV=production
 APP_DEBUG=false
-APP_KEY=<paste from key:generate --show>
-APP_URL=https://<your-service>.onrender.com
+APP_KEY=<base64:... or let Blueprint generate>
+APP_URL=https://owwa-inventory.onrender.com
 
 DB_CONNECTION=pgsql
-DB_HOST=<from Render Postgres>
+DB_HOST=<Neon host>
 DB_PORT=5432
-DB_DATABASE=<from Render Postgres>
-DB_USERNAME=<from Render Postgres>
-DB_PASSWORD=<from Render Postgres>
+DB_DATABASE=<Neon database>
+DB_USERNAME=<Neon role>
+DB_PASSWORD=<Neon password>
+DB_SSLMODE=require
+
+SEED_DEMO=true
 
 SESSION_DRIVER=database
 QUEUE_CONNECTION=database
 CACHE_STORE=database
 BROADCAST_CONNECTION=log
 
-OLLAMA_URL=https://<current-trycloudflare-url>
+OLLAMA_URL=https://<trycloudflare-url-or-127.0.0.1:11434>
 OLLAMA_EMBED_MODEL=nomic-embed-text
 OLLAMA_CHAT_MODEL=deepseek-r1:7b
 ```
 
-`bootstrap/app.php` trusts all proxies so HTTPS URLs work behind Render’s load balancer.
+`APP_KEY` from Render must use Laravel format: `base64:...` (the entrypoint adds the prefix if missing).
 
-### 5. First deploy
+Set `SEED_DEMO=false` after you have real data and want deploys to skip demo inventory seeding.
 
-1. Deploy and watch build logs — Docker runs `npm run build`, `composer install`, then starts the entrypoint.
-2. Entrypoint runs `php artisan migrate --force` automatically.
-3. Seed demo data (Render **Shell** tab):
+### 4. URLs and panels
 
-   ```bash
-   php artisan db:seed --force
-   ```
+| URL | Purpose |
+| --- | ------- |
+| `https://owwa-inventory.onrender.com` | Redirects to `/admin/login` |
+| `/admin/login` | Supply Custodian, Unit Consolidator, Employee |
+| `/system-admin/login` | System Admin only |
 
-4. Open `https://<your-service>.onrender.com/admin` and log in (see [Default login](#default-login) below).
-5. Start the Ollama quick tunnel on your laptop (see [Ollama via Cloudflare quick tunnel](#ollama-via-cloudflare-quick-tunnel-laptop--paas)) and set `OLLAMA_URL` on Render when the URL changes.
+Do not change Filament paths — two panels require `/admin` and `/system-admin`.
 
-### Render notes
+### 5. After deploy
 
-- **Free tier:** the web service spins down when idle; wake it with a browser request before a demo.
-- **Database:** use Render Postgres only — do not point production at a database on your laptop.
-- **Secrets:** never commit `.env`; set all production values in the Render dashboard.
+1. Wait for **Live** status (first request may be slow — free tier cold start).
+2. Open `/admin/login` or `/system-admin/login` — seeding runs automatically; no Shell required.
+3. For AI: start Ollama tunnel on laptop and update `OLLAMA_URL` on Render.
+
+### Free tier notes
+
+- **Render web (free):** sleeps when idle; ~30s cold start; **no Shell** (Starter plan required).
+- **Neon (free):** 0.5 GB storage, scales to zero after ~5 min; no hard 90-day delete (unlike Render Postgres free).
+- **Avoid Blueprint sync** overwriting Neon `DB_*` until `render.yaml` has no `fromDatabase` links (current blueprint uses `sync: false` for secrets).
 
 ## Default login
 
-After seeding, you can log in to the admin panel:
+After deploy (auto-seed), use:
 
-- **Supply Custodian**: `custodian@owwa.gov.ph` / `password`
-- **Employee**: `test@example.com` / `password`
+| Role | Panel | Email | Password |
+| ---- | ----- | ----- | -------- |
+| Supply Custodian | `/admin/login` | `custodian@owwa.gov.ph` | `password` |
+| Unit Consolidator | `/admin/login` | `authorized@owwa.gov.ph` | `password` |
+| System Admin | `/system-admin/login` | `admin@owwa.gov.ph` | `password` |
+
+With `SEED_DEMO=true`, additional demo users exist (e.g. `juan@owwa.gov.ph` / `password`). `test@example.com` is only created by `DemoDataSeeder`, not the base seed.
 
 Change these credentials in production.
