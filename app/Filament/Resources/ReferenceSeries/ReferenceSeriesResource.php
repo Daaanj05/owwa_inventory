@@ -2,7 +2,7 @@
 
 namespace App\Filament\Resources\ReferenceSeries;
 
-use App\Filament\Resources\ReferenceSeries\Pages\EditReferenceSeries;
+use App\Filament\Concerns\HasOwwaViewModalUrl;
 use App\Filament\Resources\ReferenceSeries\Pages\ListReferenceSeries;
 use App\Filament\Resources\ReferenceSeries\Schemas\ReferenceSeriesForm;
 use App\Filament\Resources\ReferenceSeries\Tables\ReferenceSeriesTable;
@@ -17,6 +17,8 @@ use UnitEnum;
 
 class ReferenceSeriesResource extends Resource
 {
+    use HasOwwaViewModalUrl;
+
     protected static ?string $model = ReferenceSeries::class;
 
     protected static string|UnitEnum|null $navigationGroup = 'Setup';
@@ -62,7 +64,6 @@ class ReferenceSeriesResource extends Resource
     {
         return [
             'index' => ListReferenceSeries::route('/'),
-            'edit' => EditReferenceSeries::route('/{record}/edit'),
         ];
     }
 }

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\LogsUserActivity;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -10,8 +11,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 
 class AiProcurementRun extends Model
 {
-    use HasFactory;
-    use SoftDeletes;
+    use HasFactory, LogsUserActivity, SoftDeletes;
 
     protected $fillable = [
         'ran_at',
@@ -24,9 +24,9 @@ class AiProcurementRun extends Model
     ];
 
     protected $casts = [
-        'ran_at'      => 'datetime',
+        'ran_at' => 'datetime',
         'period_from' => 'date',
-        'period_to'   => 'date',
+        'period_to' => 'date',
     ];
 
     public function items(): HasMany
@@ -39,4 +39,3 @@ class AiProcurementRun extends Model
         return $this->belongsTo(User::class, 'created_by');
     }
 }
-

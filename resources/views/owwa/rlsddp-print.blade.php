@@ -16,6 +16,7 @@
         .signature-block .name { border-bottom: 1px solid #333; padding: 4px 0; min-height: 1.5em; }
         .signature-block .label { font-size: 0.85em; color: #555; margin-top: 2px; }
         .circumstances { border: 1px solid #333; padding: 8px; min-height: 4em; margin: 1rem 0; }
+        .meta-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem 2rem; margin: 1rem 0; }
         @media print { body { margin: 0; } }
     </style>
 </head>
@@ -48,6 +49,18 @@
             <dt>RLSDDP Date</dt>
             <dd>{{ $disposal->disposal_date?->format('Y-m-d') ?? '—' }}</dd>
         </div>
+        <div>
+            <dt>Designation</dt>
+            <dd>{{ $disposal->accountable_officer_designation ?? '—' }}</dd>
+        </div>
+        <div>
+            <dt>{{ $disposal->item?->category?->getTemplateSlug() === 'semi_expendable' ? 'ICS No.' : 'PAR No.' }}</dt>
+            <dd>{{ $disposal->parIssuance?->reference_code ?? '—' }}</dd>
+        </div>
+        <div>
+            <dt>{{ $disposal->item?->category?->getTemplateSlug() === 'semi_expendable' ? 'ICS Date' : 'PAR Date' }}</dt>
+            <dd>{{ $disposal->parIssuance?->issuance_date?->format('Y-m-d') ?? '—' }}</dd>
+        </div>
     </dl>
 
     <table>
@@ -60,25 +73,59 @@
         </thead>
         <tbody>
             <tr>
-                <td>{{ $disposal->property_number ?? $disposal->item?->item_code ?? '—' }}</td>
-                <td>{{ $disposal->item?->name }}{{ $disposal->reason ? ' – ' . $disposal->reason : '' }}</td>
-                <td>{{ $disposal->acquisition_cost !== null ? number_format((float) $disposal->acquisition_cost, 2) : '—' }}</td>
+                <td>{{ $propertyNumber ?? '—' }}</td>
+                <td>{{ $disposal->item?->name }}{{ $disposal->item?->description ? ' — ' . $disposal->item->description : '' }}</td>
+                <td>{{ $acquisitionCost !== null ? number_format((float) $acquisitionCost, 2) : '—' }}</td>
             </tr>
         </tbody>
     </table>
 
-    <p><strong>Circumstances:</strong></p>
-    <div class="circumstances">{{ $disposal->reason ?? $disposal->remarks ?? '—' }}</div>
+    <div class="meta-grid">
+        <div>
+            <strong>Property status:</strong>
+            {{ match ($disposal->property_status) {
+                'lost' => 'Lost',
+                'stolen' => 'Stolen',
+                'damaged' => 'Damaged',
+                'destroyed' => 'Destroyed',
+                default => '—',
+            } }}
+        </div>
+        <div>
+            <strong>Police notified:</strong>
+            {{ $disposal->police_notified === true ? 'Yes' : ($disposal->police_notified === false ? 'No' : '—') }}
+        </div>
+        @if ($disposal->police_notified)
+            <div>
+                <strong>Police station:</strong> {{ $disposal->police_station ?? '—' }}
+            </div>
+            <div>
+                <strong>Police notification date:</strong> {{ $disposal->police_notified_date?->format('Y-m-d') ?? '—' }}
+            </div>
+        @endif
+    </div>
 
-    <p><strong>Certified by Accountable Officer:</strong> _______________________ &nbsp; <strong>Noted by:</strong> _______________________</p>
+    <p><strong>Circumstances:</strong></p>
+    <div class="circumstances">{{ $disposal->circumstances ?? $disposal->reason ?? '—' }}</div>
+
+    @if (filled($disposal->gov_id_type) || filled($disposal->gov_id_no))
+        <div class="meta-grid">
+            <div><strong>Government ID:</strong> {{ $disposal->gov_id_type ?? '—' }}</div>
+            <div><strong>ID No.:</strong> {{ $disposal->gov_id_no ?? '—' }}</div>
+            <div><strong>ID date issued:</strong> {{ $disposal->gov_id_date_issued?->format('Y-m-d') ?? '—' }}</div>
+        </div>
+    @endif
+
     <div class="signature-block">
         <div>
             <div class="name">{{ $disposal->custodian_printed_name ?? '_____________________________' }}</div>
             <div class="label">Signature over Printed Name of the Accountable Officer</div>
+            <div class="label">{{ $disposal->disposal_date?->format('Y-m-d') ?? '' }}</div>
         </div>
         <div>
-            <div class="name">{{ $disposal->approved_by_printed_name ?? '_____________________________' }}</div>
+            <div class="name">{{ $disposal->immediate_supervisor_printed_name ?? $disposal->approved_by_printed_name ?? '_____________________________' }}</div>
             <div class="label">Signature over Printed Name of the Immediate Supervisor</div>
+            <div class="label">{{ $disposal->disposal_date?->format('Y-m-d') ?? '' }}</div>
         </div>
     </div>
     <p style="margin-top: 0.5rem; font-size: 0.9em;">(Sign physically on this form when printing.)</p>

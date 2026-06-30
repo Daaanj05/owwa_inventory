@@ -25,12 +25,16 @@ class AiProcurementItem extends Model
         'suggested_qty_max',
         'reason',
         'include_in_request',
+        'action_status',
+        'action_updated_at',
+        'action_notes',
     ];
 
     protected $casts = [
         'include_in_request' => 'boolean',
-        'avg_monthly_usage'  => 'float',
-        'months_cover'       => 'float',
+        'avg_monthly_usage' => 'float',
+        'months_cover' => 'float',
+        'action_updated_at' => 'datetime',
     ];
 
     public function run(): BelongsTo
@@ -48,4 +52,3 @@ class AiProcurementItem extends Model
         return $this->belongsTo(Office::class);
     }
 }
-

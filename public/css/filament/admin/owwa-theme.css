@@ -17,6 +17,8 @@
     --owwa-shadow-card-hover: 0 4px 12px 0 rgb(0 0 0 / 0.08);
     --owwa-space-content: 1rem;
     --owwa-space-section: 1rem;
+    /* Procurement analytics — KPI row wrapper (change these to retint the container) */
+
 }
 
 /* ═══════════════════════════════════════════════════════════
@@ -34,7 +36,7 @@
     padding-left: var(--owwa-space-content) !important;
     padding-right: var(--owwa-space-content) !important;
     padding-bottom: 0.75rem !important;
-    padding-top: 0.5rem !important;
+    padding-top: 0.25rem !important;
     max-width: 1600px !important;
 }
 
@@ -125,7 +127,7 @@
    PAGE HEADER
 ═══════════════════════════════════════════════════════════ */
 .fi-header {
-    padding-top: 0.5rem !important;
+    padding-top: 0.25rem !important;
     padding-bottom: 0.5rem !important;
 }
 
@@ -142,6 +144,316 @@
     color: #6b7280 !important;
     margin-top: 0.125rem !important;
     font-weight: 400 !important;
+}
+
+/* Procurement analytics & COA reports: title sits higher; keep bottom spacing for scroll/actions */
+.fi-main:has(.owwa-pa-page),
+.fi-main:has(.owwa-coa-reports-page) {
+    padding-top: 0.05rem !important;
+    padding-bottom: 0.75rem !important;
+}
+
+/*
+ * Filament default: .fi-page-header-main-ctn { flex flex-col gap-y-8 py-8 } — large gap between
+ * the page header (title/subheading) and .fi-page-main (where the FY bar lives). Override here
+ * to tighten that space; row-gap is what separates subtitle from the context bar.
+ */
+.fi-page.owwa-pa-page .fi-page-header-main-ctn {
+    row-gap: 0.5rem !important;
+    padding-top: 0.75rem !important;
+    padding-bottom: 0.5rem !important;
+}
+
+.fi-page.owwa-pa-page .fi-header {
+    padding-left: 0.75rem !important;
+    padding-right: 0.75rem !important;
+    padding-top: 0.05rem !important;
+    padding-bottom: 0.05rem !important;
+}
+
+.fi-page.owwa-pa-page .fi-header-subheading {
+    margin-top: 0.375rem !important;
+    padding-bottom: 0.05rem;
+}
+
+/*
+ * Filament default: .fi-page-content { grid gap-y-8 } — this was the main source of the huge gap
+ * between the FY/category row and the KPI stats row (both are direct grid children).
+ */
+.fi-page.owwa-pa-page .fi-page-content {
+    gap: 0.5rem !important;
+    row-gap: 0.5rem !important;
+    column-gap: 0.5rem !important;
+    padding-top: 0.125rem;
+    padding-bottom: 1rem;
+}
+
+.fi-page.owwa-pa-page .fi-header-heading {
+    display: flex !important;
+    align-items: center !important;
+}
+
+/* KPI stack + lazy stats: remove extra vertical margin above the first widget */
+.fi-page.owwa-pa-page .fi-wi-widget,
+.fi-page.owwa-pa-page .fi-wi-stats-overview {
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+}
+
+/* COA reports — same header / content density as Procurement analytics; icon matches sidebar (document-text) */
+.fi-page.owwa-coa-reports-page .fi-page-header-main-ctn {
+    row-gap: 0.5rem !important;
+    padding-top: 0.75rem !important;
+    padding-bottom: 0.5rem !important;
+}
+
+.fi-page.owwa-coa-reports-page .fi-header {
+    padding-left: 0.75rem !important;
+    padding-right: 0.75rem !important;
+    padding-top: 0.05rem !important;
+    padding-bottom: 0.05rem !important;
+}
+
+.fi-page.owwa-coa-reports-page .fi-page-content {
+    gap: 0.5rem !important;
+    row-gap: 0.5rem !important;
+    column-gap: 0.5rem !important;
+    padding-top: 0.125rem;
+    padding-bottom: 1rem;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   REQUISITIONS — UNIT CONSOLIDATOR SECONDARY TABS (CSS)
+═══════════════════════════════════════════════════════════ */
+/*
+ * We render "Received / Sent" under the table search bar via a tiny DOM script.
+ * This CSS only styles the secondary container so it matches Filament tabs.
+ */
+.owwa-uc-secondary-tabs {
+    display: flex;
+    gap: 0.4rem;
+    flex-wrap: wrap;
+    padding-top: 0.5rem;
+    width: 100%;
+}
+
+.owwa-uc-secondary-tabs .fi-tabs-item {
+    display: inline-flex !important;
+    align-items: center !important;
+    text-decoration: none !important;
+    min-height: 1.75rem !important;
+    padding: 0.25rem 0.6rem !important;
+    border-radius: 9999px !important;
+    font-size: 0.75rem !important;
+    font-weight: 600 !important;
+    background: #ffffff !important;
+    border: 1px solid #e2e8f0 !important;
+    color: #475569 !important;
+}
+
+.owwa-uc-secondary-tabs .fi-tabs-item.fi-active,
+.owwa-uc-secondary-tabs .fi-tabs-item[aria-selected="true"] {
+    background: #eff6ff !important;
+    border-color: #bfdbfe !important;
+    color: #2563eb !important;
+}
+
+/* Requisitions UC: ensure secondary tabs are BELOW the search field */
+.fi-page.owwa-uc-requisitions-tabs .fi-ta-ctn .fi-ta-header-toolbar > :nth-child(2) {
+    flex-wrap: wrap !important;
+    row-gap: 0.4rem !important;
+}
+
+.fi-page.owwa-uc-requisitions-tabs .fi-ta-ctn .fi-ta-header-toolbar > :nth-child(2) .fi-ta-search-field {
+    /* Keep default "search left, triggers right" behavior */
+    flex: 0 0 auto !important;
+    width: 260px !important;
+    max-width: 320px !important;
+    margin-right: auto !important;
+}
+
+.fi-page.owwa-uc-requisitions-tabs .fi-ta-ctn .fi-ta-header-toolbar > :nth-child(2) .owwa-uc-secondary-tabs {
+    flex: 0 0 100% !important;
+    order: 99 !important; /* ensure it stays on the next line */
+}
+
+
+.fi-page.owwa-coa-reports-page .fi-header-heading {
+    display: flex !important;
+    align-items: center !important;
+    gap: 0.625rem;
+}
+
+.fi-page.owwa-coa-reports-page .fi-header-heading::before {
+    content: '';
+    width: 1.75rem;
+    height: 1.75rem;
+    flex-shrink: 0;
+    background: center / contain no-repeat url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22none%22%20viewBox%3D%220%200%2024%2024%22%20stroke-width%3D%221.5%22%20stroke%3D%22%232563eb%22%3E%3Cpath%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20d%3D%22M19.5%2014.25v-2.625a3.375%203.375%200%200%200-3.375-3.375h-1.5a1.125%201.125%200%200%201-1.125-1.125v-1.5a3.375%203.375%200%200%200-3.375-3.375H8.25m2.25%200H5.625c-.621%200-1.125.504-1.125%201.125v17.25c0%20.621.504%201.125%201.125%201.125h12.75c.621%200%201.125-.504%201.125-1.125V11.25a9%209%200%200%200-9-9Z%22%2F%3E%3C%2Fsvg%3E");
+}
+
+/*
+ * Inventory category hubs (Consumables, Semi-Expendable, PPE / Safety, etc.) + Stock levels:
+ * same header / content rhythm as Procurement analytics. Page root classes come from
+ * getPageClasses() on existing page classes — styling is CSS-only here.
+ */
+.fi-main:has(.owwa-inv-category-page) {
+    padding-top: 0.05rem !important;
+    padding-bottom: 0.75rem !important;
+}
+
+.fi-page.owwa-inv-category-page .fi-page-header-main-ctn {
+    row-gap: 0.5rem !important;
+    padding-top: 0.75rem !important;
+    padding-bottom: 0.5rem !important;
+}
+
+.fi-page.owwa-inv-category-page .fi-header {
+    padding-left: 0.75rem !important;
+    padding-right: 0.75rem !important;
+    padding-top: 0.05rem !important;
+    padding-bottom: 0.05rem !important;
+}
+
+.fi-page.owwa-inv-category-page .fi-page-content {
+    gap: 0.5rem !important;
+    row-gap: 0.5rem !important;
+    column-gap: 0.5rem !important;
+    padding-top: 0.125rem;
+    padding-bottom: 1rem;
+}
+
+.fi-page.owwa-inv-category-page .fi-header-heading {
+    display: flex !important;
+    align-items: center !important;
+    gap: 0.625rem;
+}
+
+/* Default icon when category slug has no specific rule below */
+.fi-page.owwa-inv-category-page .fi-header-heading::before {
+    content: '';
+    width: 1.75rem;
+    height: 1.75rem;
+    flex-shrink: 0;
+    background: center / contain no-repeat url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke-width='1.5' stroke='%232563eb'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M3.75 6A2.25 2.25 0 0 1 6 3.75h2.25A2.25 2.25 0 0 1 10.5 6v2.25a2.25 2.25 0 0 1-2.25 2.25H6a2.25 2.25 0 0 1-2.25-2.25V6ZM13.5 15.75a2.25 2.25 0 0 1 2.25-2.25H18a2.25 2.25 0 0 1 2.25 2.25V18A2.25 2.25 0 0 1 18 20.25h-2.25a2.25 2.25 0 0 1-2.25-2.25v-2.25ZM13.5 6.75a2.25 2.25 0 0 1 2.25-2.25H18A2.25 2.25 0 0 1 20.25 6v2.25A2.25 2.25 0 0 1 18 10.5h-2.25A2.25 2.25 0 0 1 13.5 8.25V6.75ZM3.75 15.75a2.25 2.25 0 0 1 2.25-2.25h2.25a2.25 2.25 0 0 1 2.25 2.25V18a2.25 2.25 0 0 1-2.25 2.25H6a2.25 2.25 0 0 1-2.25-2.25v-2.25Z' /%3E%3C/svg%3E");
+}
+
+/* Consumables — archive box */
+.fi-page.owwa-icd--consumables .fi-header-heading::before {
+    background-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22none%22%20viewBox%3D%220%200%2024%2024%22%20stroke-width%3D%221.5%22%20stroke%3D%22%232563eb%22%3E%3Cpath%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20d%3D%22M20.25%207.5l-.625%2010.632a2.25%202.25%200%2001-2.247%202.118H6.622a2.25%202.25%200%2001-2.247-2.118L3.75%207.5M10%2011.25h4M3.375%207.5h17.25c.621%200%201.125-.504%201.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621%200-1.125.504-1.125%201.125v1.5c0%20.621.504%201.125%201.125%201.125z%22%2F%3E%3C%2Fsvg%3E");
+}
+
+/* Semi-expendable — wrench & screwdriver */
+.fi-page.owwa-icd--semi-expendable .fi-header-heading::before {
+    background-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22none%22%20viewBox%3D%220%200%2024%2024%22%20stroke-width%3D%221.5%22%20stroke%3D%22%232563eb%22%3E%3Cpath%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20d%3D%22M11.42%2015.17%2017.25%2021A2.652%202.652%200%200021%2017.25l-5.877-5.877M11.42%2015.17%202.81%206.58a2.652%202.652%200%20013.12-4.24l2.87%202.87m-5.18%2010.06%205.18-5.18m5.18%205.18%202.87%202.87a2.652%202.652%200%20004.24-3.12l-2.87-2.87m-5.18-10.06-5.18%205.18%22%2F%3E%3C%2Fsvg%3E");
+}
+
+/* PPE / Safety — shield check */
+.fi-page.owwa-icd--ppe-safety .fi-header-heading::before,
+.fi-page.owwa-icd--ppe .fi-header-heading::before {
+    background-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22none%22%20viewBox%3D%220%200%2024%2024%22%20stroke-width%3D%221.5%22%20stroke%3D%22%232563eb%22%3E%3Cpath%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20d%3D%22M9%2012.75%2011.25%2015%2015%209.75m-3-7.036A11.959%2011.959%200%20013.598%206%2011.99%2011.99%200%20003%209.749c0%205.592%203.824%2010.29%209%2011.623%205.176-1.332%209-6.03%209-11.622%200-1.31-.21-2.571-.598-3.751h-.152c-3.196%200-6.1-1.248-8.25-3.285z%22%2F%3E%3C%2Fsvg%3E");
+}
+
+/* Power plant equipment (or similar category label in DB) */
+.fi-page.owwa-icd--power-plant-equipment .fi-header-heading::before {
+    background-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22none%22%20viewBox%3D%220%200%2024%2024%22%20stroke-width%3D%221.5%22%20stroke%3D%22%232563eb%22%3E%3Cpath%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20d%3D%22M2.25%2021h19.5m-18-18v18m10.5-18v18m-10.5%200h15m-15-18h15m0%200h3.375c.621%200%201.125.504%201.125%201.125V20.25m-4.5-18v18M4.875%203.75H3.375c-.621%200-1.125.504-1.125%201.125v15.75c0%20.621.504%201.125%201.125%201.125h1.5m14.25-18V6.375c0-.621-.504-1.125-1.125-1.125H4.875c-.621%200-1.125.504-1.125%201.125V18.75%22%2F%3E%3C%2Fsvg%3E");
+}
+
+/* ═══════════════════════════════════════════════════════════
+   RESOURCE PAGES — tighter header + title row icon (CSS only; no shared PHP)
+   Matches Procurement analytics header density; icon is a generic module glyph.
+═══════════════════════════════════════════════════════════ */
+.fi-page[class*="fi-resource-"] .fi-page-header-main-ctn {
+    row-gap: 0.75rem !important;
+    padding-top: 1rem !important;
+    padding-bottom: 1rem !important;
+}
+
+.fi-page[class*="fi-resource-"] .fi-header {
+    padding-left: 0.75rem !important;
+    padding-right: 0.75rem !important;
+    padding-top: 0.05rem !important;
+    padding-bottom: 0.05rem !important;
+}
+
+.fi-page[class*="fi-resource-"] .fi-page-content {
+    gap: 1rem !important;
+    row-gap: 1rem !important;
+}
+
+.fi-page[class*="fi-resource-"] .fi-header-heading {
+    display: flex !important;
+    align-items: center !important;
+    gap: 0.625rem;
+}
+
+/* Heroicons "squares-2x2" outline — default for resources; overridden per-resource below to match sidebar */
+.fi-page[class*="fi-resource-"] .fi-header-heading::before {
+    content: '';
+    width: 1.75rem;
+    height: 1.75rem;
+    flex-shrink: 0;
+    background: center / contain no-repeat url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke-width='1.5' stroke='%232563eb'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M3.75 6A2.25 2.25 0 0 1 6 3.75h2.25A2.25 2.25 0 0 1 10.5 6v2.25a2.25 2.25 0 0 1-2.25 2.25H6a2.25 2.25 0 0 1-2.25-2.25V6ZM13.5 15.75a2.25 2.25 0 0 1 2.25-2.25H18a2.25 2.25 0 0 1 2.25 2.25V18A2.25 2.25 0 0 1 18 20.25h-2.25a2.25 2.25 0 0 1-2.25-2.25v-2.25ZM13.5 6.75a2.25 2.25 0 0 1 2.25-2.25H18A2.25 2.25 0 0 1 20.25 6v2.25A2.25 2.25 0 0 1 18 10.5h-2.25A2.25 2.25 0 0 1 13.5 8.25V6.75ZM3.75 15.75a2.25 2.25 0 0 1 2.25-2.25h2.25a2.25 2.25 0 0 1 2.25 2.25V18a2.25 2.25 0 0 1-2.25 2.25H6a2.25 2.25 0 0 1-2.25-2.25v-2.25Z' /%3E%3C/svg%3E");
+}
+
+/* Items — sidebar uses Heroicon::OutlinedCube */
+.fi-page.fi-resource-items .fi-header-heading::before {
+    background-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22none%22%20viewBox%3D%220%200%2024%2024%22%20stroke-width%3D%221.5%22%20stroke%3D%22%232563eb%22%3E%3Cpath%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20d%3D%22M21%207.5l-9-5.25L3%207.5m18%200l-9%205.25m9-5.25v10.5l-9%205.25M3%207.5m0%2010.5l9%205.25m-9-5.25v-10.5l9-5.25m0%2010.5l9%205.25m9-5.25v-10.5l-9-5.25%22%2F%3E%3C%2Fsvg%3E");
+}
+
+/* Requisitions — sidebar uses Heroicon::OutlinedDocumentText */
+.fi-page.fi-resource-requisitions .fi-header-heading::before {
+    background-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22none%22%20viewBox%3D%220%200%2024%2024%22%20stroke-width%3D%221.5%22%20stroke%3D%22%232563eb%22%3E%3Cpath%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20d%3D%22M19.5%2014.25v-2.625a3.375%203.375%200%200%200-3.375-3.375h-1.5a1.125%201.125%200%200%201-1.125-1.125v-1.5a3.375%203.375%200%200%200-3.375-3.375H8.25m2.25%200H5.625c-.621%200-1.125.504-1.125%201.125v17.25c0%20.621.504%201.125%201.125%201.125h12.75c.621%200%201.125-.504%201.125-1.125V11.25a9%209%200%200%200-9-9Z%22%2F%3E%3C%2Fsvg%3E");
+}
+
+/* Setup / System Admin resources — title row icon matches sidebar navigation */
+.fi-page.fi-resource-fiscal-years .fi-header-heading::before {
+    background-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22none%22%20viewBox%3D%220%200%2024%2024%22%20stroke-width%3D%221.5%22%20stroke%3D%22%232563eb%22%3E%3Cpath%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20d%3D%22M6.75%203v2.25M17.25%203v2.25M3%2018.75V7.5a2.25%202.25%200%20012.25-2.25h13.5A2.25%202.25%200%200121%207.5v11.25m-18%200A2.25%202.25%200%20005.25%2021h13.5A2.25%202.25%200%200021%2018.75m-18%200v-7.5A2.25%202.25%200%20015.25%209h13.5A2.25%202.25%200%200121%2011.25v7.5%22%2F%3E%3C%2Fsvg%3E");
+}
+
+.fi-page.fi-resource-users .fi-header-heading::before {
+    background-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22none%22%20viewBox%3D%220%200%2024%2024%22%20stroke-width%3D%221.5%22%20stroke%3D%22%232563eb%22%3E%3Cpath%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20d%3D%22M15.75%206a3.75%203.75%200%201%201-7.5%200%203.75%203.75%200%200%201%207.5%200zM4.501%2020.118a7.5%207.5%200%200%201%2014.998%200A17.933%2017.933%200%200%201%2012%2021.75c-2.676%200-5.216-.584-7.499-1.632z%22%2F%3E%3C%2Fsvg%3E");
+}
+
+.fi-page.fi-resource-offices .fi-header-heading::before {
+    background-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22none%22%20viewBox%3D%220%200%2024%2024%22%20stroke-width%3D%221.5%22%20stroke%3D%22%232563eb%22%3E%3Cpath%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20d%3D%22M2.25%2021h19.5m-18-18v18m10.5-18v18m-10.5%200h15m-15-18h15m0%200h3.375c.621%200%201.125.504%201.125%201.125V20.25m-4.5-18v18M4.875%203.75H3.375c-.621%200-1.125.504-1.125%201.125v15.75c0%20.621.504%201.125%201.125%201.125h1.5m14.25-18V6.375c0-.621-.504-1.125-1.125-1.125H4.875c-.621%200-1.125.504-1.125%201.125V18.75%22%2F%3E%3C%2Fsvg%3E");
+}
+
+.fi-page.fi-resource-departments .fi-header-heading::before {
+    background-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22none%22%20viewBox%3D%220%200%2024%2024%22%20stroke-width%3D%221.5%22%20stroke%3D%22%232563eb%22%3E%3Cpath%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20d%3D%22M18%2018.72a9.094%209.094%200%20003.741-.479%203%203%200%2000-4.682-2.72m.94%203.198.001.031c0%20.225-.012.447-.037.666A11.944%2011.944%200%200112%2021c-2.17%200-4.207-.576-5.963-1.584A6.062%206.062%200%20016%2018.719m12%200a5.971%205.971%200%2000-.941-3.197m0%200A5.995%205.995%200%200012%2012.75a5.995%205.995%200%2000-5.059%202.772m0%200a3%203%200%2000-4.681%202.72%208.986%208.986%200%20003.74.477m.94-3.197l.001-.031a3%203%200%2000-4.24-2.732M9%209a3%203%200%20116%200%203%203%200%2001-6%200zm6%200a2.25%202.25%200%2011-4.5%200%202.25%202.25%200%20014.5%200z%22%2F%3E%3C%2Fsvg%3E");
+}
+
+.fi-page.fi-resource-item-categories .fi-header-heading::before {
+    background-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22none%22%20viewBox%3D%220%200%2024%2024%22%20stroke-width%3D%221.5%22%20stroke%3D%22%232563eb%22%3E%3Cpath%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20d%3D%22M9.568%203H5.25A2.25%202.25%200%20003%205.25v4.318c0%20.597.237%201.17.659%201.591l9.581%209.581c.699.699%201.78.872%202.607.33a18.095%2018.095%200%20005.223-5.223c.542-.827.369-1.908-.33-2.607L11.16%203.66A2.25%202.25%200%20009.568%203z%22%2F%3E%3Cpath%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20d%3D%22M6%206h.008v.008H6V6z%22%2F%3E%3C%2Fsvg%3E");
+}
+
+.fi-page.fi-resource-user-logs .fi-header-heading::before {
+    background-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22none%22%20viewBox%3D%220%200%2024%2024%22%20stroke-width%3D%221.5%22%20stroke%3D%22%232563eb%22%3E%3Cpath%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20d%3D%22M9%2012.75%2011.25%2015%2015%209.75m-3-7.036A11.959%2011.959%200%20013.598%206%2011.99%2011.99%200%20003%209.749c0%205.592%203.824%2010.29%209%2011.623%205.176-1.332%209-6.03%209-11.622%200-1.31-.21-2.571-.598-3.751h-.152c-3.196%200-6.1-1.248-8.25-3.285z%22%2F%3E%3C%2Fsvg%3E");
+}
+
+.fi-page.fi-resource-reference-series .fi-header-heading::before {
+    background-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22none%22%20viewBox%3D%220%200%2024%2024%22%20stroke-width%3D%221.5%22%20stroke%3D%22%232563eb%22%3E%3Cpath%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20d%3D%22M5.25%208.25h15m-16.5%207.5h15m-1.8-13.5-3.9%2019.5m-2.1-19.5-3.9%2019.5%22%2F%3E%3C%2Fsvg%3E");
+}
+
+.owwa-pa-page-title {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.625rem;
+}
+
+.owwa-pa-page-title .owwa-pa-page-title-icon,
+.owwa-pa-page-title-icon {
+    width: 1.75rem;
+    height: 1.75rem;
+    color: #2563eb;
+    flex-shrink: 0;
+}
+
+.owwa-pa-page-title-text {
+    font-size: inherit;
+    font-weight: inherit;
+    letter-spacing: inherit;
+    line-height: 1.2;
 }
 
 /* ═══════════════════════════════════════════════════════════
@@ -432,22 +744,85 @@ button[type="submit"].fi-btn:hover {
     color: #111827 !important;
 }
 
-/* Table container: standalone card */
+/* Table outer container + header area: transparent so search toolbar has no white fill */
 .fi-resource-list-records-page .fi-ta-ctn {
+    background: transparent !important;
+    border: none !important;
+    border-radius: 0 !important;
+    overflow: visible !important;
+    box-shadow: none !important;
+}
+
+.fi-resource-list-records-page .fi-ta-header-ctn {
+    background: transparent !important;
+    border-bottom: none !important;
+}
+
+/* .fi-ta-main holds header-ctn (toolbar) + content-ctn (table) + empty-state.
+   Keep main transparent; card styling goes on content + empty individually. */
+.fi-resource-list-records-page .fi-ta-main {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+}
+
+/* Table content area (column headers + data rows): white card with top rounding.
+   Do NOT use overflow:hidden — it clips row actions and blocks horizontal scroll. */
+.fi-resource-list-records-page .fi-ta-content-ctn {
     background: #ffffff !important;
     border: 1px solid #e5e7eb !important;
-    border-radius: 0.5rem !important;
-    overflow: hidden !important;
+    border-top: none !important;
+    border-bottom: none !important;
+    border-radius: 0.5rem 0.5rem 0 0 !important;
+    overflow-x: auto !important;
+    overflow-y: visible !important;
     box-shadow: 0 1px 2px rgba(0,0,0,0.04) !important;
+    -webkit-overflow-scrolling: touch !important;
+}
+
+/* Inner layout wrapper (fi-ta-content) must allow the table to grow wider than the viewport */
+.fi-resource-list-records-page .fi-ta-content {
+    min-width: 0 !important;
+    overflow-x: visible !important;
+}
+
+.fi-resource-list-records-page .fi-ta-table {
+    width: max-content !important;
+    min-width: 100% !important;
+}
+
+/* Empty state: connects to content-ctn above, bottom rounding */
+.fi-resource-list-records-page .fi-ta-empty-state {
+    background: #ffffff !important;
+    border: 1px solid #e5e7eb !important;
+    border-top: none !important;
+    border-radius: 0 0 0.5rem 0.5rem !important;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.04) !important;
+}
+
+/* When table has records and no empty state, content-ctn gets full rounding */
+.fi-resource-list-records-page .fi-ta-ctn:not(.fi-ta-ctn-with-footer) .fi-ta-content-ctn:last-child {
+    border-radius: 0.5rem !important;
+    border-bottom: 1px solid #e5e7eb !important;
 }
 
 /* ═══════════════════════════════════════════════════════════
    TABLES – toolbar layout override
    Goal: search on the left (reasonable width), filters + column manager on the right.
 ═══════════════════════════════════════════════════════════ */
+.fi-ta-ctn .fi-ta-header {
+    background: transparent !important;
+}
+
+.fi-resource-list-records-page .fi-ta-header-ctn {
+    margin-bottom: 1rem !important;
+}
+
 .fi-ta-ctn .fi-ta-header-toolbar {
     justify-content: flex-start !important;
     gap: 0.75rem !important;
+    padding: 0 !important;
+    border-bottom: none !important;
 }
 
 /* Second child wrapper: contains search + filters + column manager */
@@ -474,14 +849,20 @@ button[type="submit"].fi-btn:hover {
     letter-spacing: 0.05em !important;
     color: #475569 !important;
     background-color: #f1f5f9 !important;
-    padding: 0.4rem 0.75rem !important;
-    border-bottom: 2px solid #e2e8f0 !important;
+    padding: 0.3rem 0.75rem !important;
+    border-bottom: 1px solid #e2e8f0 !important;
+}
+
+/* Ensure ALL table header cells (including edge/actions column headers) share the same background */
+.fi-ta-table thead th,
+.fi-ta-thead th {
+    background-color: #f1f5f9 !important;
 }
 
 .fi-ta-cell {
     font-size: 0.8125rem !important;
     color: #374151 !important;
-    padding: 0.4rem 0.75rem !important;
+    padding: 0.125rem 0.75rem !important;
     vertical-align: middle !important;
 }
 
@@ -503,7 +884,14 @@ button[type="submit"].fi-btn:hover {
 }
 
 .fi-ta-table thead tr {
-    border-bottom: 1px solid #e5e7eb !important;
+    border-bottom: 0 !important; /* avoid double line with header cell border */
+}
+
+/* Remove any subtle header shadowing between cells */
+.fi-ta-header-cell,
+.fi-ta-table thead th,
+.fi-ta-thead th {
+    box-shadow: none !important;
 }
 
 /* ═══════════════════════════════════════════════════════════
@@ -558,10 +946,10 @@ button[type="submit"].fi-btn:hover {
 
 /* Dashboard gap between widgets */
 .fi-page-content .fi-sc-has-gap {
-    gap: 1.5rem !important;
+    gap: 1.25rem !important;
 }
 
-/* Stats Section wrapper — transparent so only individual cards show */
+/* Stats Section wrapper — default behavior (don’t break non-dashboard widgets) */
 .fi-wi-stats-overview .fi-section {
     background: transparent !important;
     border: none !important;
@@ -596,11 +984,28 @@ button[type="submit"].fi-btn:hover {
     padding: 0 !important;
 }
 
+/* Remove any remaining top/bottom whitespace and scrolling on login only */
+.fi-body:has(.owwa-login-wrapper) {
+    padding: 0 !important;
+    margin: 0 !important;
+    overflow: hidden !important;
+}
+
+.fi-body:has(.owwa-login-wrapper) .fi-main,
+.fi-body:has(.owwa-login-wrapper) .fi-simple-layout,
+.fi-body:has(.owwa-login-wrapper) .fi-simple-main,
+.fi-body:has(.owwa-login-wrapper) .fi-simple-main-ctn {
+    padding: 0 !important;
+    margin: 0 !important;
+    height: 100vh !important;
+    max-height: 100vh !important;
+}
+
 /* Wrapper: two columns side by side */
 .owwa-login-wrapper {
     display: flex;
-    min-height: 100vh;
     width: 100%;
+    height: 100vh;
 }
 
 /* ── Left brand panel ── */
@@ -1199,6 +1604,29 @@ button[type="submit"].fi-btn:hover {
     line-height: 1.5;
 }
 
+/* (Replaced by the scoped .fi-body:has(.owwa-login-wrapper) rules above.) */
+
+.owwa-login-error {
+    margin-top: 1.1rem;
+    padding: 0.75rem 0.9rem;
+    border-radius: 0.75rem;
+    border: 1px solid #fecaca;
+    background: #fef2f2;
+}
+
+.owwa-login-error-title {
+    margin: 0 0 0.15rem;
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: #b91c1c;
+}
+
+.owwa-login-error-text {
+    margin: 0;
+    font-size: 0.8rem;
+    color: #7f1d1d;
+}
+
 /* Responsive: stack vertically on tablet/mobile */
 @media (max-width: 900px) {
     .owwa-login-brand {
@@ -1223,7 +1651,7 @@ button[type="submit"].fi-btn:hover {
     border: none !important;
     border-radius: 1.25rem !important;
     color: #fff !important;
-    padding: 1.75rem 2rem !important;
+    padding: 1.25rem 1.5rem !important;
     position: relative;
     overflow: hidden;
     box-shadow: 0 4px 20px -2px rgba(0,51,102,0.35) !important;
@@ -1256,7 +1684,7 @@ button[type="submit"].fi-btn:hover {
     align-items: center;
     justify-content: space-between;
     flex-wrap: wrap;
-    gap: 1.25rem;
+    gap: 1rem;
     position: relative;
     z-index: 1;
 }
@@ -1264,12 +1692,12 @@ button[type="submit"].fi-btn:hover {
 .owwa-welcome-left {
     display: flex;
     align-items: center;
-    gap: 1.25rem;
+    gap: 1rem;
 }
 
 .owwa-welcome-avatar-placeholder {
-    width: 3.25rem;
-    height: 3.25rem;
+    width: 3rem;
+    height: 3rem;
     border-radius: 50%;
     background: rgba(255,255,255,0.15);
     border: 2px solid rgba(255,255,255,0.3);
@@ -1284,7 +1712,7 @@ button[type="submit"].fi-btn:hover {
 }
 
 .owwa-welcome-greeting {
-    font-size: 1.4rem;
+    font-size: 1.25rem;
     font-weight: 700;
     color: #fff;
     letter-spacing: -0.02em;
@@ -1342,8 +1770,29 @@ button[type="submit"].fi-btn:hover {
    STATS OVERVIEW — KPI cards (4-in-a-row)
 ═══════════════════════════════════════════════════════════ */
 
-/* Stat card — white background, no hover effects */
+/* Outer container for the KPI group (does NOT affect chart widgets) */
+.fi-wi-stats-overview .fi-section {
+    background: #ffffff !important;
+    border: 1px solid #e2e8f0 !important;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.05) !important;
+    border-radius: 0.875rem !important;
+    overflow: hidden !important;
+}
+
+.fi-wi-stats-overview .fi-section-content-ctn {
+    padding: 0 !important;
+}
+
+.fi-wi-stats-overview .fi-section-content {
+    padding: 0.3rem 0.5rem !important;
+    gap: 0.5rem !important;
+    justify-content: center !important;
+}
+
+/* Stat card — default visible cards (baseline) */
 .fi-wi-stats-overview-stat {
+    display: flex !important;
+    flex-direction: column !important;
     background: #ffffff !important;
     border: 1px solid #e8edf3 !important;
     border-radius: 0.875rem !important;
@@ -1370,7 +1819,72 @@ button[type="submit"].fi-btn:hover {
 
 /* Inner content */
 .fi-wi-stats-overview-stat-content {
-    padding: 1.1rem 1.25rem 1.1rem !important;
+    /* tighter vertical, roomier horizontal */
+    padding: 0.1rem .1rem 0.1rem !important;
+}
+
+/* Scoped “KPI chips inside container card” */
+.owwa-kpi-container .fi-section {
+    background: #ffffff !important;
+    border: 1px solid #e2e8f0 !important;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.05) !important;
+    border-radius: 0.875rem !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+}
+
+.owwa-kpi-container .fi-section-content-ctn {
+    padding: 0 !important;
+}
+
+.owwa-kpi-container .fi-section-content {
+    padding: 0 !important;
+    gap: 0 !important;
+}
+
+.owwa-kpi-container .fi-wi-stats-overview-stat {
+    display: flex !important;
+    flex-direction: column !important;
+    background: transparent !important;
+    border: none !important;
+    border-right: 1px solid #e8edf3 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    overflow: visible !important;
+    position: relative !important;
+    transition: background 0.12s !important;
+}
+
+.owwa-kpi-container .fi-wi-stats-overview-stat:last-child {
+    border-right: none !important;
+}
+
+.owwa-kpi-container .fi-wi-stats-overview-stat:hover {
+    background: #f8fafc !important;
+}
+
+.owwa-kpi-container .fi-wi-stats-overview-stat::before {
+    content: '' !important;
+    display: block !important;
+    position: absolute !important;
+    left: 0 !important;
+    top: 0.75rem !important;
+    bottom: 0.75rem !important;
+    width: 3px !important;
+    border-radius: 0 2px 2px 0 !important;
+    background: #e2e8f0 !important;
+    flex-shrink: unset !important;
+    height: auto !important;
+}
+
+.owwa-kpi-container .fi-wi-stats-overview-stat:has([class*="warning"])::before { background: linear-gradient(180deg,#f59e0b,#fbbf24) !important; }
+.owwa-kpi-container .fi-wi-stats-overview-stat:has([class*="success"])::before { background: linear-gradient(180deg,#10b981,#34d399) !important; }
+.owwa-kpi-container .fi-wi-stats-overview-stat:has([class*="primary"])::before { background: linear-gradient(180deg,#1e6fbe,#3b82f6) !important; }
+.owwa-kpi-container .fi-wi-stats-overview-stat:has([class*="info"])::before    { background: linear-gradient(180deg,#0284c7,#38bdf8) !important; }
+.owwa-kpi-container .fi-wi-stats-overview-stat:has([class*="gray"])::before    { background: linear-gradient(180deg,#64748b,#94a3b8) !important; }
+
+.owwa-kpi-container .fi-wi-stats-overview-stat-content {
+    padding: 0.75rem 1.1rem 0.875rem 1.35rem !important;
 }
 
 /* Label */
@@ -1378,25 +1892,25 @@ button[type="submit"].fi-btn:hover {
     display: flex !important;
     align-items: center !important;
     gap: 0.35rem !important;
-    margin-bottom: 0.4rem !important;
+    margin-bottom: 0.25rem !important;
 }
 
 .fi-wi-stats-overview-stat-label {
-    font-size: 0.8125rem !important;
+    font-size: 0.65rem !important;
     font-weight: 600 !important;
-    color: #64748b !important;
-    text-transform: none !important;
-    letter-spacing: 0 !important;
+    color: #94a3b8 !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.05em !important;
 }
 
-/* Big number */
+/* Big number — smaller to stay compact inside the container */
 .fi-wi-stats-overview-stat-value {
-    font-size: 2.25rem !important;
+    font-size: 1.45rem !important;
     font-weight: 800 !important;
-    letter-spacing: -0.05em !important;
+    letter-spacing: -0.04em !important;
     color: #0f172a !important;
     line-height: 1 !important;
-    margin-bottom: 0.5rem !important;
+    margin-bottom: 0.25rem !important;
 }
 
 /* Description */
@@ -1404,8 +1918,18 @@ button[type="submit"].fi-btn:hover {
     display: flex !important;
     align-items: center !important;
     gap: 0.3rem !important;
-    font-size: 0.75rem !important;
+    font-size: 0.65rem !important;
     font-weight: 500 !important;
+}
+
+/* KPI tiles tagged via Stat::extraAttributes — match Procurement Analytics KPI rhythm.
+   No square aspect ratio: use natural content height like the Procurement cards. */
+.fi-wi-stats-overview-stat.owwa-kpi-square .fi-wi-stats-overview-stat-label {
+    white-space: nowrap !important;
+}
+
+.fi-wi-stats-overview-stat.owwa-kpi-square .fi-wi-stats-overview-stat-description svg {
+    flex-shrink: 0 !important;
 }
 
 /* ═══════════════════════════════════════════════════════════
@@ -1421,6 +1945,8 @@ button[type="submit"].fi-btn:hover {
 
 .fi-wi-chart .fi-section-header {
     margin-bottom: 0.75rem !important;
+    padding-top: 0.40rem !important;
+    padding-bottom: 0.40rem !important;
 }
 
 .fi-wi-chart .fi-section-header-heading {
@@ -1428,6 +1954,9 @@ button[type="submit"].fi-btn:hover {
     font-weight: 700 !important;
     color: #0f172a !important;
     letter-spacing: -0.015em !important;
+    line-height: 1.1 !important;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
 }
 
 .fi-wi-chart .fi-section-header-description {
@@ -1436,9 +1965,47 @@ button[type="submit"].fi-btn:hover {
     margin-top: 0.1rem !important;
 }
 
+/* Widget heading tooltip */
+.owwa-widget-heading-tip {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    cursor: help;
+    padding: 0;
+    margin: 0;
+    line-height: 1.1;
+}
+
+.owwa-widget-tip-bubble {
+    position: absolute;
+    bottom: calc(100% + 8px);
+    left: 0;
+    z-index: 9999;
+    width: 280px;
+    padding: 0.55rem 0.75rem;
+    border-radius: 0.5rem;
+    background: rgba(15, 23, 42, 0.93);
+    color: #e2e8f0;
+    font-size: 0.75rem;
+    font-weight: 400;
+    line-height: 1.5;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+    pointer-events: none;
+    white-space: normal;
+}
+
+.owwa-widget-tip-bubble::after {
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: 1rem;
+    border: 5px solid transparent;
+    border-top-color: rgba(15, 23, 42, 0.93);
+}
+
 /* Chart canvas: breathing room */
 .fi-wi-chart-canvas-ctn {
-    padding: 0.75rem 1rem 0.5rem !important;
+    padding: 0.65rem 0.9rem 0.4rem !important;
 }
 
 /* Pie chart: center the donut */
@@ -1455,8 +2022,8 @@ button[type="submit"].fi-btn:hover {
 .owwa-kpi-row {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 0.75rem;
-    margin-bottom: 1.25rem;
+    gap: 0.6rem;
+    margin-bottom: 1rem;
     width: 100%;
 }
 
@@ -1468,7 +2035,7 @@ button[type="submit"].fi-btn:hover {
     background: #f8fafc;
     border: 1px solid #edf2f7;
     border-radius: 0.875rem;
-    padding: 0.875rem 1.1rem;
+    padding: 0.75rem 1rem;
     position: relative;
     overflow: hidden;
     transition: box-shadow 0.15s ease, border-color 0.15s ease;
@@ -1504,12 +2071,12 @@ button[type="submit"].fi-btn:hover {
     text-transform: uppercase;
     letter-spacing: 0.07em;
     display: block;
-    margin-bottom: 0.4rem;
+    margin-bottom: 0.3rem;
 }
 
 .owwa-kpi-value {
     display: block;
-    font-size: 1.5rem;
+    font-size: 1.4rem;
     font-weight: 800;
     color: #0f172a;
     letter-spacing: -0.04em;
@@ -1533,7 +2100,7 @@ button[type="submit"].fi-btn:hover {
     display: block;
     font-size: 0.6875rem;
     color: #94a3b8;
-    margin-top: 0.3rem;
+    margin-top: 0.2rem;
     font-weight: 500;
     letter-spacing: 0.02em;
 }
@@ -1546,8 +2113,8 @@ button[type="submit"].fi-btn:hover {
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    min-height: 100px;
-    padding: 1rem 1rem;
+    min-height: 80px;
+    padding: 0.85rem 1rem;
     background: #f9fafb;
     border: 1px dashed #e5e7eb;
     border-radius: 0.5rem;
@@ -1720,10 +2287,85 @@ button[type="submit"].fi-btn:hover {
     gap: 0.75rem;
 }
 
+.owwa-wizard-title {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 0.4rem;
+    width: fit-content;
+    max-width: 100%;
+    color: #111827;
+    font-size: 1.125rem;
+    line-height: 1.2;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+}
+
+.owwa-wizard-step {
+    color: inherit;
+    font-size: inherit;
+    line-height: inherit;
+    font-weight: inherit;
+    white-space: nowrap;
+}
+
+.owwa-wizard-step-link,
+.owwa-wizard-step-link:hover,
+.owwa-wizard-step-link:focus-visible,
+.owwa-wizard-step-link:active {
+    color: inherit;
+    background: transparent;
+    border: 0;
+    text-decoration: none;
+    outline: none;
+}
+
+.owwa-wizard-step-current {
+    color: inherit;
+}
+
+.owwa-wizard-separator {
+    color: #64748b;
+    font-size: 0.9em;
+    font-weight: 700;
+    line-height: 1;
+    margin-inline: 0.08rem;
+}
+
+/* JOE: My inventory — clipboard-document-list icon (matches sidebar) */
+.fi-page.owwa-employee-my-inventory .fi-header-heading::before {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke-width='1.5' stroke='%232563eb'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 0 0 2.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 0 0-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 0 0 .75-.75 2.25 2.25 0 0 0-.1-.664m-5.8 0A2.251 2.251 0 0 1 13.5 2.25H15a2.25 2.25 0 0 1 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25ZM6.75 12h.008v.008H6.75V12Zm0 3h.008v.008H6.75V15Zm0 3h.008v.008H6.75V18Z' /%3E%3C/svg%3E");
+}
+
+/* JOE: Stock levels — squares-2x2 icon (matches sidebar) */
+.fi-page.owwa-employee-stock-levels .fi-header-heading::before {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke-width='1.5' stroke='%232563eb'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M3.75 6A2.25 2.25 0 0 1 6 3.75h2.25A2.25 2.25 0 0 1 10.5 6v2.25a2.25 2.25 0 0 1-2.25 2.25H6a2.25 2.25 0 0 1-2.25-2.25V6ZM3.75 15.75A2.25 2.25 0 0 1 6 13.5h2.25a2.25 2.25 0 0 1 2.25 2.25V18a2.25 2.25 0 0 1-2.25 2.25H6A2.25 2.25 0 0 1 3.75 18v-2.25ZM13.5 6a2.25 2.25 0 0 1 2.25-2.25H18A2.25 2.25 0 0 1 20.25 6v2.25A2.25 2.25 0 0 1 18 10.5h-2.25a2.25 2.25 0 0 1-2.25-2.25V6ZM13.5 15.75a2.25 2.25 0 0 1 2.25-2.25H18a2.25 2.25 0 0 1 2.25 2.25V18A2.25 2.25 0 0 1 18 20.25h-2.25a2.25 2.25 0 0 1-2.25-2.25v-2.25Z' /%3E%3C/svg%3E");
+}
+
+.owwa-search-bar {
+    width: 260px;
+    max-width: 100%;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid #d1d5db;
+    border-radius: 0.5rem;
+    font-size: 0.8125rem;
+    background: #fff;
+    color: #111827;
+    outline: none;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+    transition: border-color 0.15s, box-shadow 0.15s;
+}
+.owwa-search-bar:focus {
+    border-color: #2563eb;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+.owwa-search-bar::placeholder {
+    color: #9ca3af;
+}
+
 .owwa-kpi-grid {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
-    gap: 0.5rem;
+    gap: 0.4rem;
 }
 
 @media (max-width: 640px) {
@@ -1734,10 +2376,10 @@ button[type="submit"].fi-btn:hover {
     background: #fff;
     border: 1px solid #e5e7eb;
     border-radius: 0.5rem;
-    padding: 0.75rem 1rem;
+    padding: 0.6rem 0.9rem;
     box-shadow: 0 1px 2px rgba(0,0,0,0.04);
     position: relative;
-    overflow: hidden;
+    overflow: visible;
 }
 
 .owwa-kpi-card::before {
@@ -1776,19 +2418,150 @@ button[type="submit"].fi-btn:hover {
     color: #6b7280;
 }
 
+.owwa-kpi-tooltip {
+    position: absolute;
+    left: 0.75rem;
+    right: 0.75rem;
+    top: -0.55rem;
+    transform: translateY(-100%);
+    z-index: 20;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.14s ease;
+    padding: 0.45rem 0.55rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.375rem;
+    background: #ffffff;
+    color: #334155;
+    font-size: 0.75rem;
+    font-weight: 500;
+    line-height: 1.4;
+    box-shadow: 0 4px 14px rgba(15, 23, 42, 0.12);
+}
+
+.owwa-kpi-card:hover .owwa-kpi-tooltip {
+    opacity: 1;
+}
+
 /* Data panel: card with header + body */
 .owwa-data-panel {
     background: #fff;
     border: 1px solid #e5e7eb;
-    border-radius: 0.5rem;
-    box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+    border-radius: 0.75rem;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 0 0 1px rgba(0,0,0,0.03);
     overflow: hidden;
 }
 
+.owwa-search-wrap {
+    padding: 0 0 0.5rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+/* Toolbar: search left, filters right — grid keeps one row (no wrap under search) */
+.owwa-toolbar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0 0 0.5rem;
+}
+.owwa-toolbar-left {
+    min-width: 0;
+    justify-self: start;
+    width: 100%;
+    max-width: min(28rem, 100%);
+}
+.owwa-toolbar-right {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 0.5rem;
+    justify-content: flex-end;
+    min-width: 0;
+}
+
+@media (max-width: 520px) {
+    .owwa-stock-levels-toolbar .owwa-toolbar-right {
+        flex-wrap: wrap;
+        justify-content: flex-end;
+    }
+}
+
+/* Stock levels: scoped selects — solid fill + border (Filament can reset native selects) */
+.owwa-stock-scope-select {
+    box-sizing: border-box;
+    height: 2.375rem;
+    min-width: 10.5rem;
+    max-width: 100%;
+    padding: 0.5rem 2rem 0.5rem 0.75rem;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    line-height: 1.25;
+    color: #111827;
+    background-color: #ffffff;
+    border: 1px solid #cbd5e1;
+    border-radius: 0.5rem;
+    outline: none;
+    cursor: pointer;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath d='M6 8l4 4 4-4' stroke='%23475569' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-size: 1rem 1rem;
+    background-position: right 0.5rem center;
+    transition: border-color 0.15s, box-shadow 0.15s;
+}
+.owwa-stock-scope-select:hover {
+    border-color: #94a3b8;
+    background-color: #f8fafc;
+}
+.owwa-stock-scope-select:focus {
+    border-color: #2563eb;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+    background-color: #fff;
+}
+/* Stock levels page also embeds matching rules in stock-levels.blade.php (!important) so Filament cannot override. */
+
+.owwa-per-page-select {
+    height: 2.25rem;
+    padding: 0.5rem 2.25rem 0.5rem 0.75rem;
+    font-size: 0.8125rem;
+    border: 1px solid #d1d5db;
+    border-radius: 0.5rem;
+    background: #fff;
+    color: #111827;
+    outline: none;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath d='M6 8l4 4 4-4' stroke='%236b7280' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-size: 1rem 1rem;
+    /* This controls the space to the RIGHT of the arrow */
+    background-position: right 0.75rem center;
+}
+
+.owwa-per-page-select:focus {
+    border-color: #2563eb;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+/* When per-page is inside the joined pill, focus ring goes on the container */
+.owwa-pagination-center:focus-within {
+    border-color: #2563eb;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
 .owwa-data-panel-header {
-    padding: 0.5rem 0.75rem;
-    background: #f8fafc;
-    border-bottom: 1px solid #e5e7eb;
+    padding: 0.15rem 0;
+    background: transparent;
+    border-bottom: none;
     display: flex;
     flex-wrap: wrap;
     align-items: center;
@@ -1817,6 +2590,11 @@ button[type="submit"].fi-btn:hover {
     color: #92400e;
 }
 
+.owwa-data-panel-alert-full {
+    width: 100%;
+    display: flex;
+}
+
 .owwa-alert-icon {
     width: 1rem;
     height: 1rem;
@@ -1839,53 +2617,473 @@ button[type="submit"].fi-btn:hover {
 }
 
 .owwa-data-table thead {
-    background: #f1f5f9;
+    background-color: #f1f5f9;
 }
 
 .owwa-data-table th {
-    padding: 0.4rem 0.75rem;
+    padding: 0.75rem 0.75rem;
     text-align: left;
     font-weight: 600;
     font-size: 0.6875rem;
     text-transform: uppercase;
     letter-spacing: 0.05em;
     color: #475569;
-    border-bottom: 2px solid #e2e8f0;
+    border-bottom: 1px solid #e2e8f0;
     white-space: nowrap;
 }
 
-.owwa-data-table th.owwa-num,
-.owwa-data-table th.owwa-status { text-align: right; }
-.owwa-data-table th.owwa-status { padding-right: 0.75rem; }
 
 .owwa-data-table tbody tr {
-    border-bottom: 1px solid #f1f5f9;
-    transition: background 0.15s ease;
+    border-bottom: 1px solid #e5e7eb;
+    transition: background-color 0.12s ease;
+}
+
+.owwa-data-table tbody tr:nth-child(even) {
+    background-color: #fafafa;
 }
 
 .owwa-data-table tbody tr:hover {
-    background: #f8fafc;
+    background-color: #f1f5f9;
 }
 
 .owwa-data-table tbody tr.owwa-row-low {
-    background: #fef2f2;
+    background-color: #fef2f2;
 }
 
 .owwa-data-table tbody tr.owwa-row-low:hover {
-    background: #fee2e2;
+    background-color: #fde8e8;
 }
 
 .owwa-data-table td {
-    padding: 0.4rem 0.75rem;
+    padding: 0.875rem 0.75rem;
     vertical-align: middle;
-    color: #475569;
+    color: #374151;
 }
 
 .owwa-data-table td.owwa-cell-primary { color: #111827; font-weight: 500; }
-.owwa-data-table td.owwa-cell-muted  { color: #64748b; }
+.owwa-data-table td.owwa-cell-muted  { color: #6b7280; }
 .owwa-data-table td.owwa-cell-danger { color: #dc2626; font-weight: 600; }
 .owwa-data-table td.owwa-num        { text-align: right; font-variant-numeric: tabular-nums; }
 .owwa-data-table td.owwa-status     { text-align: right; }
+.owwa-data-table th.owwa-num        { text-align: right; }
+.owwa-data-table th.owwa-status     { text-align: right; }
+
+.owwa-data-table--zebra tbody tr:nth-child(even):not(.owwa-row-low) {
+    background-color: #fafafa;
+}
+
+.owwa-pa-table-shell {
+    border-radius: 0.5rem;
+    border: 1px solid #e2e8f0;
+    overflow: hidden;
+}
+
+.owwa-pa-table-shell .owwa-data-table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: #f8fafc;
+    box-shadow: 0 1px 0 #e2e8f0;
+}
+
+.dark .owwa-pa-table-shell .owwa-data-table thead th {
+    background: #0f172a;
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.owwa-pa-table-scroll {
+    max-height: 28rem;
+    overflow: auto;
+}
+
+.owwa-pa-presets {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+}
+
+.owwa-pa-preset-btn {
+    border: 1px solid #d1d5db;
+    border-radius: 9999px;
+    padding: 0.2rem 0.65rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: #374151;
+    background: #fff;
+    cursor: pointer;
+}
+
+.owwa-pa-preset-btn:hover {
+    border-color: #1e6fbe;
+    color: #1e6fbe;
+}
+
+.owwa-pa-preset-btn.is-active {
+    background: #eff6ff;
+    border-color: #93c5fd;
+    color: #1e6fbe;
+    font-weight: 600;
+}
+
+.owwa-pa-chip--inline {
+    margin-bottom: 0.75rem;
+}
+
+.owwa-pa-tab-helper {
+    margin: 0.5rem 0 0;
+    font-size: 0.75rem;
+    line-height: 1.5;
+    color: #64748b;
+}
+
+.owwa-pa-summary-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.owwa-pa-action-panel {
+    border-radius: 0.75rem;
+    border: 1px solid #e2e8f0;
+    background: #f8fafc;
+    padding: 1rem 1.1rem;
+}
+
+.owwa-pa-action-headline {
+    margin: 0 0 0.75rem;
+    font-size: 0.9375rem;
+    font-weight: 700;
+    color: #0f172a;
+}
+
+.owwa-pa-action-group {
+    margin-top: 0.65rem;
+}
+
+.owwa-pa-action-group-title {
+    margin: 0 0 0.35rem;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #64748b;
+}
+
+.owwa-pa-action-list {
+    margin: 0;
+    padding-left: 1.1rem;
+    font-size: 0.8125rem;
+    line-height: 1.55;
+    color: #334155;
+}
+
+.owwa-pa-action-empty {
+    margin: 0;
+    font-size: 0.8125rem;
+    color: #64748b;
+}
+
+.owwa-pa-generate-btn--secondary {
+    background: #fff;
+    color: #1e6fbe;
+}
+
+.owwa-pa-ai-insight {
+    border-radius: 0.75rem;
+    border: 1px solid #e2e8f0;
+    background: #fff;
+    padding: 0.85rem 1rem;
+}
+
+.owwa-pa-ai-insight-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin-bottom: 0.5rem;
+}
+
+.owwa-pa-ai-insight-title {
+    margin: 0;
+    font-size: 0.8125rem;
+    font-weight: 700;
+    color: #475569;
+}
+
+.owwa-pa-ai-recommendation {
+    margin-top: 0.75rem;
+    border-radius: 0.75rem;
+    border: 1px solid #e2e8f0;
+    background: #fff;
+    overflow: hidden;
+}
+
+.owwa-pa-ai-recommendation-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.85rem 1rem 0;
+}
+
+.owwa-pa-ai-recommendation-title {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 600;
+    color: #0f172a;
+    line-height: 1.3;
+}
+
+.owwa-pa-ai-recommendation-icon {
+    font-size: 0.875rem;
+    color: #2563eb;
+    line-height: 1;
+}
+
+.owwa-pa-ai-recommendation-meta-link {
+    flex-shrink: 0;
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: #64748b;
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+.owwa-pa-ai-recommendation-meta-link:hover {
+    color: #334155;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+.owwa-pa-ai-recommendation-body {
+    padding: 0.5rem 1rem 0.85rem;
+    font-size: 0.875rem;
+    line-height: 1.6;
+    color: #334155;
+}
+
+.owwa-pa-ai-recommendation-body p {
+    margin: 0 0 0.5rem;
+}
+
+.owwa-pa-ai-recommendation-body p:last-child {
+    margin-bottom: 0;
+}
+
+.owwa-pa-ai-recommendation .owwa-pr-ai-foot {
+    margin: 0;
+}
+
+.owwa-pa-ai-unavailable {
+    margin: 0;
+    font-size: 0.8125rem;
+    color: #64748b;
+}
+
+.owwa-pr-ai-loading--inset {
+    margin-top: 0.25rem;
+}
+
+.owwa-pa-filter-chips {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 0.75rem;
+    margin-bottom: 0.75rem;
+}
+
+.owwa-pa-chip {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.25rem 0.65rem;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: #1e3a5f;
+    background: #eff6ff;
+    border: 1px solid #bfdbfe;
+}
+
+.owwa-pa-how-it-works summary {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #2563eb;
+    cursor: pointer;
+    list-style: none;
+}
+
+.owwa-pa-how-it-works summary::-webkit-details-marker {
+    display: none;
+}
+
+.owwa-pa-how-it-works p {
+    margin: 0.5rem 0 0;
+    max-width: 52rem;
+    font-size: 0.8125rem;
+    line-height: 1.55;
+    color: #64748b;
+}
+
+.owwa-pa-table-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.75rem;
+}
+
+.owwa-pa-table-actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.owwa-pa-export-btn,
+.owwa-pa-generate-btn {
+    border-radius: 0.5rem;
+    border: 1px solid #1e6fbe;
+    background: #1e6fbe;
+    color: #fff;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    padding: 0.45rem 0.85rem;
+    cursor: pointer;
+}
+
+.owwa-pa-export-btn {
+    background: #fff;
+    color: #1e6fbe;
+}
+
+.owwa-pa-export-btn:hover,
+.owwa-pa-generate-btn:hover {
+    filter: brightness(0.95);
+}
+
+.owwa-pa-generate-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.owwa-pa-ai-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.75rem;
+    width: 100%;
+}
+
+.owwa-pa-view-tabs {
+    display: flex;
+    gap: 0.35rem;
+    margin-top: 0.75rem;
+}
+
+.owwa-pa-view-tab {
+    border: 1px solid #e2e8f0;
+    border-radius: 9999px;
+    padding: 0.3rem 0.75rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #64748b;
+    background: #f8fafc;
+    cursor: pointer;
+}
+
+.owwa-pa-view-tab.is-active {
+    color: #1e6fbe;
+    border-color: #93c5fd;
+    background: #eff6ff;
+}
+
+.owwa-pa-sort-btn {
+    border: none;
+    background: transparent;
+    font: inherit;
+    font-weight: 600;
+    color: inherit;
+    cursor: pointer;
+    padding: 0;
+}
+
+.owwa-pa-usage-badge {
+    display: inline-block;
+    margin-left: 0.35rem;
+    padding: 0.1rem 0.4rem;
+    border-radius: 9999px;
+    font-size: 0.65rem;
+    font-weight: 600;
+    color: #92400e;
+    background: #fffbeb;
+    border: 1px solid #fcd34d;
+    vertical-align: middle;
+}
+
+.owwa-pa-row-actions {
+    display: flex;
+    gap: 0.35rem;
+}
+
+.owwa-pa-row-link {
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: #2563eb;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+.owwa-pa-callout {
+    border-radius: 0.75rem;
+    padding: 0.85rem 1rem;
+    border: 1px solid #bfdbfe;
+    background: #eff6ff;
+}
+
+.owwa-pa-callout-title {
+    margin: 0 0 0.35rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #1e3a5f;
+}
+
+.owwa-pa-callout-body {
+    margin: 0;
+    font-size: 0.8125rem;
+    line-height: 1.55;
+    color: #334155;
+}
+
+.owwa-pa-cover-cell {
+    min-width: 7.5rem;
+}
+
+.owwa-pa-cover-bar-wrap {
+    display: block;
+    height: 4px;
+    border-radius: 9999px;
+    background: #e2e8f0;
+    margin-bottom: 0.25rem;
+    overflow: hidden;
+}
+
+.owwa-pa-cover-bar {
+    display: block;
+    height: 100%;
+    border-radius: 9999px;
+    background: linear-gradient(90deg, #f59e0b 0%, #22c55e 100%);
+    max-width: 100%;
+}
+
+.owwa-row-low .owwa-pa-cover-bar {
+    background: linear-gradient(90deg, #dc2626 0%, #f97316 100%);
+}
+
+.owwa-pa-cover-val {
+    font-size: 0.75rem;
+}
 
 .owwa-status-badge {
     display: inline-flex;
@@ -1930,61 +3128,357 @@ button[type="submit"].fi-btn:hover {
 }
 
 .owwa-data-panel-footer {
-    padding: 0.4rem 0.75rem;
-    border-top: 1px solid #e5e7eb;
-    background: #fafafa;
+    background: transparent;
 }
 
-/* Pagination (shared) */
-.owwa-pagination {
-    padding: 0.5rem 1rem;
-    border-top: 1px solid #e5e7eb;
-    background: #fafafa;
+/* Category dashboard task cards */
+.owwa-category-task-body {
+    padding: 0.75rem;
 }
+
+.owwa-category-task-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.6rem;
+}
+
+@media (max-width: 768px) {
+    .owwa-category-task-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.owwa-category-task-card {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.6rem;
+    padding: 0.75rem;
+    border: 1px solid #e5e7eb;
+    border-radius: 0.5rem;
+    background: #ffffff;
+    text-decoration: none !important;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+}
+
+.owwa-category-task-card:hover {
+    border-color: #bfdbfe;
+    background: #f8fbff;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.owwa-category-task-icon {
+    width: 2rem;
+    height: 2rem;
+    border-radius: 0.5rem;
+    background: #eff6ff;
+    color: #1d4ed8;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.owwa-category-task-title {
+    margin: 0;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #111827;
+    line-height: 1.3;
+}
+
+.owwa-category-task-desc {
+    margin: 0.2rem 0 0;
+    font-size: 0.8125rem;
+    color: #64748b;
+    line-height: 1.45;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   FILAMENT TABLE PAGINATION — isang row lang:
+   Showing… | (spacer) | Previous | page #’s | Next
+═══════════════════════════════════════════════════════════ */
+.fi-pagination {
+    display: grid !important;
+    grid-template-columns: auto minmax(0, 1fr) auto auto auto !important;
+    grid-template-rows: auto !important;
+    align-items: center !important;
+    column-gap: 0.75rem !important;
+    row-gap: 0 !important;
+    padding: 0.75rem 1rem !important;
+    border-top: 1px solid #e5e7eb !important;
+    position: static !important;
+}
+
+.fi-pagination .fi-pagination-overview {
+    display: inline !important;
+    grid-column: 1 !important;
+    grid-row: 1 !important;
+    font-size: 0.8125rem !important;
+    font-weight: 400 !important;
+    color: #6b7280 !important;
+    min-width: 0 !important;
+    justify-self: start !important;
+}
+
+.fi-pagination .fi-pagination-records-per-page-select-ctn {
+    display: inline-flex !important;
+    align-items: center !important;
+    grid-column: 2 !important;
+    grid-row: 1 !important;
+    justify-self: start !important;
+    gap: 0.5rem !important;
+    position: static !important;
+    left: auto !important;
+    transform: none !important;
+}
+
+.fi-pagination .fi-pagination-previous-btn {
+    display: inline-flex !important;
+    grid-column: 3 !important;
+    grid-row: 1 !important;
+    font-size: 0.8125rem !important;
+    justify-self: end !important;
+    margin-left: 0 !important;
+}
+
+.fi-pagination .fi-pagination-items {
+    display: flex !important;
+    grid-column: 4 !important;
+    grid-row: 1 !important;
+    justify-self: end !important;
+    align-self: center !important;
+    width: max-content !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    align-items: center !important;
+    gap: 0.25rem !important;
+    flex-wrap: nowrap !important;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+    justify-content: flex-end !important;
+    -webkit-overflow-scrolling: touch !important;
+    scrollbar-width: thin !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    border: none !important;
+    padding: 0 !important;
+    list-style: none !important;
+}
+
+.fi-pagination .fi-pagination-next-btn {
+    display: inline-flex !important;
+    grid-column: 5 !important;
+    grid-row: 1 !important;
+    font-size: 0.8125rem !important;
+    justify-self: end !important;
+}
+
+@media (max-width: 640px) {
+    .fi-pagination {
+        display: flex !important;
+        flex-direction: row !important;
+        flex-wrap: nowrap !important;
+        align-items: center !important;
+        gap: 0.5rem !important;
+        overflow-x: auto !important;
+        overflow-y: hidden !important;
+        -webkit-overflow-scrolling: touch !important;
+    }
+
+    .fi-pagination .fi-pagination-overview,
+    .fi-pagination .fi-pagination-records-per-page-select-ctn,
+    .fi-pagination .fi-pagination-previous-btn,
+    .fi-pagination .fi-pagination-items,
+    .fi-pagination .fi-pagination-next-btn {
+        grid-column: unset !important;
+        grid-row: unset !important;
+        flex: 0 0 auto !important;
+        justify-self: unset !important;
+    }
+
+    .fi-pagination .fi-pagination-overview {
+        min-width: 0 !important;
+    }
+
+    .fi-pagination .fi-pagination-previous-btn {
+        margin-left: auto !important;
+    }
+
+    .fi-pagination .fi-pagination-items {
+        max-width: 40vw !important;
+        min-width: 0 !important;
+    }
+}
+
+/* Resource list pages: search row above bulk toolbar; wide tables scroll horizontally */
+.fi-resource-list-records-page .fi-ta-header-toolbar {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.625rem;
+}
+
+.fi-resource-list-records-page .fi-ta-header-toolbar > div:has(.fi-ta-search-field) {
+    order: 1;
+    width: 100%;
+}
+
+.fi-resource-list-records-page .fi-ta-header-toolbar > .fi-ta-actions {
+    order: 2;
+    width: 100%;
+}
+
+.fi-pagination .fi-pagination-item--ellipsis {
+    pointer-events: none !important;
+}
+
+.fi-pagination .fi-pagination-item--ellipsis .fi-pagination-item-label {
+    padding: 0 0.125rem !important;
+    color: #9ca3af !important;
+    font-weight: 500 !important;
+}
+
+.fi-pagination .fi-pagination-item {
+    border: none !important;
+}
+
+.fi-pagination .fi-pagination-item-btn {
+    background: #fff !important;
+    border: 1px solid #e5e7eb !important;
+    border-radius: 0.375rem !important;
+    padding: 0.375rem 0.625rem !important;
+}
+
+.fi-pagination .fi-pagination-item.fi-active .fi-pagination-item-btn {
+    background: #eef2ff !important;
+    border-color: #c7d2fe !important;
+}
+
+.fi-pagination .fi-pagination-item.fi-active .fi-pagination-item-label {
+    color: #2563eb !important;
+}
+
+/* Hide chevron icons inside page list (redundant with Previous/Next) */
+.fi-pagination .fi-pagination-item-icon {
+    display: none !important;
+}
+
+/* Pagination (shared — matches Filament table pagination; no per-page row) */
 .owwa-pagination-nav {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     justify-content: space-between;
-    gap: 0.5rem;
+    gap: 0.75rem;
+    padding: 0.5rem 0;
 }
-.owwa-pagination-list {
+.owwa-pagination-info {
+    font-size: 0.8125rem;
+    color: #6b7280;
+    flex: 0 1 auto;
+    min-width: 0;
+    max-width: min(100%, 22rem);
+}
+.owwa-pagination-center {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+    flex: 0 0 auto;
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 0.5rem;
+    overflow: hidden;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06), 0 2px 6px rgba(0, 0, 0, 0.06);
+}
+.owwa-pagination-center-label {
+    font-size: 0.8125rem;
+    color: #6b7280;
+    white-space: nowrap;
+    padding: 0.5rem 0.75rem;
+}
+
+.owwa-pagination-center .owwa-per-page-select {
+    border: none;
+    border-left: 1px solid #e5e7eb;
+    border-radius: 0;
+    box-shadow: none;
+}
+.owwa-pagination-controls {
     display: flex;
-    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.375rem;
+    flex: 0 1 auto;
+    min-width: 0;
+    margin-left: auto;
+    justify-content: flex-end;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+.owwa-pagination-btn {
+    display: inline-flex;
     align-items: center;
     gap: 0.25rem;
-    list-style: none;
-    padding: 0;
-    margin: 0;
-}
-.owwa-pagination-item {
-    display: inline-block;
-    padding: 0.2rem 0.5rem;
-    font-size: 0.75rem;
-    border-radius: 0.25rem;
-    text-decoration: none;
+    padding: 0.375rem 0.75rem;
+    font-size: 0.8125rem;
+    font-weight: 500;
     color: #374151;
-    border: 1px solid #e5e7eb;
     background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 0.375rem;
+    cursor: pointer;
+    text-decoration: none;
+    transition: background 0.15s;
+    user-select: none;
+    line-height: 1.25;
 }
-.owwa-pagination a.owwa-pagination-item:hover {
+a.owwa-pagination-btn:hover {
+    background: #f3f4f6;
+}
+.owwa-pagination-btn.owwa-pagination-disabled {
+    color: #9ca3af;
+    background: #f9fafb;
+    border-color: #e5e7eb;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+.owwa-pagination-page {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 2rem;
+    height: 2rem;
+    padding: 0 0.375rem;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: #374151;
+    text-decoration: none;
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 0.375rem;
+    transition: background 0.15s;
+}
+a.owwa-pagination-page:hover {
     background: #f3f4f6;
     border-color: #d1d5db;
 }
-.owwa-pagination-item.owwa-pagination-active {
-    background: #2563eb;
-    color: #fff;
-    border-color: #2563eb;
+.owwa-pagination-page-active {
+    background: #eef2ff;
+    color: #2563eb;
+    border-color: #c7d2fe;
 }
-.owwa-pagination-item.owwa-pagination-disabled {
+
+.owwa-pagination-ellipsis {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.375rem 0.25rem;
+    font-size: 0.8125rem;
+    font-weight: 500;
     color: #9ca3af;
-    background: #f3f4f6;
-    cursor: not-allowed;
+    user-select: none;
 }
-.owwa-pagination-info {
-    font-size: 0.75rem;
-    color: #6b7280;
-}
+
 
 /* ═══════════════════════════════════════════════════════════
    COA REPORTS PAGE
@@ -2896,4 +4390,2589 @@ button[type="submit"].fi-btn:hover {
 .fi-ta-text-item-badge {
     font-size: 0.75rem !important;
     white-space: nowrap !important;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   PROCUREMENT ANALYTICS PAGE
+═══════════════════════════════════════════════════════════ */
+
+/* --- Context bar (FY badge + category filter) --- */
+.owwa-pa-context-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 1rem;
+    margin-bottom: 0.25rem;
+    padding: 0.25rem 0.5rem;
+}
+
+.owwa-pa-filters-left {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 0.5rem 1rem;
+}
+
+.owwa-pa-filter--fy {
+    margin-left: 0 !important;
+}
+
+.owwa-pa-fy-badge--warn {
+    background: #fffbeb;
+    border-color: #fcd34d;
+    color: #92400e;
+}
+
+.owwa-pa-explainer {
+    margin-bottom: 1rem;
+    padding: 0.75rem 1rem;
+    border-radius: 0.75rem;
+    background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+    border: 1px solid #e2e8f0;
+}
+
+.dark .owwa-pa-explainer {
+    background: rgba(15, 23, 42, 0.6);
+    border-color: rgba(255, 255, 255, 0.1);
+}
+
+.owwa-pa-explainer-title {
+    margin: 0 0 0.35rem;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: #334155;
+}
+
+.dark .owwa-pa-explainer-title {
+    color: #e2e8f0;
+}
+
+.owwa-pa-explainer-body {
+    margin: 0;
+    font-size: 0.8125rem;
+    line-height: 1.55;
+    color: #64748b;
+}
+
+.dark .owwa-pa-explainer-body {
+    color: #94a3b8;
+}
+
+.owwa-pa-fy-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.25rem 0.65rem;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: #334155;
+    background: #f1f5f9;
+    border: 1px solid #e2e8f0;
+}
+
+.owwa-pa-fy-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 9999px;
+    background: #34d399;
+    flex-shrink: 0;
+}
+
+.owwa-pa-fy-sep {
+    margin: 0 0.15rem;
+    opacity: 0.5;
+}
+
+.owwa-pa-filter {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.owwa-pa-filter--right {
+    margin-left: auto;
+}
+
+.owwa-pa-filter-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #374151;
+}
+
+.owwa-pa-filter-select {
+    min-width: 10rem;
+    border-radius: 0.375rem;
+    border: 1px solid #d1d5db;
+    padding: 0.3rem 0.5rem;
+    font-size: 0.8125rem;
+    color: #111827;
+    background: #fff;
+}
+
+/* --- Links --- */
+.owwa-pa-inline-link {
+    color: #2563eb;
+    font-weight: 600;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+.owwa-pa-inline-link:hover {
+    color: #1d4ed8;
+}
+
+/* Description line link — gray like Filament section description (not primary blue) */
+.owwa-pa-card .fi-section-header-description .owwa-pa-section-desc-link {
+    color: #6b7280 !important;
+    font-weight: 500;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+.owwa-pa-card .fi-section-header-description .owwa-pa-section-desc-link:hover {
+    color: #4b5563 !important;
+}
+
+/* --- Widgets wrapper --- */
+.owwa-pa-widgets {
+    margin-bottom: 0.75rem;
+}
+
+.owwa-pa-widgets--stack {
+    border-radius: 0.75rem;
+    padding: 0.4rem 0.55rem;
+}
+
+/* --- Section cards with left accent bar ---
+   Reserve 4px via padding-left so the gradient strip is not covered by the white section (was only showing a corner). */
+.owwa-pa-card {
+    margin-top: 0;
+    margin-bottom: 0.75rem;
+    position: relative;
+    overflow: hidden;
+    padding-left: 4px;
+    box-sizing: border-box;
+}
+
+.owwa-pa-card::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 4px;
+    background: linear-gradient(180deg, #1e6fbe 0%, #c41e3a 100%);
+    border-radius: 0.75rem 0 0 0.75rem;
+    z-index: 1;
+    pointer-events: none;
+}
+
+.owwa-pa-card > * {
+    position: relative;
+    z-index: 2;
+}
+
+/* Match Filament section header padding (accent sits in parent padding, not under content) */
+.owwa-pa-card .fi-section-header-ctn,
+.owwa-pa-card header.fi-section-header,
+.owwa-pa-card .fi-section-content-ctn,
+.owwa-pa-card.fi-section > .px-5 {
+    padding-left: 1.25rem !important;
+    padding-right: 1.25rem !important;
+    padding-top: 1rem !important;
+    padding-bottom: 1rem !important;
+}
+
+.owwa-pa-card header.fi-section-header {
+    padding-top: 0.875rem !important;
+    padding-bottom: 0.875rem !important;
+}
+
+.owwa-pa-card .fi-section-content-ctn {
+    padding-top: 0.875rem !important;
+    padding-bottom: 0.875rem !important;
+}
+
+.owwa-pa-card .fi-section-header-ctn {
+    background: transparent;
+}
+
+.owwa-table-wrap--scroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   PROCUREMENT RECOMMENDATIONS (AI) — compact
+═══════════════════════════════════════════════════════════ */
+
+.owwa-pr-ai-top {
+    margin-bottom: 1rem;
+    padding: 0.85rem 1rem;
+    border-radius: 0.75rem;
+    background: #fafafa;
+    border: 1px solid #e5e7eb;
+}
+
+.owwa-pr-ai-lede {
+    font-size: 0.875rem;
+    line-height: 1.55;
+    color: #475569;
+    margin: 0 0 0.75rem;
+    max-width: 48rem;
+}
+
+.owwa-pr-ai-controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 0.75rem;
+}
+
+.owwa-pr-ai-label {
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: #374151;
+}
+
+.owwa-pr-ai-select {
+    min-width: 12rem;
+    border-radius: 0.375rem;
+    border: 1px solid #d1d5db;
+    padding: 0.35rem 0.6rem;
+    font-size: 0.875rem;
+}
+
+.owwa-pr-ai-loading {
+    display: flex;
+    align-items: flex-start;
+    gap: 1rem;
+    padding: 1.25rem;
+    border-radius: 0.75rem;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+}
+
+.owwa-pr-ai-spinner {
+    width: 2rem;
+    height: 2rem;
+    border: 3px solid #e2e8f0;
+    border-top-color: #2563eb;
+    border-radius: 50%;
+    animation: owwa-pr-spin 0.85s linear infinite;
+}
+
+@keyframes owwa-pr-spin {
+    to { transform: rotate(360deg); }
+}
+
+.owwa-pr-ai-loading-title {
+    font-weight: 600;
+    color: #0f172a;
+    margin: 0 0 0.25rem;
+    font-size: 0.9375rem;
+}
+
+.owwa-pr-ai-loading-sub {
+    margin: 0;
+    font-size: 0.8125rem;
+    color: #64748b;
+}
+
+.owwa-pr-ai-result {
+    border-radius: 0.75rem;
+    border: 1px solid #e2e8f0;
+    background: #ffffff;
+    overflow: hidden;
+}
+
+.owwa-pr-ai-result-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.85rem 1rem;
+    background: #f8fafc;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.owwa-pr-ai-result-title {
+    font-size: 1rem;
+    font-weight: 700;
+    color: #0f172a;
+    margin: 0 0 0.15rem;
+}
+
+.owwa-pr-ai-result-meta {
+    font-size: 0.75rem;
+    color: #64748b;
+    margin: 0;
+}
+
+.owwa-pr-ai-pill {
+    flex-shrink: 0;
+    font-size: 0.6875rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    padding: 0.35rem 0.65rem;
+    border-radius: 9999px;
+    background: #eff6ff;
+    color: #1d4ed8;
+    border: 1px solid #bfdbfe;
+}
+
+.owwa-pr-ai-hint {
+    margin: 0;
+    padding: 0.6rem 1rem;
+    font-size: 0.8125rem;
+    line-height: 1.5;
+    color: #64748b;
+    background: #fffbeb;
+    border-bottom: 1px solid #fde68a;
+}
+
+.owwa-pr-ai-narrative {
+    padding: 0.9rem 1rem 1rem;
+}
+
+.owwa-pr-ai-details {
+    margin: 0 1rem 1rem;
+    border: 1px solid #e5e7eb;
+    border-radius: 0.5rem;
+    background: #fafafa;
+}
+
+.owwa-pr-ai-details-summary {
+    padding: 0.65rem 1rem;
+    cursor: pointer;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: #374151;
+    list-style: none;
+}
+
+.owwa-pr-ai-details-summary::-webkit-details-marker {
+    display: none;
+}
+
+.owwa-pr-ai-table-wrap {
+    padding: 0 0.75rem 0.75rem;
+    overflow-x: auto;
+}
+
+.owwa-pr-ai-foot {
+    margin: 0;
+    padding: 0.6rem 1rem;
+    font-size: 0.75rem;
+    color: #64748b;
+    border-top: 1px solid #f1f5f9;
+    background: #f8fafc;
+}
+
+.owwa-pr-ai-idle {
+    padding: 1rem;
+    border-radius: 0.5rem;
+    border: 1px dashed #cbd5e1;
+    background: #fafafa;
+}
+
+.owwa-pr-ai-idle-text {
+    margin: 0;
+    font-size: 0.875rem;
+    color: #64748b;
+    line-height: 1.55;
+    max-width: 40rem;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   GLOBAL FISCAL YEAR MODAL
+═══════════════════════════════════════════════════════════ */
+
+[x-cloak] {
+    display: none !important;
+}
+
+.owwa-fy-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1.25rem;
+    background: rgba(15, 23, 42, 0.55);
+    backdrop-filter: blur(2px);
+}
+
+.owwa-fy-modal {
+    width: min(520px, 92vw);
+    background: #ffffff;
+    border-radius: 1rem;
+    box-shadow: 0 28px 80px rgba(2, 6, 23, 0.32);
+    border: 1px solid rgba(148, 163, 184, 0.35);
+    padding: 1rem 1.1rem 1.2rem;
+}
+
+.owwa-fy-head {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 0.75rem;
+    padding-bottom: 1rem;
+}
+
+.owwa-fy-title {
+    margin: 0;
+    font-size: 1.35rem;
+    line-height: 1.1;
+    font-weight: 700;
+    color: #0f172a;
+    letter-spacing: -0.02em;
+}
+
+.owwa-fy-close {
+    appearance: none;
+    border: 0;
+    background: transparent;
+    font-size: 1.5rem;
+    line-height: 1;
+    color: #475569;
+    cursor: pointer;
+    padding: 0.35rem 0.55rem;
+    border-radius: 0.5rem;
+}
+
+.owwa-fy-close:hover {
+    background: rgba(148, 163, 184, 0.25);
+    color: #0f172a;
+}
+
+.owwa-fy-subtitle {
+    margin: 0.25rem 0 0.8rem;
+    font-size: 0.88rem;
+    color: #475569;
+    line-height: 1.55;
+    max-width: 48rem;
+}
+
+.owwa-fy-field {
+    display: grid;
+    gap: 0.3rem;
+}
+
+.owwa-fy-label {
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: #334155;
+}
+
+.owwa-fy-label--sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+.owwa-fy-select {
+    width: 100%;
+    border-radius: 0.75rem;
+    border: 1px solid #cbd5e1;
+    padding: 0.6rem 2.8rem 0.6rem 0.75rem;
+    font-size: 0.95rem;
+    color: #0f172a;
+    background: #ffffff;
+    outline: none;
+}
+
+.owwa-fy-select:focus {
+    border-color: #2563eb;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.18);
+}
+
+.owwa-fy-foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin-top: .2rem;
+    padding-top: 0.2rem;
+}
+
+.owwa-fy-hint {
+    font-size: 0.8rem;
+    color: #64748b;
+}
+
+.owwa-fy-actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.owwa-fy-btn {
+    appearance: none;
+    border: 1px solid #cbd5e1;
+    background: #ffffff;
+    color: #0f172a;
+    border-radius: 0.75rem;
+    padding: 0.45rem 0.85rem;
+    font-size: 0.85rem;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.owwa-fy-btn:hover {
+    background: #f8fafc;
+}
+
+.owwa-fy-btn--ghost {
+    background: #ffffff;
+    border-color: #cbd5e1;
+    color: #0f172a;
+}
+
+.owwa-fy-btn--primary {
+    background: #1d4ed8;
+    border-color: #1d4ed8;
+    color: #ffffff;
+}
+
+.owwa-fy-btn--primary:hover {
+    background: #1e40af;
+    border-color: #1e40af;
+}
+
+@media (max-width: 520px) {
+    .owwa-fy-modal {
+        padding: 0.9rem 0.9rem 0.8rem;
+    }
+
+    .owwa-fy-title {
+        font-size: 1.25rem;
+    }
+
+    .owwa-fy-select {
+        font-size: 0.9rem;
+    }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   VIEW RECORD MODALS (ViewAction) — less dead space (grid,
+   sections, footer), readable type. Labels: black + weight/size
+   only. Window: .owwa-view-record-modal (PHP).
+═══════════════════════════════════════════════════════════ */
+.fi-modal-window.owwa-view-record-modal .fi-modal-header,
+.fi-modal-window.owwa-view-record-modal .fi-modal-content,
+.fi-modal-window.owwa-view-record-modal .fi-modal-footer {
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
+}
+
+@media (min-width: 640px) {
+    .fi-modal-window.owwa-view-record-modal .fi-modal-header,
+    .fi-modal-window.owwa-view-record-modal .fi-modal-content,
+    .fi-modal-window.owwa-view-record-modal .fi-modal-footer {
+        padding-left: 1rem;
+        padding-right: 1rem;
+    }
+}
+
+.fi-modal-window.owwa-view-record-modal .fi-modal-footer {
+    padding-top: 0.5rem;
+    padding-bottom: 0.65rem;
+}
+
+/* Avoid modal body growing and leaving a tall empty band above Close */
+.fi-modal-window.owwa-view-record-modal .fi-modal-content {
+    flex-grow: 0 !important;
+}
+
+/* Filament schema grid — tighten row/column gaps (main “white space”) */
+.fi-modal-window.owwa-view-record-modal .fi-sc {
+    row-gap: 0.35rem !important;
+    column-gap: 0.75rem !important;
+}
+
+@media (min-width: 1024px) {
+    .fi-modal-window.owwa-view-record-modal .fi-sc {
+        column-gap: 1rem !important;
+        row-gap: 0.45rem !important;
+    }
+}
+
+.fi-modal-window.owwa-view-record-modal .fi-sc-section + .fi-sc-section {
+    margin-top: 0.35rem;
+}
+
+.fi-modal-window.owwa-view-record-modal .fi-section-header {
+    padding-top: 0.45rem !important;
+    padding-bottom: 0.3rem !important;
+}
+
+.fi-modal-window.owwa-view-record-modal .fi-section-content-ctn {
+    padding-top: 0.35rem !important;
+    padding-bottom: 0.45rem !important;
+}
+
+.fi-modal-window.owwa-view-record-modal .fi-in-entry {
+    margin-bottom: 0.2rem !important;
+}
+
+.fi-modal-window.owwa-view-record-modal .fi-fo-field {
+    row-gap: 0.125rem !important;
+    margin-bottom: 0.2rem !important;
+}
+
+/* Field labels — black, readable, semibold */
+.fi-modal-window.owwa-view-record-modal .fi-in-entry-label {
+    font-weight: 600;
+    font-size: 0.8125rem;
+    color: #0a0a0a;
+}
+
+.fi-modal-window.owwa-view-record-modal .fi-fo-field-label,
+.fi-modal-window.owwa-view-record-modal .fi-fo-field-label-content {
+    font-weight: 600;
+    font-size: 0.8125rem;
+    color: #0a0a0a;
+}
+
+.fi-modal-window.owwa-view-record-modal .fi-in-entry-content-ctn .fi-in-text {
+    font-weight: 400;
+    font-size: 0.9375rem;
+    color: #374151;
+}
+
+.fi-modal-window.owwa-view-record-modal .fi-in-placeholder {
+    font-weight: 400;
+    font-size: 0.875rem;
+    color: #9ca3af;
+}
+
+.fi-modal-window.owwa-view-record-modal .fi-section-header-heading {
+    font-weight: 700;
+    font-size: 1rem;
+    color: #0a0a0a;
+}
+
+/* Stock ledger modal (Stock Levels item click) */
+.owwa-stock-ledger-modal {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.owwa-stock-ledger-header {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.75rem 1.25rem;
+    margin: 0;
+    padding: 0.75rem 1rem;
+    border: 1px solid #e5e7eb;
+    border-radius: 0.5rem;
+    background: #f9fafb;
+}
+
+.owwa-stock-ledger-header-item {
+    margin: 0;
+}
+
+.owwa-stock-ledger-header-item--wide {
+    grid-column: 1 / -1;
+}
+
+.owwa-stock-ledger-header-item dt {
+    margin: 0 0 0.15rem;
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: #6b7280;
+}
+
+.owwa-stock-ledger-header-item dd {
+    margin: 0;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: #111827;
+}
+
+.owwa-stock-ledger-table-wrap {
+    max-height: min(24rem, 50vh);
+    overflow: auto;
+}
+
+.fi-modal-window.owwa-view-record-modal .owwa-stock-ledger-table-wrap .owwa-data-table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: #fff;
+}
+
+/* Stock ledger modal: keep the dialog above its backdrop (Filament uses z-40 for both). */
+.fi-page.owwa-inv-category-page .fi-modal.fi-modal-open > .fi-modal-window-ctn {
+    z-index: 41;
+}
+
+/* Physical count mobile scan page */
+.owwa-physical-count-scan-page.owwa-pc-scan-container {
+    max-width: 32rem;
+    margin-inline: auto;
+    padding-inline: 0.5rem;
+    padding-bottom: 2rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.owwa-pc-scan-card {
+    border: 1px solid var(--gray-200, #e5e7eb);
+    border-radius: 0.75rem;
+    background: var(--white, #fff);
+    padding: 1rem;
+    box-shadow: 0 1px 2px rgb(0 0 0 / 0.05);
+}
+
+.dark .owwa-pc-scan-card {
+    border-color: var(--gray-700, #374151);
+    background: var(--gray-900, #111827);
+}
+
+.owwa-pc-scan-title {
+    margin: 0;
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: var(--gray-950, #030712);
+}
+
+.dark .owwa-pc-scan-title {
+    color: var(--gray-50, #f9fafb);
+}
+
+.owwa-pc-scan-subtitle,
+.owwa-pc-scan-hint,
+.owwa-pc-camera-hint {
+    margin: 0.25rem 0 0;
+    font-size: 0.875rem;
+    color: var(--gray-500, #6b7280);
+}
+
+.owwa-pc-scan-mode-label {
+    margin-bottom: 0.5rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--primary-600, #2563eb);
+}
+
+.owwa-pc-stat-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.75rem;
+    margin-top: 1rem;
+    font-size: 0.875rem;
+}
+
+.owwa-pc-stat-grid--single {
+    grid-template-columns: 1fr;
+}
+
+.owwa-pc-stat-label {
+    color: var(--gray-500, #6b7280);
+}
+
+.owwa-pc-stat-value {
+    margin: 0.125rem 0 0;
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: var(--gray-950, #030712);
+}
+
+.dark .owwa-pc-stat-value {
+    color: var(--gray-50, #f9fafb);
+}
+
+.owwa-pc-stat-value--danger {
+    color: var(--danger-600, #dc2626);
+}
+
+.owwa-pc-stat-value--warning {
+    color: var(--warning-600, #d97706);
+}
+
+.owwa-pc-progress-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.75rem;
+    font-size: 0.875rem;
+}
+
+.owwa-pc-progress-text {
+    font-weight: 500;
+}
+
+.owwa-pc-progress {
+    height: 0.5rem;
+    margin-bottom: 1rem;
+    overflow: hidden;
+    border-radius: 9999px;
+    background: var(--gray-200, #e5e7eb);
+}
+
+.dark .owwa-pc-progress {
+    background: var(--gray-700, #374151);
+}
+
+.owwa-pc-progress-bar {
+    height: 100%;
+    border-radius: 9999px;
+    background: var(--primary-600, #2563eb);
+    transition: width 0.2s ease;
+}
+
+.owwa-pc-action-row,
+.owwa-pc-action-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin-top: 1rem;
+}
+
+.owwa-pc-action-row {
+    flex-direction: row;
+}
+
+.owwa-pc-feedback {
+    border-radius: 0.5rem;
+    border: 1px solid var(--gray-300, #d1d5db);
+    padding: 0.75rem 1rem;
+    font-size: 0.875rem;
+}
+
+.owwa-pc-feedback--success {
+    border-color: var(--success-300, #86efac);
+    background: var(--success-50, #f0fdf4);
+    color: var(--success-800, #166534);
+}
+
+.owwa-pc-feedback--warning {
+    border-color: var(--warning-300, #fcd34d);
+    background: var(--warning-50, #fffbeb);
+    color: var(--warning-800, #92400e);
+}
+
+.owwa-pc-feedback--danger {
+    border-color: var(--danger-300, #fca5a5);
+    background: var(--danger-50, #fef2f2);
+    color: var(--danger-800, #991b1b);
+}
+
+.owwa-pc-feedback--info {
+    border-color: var(--gray-300, #d1d5db);
+    background: var(--gray-50, #f9fafb);
+    color: var(--gray-800, #1f2937);
+}
+
+.owwa-pc-camera-notice {
+    margin-bottom: 0.75rem;
+    border-radius: 0.5rem;
+    border: 1px solid var(--warning-300, #fcd34d);
+    background: var(--warning-50, #fffbeb);
+    padding: 0.75rem 1rem;
+    font-size: 0.875rem;
+    color: var(--warning-800, #92400e);
+}
+
+.owwa-pc-camera-box {
+    overflow: hidden;
+    border: 1px solid var(--gray-200, #e5e7eb);
+    border-radius: 0.75rem;
+    background: #000;
+}
+
+.dark .owwa-pc-camera-box {
+    border-color: var(--gray-700, #374151);
+}
+
+.owwa-pc-qr-reader {
+    width: 100%;
+    min-height: 280px;
+}
+
+.owwa-pc-manual-form {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.owwa-pc-manual-input {
+    display: block;
+    width: 100%;
+    border-radius: 0.5rem;
+    font-size: 0.875rem;
+}
+
+/* Scan asset page (sidebar lookup) */
+.fi-main:has(.owwa-scan-asset-page) {
+    padding-top: 0.05rem !important;
+    padding-bottom: 0.75rem !important;
+}
+
+.fi-page.owwa-scan-asset-page .fi-page-header-main-ctn {
+    row-gap: 0.5rem !important;
+    padding-top: 0.75rem !important;
+    padding-bottom: 0.5rem !important;
+}
+
+.fi-page.owwa-scan-asset-page .fi-header {
+    padding-left: 0.75rem !important;
+    padding-right: 0.75rem !important;
+    padding-top: 0.05rem !important;
+    padding-bottom: 0.05rem !important;
+}
+
+.fi-page.owwa-scan-asset-page .fi-page-content {
+    gap: 0.5rem !important;
+    row-gap: 0.5rem !important;
+    column-gap: 0.5rem !important;
+    padding-top: 0.125rem;
+    padding-bottom: 1rem;
+}
+
+.fi-page.owwa-scan-asset-page .fi-header-heading {
+    display: flex !important;
+    align-items: center !important;
+}
+
+.owwa-scan-asset-page .owwa-pc-scan-container {
+    max-width: 36rem;
+}
+
+.owwa-scan-asset-card {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.owwa-scan-asset-intro {
+    margin: 0;
+    font-size: 0.9375rem;
+    font-weight: 500;
+    color: var(--gray-700, #374151);
+    line-height: 1.4;
+}
+
+.dark .owwa-scan-asset-intro {
+    color: var(--gray-200, #e5e7eb);
+}
+
+.owwa-scan-asset-page .owwa-scan-asset-camera-box {
+    position: relative;
+    max-height: 280px;
+    overflow: hidden;
+}
+
+.owwa-scan-asset-page .owwa-pc-qr-reader {
+    min-height: 0;
+}
+
+.owwa-scan-asset-page #asset-lookup-qr-reader video {
+    max-height: 260px;
+    width: 100% !important;
+    object-fit: cover;
+}
+
+.owwa-scan-asset-frame {
+    position: absolute;
+    inset: 12%;
+    border: 2px dashed rgb(255 255 255 / 0.55);
+    border-radius: 0.5rem;
+    pointer-events: none;
+    box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.15);
+}
+
+.owwa-scan-asset-divider {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--gray-400, #9ca3af);
+}
+
+.owwa-scan-asset-divider::before,
+.owwa-scan-asset-divider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--gray-200, #e5e7eb);
+}
+
+.dark .owwa-scan-asset-divider::before,
+.dark .owwa-scan-asset-divider::after {
+    background: var(--gray-700, #374151);
+}
+
+.owwa-scan-asset-page .owwa-scan-asset-manual-form {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: stretch;
+}
+
+.owwa-scan-asset-page .owwa-scan-asset-manual-form .owwa-pc-manual-input {
+    flex: 1 1 12rem;
+    min-width: 0;
+    margin: 0;
+}
+
+.owwa-scan-asset-page .owwa-scan-asset-lookup-btn {
+    flex: 0 0 auto;
+    white-space: nowrap;
+    min-width: 5.5rem;
+}
+
+@media (max-width: 480px) {
+    .owwa-scan-asset-page .owwa-scan-asset-manual-form {
+        flex-direction: column;
+    }
+
+    .owwa-scan-asset-page .owwa-scan-asset-lookup-btn {
+        width: 100%;
+        justify-content: center;
+    }
+}
+
+.owwa-pc-recent-title {
+    margin: 0 0 0.5rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+}
+
+.owwa-pc-recent-list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.owwa-pc-recent-item {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding-bottom: 0.5rem;
+    margin-bottom: 0.5rem;
+    border-bottom: 1px solid var(--gray-100, #f3f4f6);
+    font-size: 0.875rem;
+}
+
+.owwa-pc-recent-item:last-child {
+    margin-bottom: 0;
+    padding-bottom: 0;
+    border-bottom: none;
+}
+
+.owwa-pc-recent-meta {
+    text-align: right;
+    font-size: 0.75rem;
+    color: var(--gray-400, #9ca3af);
+}
+
+.owwa-pc-filter-row {
+    display: flex;
+    gap: 0.5rem;
+    overflow-x: auto;
+    padding-bottom: 0.25rem;
+    font-size: 0.875rem;
+}
+
+.owwa-pc-filter-chip {
+    flex-shrink: 0;
+    border: none;
+    border-radius: 9999px;
+    padding: 0.25rem 0.75rem;
+    font-weight: 500;
+    background: var(--gray-100, #f3f4f6);
+    color: var(--gray-700, #374151);
+    cursor: pointer;
+}
+
+.dark .owwa-pc-filter-chip {
+    background: var(--gray-800, #1f2937);
+    color: var(--gray-300, #d1d5db);
+}
+
+.owwa-pc-filter-chip--active {
+    background: var(--primary-600, #2563eb);
+    color: #fff;
+}
+
+.owwa-pc-line-list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    border: 1px solid var(--gray-200, #e5e7eb);
+    border-radius: 0.75rem;
+    background: var(--white, #fff);
+    overflow: hidden;
+}
+
+.dark .owwa-pc-line-list {
+    border-color: var(--gray-700, #374151);
+    background: var(--gray-900, #111827);
+}
+
+.owwa-pc-line-item {
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--gray-100, #f3f4f6);
+    font-size: 0.875rem;
+}
+
+.dark .owwa-pc-line-item {
+    border-bottom-color: var(--gray-800, #1f2937);
+}
+
+.owwa-pc-line-item:last-child {
+    border-bottom: none;
+}
+
+.owwa-pc-line-title {
+    font-weight: 500;
+}
+
+.owwa-pc-line-meta {
+    color: var(--gray-500, #6b7280);
+}
+
+.owwa-pc-line-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 0.25rem;
+    font-size: 0.75rem;
+}
+
+.owwa-pc-line-status--danger {
+    font-weight: 500;
+    color: var(--danger-600, #dc2626);
+}
+
+.owwa-pc-line-status--warning {
+    font-weight: 500;
+    color: var(--warning-600, #d97706);
+}
+
+.owwa-pc-line-status--ok {
+    font-weight: 500;
+    color: var(--success-600, #16a34a);
+}
+
+.owwa-pc-line-empty {
+    padding: 1.5rem 1rem;
+    text-align: center;
+    font-size: 0.875rem;
+    color: var(--gray-500, #6b7280);
+}
+
+/* Physical count start page */
+.owwa-physical-count-start-page.owwa-pc-scan-container {
+    max-width: 32rem;
+}
+
+.owwa-pc-start-info-title {
+    margin: 0 0 0.25rem;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--primary-700, #1d4ed8);
+}
+
+.dark .owwa-pc-start-info-title {
+    color: var(--primary-300, #93c5fd);
+}
+
+.owwa-pc-start-steps {
+    margin: 0.75rem 0 0;
+    padding-left: 1.25rem;
+    font-size: 0.875rem;
+    color: var(--gray-600, #4b5563);
+}
+
+.owwa-pc-start-steps li + li {
+    margin-top: 0.25rem;
+}
+
+.owwa-pc-start-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.owwa-pc-form-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.owwa-pc-field-label {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--gray-700, #374151);
+}
+
+.dark .owwa-pc-field-label {
+    color: var(--gray-300, #d1d5db);
+}
+
+.owwa-pc-field-error {
+    margin: 0;
+    font-size: 0.875rem;
+    color: var(--danger-600, #dc2626);
+}
+
+.owwa-pc-office-chip {
+    padding: 0.75rem 1rem;
+    border-radius: 0.5rem;
+    background: var(--primary-50, #eff6ff);
+    border: 1px solid var(--primary-200, #bfdbfe);
+}
+
+.dark .owwa-pc-office-chip {
+    background: rgb(30 58 138 / 0.25);
+    border-color: var(--primary-800, #1e40af);
+}
+
+.owwa-pc-office-chip-name {
+    display: block;
+    margin-top: 0.125rem;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--gray-950, #030712);
+}
+
+.dark .owwa-pc-office-chip-name {
+    color: var(--gray-50, #f9fafb);
+}
+
+/* Physical count session view hero */
+.owwa-physical-count-view-page .owwa-pc-view-hero {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.owwa-pc-view-hero-main {
+    border: 1px solid var(--gray-200, #e5e7eb);
+    border-radius: 0.75rem;
+    background: var(--white, #fff);
+    padding: 1rem 1.25rem;
+}
+
+.dark .owwa-pc-view-hero-main {
+    border-color: var(--gray-700, #374151);
+    background: var(--gray-900, #111827);
+}
+
+.owwa-pc-view-hero-top {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.owwa-pc-view-reference {
+    margin: 0.125rem 0 0;
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--gray-950, #030712);
+}
+
+.dark .owwa-pc-view-reference {
+    color: var(--gray-50, #f9fafb);
+}
+
+.owwa-pc-status-badge {
+    flex-shrink: 0;
+    border-radius: 9999px;
+    padding: 0.25rem 0.75rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.owwa-pc-status-badge--progress {
+    background: var(--gray-100, #f3f4f6);
+    color: var(--gray-700, #374151);
+}
+
+.owwa-pc-status-badge--incomplete {
+    background: var(--warning-100, #fef3c7);
+    color: var(--warning-800, #92400e);
+}
+
+.owwa-pc-status-badge--complete {
+    background: var(--success-100, #dcfce7);
+    color: var(--success-800, #166534);
+}
+
+.owwa-pc-view-meta {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.75rem;
+    margin: 0;
+    font-size: 0.875rem;
+}
+
+.owwa-pc-view-meta dd {
+    margin: 0.125rem 0 0;
+    font-weight: 500;
+    color: var(--gray-900, #111827);
+}
+
+.dark .owwa-pc-view-meta dd {
+    color: var(--gray-100, #f3f4f6);
+}
+
+.owwa-pc-view-progress,
+.owwa-pc-view-workflow {
+    margin: 0;
+}
+
+.owwa-pc-workflow-steps {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.owwa-pc-workflow-step {
+    display: flex;
+    gap: 0.75rem;
+    padding: 0.75rem 0;
+    border-bottom: 1px solid var(--gray-100, #f3f4f6);
+}
+
+.dark .owwa-pc-workflow-step {
+    border-bottom-color: var(--gray-800, #1f2937);
+}
+
+.owwa-pc-workflow-step:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+}
+
+.owwa-pc-workflow-step-marker {
+    width: 0.75rem;
+    height: 0.75rem;
+    margin-top: 0.35rem;
+    border-radius: 9999px;
+    background: var(--gray-300, #d1d5db);
+    flex-shrink: 0;
+}
+
+.owwa-pc-workflow-step--active .owwa-pc-workflow-step-marker {
+    background: var(--primary-600, #2563eb);
+    box-shadow: 0 0 0 3px rgb(37 99 235 / 0.2);
+}
+
+.owwa-pc-workflow-step--done .owwa-pc-workflow-step-marker {
+    background: var(--success-600, #16a34a);
+}
+
+.owwa-pc-workflow-step-title {
+    font-size: 0.9375rem;
+    font-weight: 600;
+    color: var(--gray-900, #111827);
+}
+
+.dark .owwa-pc-workflow-step-title {
+    color: var(--gray-100, #f3f4f6);
+}
+
+.owwa-pc-workflow-link {
+    display: inline-block;
+    margin-top: 0.35rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--primary-600, #2563eb);
+    text-decoration: none;
+}
+
+.owwa-pc-workflow-link:hover {
+    text-decoration: underline;
+}
+
+@media (max-width: 640px) {
+    .owwa-pc-view-meta {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* OWWA record modal shell (view + create + edit) */
+.fi-modal-window.owwa-record-modal,
+.fi-modal-window.owwa-physical-count-modal {
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.fi-modal-window.owwa-record-modal .fi-modal-content,
+.fi-modal-window.owwa-physical-count-modal .fi-modal-content {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    min-height: 0;
+}
+
+.fi-modal-window.owwa-record-modal .fi-modal-footer,
+.fi-modal-window.owwa-physical-count-modal .fi-modal-footer {
+    position: sticky;
+    bottom: 0;
+    z-index: 2;
+    background: var(--white, #fff);
+    border-top: 1px solid var(--gray-200, #e5e7eb);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    justify-content: flex-end;
+}
+
+.dark .fi-modal-window.owwa-record-modal .fi-modal-footer,
+.dark .fi-modal-window.owwa-physical-count-modal .fi-modal-footer {
+    background: var(--gray-900, #111827);
+    border-top-color: var(--gray-700, #374151);
+}
+
+.fi-modal-window.owwa-record-modal .fi-modal-footer-actions,
+.fi-modal-window.owwa-physical-count-modal .fi-modal-footer-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    justify-content: flex-end;
+    width: 100%;
+}
+
+.fi-modal-window.owwa-record-modal .fi-modal-footer-actions .fi-btn,
+.fi-modal-window.owwa-physical-count-modal .fi-modal-footer-actions .fi-btn {
+    min-width: unset;
+}
+
+.fi-modal-window.owwa-record-modal .owwa-pc-view-hero,
+.fi-modal-window.owwa-record-modal .owwa-record-hero,
+.fi-modal-window.owwa-physical-count-modal .owwa-pc-view-hero {
+    margin-bottom: 0.75rem;
+}
+
+.fi-modal-window.owwa-physical-count-modal .owwa-pc-modal-lines .fi-section-content-ctn {
+    max-height: 40vh;
+    overflow-y: auto;
+}
+
+.fi-modal-window.owwa-physical-count-modal .owwa-pc-modal-lines .fi-in-repeatable {
+    overflow: visible;
+}
+
+/* Create/edit form modals — full-width sections (no half-modal dead space) */
+.fi-modal-window.owwa-record-modal .fi-fo-form .fi-sc-section {
+    grid-column: 1 / -1;
+    width: 100%;
+}
+
+.fi-modal-window.owwa-record-modal .fi-fo-form > .fi-sc {
+    grid-template-columns: 1fr;
+}
+
+.fi-modal-window.owwa-record-modal .fi-fo-form .fi-section-header-description {
+    display: block !important;
+    font-size: 0.8125rem;
+    color: #6b7280;
+    margin-top: 0.125rem;
+}
+
+.dark .fi-modal-window.owwa-record-modal .fi-fo-form .fi-section-header-description {
+    color: #9ca3af;
+}
+
+/* Acquisition PR — header left, line items right */
+.fi-modal-window.owwa-record-modal .fi-fo-repeater {
+    min-width: 0;
+}
+
+.fi-modal-window.owwa-record-modal .fi-fo-repeater .fi-fo-repeater-item {
+    padding: 0.75rem;
+}
+
+/* Request Items repeater — two item cards per row (container grid) */
+.fi-fo-repeater-items {
+    gap: 0.75rem 1rem;
+}
+
+.fi-fo-repeater-item {
+    min-width: 0;
+}
+
+.fi-fo-repeater-add-between-items-ctn {
+    grid-column: 1 / -1;
+}
+
+/* Request Items repeater — 2-column field grid inside each card */
+@media (min-width: 769px) {
+    .fi-fo-repeater .fi-fo-repeater-item .grid {
+        display: grid !important;
+        grid-template-columns: repeat(2, minmax(10rem, 1fr)) !important;
+        gap: 0.75rem 1rem !important;
+    }
+}
+
+@media (max-width: 768px) {
+    .fi-fo-repeater .fi-fo-repeater-item .grid {
+        grid-template-columns: 1fr !important;
+    }
+}
+
+@media (max-width: 767px) {
+    .fi-modal-window.owwa-record-modal .fi-sc-section:has(.fi-fo-repeater) {
+        grid-column: 1 / -1;
+    }
+}
+
+.owwa-pc-phase-step--clickable .owwa-pc-phase-step-button {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    cursor: pointer;
+    text-align: center;
+    color: inherit;
+}
+
+.owwa-pc-phase-step-button:hover .owwa-pc-phase-step-label {
+    color: #111827;
+}
+
+.dark .owwa-pc-phase-step-button:hover .owwa-pc-phase-step-label {
+    color: #f9fafb;
+}
+
+.owwa-pc-phase-status-badge {
+    display: inline-block;
+    margin-top: 0.25rem;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: #6b7280;
+}
+
+.dark .owwa-pc-phase-status-badge {
+    color: #9ca3af;
+}
+
+.owwa-acquisition-workflow-stepper--compact {
+    margin-bottom: 0.5rem;
+    padding: 0.75rem 1rem !important;
+    background: #f9fafb;
+    border: 1px solid #e5e7eb;
+    border-radius: 0.5rem;
+}
+
+.dark .owwa-acquisition-workflow-stepper--compact {
+    background: #111827;
+    border-color: #374151;
+}
+
+.owwa-acquisition-workflow-stepper--compact .owwa-pc-phase-step {
+    min-width: 5rem;
+    padding: 0 0.25rem 0.25rem;
+}
+
+.owwa-acquisition-workflow-stepper--compact .owwa-pc-phase-step-body .owwa-pc-line-meta {
+    display: none;
+}
+
+.owwa-acquisition-workflow-stepper--compact .owwa-pc-phase-step-label--full {
+    display: none;
+}
+
+.owwa-acquisition-workflow-stepper--compact .owwa-pc-phase-step-label--short {
+    display: inline;
+}
+
+.owwa-pc-phase-step-button--static {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+    cursor: default;
+}
+
+/* Horizontal phase stepper */
+.owwa-pc-phase-stepper {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.owwa-pc-phase-step {
+    position: relative;
+    flex: 1 1 0;
+    min-width: 7rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    padding: 0 0.5rem 0.5rem;
+}
+
+.owwa-pc-phase-step:not(:last-child)::after {
+    content: '';
+    position: absolute;
+    top: 0.875rem;
+    left: calc(50% + 0.875rem);
+    right: calc(-50% + 0.875rem);
+    height: 2px;
+    background: var(--gray-200, #e5e7eb);
+    z-index: 0;
+}
+
+.dark .owwa-pc-phase-step:not(:last-child)::after {
+    background: var(--gray-700, #374151);
+}
+
+.owwa-pc-phase-step--done:not(:last-child)::after {
+    background: var(--success-500, #22c55e);
+}
+
+.owwa-pc-phase-step-indicator {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.75rem;
+    height: 1.75rem;
+    border-radius: 9999px;
+    background: var(--gray-200, #e5e7eb);
+    color: var(--gray-600, #4b5563);
+    font-size: 0.75rem;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+}
+
+.dark .owwa-pc-phase-step-indicator {
+    background: var(--gray-700, #374151);
+    color: var(--gray-300, #d1d5db);
+}
+
+.owwa-pc-phase-step--active .owwa-pc-phase-step-indicator {
+    background: var(--primary-600, #2563eb);
+    color: #fff;
+    box-shadow: 0 0 0 3px rgb(37 99 235 / 0.2);
+}
+
+.owwa-pc-phase-step--done .owwa-pc-phase-step-indicator {
+    background: var(--success-600, #16a34a);
+    color: #fff;
+}
+
+.owwa-pc-phase-step-body {
+    width: 100%;
+}
+
+.owwa-pc-phase-step-label {
+    display: block;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: var(--gray-900, #111827);
+}
+
+.dark .owwa-pc-phase-step-label {
+    color: var(--gray-100, #f3f4f6);
+}
+
+.owwa-pc-phase-step-label--short {
+    display: none;
+}
+
+.owwa-pc-phase-step .owwa-pc-line-meta {
+    margin: 0.25rem 0 0;
+    font-size: 0.75rem;
+}
+
+@media (max-width: 640px) {
+    .owwa-pc-phase-stepper {
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+
+    .owwa-pc-phase-step {
+        flex-direction: row;
+        align-items: flex-start;
+        text-align: left;
+        min-width: 0;
+        padding: 0;
+    }
+
+    .owwa-pc-phase-step:not(:last-child)::after {
+        display: none;
+    }
+
+    .owwa-pc-phase-step-indicator {
+        margin-bottom: 0;
+        margin-right: 0.75rem;
+        flex-shrink: 0;
+    }
+
+    .owwa-pc-phase-step-label--full {
+        display: none;
+    }
+
+    .owwa-pc-phase-step-label--short {
+        display: block;
+    }
+}
+
+/* Idle logout warning */
+.owwa-idle-logout-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 120;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(15, 23, 42, 0.45);
+    padding: 1rem;
+}
+
+.owwa-idle-logout-modal {
+    width: min(100%, 28rem);
+    background: #fff;
+    border-radius: 0.75rem;
+    padding: 1.25rem 1.5rem;
+    box-shadow: 0 20px 40px rgba(15, 23, 42, 0.18);
+}
+
+.owwa-idle-logout-title {
+    font-size: 1.125rem;
+    font-weight: 600;
+    margin: 0 0 0.5rem;
+}
+
+.owwa-idle-logout-text {
+    margin: 0 0 1rem;
+    color: #475569;
+}
+
+.owwa-idle-logout-actions {
+    display: flex;
+    gap: 0.75rem;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+}
+
+.owwa-idle-logout-btn {
+    border: 1px solid #cbd5e1;
+    background: #fff;
+    color: #0f172a;
+    border-radius: 0.5rem;
+    padding: 0.5rem 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+}
+
+.owwa-idle-logout-btn--primary {
+    background: #2563eb;
+    border-color: #2563eb;
+    color: #fff;
+}
+
+/* Login audit session activity */
+.owwa-user-log-session-subtitle {
+    margin: 0 0 0.75rem;
+    font-size: 0.875rem;
+    color: #475569;
+    font-weight: 500;
+}
+
+.owwa-user-log-session-empty,
+.owwa-user-log-session-note {
+    color: #64748b;
+    font-size: 0.875rem;
+}
+
+.owwa-user-log-session-table-wrap {
+    overflow-x: auto;
+}
+
+.owwa-user-log-session-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.875rem;
+}
+
+.owwa-user-log-session-table th,
+.owwa-user-log-session-table td {
+    border-bottom: 1px solid #e2e8f0;
+    padding: 0.5rem 0.625rem;
+    text-align: left;
+    vertical-align: top;
+}
+
+.owwa-user-log-action-badge {
+    display: inline-block;
+    padding: 0.125rem 0.5rem;
+    border-radius: 999px;
+    background: #eff6ff;
+    color: #1d4ed8;
+    font-size: 0.75rem;
+    text-transform: capitalize;
+}
+
+/* AI procurement run — compact view modal */
+.fi-modal-window.owwa-ai-run-modal .fi-section {
+    margin-bottom: 0.75rem;
+}
+
+.fi-modal-window.owwa-ai-run-modal .fi-section-header {
+    padding-top: 0.25rem;
+    padding-bottom: 0.35rem;
+}
+
+.fi-modal-window.owwa-ai-run-modal .fi-section-content-ctn {
+    padding-top: 0.35rem;
+    padding-bottom: 0.5rem;
+}
+
+.owwa-ai-run-modal-header {
+    border: 1px solid #e2e8f0;
+    border-radius: 0.75rem;
+    background: #fff;
+    padding: 0.75rem 1rem;
+    margin-bottom: 0.25rem;
+}
+
+.dark .owwa-ai-run-modal-header {
+    border-color: #374151;
+    background: #111827;
+}
+
+.owwa-ai-run-modal-header-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin-bottom: 0.65rem;
+}
+
+.owwa-ai-run-modal-reference {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 600;
+    color: #0f172a;
+    line-height: 1.3;
+}
+
+.dark .owwa-ai-run-modal-reference {
+    color: #f9fafb;
+}
+
+.owwa-ai-run-modal-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.25rem 0.65rem;
+    border-radius: 9999px;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.owwa-ai-run-modal-status-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.owwa-ai-run-modal-meta {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.5rem 0.75rem;
+    margin: 0;
+    font-size: 0.8125rem;
+}
+
+.owwa-ai-run-modal-meta dt {
+    margin: 0;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    color: #94a3b8;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.owwa-ai-run-modal-meta dd {
+    margin: 0.125rem 0 0;
+    font-weight: 500;
+    color: #334155;
+}
+
+.dark .owwa-ai-run-modal-meta dd {
+    color: #e5e7eb;
+}
+
+.owwa-ai-run-modal-items-empty {
+    margin: 0;
+    font-size: 0.8125rem;
+    color: #64748b;
+}
+
+.owwa-ai-run-modal-items-scroll {
+    max-height: 35vh;
+    overflow: auto;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.5rem;
+}
+
+.dark .owwa-ai-run-modal-items-scroll {
+    border-color: #374151;
+}
+
+.owwa-ai-run-modal-items-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.8125rem;
+}
+
+.owwa-ai-run-modal-items-table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: #f8fafc;
+    border-bottom: 1px solid #e2e8f0;
+    padding: 0.45rem 0.6rem;
+    text-align: left;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+}
+
+.dark .owwa-ai-run-modal-items-table thead th {
+    background: #1f2937;
+    border-bottom-color: #374151;
+    color: #9ca3af;
+}
+
+.owwa-ai-run-modal-items-table tbody td {
+    border-bottom: 1px solid #f1f5f9;
+    padding: 0.5rem 0.6rem;
+    vertical-align: top;
+    color: #334155;
+}
+
+.dark .owwa-ai-run-modal-items-table tbody td {
+    border-bottom-color: #1f2937;
+    color: #e5e7eb;
+}
+
+.owwa-ai-run-modal-items-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.owwa-ai-run-modal-items-item {
+    font-weight: 600;
+    color: #0f172a;
+}
+
+.dark .owwa-ai-run-modal-items-item {
+    color: #f9fafb;
+}
+
+.owwa-ai-run-modal-items-num {
+    text-align: right;
+    white-space: nowrap;
+}
+
+.owwa-ai-run-modal-items-reason {
+    max-width: 14rem;
+    font-size: 0.75rem;
+    color: #64748b;
+    line-height: 1.45;
+}
+
+.owwa-ai-run-priority-badge {
+    display: inline-block;
+    padding: 0.125rem 0.45rem;
+    border-radius: 9999px;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.owwa-ai-run-priority-badge--high {
+    background: #fee2e2;
+    color: #b91c1c;
+}
+
+.owwa-ai-run-priority-badge--medium {
+    background: #fef3c7;
+    color: #b45309;
+}
+
+.owwa-ai-run-priority-badge--low {
+    background: #f1f5f9;
+    color: #475569;
+}
+
+.owwa-transfer-workflow-hint {
+    margin: 0 0 0.25rem;
+    padding: 0.65rem 0.85rem;
+    border-radius: 0.5rem;
+    border: 1px solid #e2e8f0;
+    background: #f8fafc;
+    font-size: 0.8125rem;
+    line-height: 1.5;
+    color: #475569;
+}
+
+.owwa-stock-transfer-link {
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: #2563eb;
+    text-decoration: none;
+}
+
+.owwa-stock-transfer-link:hover {
+    text-decoration: underline;
+}
+
+.owwa-stock-transfer-link--disabled {
+    color: #94a3b8;
+    cursor: not-allowed;
+    font-weight: 500;
+}
+
+.owwa-stock-actions {
+    white-space: nowrap;
+}
+
+@media (max-width: 767px) {
+    .owwa-ai-run-modal-meta {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+/* Inventory plan — compact create/view modals */
+.fi-modal-window.owwa-inventory-plan-modal {
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.fi-modal-window.owwa-inventory-plan-modal .fi-modal-content {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    min-height: 0;
+    padding: 0.625rem 0.875rem !important;
+}
+
+.fi-modal-window.owwa-inventory-plan-modal .owwa-pc-view-hero,
+.fi-modal-window.owwa-inventory-plan-modal .owwa-record-hero {
+    margin-bottom: 0.5rem;
+}
+
+.fi-modal-window.owwa-inventory-plan-modal .owwa-pc-view-meta {
+    gap: 0.35rem 0.75rem;
+}
+
+.fi-modal-window.owwa-inventory-plan-modal .owwa-pc-scan-card.owwa-pc-view-progress {
+    margin-top: 0.5rem;
+    padding: 0.5rem 0.75rem;
+}
+
+.fi-modal-window.owwa-inventory-plan-modal .fi-section {
+    margin-bottom: 0.5rem;
+}
+
+.fi-modal-window.owwa-inventory-plan-modal .fi-section-header {
+    padding-top: 0.2rem;
+    padding-bottom: 0.25rem;
+}
+
+.fi-modal-window.owwa-inventory-plan-modal .fi-section-content-ctn {
+    padding-top: 0.25rem !important;
+    padding-bottom: 0.35rem !important;
+}
+
+.fi-modal-window.owwa-inventory-plan-modal .fi-in-entry {
+    margin-bottom: 0.15rem !important;
+}
+
+.fi-modal-window.owwa-inventory-plan-modal .fi-fo-repeater .fi-fo-repeater-item {
+    padding: 0.5rem 0.625rem;
+}
+
+.fi-modal-window.owwa-inventory-plan-modal .fi-fo-form .fi-section-content > div,
+.fi-modal-window.owwa-inventory-plan-modal .fi-fo-form .fi-section-content .grid {
+    gap: 0.375rem 0.625rem !important;
+}
+
+.owwa-inventory-plan-schedule {
+    margin-top: 0.25rem;
+}
+
+.owwa-inventory-plan-schedule-title {
+    font-size: 0.8125rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #374151;
+    margin: 0 0 0.375rem;
+}
+
+.dark .owwa-inventory-plan-schedule-title {
+    color: #d1d5db;
+}
+
+.owwa-inventory-plan-schedule-empty {
+    font-size: 0.8125rem;
+    color: #6b7280;
+    margin: 0;
+    padding: 0.25rem 0;
+}
+
+.owwa-inventory-plan-schedule-scroll {
+    max-height: 35vh;
+    overflow-y: auto;
+    border: 1px solid #e5e7eb;
+    border-radius: 0.5rem;
+}
+
+.dark .owwa-inventory-plan-schedule-scroll {
+    border-color: #374151;
+}
+
+.owwa-inventory-plan-schedule-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.8125rem;
+}
+
+.owwa-inventory-plan-schedule-table thead {
+    background: #f9fafb;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+}
+
+.dark .owwa-inventory-plan-schedule-table thead {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.owwa-inventory-plan-schedule-table th {
+    padding: 0.375rem 0.75rem;
+    text-align: left;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: #6b7280;
+}
+
+.owwa-inventory-plan-schedule-table td {
+    padding: 0.375rem 0.75rem;
+    border-top: 1px solid #e5e7eb;
+    color: #374151;
+}
+
+.dark .owwa-inventory-plan-schedule-table td {
+    border-top-color: #374151;
+    color: #d1d5db;
+}
+
+.owwa-inventory-plan-schedule-actions {
+    text-align: right;
+}
+
+.owwa-inventory-plan-status {
+    display: inline-flex;
+    align-items: center;
+    border-radius: 0.375rem;
+    padding: 0.125rem 0.375rem;
+    font-size: 0.6875rem;
+    font-weight: 500;
+    line-height: 1.25;
+}
+
+.owwa-inventory-plan-status--complete {
+    background: #ecfdf5;
+    color: #047857;
+}
+
+.owwa-inventory-plan-status--progress {
+    background: #fffbeb;
+    color: #b45309;
+}
+
+.owwa-inventory-plan-status--overdue {
+    background: #fef2f2;
+    color: #b91c1c;
+}
+
+.owwa-inventory-plan-status--pending {
+    background: #f3f4f6;
+    color: #4b5563;
+}
+
+.dark .owwa-inventory-plan-status--complete {
+    background: rgba(16, 185, 129, 0.15);
+    color: #34d399;
+}
+
+.dark .owwa-inventory-plan-status--progress {
+    background: rgba(245, 158, 11, 0.15);
+    color: #fbbf24;
+}
+
+.dark .owwa-inventory-plan-status--overdue {
+    background: rgba(239, 68, 68, 0.15);
+    color: #f87171;
+}
+
+.dark .owwa-inventory-plan-status--pending {
+    background: rgba(255, 255, 255, 0.05);
+    color: #9ca3af;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   PROFILE PAGE — account settings layout
+═══════════════════════════════════════════════════════════ */
+.owwa-profile-page .fi-main {
+    max-width: 48rem !important;
+}
+
+.owwa-profile-page .fi-header-heading {
+    font-size: 1.375rem !important;
+    font-weight: 700 !important;
+    color: #111827 !important;
+}
+
+.owwa-profile-page .fi-header-subheading {
+    font-size: 0.875rem !important;
+    color: #6b7280 !important;
+    margin-top: 0.25rem !important;
+}
+
+.owwa-profile-page .fi-header-actions .fi-btn {
+    font-weight: 500 !important;
+}
+
+.owwa-profile-page .fi-fo-form {
+    gap: 1rem !important;
+}
+
+.owwa-profile-page .fi-fo-form .owwa-profile-password-section .fi-section-content > div,
+.owwa-profile-page .fi-fo-form .owwa-profile-password-section .fi-section-content .grid {
+    grid-template-columns: 1fr !important;
+}
+
+.owwa-profile-page .fi-form-actions {
+    margin-top: 0.5rem !important;
+    padding-top: 0.75rem !important;
+    border-top: 1px solid #e5e7eb !important;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   NOTIFICATION DROPDOWN — Facebook-style bell panel
+═══════════════════════════════════════════════════════════ */
+.owwa-notif-root {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    margin-right: 0.35rem;
+}
+
+.owwa-notif-trigger {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: 9999px;
+    border: none;
+    background: rgba(255, 255, 255, 0.12);
+    color: #fff !important;
+    cursor: pointer;
+    transition: background-color 0.15s ease;
+}
+
+.owwa-notif-trigger:hover {
+    background: rgba(255, 255, 255, 0.22);
+}
+
+.owwa-notif-trigger-icon {
+    width: 1.35rem;
+    height: 1.35rem;
+}
+
+.owwa-notif-badge {
+    position: absolute;
+    top: 0.1rem;
+    right: 0.1rem;
+    min-width: 1.1rem;
+    height: 1.1rem;
+    padding: 0 0.25rem;
+    border-radius: 9999px;
+    background: #ef4444;
+    color: #fff;
+    font-size: 0.625rem;
+    font-weight: 700;
+    line-height: 1.1rem;
+    text-align: center;
+}
+
+.owwa-notif-dropdown {
+    position: absolute;
+    top: calc(100% + 0.5rem);
+    right: 0;
+    z-index: 50;
+    width: min(24rem, calc(100vw - 1.5rem));
+    max-height: min(70vh, 32rem);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border-radius: 0.75rem;
+    background: #fff;
+    box-shadow: 0 12px 40px rgba(15, 23, 42, 0.18);
+    border: 1px solid #e5e7eb;
+}
+
+.owwa-notif-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.875rem 1rem 0.5rem;
+}
+
+.owwa-notif-title {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: #111827;
+    margin: 0;
+}
+
+.owwa-notif-mark-all {
+    border: none;
+    background: transparent;
+    color: #2563eb;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    cursor: pointer;
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.375rem;
+}
+
+.owwa-notif-mark-all:hover {
+    background: #eff6ff;
+}
+
+.owwa-notif-tabs {
+    display: flex;
+    gap: 0.5rem;
+    padding: 0 1rem 0.75rem;
+}
+
+.owwa-notif-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    border: none;
+    border-radius: 9999px;
+    padding: 0.35rem 0.85rem;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: #374151;
+    background: #f3f4f6;
+    cursor: pointer;
+}
+
+.owwa-notif-tab--active {
+    background: #dbeafe;
+    color: #1d4ed8;
+}
+
+.owwa-notif-tab-count {
+    min-width: 1.1rem;
+    height: 1.1rem;
+    padding: 0 0.3rem;
+    border-radius: 9999px;
+    background: #2563eb;
+    color: #fff;
+    font-size: 0.625rem;
+    line-height: 1.1rem;
+}
+
+.owwa-notif-list {
+    overflow-y: auto;
+    flex: 1;
+}
+
+.owwa-notif-group-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.35rem 1rem;
+    font-size: 0.8125rem;
+    font-weight: 700;
+    color: #111827;
+    background: #f9fafb;
+    border-top: 1px solid #f3f4f6;
+}
+
+.owwa-notif-row {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 0.75rem;
+    align-items: start;
+    width: 100%;
+    padding: 0.75rem 1rem;
+    border: none;
+    border-bottom: 1px solid #f3f4f6;
+    background: #fff;
+    text-align: left;
+    cursor: pointer;
+    transition: background-color 0.12s ease;
+}
+
+.owwa-notif-row:hover {
+    background: #f8fafc;
+}
+
+.owwa-notif-row--unread {
+    background: #f0f7ff;
+}
+
+.owwa-notif-row--unread:hover {
+    background: #e8f2ff;
+}
+
+.owwa-notif-row-icon {
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: 9999px;
+    background: #e5e7eb;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.owwa-notif-row-icon-svg {
+    width: 1.25rem;
+    height: 1.25rem;
+    color: #374151;
+}
+
+.owwa-notif-row-body {
+    min-width: 0;
+}
+
+.owwa-notif-row-title {
+    margin: 0;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #111827;
+    line-height: 1.35;
+}
+
+.owwa-notif-row--unread .owwa-notif-row-title {
+    font-weight: 700;
+}
+
+.owwa-notif-row-text {
+    margin: 0.15rem 0 0;
+    font-size: 0.8125rem;
+    color: #6b7280;
+    line-height: 1.35;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.owwa-notif-row-time {
+    margin: 0.25rem 0 0;
+    font-size: 0.75rem;
+    color: #9ca3af;
+}
+
+.owwa-notif-row-dot {
+    width: 0.55rem;
+    height: 0.55rem;
+    border-radius: 9999px;
+    background: #2563eb;
+    margin-top: 0.35rem;
+    flex-shrink: 0;
+}
+
+.owwa-notif-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.35rem;
+    padding: 2.5rem 1.5rem;
+    text-align: center;
+}
+
+.owwa-notif-empty-icon {
+    width: 2rem;
+    height: 2rem;
+    color: #9ca3af;
+}
+
+.owwa-notif-empty-title {
+    margin: 0;
+    font-size: 0.9375rem;
+    font-weight: 600;
+    color: #374151;
+}
+
+.owwa-notif-empty-text {
+    margin: 0;
+    font-size: 0.8125rem;
+    color: #6b7280;
+    max-width: 16rem;
+}
+
+@media (max-width: 640px) {
+    .owwa-notif-dropdown {
+        position: fixed;
+        top: 3.75rem;
+        right: 0.75rem;
+        left: 0.75rem;
+        width: auto;
+    }
 }

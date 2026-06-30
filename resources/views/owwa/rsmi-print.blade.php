@@ -24,6 +24,7 @@
     @php
         $user = auth()->user();
         $isSupplyCustodian = $user?->isSupplyCustodian() ?? false;
+        $risNumber = $issuance->requisition?->reference_code ?? '—';
     @endphp
 
     <h1>REPORT OF SUPPLIES AND MATERIALS ISSUED</h1>
@@ -63,7 +64,7 @@
         </thead>
         <tbody>
             <tr>
-                <td>{{ $issuance->reference_code }}</td>
+                <td>{{ $risNumber }}</td>
                 <td>{{ $issuance->office?->code ?? $issuance->department?->code ?? $issuance->department?->name ?? '—' }}</td>
                 <td>{{ $issuance->item?->item_code ?? '—' }}</td>
                 <td>{{ $issuance->item?->name }}</td>

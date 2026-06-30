@@ -23,6 +23,7 @@ class RoleAndUserSeeder extends Seeder
                 'password' => Hash::make('password'),
                 'role' => User::ROLE_SYSTEM_ADMIN,
                 'office_id' => $regional->id,
+                'email_verified_at' => now(),
             ]
         );
 
@@ -33,6 +34,7 @@ class RoleAndUserSeeder extends Seeder
                 'password' => Hash::make('password'),
                 'role' => User::ROLE_SUPPLY_CUSTODIAN,
                 'office_id' => $regional->id,
+                'email_verified_at' => now(),
             ]
         );
 
@@ -41,8 +43,9 @@ class RoleAndUserSeeder extends Seeder
             [
                 'name' => 'Unit Head',
                 'password' => Hash::make('password'),
-                'role' => User::ROLE_AUTHORIZED_PERSONNEL,
+                'role' => User::ROLE_UNIT_CONSOLIDATOR,
                 'office_id' => $regional->id,
+                'email_verified_at' => now(),
             ]
         );
     }

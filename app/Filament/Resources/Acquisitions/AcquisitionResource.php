@@ -2,27 +2,31 @@
 
 namespace App\Filament\Resources\Acquisitions;
 
+use App\Filament\Concerns\HasOwwaViewModalUrl;
 use App\Filament\Resources\Acquisitions\Pages\ListAcquisitions;
 use App\Filament\Resources\Acquisitions\Pages\ViewAcquisition;
-use App\Filament\Resources\Acquisitions\Schemas\AcquisitionForm;
+use App\Filament\Resources\Acquisitions\Paperwork\Schemas\AcquisitionPaperworkForm;
+use App\Filament\Resources\Acquisitions\Paperwork\Schemas\AcquisitionPaperworkInfolist;
 use App\Filament\Resources\Acquisitions\Tables\AcquisitionsTable;
-use App\Models\Acquisition;
-use App\Services\FiscalYearService;
+use App\Models\AcquisitionPaperwork;
+use App\Support\CustodianOfficeScope;
 use BackedEnum;
 use Filament\Facades\Filament;
-use Filament\Infolists\Components\TextEntry;
 use Filament\Resources\Resource;
-use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\SoftDeletingScope;
+use Illuminate\Database\Eloquent\Model;
 use UnitEnum;
 
 class AcquisitionResource extends Resource
 {
-    protected static ?string $model = Acquisition::class;
+    use HasOwwaViewModalUrl;
+
+    protected static ?string $model = AcquisitionPaperwork::class;
+
+    protected static bool $shouldRegisterNavigation = false;
 
     protected static string|UnitEnum|null $navigationGroup = 'Inventory';
 
@@ -36,16 +40,12 @@ class AcquisitionResource extends Resource
 
     public static function getEloquentQuery(): Builder
     {
-        $query = parent::getEloquentQuery();
-        app(FiscalYearService::class)->applyDateRangeFilter($query, 'acquisition_date');
+        $query = CustodianOfficeScope::applyOfficeColumn(parent::getEloquentQuery());
 
-        $categoryId = session('active_item_category_id');
-        if (filled($categoryId)) {
-            $query->whereHas('item', function (Builder $itemQuery) use ($categoryId): void {
-                $itemQuery->where('item_category_id', (int) $categoryId);
-            });
+        $categoryId = (int) session('active_item_category_id', 0);
+        if ($categoryId > 0) {
+            $query->where('item_category_id', $categoryId);
         } else {
-            // Don't show acquisitions until the user selects a category.
             $query->whereRaw('1 = 0');
         }
 
@@ -54,26 +54,12 @@ class AcquisitionResource extends Resource
 
     public static function form(Schema $schema): Schema
     {
-        return AcquisitionForm::configure($schema);
+        return AcquisitionPaperworkForm::configure($schema);
     }
 
     public static function infolist(Schema $schema): Schema
     {
-        return $schema
-            ->components([
-                Section::make('Acquisition details')
-                    ->schema([
-                        TextEntry::make('reference_code')->label('Reference number'),
-                        TextEntry::make('item.name')->label('Item'),
-                        TextEntry::make('quantity')->label('Quantity'),
-                        TextEntry::make('unit_cost')->label('Unit cost')->money('PHP'),
-                        TextEntry::make('acquisition_date')->label('Date')->date('M d, Y'),
-                        TextEntry::make('source')->label('Source')->placeholder('—'),
-                        TextEntry::make('remarks')->label('Remarks')->placeholder('—')->columnSpanFull(),
-                    ])
-                    ->columns(2)
-                    ->columnSpanFull(),
-            ]);
+        return AcquisitionPaperworkInfolist::configure($schema);
     }
 
     public static function table(Table $table): Table
@@ -88,17 +74,9 @@ class AcquisitionResource extends Resource
         return $user !== null && $user->isSupplyCustodian();
     }
 
-    public static function getRecordRouteBindingEloquentQuery(): Builder
-    {
-        return parent::getRecordRouteBindingEloquentQuery()
-            ->withoutGlobalScopes([SoftDeletingScope::class]);
-    }
-
     public static function getRelations(): array
     {
-        return [
-            //
-        ];
+        return [];
     }
 
     public static function getPages(): array
@@ -107,5 +85,32 @@ class AcquisitionResource extends Resource
             'index' => ListAcquisitions::route('/'),
             'view' => ViewAcquisition::route('/{record}'),
         ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $extraParams
+     */
+    public static function viewModalUrl(Model|int $record, array $extraParams = []): string
+    {
+        $model = $record instanceof Model
+            ? $record
+            : static::getModel()::query()->find($record);
+
+        $id = $model instanceof Model ? $model->getKey() : $record;
+
+        $tableAction = $model instanceof AcquisitionPaperwork && $model->isReceived()
+            ? 'view'
+            : 'edit';
+
+        $params = array_merge([
+            'tableAction' => $tableAction,
+            'tableActionRecord' => $id,
+        ], $extraParams);
+
+        if ($categoryId = session('active_item_category_id')) {
+            $params['category'] ??= $categoryId;
+        }
+
+        return static::getUrl('index', $params);
     }
 }

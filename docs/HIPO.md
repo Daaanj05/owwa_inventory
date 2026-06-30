@@ -8,35 +8,27 @@
 flowchart LR
     A["0.0 OWWA Inventory Management System"]:::root
 
-    A --> B["1.0 User Authentication"]:::mod
-    A --> C["2.0 Stock Management"]:::mod
-    A --> D["3.0 Requisition Processing"]:::mod
-    A --> E["4.0 Stock Monitoring"]:::mod
-    A --> F["5.0 AI Procurement Analysis"]:::mod
-    A --> G["6.0 Report Generation"]:::mod
+    A --> C["1.0 Inventory Category Context"]:::mod
+    A --> D["2.0 Requisition Processing"]:::mod
+    A --> E["3.0 Stock Monitoring"]:::mod
+    A --> F["4.0 AI Procurement Analysis"]:::mod
 
-    B --> B1["1.1 Validate Credentials"]:::sub
-    B --> B2["1.2 Assign Role-Based Access"]:::sub
+    C --> C1["1.1 Select Inventory Category (Consumables / PPE / Semi-expendable)"]:::sub
+    C --> C2["1.2 Record Acquisition (with COA export)"]:::sub
+    C --> C3["1.3 Record Issuance (with COA export)"]:::sub
+    C --> C4["1.4 Record Transfer (with COA export)"]:::sub
+    C --> C5["1.5 Record Disposal (with COA export)"]:::sub
 
-    C --> C1["2.1 Record Acquisition"]:::sub
-    C --> C2["2.2 Record Issuance"]:::sub
-    C --> C3["2.3 Record Transfer"]:::sub
-    C --> C4["2.4 Record Disposal"]:::sub
+    D --> D1["2.1 Submit Requisition"]:::sub
+    D --> D2["2.2 Compile Requisition"]:::sub
+    D --> D3["2.3 Approve / Reject Requisition"]:::sub
+    D --> D4["2.4 Fulfill Requisition"]:::sub
 
-    D --> D1["3.1 Submit Requisition"]:::sub
-    D --> D2["3.2 Compile Requisition"]:::sub
-    D --> D3["3.3 Approve / Reject Requisition"]:::sub
-    D --> D4["3.4 Fulfill Requisition"]:::sub
+    E --> E1["3.1 Compute Stock Levels"]:::sub
+    E --> E2["3.2 Detect Low Stock"]:::sub
 
-    E --> E1["4.1 Compute Stock Levels"]:::sub
-    E --> E2["4.2 Detect Low Stock"]:::sub
-
-    F --> F1["5.1 Generate AI Recommendations"]:::sub
-    F --> F2["5.2 Review and Archive AI Run"]:::sub
-
-    G --> G1["6.1 Stock Level Report"]:::sub
-    G --> G2["6.2 Issuance Report"]:::sub
-    G --> G3["6.3 Transfer Report"]:::sub
+    F --> F1["4.1 Generate AI Recommendations"]:::sub
+    F --> F2["4.2 Review and Archive AI Run"]:::sub
 
     classDef root fill:#1e3a5f,color:#fff,stroke:#1e3a5f,font-weight:bold
     classDef mod fill:#2e6da4,color:#fff,stroke:#1e3a5f
@@ -49,71 +41,61 @@ flowchart LR
 
 ---
 
-### 1.0 User Authentication
+### 1.0 Inventory Category Context (includes Stock Transactions)
 
-#### 1.1 Validate Credentials
-
-| INPUT | PROCESS | OUTPUT |
-|-------|---------|--------|
-| Email address, password | 1. Receive login form submission. 2. Search for matching email in the Users database. 3. Verify hashed password. 4. Allow or deny access. | Valid credentials proceed to role assignment; invalid credentials return an error message. |
-
-#### 1.2 Assign Role-Based Access
+#### 1.1 Select Inventory Category (Consumables / PPE / Semi-expendable)
 
 | INPUT | PROCESS | OUTPUT |
 |-------|---------|--------|
-| Authenticated user record, assigned role, office, department | 1. Read user role from the database. 2. Load permitted navigation items and resources for that role. 3. Apply office and department scope to data visibility. | Role-specific dashboard and navigation displayed; data filtered according to user's office and department. |
+| Category choice (Consumables, PPE, Semi-expendable) | 1. Persist active category (e.g., session). 2. Scope item lists and transaction forms to the selected category. 3. Load the inventory category dashboard. | Active category displayed; category-scoped items and transaction tasks shown. |
+
+#### 1.2 Record Acquisition (with COA export)
+
+| INPUT | PROCESS | OUTPUT |
+|-------|---------|--------|
+| Category context; item, office, quantity, unit cost, source, acquisition date | 1. Validate required fields. 2. Generate unique reference code. 3. Save acquisition record to the database. 4. Update computed stock level. 5. Generate COA-aligned PDF export from the acquisition list when requested. | Acquisition record saved; stock level increased; COA-aligned acquisition export available. |
+
+#### 1.3 Record Issuance (with COA export)
+
+| INPUT | PROCESS | OUTPUT |
+|-------|---------|--------|
+| Category context; item, office, department, quantity, issuance date, issued to, linked requisition (optional) | 1. Validate required fields. 2. Generate unique reference code. 3. Link to requisition record if provided. 4. Save issuance record to the database. 5. Generate COA-aligned PDF export from the issuance list when requested. | Issuance record saved; stock level decreased; COA-aligned issuance export available. |
+
+#### 1.4 Record Transfer (with COA export)
+
+| INPUT | PROCESS | OUTPUT |
+|-------|---------|--------|
+| Category context; item, source office, destination office, quantity, transfer date | 1. Validate required fields. 2. Generate unique reference code. 3. Save transfer record to the database. 4. Generate COA-aligned PDF export from the transfer list when requested. | Transfer record saved; stock adjusted at both offices; COA-aligned transfer export available. |
+
+#### 1.5 Record Disposal (with COA export)
+
+| INPUT | PROCESS | OUTPUT |
+|-------|---------|--------|
+| Category context; item, office, quantity, reason, disposal date | 1. Validate required fields. 2. Generate unique reference code. 3. Save disposal record to the database. 4. Generate COA-aligned PDF export from the disposal list when requested. | Disposal record saved; stock decreased; COA-aligned disposal export available. |
 
 ---
 
-### 2.0 Stock Management
+### 2.0 Requisition Processing
 
-#### 2.1 Record Acquisition
-
-| INPUT | PROCESS | OUTPUT |
-|-------|---------|--------|
-| Item, office, quantity, unit cost, source, acquisition date | 1. Validate required fields. 2. Generate unique reference code. 3. Save acquisition record to the database. 4. Update computed stock level. | Acquisition record saved; stock level for the item and office increased. |
-
-#### 2.2 Record Issuance
-
-| INPUT | PROCESS | OUTPUT |
-|-------|---------|--------|
-| Item, office, department, quantity, issuance date, issued to, linked requisition (optional) | 1. Validate required fields. 2. Generate unique reference code. 3. Link to requisition record if provided. 4. Save issuance record to the database. | Issuance record saved; stock level for the item and office decreased. |
-
-#### 2.3 Record Transfer
-
-| INPUT | PROCESS | OUTPUT |
-|-------|---------|--------|
-| Item, source office, destination office, quantity, transfer date | 1. Validate required fields. 2. Generate unique reference code. 3. Save transfer record to the database. | Transfer record saved; stock decreased at source office and increased at destination office. |
-
-#### 2.4 Record Disposal
-
-| INPUT | PROCESS | OUTPUT |
-|-------|---------|--------|
-| Item, office, quantity, reason, disposal date | 1. Validate required fields. 2. Generate unique reference code. 3. Save disposal record to the database. | Disposal record saved; stock level for the item and office decreased. |
-
----
-
-### 3.0 Requisition Processing
-
-#### 3.1 Submit Requisition
+#### 2.1 Submit Requisition
 
 | INPUT | PROCESS | OUTPUT |
 |-------|---------|--------|
 | Items and quantities needed, office, department (Employee) | 1. Validate that items and quantities are provided. 2. Generate unique reference code. 3. Save requisition with status set to Pending. | Requisition record created with Pending status; visible to the Unit Head for review. |
 
-#### 3.2 Compile Requisition
+#### 2.2 Compile Requisition
 
 | INPUT | PROCESS | OUTPUT |
 |-------|---------|--------|
 | Selected employee requisitions, Unit Head's office and department | 1. Retrieve line items from all selected requisitions. 2. Merge and sum quantities for duplicate items. 3. Create a new consolidated requisition record under the Unit Head's name. | Consolidated requisition created with Pending status; visible to the Supply Custodian. |
 
-#### 3.3 Approve / Reject Requisition
+#### 2.3 Approve / Reject Requisition
 
 | INPUT | PROCESS | OUTPUT |
 |-------|---------|--------|
 | Consolidated requisition record, decision (Approve or Reject), remarks | 1. Review requisition details and line items. 2. Update requisition status to Approved or Rejected. 3. Record the approving user and approval timestamp. 4. Save remarks if provided. | Requisition status updated; visible to Unit Head and Employee through status view. |
 
-#### 3.4 Fulfill Requisition
+#### 2.4 Fulfill Requisition
 
 | INPUT | PROCESS | OUTPUT |
 |-------|---------|--------|
@@ -121,15 +103,15 @@ flowchart LR
 
 ---
 
-### 4.0 Stock Monitoring
+### 3.0 Stock Monitoring
 
-#### 4.1 Compute Stock Levels
+#### 3.1 Compute Stock Levels
 
 | INPUT | PROCESS | OUTPUT |
 |-------|---------|--------|
 | All acquisition, issuance, transfer, and disposal records per item and office | 1. Sum all acquisition quantities and incoming transfer quantities per item and office. 2. Subtract all issuance quantities, outgoing transfer quantities, and disposal quantities. 3. Return the result as the current stock level. | Current stock level computed for each item and office combination; displayed on the stock levels page and dashboard. |
 
-#### 4.2 Detect Low Stock
+#### 3.2 Detect Low Stock
 
 | INPUT | PROCESS | OUTPUT |
 |-------|---------|--------|
@@ -137,15 +119,15 @@ flowchart LR
 
 ---
 
-### 5.0 AI Procurement Analysis
+### 4.0 AI Procurement Analysis
 
-#### 5.1 Generate AI Recommendations
+#### 4.1 Generate AI Recommendations
 
 | INPUT | PROCESS | OUTPUT |
 |-------|---------|--------|
 | Review period (from and to dates), item category filter (optional), inventory transaction history | 1. Retrieve historical issuance and stock data for the selected period. 2. Compute consumption rate and moving average per item and office. 3. Estimate months of cover based on current stock and average monthly usage. 4. Build context summary and send to AI model. 5. Parse AI response and save run and item records. | AI procurement run record saved; per-item recommendations generated with priority level, suggested reorder quantity, months of cover, and reason. |
 
-#### 5.2 Review and Archive AI Run
+#### 4.2 Review and Archive AI Run
 
 | INPUT | PROCESS | OUTPUT |
 |-------|---------|--------|
@@ -153,22 +135,3 @@ flowchart LR
 
 ---
 
-### 6.0 Report Generation
-
-#### 6.1 Stock Level Report
-
-| INPUT | PROCESS | OUTPUT |
-|-------|---------|--------|
-| Date range, office filter (optional) | 1. Compute current stock levels per item and office for the selected filters. 2. Format data into the COA-aligned report layout. 3. Generate and serve PDF file. | Downloadable stock level report in PDF format ready for COA submission. |
-
-#### 6.2 Issuance Report
-
-| INPUT | PROCESS | OUTPUT |
-|-------|---------|--------|
-| Date range, office or department filter (optional) | 1. Query all issuance records within the selected date range and filters. 2. Format data into the report layout. 3. Generate and serve PDF file. | Downloadable issuance report in PDF format ready for COA submission. |
-
-#### 6.3 Transfer Report
-
-| INPUT | PROCESS | OUTPUT |
-|-------|---------|--------|
-| Date range, office filter (optional) | 1. Query all transfer records within the selected date range and filters. 2. Format data into the report layout. 3. Generate and serve PDF file. | Downloadable transfer report in PDF format showing inter-office item movements. |

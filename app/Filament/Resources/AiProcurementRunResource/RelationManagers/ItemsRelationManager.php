@@ -20,9 +20,9 @@ class ItemsRelationManager extends RelationManager
                     ->badge()
                     ->formatStateUsing(fn (?string $state) => $state ?? '—')
                     ->colors([
-                        'danger'  => 'High',
+                        'danger' => 'High',
                         'warning' => 'Medium',
-                        'gray'    => 'Low',
+                        'gray' => 'Low',
                     ])
                     ->sortable()
                     ->width('90px'),
@@ -54,10 +54,13 @@ class ItemsRelationManager extends RelationManager
                 Tables\Columns\TextColumn::make('months_cover')
                     ->label('Cover')
                     ->formatStateUsing(function ($state) {
-                        if ($state === null) return '—';
+                        if ($state === null) {
+                            return '—';
+                        }
                         $val = (float) $state;
                         $color = $val < 1 ? '🔴' : ($val <= 3 ? '🟡' : '🟢');
-                        return $color . ' ' . number_format($val, 1) . ' mo';
+
+                        return $color.' '.number_format($val, 1).' mo';
                     })
                     ->description(fn () => 'Months of cover')
                     ->alignEnd(),
@@ -67,8 +70,13 @@ class ItemsRelationManager extends RelationManager
                     ->formatStateUsing(function ($state, $record) {
                         $min = $record->suggested_qty_min;
                         $max = $record->suggested_qty_max;
-                        if ($min === null) return '—';
-                        if ($min === $max) return (string) $min;
+                        if ($min === null) {
+                            return '—';
+                        }
+                        if ($min === $max) {
+                            return (string) $min;
+                        }
+
                         return "{$min}–{$max}";
                     })
                     ->description(fn () => 'Qty to reorder')
@@ -76,6 +84,28 @@ class ItemsRelationManager extends RelationManager
 
                 Tables\Columns\ToggleColumn::make('include_in_request')
                     ->label('Include'),
+
+                Tables\Columns\SelectColumn::make('action_status')
+                    ->label('Status')
+                    ->options([
+                        'pending' => 'Pending',
+                        'requested' => 'Requested',
+                        'ordered' => 'Ordered',
+                        'received' => 'Received',
+                        'ignored' => 'Ignored',
+                    ])
+                    ->placeholder('—')
+                    ->afterStateUpdated(function ($record, $state): void {
+                        $record->update(['action_updated_at' => now()]);
+                    }),
+
+                Tables\Columns\TextInputColumn::make('action_notes')
+                    ->label('Notes')
+                    ->placeholder('Add note…')
+                    ->extraAttributes(['style' => 'min-width: 200px;'])
+                    ->afterStateUpdated(function ($record): void {
+                        $record->update(['action_updated_at' => now()]);
+                    }),
 
                 Tables\Columns\TextColumn::make('reason')
                     ->label('Reason')

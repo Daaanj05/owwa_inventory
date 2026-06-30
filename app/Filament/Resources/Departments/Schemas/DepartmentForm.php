@@ -3,7 +3,6 @@
 namespace App\Filament\Resources\Departments\Schemas;
 
 use App\Rules\UniqueDepartmentNameInOffice;
-use App\Services\FiscalYearService;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Components\Section;
@@ -13,17 +12,19 @@ class DepartmentForm
 {
     public static function configure(Schema $schema): Schema
     {
-        $scopeCurrentFy = fn ($query) => $query->forFiscalYear(app(FiscalYearService::class)->current()?->id)->active();
+        $scopeActive = fn ($query) => $query->active();
 
         return $schema
+            ->columns(1)
             ->components([
                 Section::make('Department details')
                     ->description('Departments belong to an OWWA office.')
+                    ->columnSpanFull()
                     ->columns(2)
                     ->schema([
                         Select::make('office_id')
                             ->label('Office')
-                            ->relationship('office', 'name', $scopeCurrentFy)
+                            ->relationship('office', 'name', $scopeActive)
                             ->required()
                             ->searchable()
                             ->preload()

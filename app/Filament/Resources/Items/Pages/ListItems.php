@@ -2,20 +2,28 @@
 
 namespace App\Filament\Resources\Items\Pages;
 
+use App\Filament\Concerns\HasSystemAdminWizardHeading;
+use App\Filament\Concerns\SyncsActiveItemCategory;
+use App\Filament\Pages\InventoryCategoryDashboard;
 use App\Filament\Resources\Items\ItemResource;
-use Filament\Actions\CreateAction;
+use App\Filament\Support\OwwaFormModalDefaults;
+use App\Models\ItemCategory;
 use Filament\Resources\Pages\ListRecords;
 use Filament\Schemas\Components\Actions;
-use Filament\Schemas\Components\Flex;
 use Filament\Schemas\Components\EmbeddedTable;
+use Filament\Schemas\Components\Flex;
 use Filament\Schemas\Components\RenderHook;
 use Filament\Schemas\Components\Tabs\Tab;
 use Filament\Schemas\Schema;
 use Filament\View\PanelsRenderHook;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\HtmlString;
 
 class ListItems extends ListRecords
 {
+    use HasSystemAdminWizardHeading;
+    use SyncsActiveItemCategory;
+
     protected static string $resource = ItemResource::class;
 
     /**
@@ -27,9 +35,44 @@ class ListItems extends ListRecords
         return null;
     }
 
+    public function mount(): void
+    {
+        parent::mount();
+
+        $this->syncActiveItemCategoryFromRequest();
+    }
+
+    public function getHeading(): string|\Illuminate\Contracts\Support\Htmlable
+    {
+        if ($this->isSystemAdminPanel()) {
+            return parent::getHeading();
+        }
+
+        $categoryName = ItemCategory::query()->whereKey((int) session('active_item_category_id'))->value('name');
+
+        if (! $categoryName) {
+            return 'Items';
+        }
+
+        return new HtmlString($this->getWizardHeaderBreadcrumb($categoryName, 'Items'));
+    }
+
     public function getSubheading(): string|\Illuminate\Contracts\Support\Htmlable|null
     {
         return null;
+    }
+
+    protected function getWizardHeaderBreadcrumb(string $categoryName, string $taskLabel): string
+    {
+        $categoryId = (int) session('active_item_category_id', 0);
+        $dashboardUrl = InventoryCategoryDashboard::getUrl(['category' => $categoryId]);
+
+        return sprintf(
+            '<span class="owwa-wizard-title" role="list"><a class="owwa-wizard-step owwa-wizard-step-link" href="%s" role="listitem">%s</a><span class="owwa-wizard-separator" aria-hidden="true">&gt;</span><span class="owwa-wizard-step owwa-wizard-step-current" role="listitem">%s</span></span>',
+            e($dashboardUrl),
+            e($categoryName),
+            e($taskLabel),
+        );
     }
 
     public function getTabs(): array
@@ -52,8 +95,18 @@ class ListItems extends ListRecords
                 Flex::make([
                     $this->getTabsContentComponent(),
                     Actions::make([
-                        CreateAction::make()
-                            ->modalWidth('5xl'),
+                        OwwaFormModalDefaults::createAction(OwwaFormModalDefaults::WIDTH_COMPACT)
+                            ->fillForm(fn (): array => [
+                                'item_category_id' => (int) session('active_item_category_id', 0) ?: null,
+                            ])
+                            ->mutateDataUsing(function (array $data): array {
+                                $categoryId = (int) session('active_item_category_id', 0);
+                                if ($categoryId > 0) {
+                                    $data['item_category_id'] = $categoryId;
+                                }
+
+                                return $data;
+                            }),
                     ])->alignEnd(),
                 ])->alignBetween()->verticallyAlignCenter(),
                 RenderHook::make(PanelsRenderHook::RESOURCE_PAGES_LIST_RECORDS_TABLE_BEFORE),

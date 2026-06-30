@@ -2,19 +2,29 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\LogsUserActivity;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class ItemCategory extends Model
 {
-    use HasFactory;
+    use HasFactory, LogsUserActivity;
 
     public const POWER_PLANT_EQUIPMENT = 'power_plant_equipment';
+
     public const SEMI_EXPENDABLE = 'semi_expendable';
+
     public const CONSUMABLES = 'consumables';
 
-    protected $fillable = ['name', 'description'];
+    protected $fillable = ['name', 'description', 'archived_at'];
+
+    protected function casts(): array
+    {
+        return [
+            'archived_at' => 'datetime',
+        ];
+    }
 
     public function items(): HasMany
     {

@@ -2,19 +2,13 @@
 
 namespace App\Filament\Resources\Acquisitions\Pages;
 
+use App\Filament\Concerns\RedirectsViewToTableModal;
 use App\Filament\Resources\Acquisitions\AcquisitionResource;
-use Filament\Actions\EditAction;
 use Filament\Resources\Pages\ViewRecord;
 
 class ViewAcquisition extends ViewRecord
 {
-    protected static string $resource = AcquisitionResource::class;
+    use RedirectsViewToTableModal;
 
-    protected function getHeaderActions(): array
-    {
-        return [
-            EditAction::make()
-                ->modalWidth('5xl'),
-        ];
-    }
+    protected static string $resource = AcquisitionResource::class;
 }

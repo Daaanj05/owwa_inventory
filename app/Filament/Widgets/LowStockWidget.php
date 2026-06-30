@@ -2,44 +2,90 @@
 
 namespace App\Filament\Widgets;
 
-use App\Models\Department;
 use App\Models\Issuance;
-use App\Models\Item;
-use App\Services\FiscalYearService;
+use App\Models\Requisition;
+use App\Models\User;
 use App\Services\InventoryStockService;
 use Filament\Facades\Filament;
 use Filament\Widgets\StatsOverviewWidget;
 use Filament\Widgets\StatsOverviewWidget\Stat;
+use Illuminate\Database\Eloquent\Builder;
 
 class LowStockWidget extends StatsOverviewWidget
 {
     protected static ?int $sort = 1;
 
-    protected int | array | null $columns = 4;
+    protected static bool $isLazy = true;
+
+    protected int|array|null $columns = 2;
 
     public static function canView(): bool
     {
         $user = Filament::auth()->user();
 
-        return $user && ! $user->isSystemAdmin();
+        return $user && ! $user->isSystemAdmin() && ! $user->isEmployee();
     }
 
     protected function getStats(): array
     {
+        /** @var User|null $user */
         $user = Filament::auth()->user();
-        $officeIds = null;
-        $scopeLabel = null;
-        if ($user && ! $user->isSupplyCustodian() && $user->office_id) {
-            $officeIds = [(int) $user->office_id];
-            $scopeLabel = ' (your office)';
+        if (! $user) {
+            return [];
         }
 
-        $fiscal = app(FiscalYearService::class);
-        $fyId = $fiscal->current()?->id;
+        $officeIds = $user?->office_id ? [(int) $user->office_id] : null;
+        $scopeLabel = ($user && ! $user->isSupplyCustodian() && $user->office_id) ? ' (your office)' : '';
 
         $stockService = app(InventoryStockService::class);
-        $lowStockCount = $stockService->lowStockCount($officeIds, $fyId);
+        $lowStockCount = $stockService->lowStockCount($officeIds);
 
+        return [
+            Stat::make('Low stock', $lowStockCount)
+                ->description(($lowStockCount > 0 ? 'Below reorder point' : 'All stocks healthy').$scopeLabel)
+                ->descriptionIcon($lowStockCount > 0 ? 'heroicon-o-exclamation-triangle' : 'heroicon-o-check-circle')
+                ->color($lowStockCount > 0 ? 'warning' : 'success')
+                ->extraAttributes(['class' => 'owwa-kpi-square'], true),
+
+            $this->buildSecondStat($user, $scopeLabel, $officeIds),
+        ];
+    }
+
+    protected function buildSecondStat(?User $user, string $scopeLabel, ?array $officeIds): Stat
+    {
+        if ($user?->isSupplyCustodian()) {
+            return $this->buildPendingRequisitionsStat();
+        }
+
+        return $this->buildIssuedThisMonthStat($scopeLabel, $officeIds);
+    }
+
+    protected function buildPendingRequisitionsStat(): Stat
+    {
+        $pendingCount = Requisition::query()
+            ->where('status', Requisition::STATUS_PENDING)
+            ->whereHas('requestedBy', function (Builder $q): void {
+                $q->where('role', User::ROLE_UNIT_CONSOLIDATOR);
+            })
+            ->count();
+
+        if ($pendingCount > 0) {
+            return Stat::make('Pending requisitions', $pendingCount)
+                ->description($pendingCount.' '.str('requisition')->plural($pendingCount).' awaiting your action')
+                ->descriptionIcon('heroicon-o-bell-alert')
+                ->color('warning')
+                ->extraAttributes(['class' => 'owwa-kpi-square'], true);
+        }
+
+        return Stat::make('Pending requisitions', 0)
+            ->description('No pending requisitions')
+            ->descriptionIcon('heroicon-o-check-circle')
+            ->color('success')
+            ->extraAttributes(['class' => 'owwa-kpi-square'], true);
+    }
+
+    protected function buildIssuedThisMonthStat(string $scopeLabel, ?array $officeIds): Stat
+    {
         $issuancesQuery = Issuance::query();
         $issuancesQuery->whereMonth('issuance_date', now()->month)
             ->whereYear('issuance_date', now()->year);
@@ -48,33 +94,10 @@ class LowStockWidget extends StatsOverviewWidget
         }
         $issuancesThisMonth = $issuancesQuery->sum('quantity');
 
-        $totalItems = Item::forFiscalYear($fyId)->active()->count();
-
-        $stats = [
-            Stat::make('Low stock', $lowStockCount)
-                ->description(($lowStockCount > 0 ? 'Below reorder point' : 'All stocks healthy') . ($scopeLabel ?? ''))
-                ->descriptionIcon($lowStockCount > 0 ? 'heroicon-o-exclamation-triangle' : 'heroicon-o-check-circle')
-                ->color($lowStockCount > 0 ? 'warning' : 'success'),
-
-            Stat::make('Total items', number_format($totalItems))
-                ->description('Items in catalog')
-                ->descriptionIcon('heroicon-o-archive-box')
-                ->color('primary'),
-
-            Stat::make('Issued this month', number_format($issuancesThisMonth))
-                ->description(now()->format('M Y') . ' issuances' . ($scopeLabel ?? ''))
-                ->descriptionIcon('heroicon-o-arrow-up-tray')
-                ->color('info'),
-        ];
-
-        if ($officeIds === null) {
-            $departments = Department::forFiscalYear($fyId)->active()->count();
-            $stats[] = Stat::make('Departments', number_format($departments))
-                ->description('Active departments')
-                ->descriptionIcon('heroicon-o-building-office-2')
-                ->color('gray');
-        }
-
-        return $stats;
+        return Stat::make('Issued this month', number_format($issuancesThisMonth))
+            ->description(now()->format('M Y').' issuances'.$scopeLabel)
+            ->descriptionIcon('heroicon-o-arrow-up-tray')
+            ->color('info')
+            ->extraAttributes(['class' => 'owwa-kpi-square'], true);
     }
 }

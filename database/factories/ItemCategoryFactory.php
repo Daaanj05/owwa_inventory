@@ -12,7 +12,7 @@ class ItemCategoryFactory extends Factory
     public function definition(): array
     {
         return [
-            'name' => fake()->randomElement(['Power Plant Equipment', 'Semi-Expendable', 'Consumables']),
+            'name' => 'Category '.fake()->unique()->numerify('########'),
             'description' => fake()->sentence(),
         ];
     }

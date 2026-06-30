@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\LogsUserActivity;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -10,11 +11,11 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Item extends Model
 {
-    use HasFactory;
+    use HasFactory, LogsUserActivity;
 
     protected $fillable = [
-        'fiscal_year_id', 'item_category_id', 'name', 'unit', 'item_code', 'value_type',
-        'reorder_level', 'description',
+        'item_category_id', 'name', 'unit', 'item_code', 'value_type', 'property_class',
+        'reorder_level', 'description', 'days_to_consume', 'estimated_useful_life', 'serial_number',
     ];
 
     protected function casts(): array
@@ -24,23 +25,9 @@ class Item extends Model
         ];
     }
 
-    public function fiscalYear(): BelongsTo
-    {
-        return $this->belongsTo(FiscalYear::class, 'fiscal_year_id');
-    }
-
     public function category(): BelongsTo
     {
         return $this->belongsTo(ItemCategory::class, 'item_category_id');
-    }
-
-    public function scopeForFiscalYear(Builder $query, ?int $fiscalYearId): Builder
-    {
-        if ($fiscalYearId !== null) {
-            $query->where('fiscal_year_id', $fiscalYearId);
-        }
-
-        return $query;
     }
 
     public function scopeActive(Builder $query): Builder

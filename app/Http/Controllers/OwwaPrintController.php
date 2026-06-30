@@ -6,6 +6,7 @@ use App\Models\Acquisition;
 use App\Models\Disposal;
 use App\Models\Issuance;
 use App\Models\Transfer;
+use App\Services\DisposalInventoryUnitService;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 
@@ -13,7 +14,7 @@ class OwwaPrintController extends Controller
 {
     public function issuance(Issuance $issuance, Request $request): View
     {
-        $issuance->load(['item', 'item.category', 'office', 'department', 'issuedBy', 'issuedTo']);
+        $issuance->load(['item', 'item.category', 'office', 'department', 'issuedBy', 'issuedTo', 'requisition']);
 
         $dateAcquired = $this->lookupDateAcquired($issuance->item_id);
         $form = $request->query('form');
@@ -56,24 +57,25 @@ class OwwaPrintController extends Controller
 
     public function disposal(Disposal $disposal, Request $request): View
     {
-        $disposal->load(['item', 'item.category', 'office']);
+        $disposal->load(['item', 'item.category', 'office', 'parIssuance', 'inventoryUnit']);
 
         $dateAcquired = $this->lookupDateAcquired($disposal->item_id);
         $form = $request->query('form');
+        $unitService = app(DisposalInventoryUnitService::class);
 
-        if ($form === 'iirup' || $form === 'iirusp') {
+        if ($form === 'iirup') {
             return view('owwa.iirup-print', [
                 'disposal' => $disposal,
                 'dateAcquired' => $dateAcquired,
-                'title' => $form === 'iirusp'
-                    ? 'Inventory and Inspection Report of Unserviceable Semi-Expendable Property (Annex A.10 - IIRUSP)'
-                    : 'Inventory and Inspection Report of Unserviceable Property (Appendix 74 - IIRUP)',
+                'title' => 'Inventory and Inspection Report of Unserviceable Property (Appendix 74 - IIRUP)',
             ]);
         }
         if ($form === 'rlsddp') {
             return view('owwa.rlsddp-print', [
                 'disposal' => $disposal,
                 'dateAcquired' => $dateAcquired,
+                'propertyNumber' => $unitService->resolvePropertyNumber($disposal),
+                'acquisitionCost' => $unitService->resolveAcquisitionCost($disposal),
                 'title' => 'Report of Lost, Stolen, Damaged or Destroyed Property (Appendix 75 - RLSDDP)',
             ]);
         }

@@ -2,8 +2,7 @@
 
 namespace App\Filament\Resources\Users;
 
-use App\Filament\Resources\Users\Pages\CreateUser;
-use App\Filament\Resources\Users\Pages\EditUser;
+use App\Filament\Concerns\HasOwwaViewModalUrl;
 use App\Filament\Resources\Users\Pages\ListUsers;
 use App\Filament\Resources\Users\Schemas\UserForm;
 use App\Filament\Resources\Users\Tables\UsersTable;
@@ -20,6 +19,8 @@ use UnitEnum;
 
 class UserResource extends Resource
 {
+    use HasOwwaViewModalUrl;
+
     protected static ?string $model = User::class;
 
     protected static string|UnitEnum|null $navigationGroup = 'Setup';
@@ -32,7 +33,7 @@ class UserResource extends Resource
     {
         $query = parent::getEloquentQuery();
         $user = Filament::auth()->user();
-        if ($user && $user->isAuthorizedPersonnel() && $user->office_id) {
+        if ($user && $user->isUnitConsolidator() && $user->office_id) {
             $query->where('office_id', $user->office_id)
                 ->where('role', User::ROLE_EMPLOYEE);
         }
@@ -82,8 +83,6 @@ class UserResource extends Resource
     {
         return [
             'index' => ListUsers::route('/'),
-            'create' => CreateUser::route('/create'),
-            'edit' => EditUser::route('/{record}/edit'),
         ];
     }
 }

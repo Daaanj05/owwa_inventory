@@ -7,7 +7,9 @@ use Illuminate\Support\Facades\Http;
 class OllamaClient
 {
     protected string $baseUrl;
+
     protected string $embedModel;
+
     protected string $chatModel;
 
     public function __construct()
@@ -26,17 +28,22 @@ class OllamaClient
      */
     public function embed(string $text): ?array
     {
-        $response = Http::timeout(60)->post("{$this->baseUrl}/api/embeddings", [
-            'model' => $this->embedModel,
-            'prompt' => $text,
-        ]);
+        try {
+            $response = Http::timeout(60)->post("{$this->baseUrl}/api/embeddings", [
+                'model' => $this->embedModel,
+                'prompt' => $text,
+            ]);
 
-        if (!$response->successful()) {
+            if (! $response->successful()) {
+                return null;
+            }
+
+            $data = $response->json();
+
+            return $data['embedding'] ?? null;
+        } catch (\Throwable) {
             return null;
         }
-
-        $data = $response->json();
-        return $data['embedding'] ?? null;
     }
 
     /**
@@ -44,32 +51,41 @@ class OllamaClient
      */
     public function chat(string $systemPrompt, string $userMessage): ?string
     {
-        $response = Http::timeout(120)->post("{$this->baseUrl}/api/chat", [
-            'model' => $this->chatModel,
-            'messages' => [
-                ['role' => 'system', 'content' => $systemPrompt],
-                ['role' => 'user', 'content' => $userMessage],
-            ],
-            'stream' => false,
-        ]);
+        try {
+            $response = Http::timeout(120)->post("{$this->baseUrl}/api/chat", [
+                'model' => $this->chatModel,
+                'messages' => [
+                    ['role' => 'system', 'content' => $systemPrompt],
+                    ['role' => 'user', 'content' => $userMessage],
+                ],
+                'stream' => false,
+            ]);
 
-        if (!$response->successful()) {
+            if (! $response->successful()) {
+                return null;
+            }
+
+            $data = $response->json();
+
+            return $data['message']['content'] ?? null;
+        } catch (\Throwable) {
             return null;
         }
-
-        $data = $response->json();
-        return $data['message']['content'] ?? null;
     }
 
     public function isAvailable(): bool
     {
-        // Try /api/tags first (list models)
-        $response = Http::timeout(10)->connectTimeout(5)->get("{$this->baseUrl}/api/tags");
-        if ($response->successful()) {
-            return true;
+        try {
+            $response = Http::timeout(10)->connectTimeout(5)->get("{$this->baseUrl}/api/tags");
+            if ($response->successful()) {
+                return true;
+            }
+
+            $fallback = Http::timeout(5)->connectTimeout(3)->get($this->baseUrl);
+
+            return $fallback->successful();
+        } catch (\Throwable) {
+            return false;
         }
-        // Fallback: some Ollama versions respond on root or /api/version
-        $fallback = Http::timeout(5)->connectTimeout(3)->get($this->baseUrl);
-        return $fallback->successful();
     }
 }

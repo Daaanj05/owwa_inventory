@@ -27,6 +27,7 @@ Thumbs.db
 /node_modules/
 /.env
 .env.*
+!.env.example
 /storage/*.key
 /storage/logs/
 /storage/framework/cache/

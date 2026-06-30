@@ -2,13 +2,15 @@
 
 namespace App\Filament\Resources\Issuances;
 
+use App\Filament\Concerns\HasOwwaViewModalUrl;
 use App\Filament\Resources\Issuances\Pages\ListIssuances;
 use App\Filament\Resources\Issuances\Pages\ViewIssuance;
 use App\Filament\Resources\Issuances\Schemas\IssuanceForm;
 use App\Filament\Resources\Issuances\Tables\IssuancesTable;
 use App\Models\Issuance;
 use App\Models\User;
-use App\Services\FiscalYearService;
+use App\Support\OwwaReferenceLabels;
+use App\Support\SemiExpendableUsefulLife;
 use BackedEnum;
 use Filament\Facades\Filament;
 use Filament\Infolists\Components\TextEntry;
@@ -23,7 +25,11 @@ use UnitEnum;
 
 class IssuanceResource extends Resource
 {
+    use HasOwwaViewModalUrl;
+
     protected static ?string $model = Issuance::class;
+
+    protected static bool $shouldRegisterNavigation = false;
 
     protected static string|UnitEnum|null $navigationGroup = 'Inventory';
 
@@ -38,10 +44,19 @@ class IssuanceResource extends Resource
     public static function getEloquentQuery(): Builder
     {
         $query = parent::getEloquentQuery();
-        app(FiscalYearService::class)->applyDateRangeFilter($query, 'issuance_date');
         $user = Filament::auth()->user();
-        if ($user && $user->isAuthorizedPersonnel() && $user->office_id) {
+        if ($user && $user->isUnitConsolidator() && $user->office_id) {
             $query->where('office_id', $user->office_id);
+        }
+
+        $categoryId = session('active_item_category_id');
+        if (filled($categoryId)) {
+            $query->whereHas('item', function (Builder $itemQuery) use ($categoryId): void {
+                $itemQuery->where('item_category_id', (int) $categoryId);
+            });
+        } else {
+            // Don't show issuances until the user selects a category.
+            $query->whereRaw('1 = 0');
         }
 
         return $query;
@@ -56,9 +71,16 @@ class IssuanceResource extends Resource
     {
         return $schema
             ->components([
-                Section::make('Transaction')
+                Section::make('Transaction Details')
                     ->schema([
-                        TextEntry::make('reference_code')->label('Reference number'),
+                        TextEntry::make('reference_code')
+                            ->label(fn (Issuance $record): string => OwwaReferenceLabels::forIssuance($record)),
+                        TextEntry::make('requisition.reference_code')
+                            ->label(OwwaReferenceLabels::RIS)
+                            ->placeholder('—')
+                            ->helperText(fn (Issuance $record): ?string => $record->requisition_id
+                                ? null
+                                : 'Legacy record without a linked requisition.'),
                         TextEntry::make('issuance_date')->label('Date')->date('M d, Y'),
                         TextEntry::make('office.name')->label('Office'),
                         TextEntry::make('department.name')->label('Department')->placeholder('—'),
@@ -69,21 +91,100 @@ class IssuanceResource extends Resource
                     ->columnSpanFull(),
                 Section::make('Pricing')
                     ->schema([
-                        TextEntry::make('unit_cost')->label('Unit cost')->money('PHP'),
+                        TextEntry::make('unit_cost')->label('Unit cost (₱ per measurement unit)')->money('PHP'),
                         TextEntry::make('amount')->label('Amount')->money('PHP'),
                     ])
                     ->columns(2)
                     ->columnSpanFull(),
                 Section::make('Assignment')
                     ->schema([
-                        TextEntry::make('requisition.reference_code')->label('Requisition')->placeholder('—'),
                         TextEntry::make('issuedTo.name')->label('Issued to')->placeholder('—'),
-                        TextEntry::make('property_number')->label('Property / inventory number')->placeholder('—'),
+                        TextEntry::make('asset_identifier')
+                            ->label(fn (Issuance $record): string => OwwaReferenceLabels::assetIdentifierLabel(
+                                $record->item?->category?->getTemplateSlug()
+                            ))
+                            ->state(fn (Issuance $record): ?string => OwwaReferenceLabels::assetIdentifierForIssuance($record))
+                            ->placeholder('—'),
                         TextEntry::make('remarks')->label('Remarks')->placeholder('—')->columnSpanFull(),
                     ])
                     ->columns(2)
                     ->columnSpanFull(),
+                Section::make('Useful life')
+                    ->schema([
+                        TextEntry::make('estimated_useful_life')
+                            ->label('Estimated useful life')
+                            ->placeholder('—')
+                            ->visible(fn (Issuance $record): bool => $record->item?->category?->getTemplateSlug() === 'semi_expendable'),
+                        TextEntry::make('eul_expires_at')
+                            ->label('Useful life expires')
+                            ->date('M d, Y')
+                            ->placeholder('—')
+                            ->visible(fn (Issuance $record): bool => $record->item?->category?->getTemplateSlug() === 'semi_expendable'),
+                        TextEntry::make('eul_status')
+                            ->label('EUL status')
+                            ->state(fn (Issuance $record): string => SemiExpendableUsefulLife::statusLabel(
+                                SemiExpendableUsefulLife::statusForIssuance($record)
+                            ))
+                            ->visible(fn (Issuance $record): bool => $record->item?->category?->getTemplateSlug() === 'semi_expendable'),
+                    ])
+                    ->columns(3)
+                    ->columnSpanFull()
+                    ->visible(fn (Issuance $record): bool => $record->item?->category?->getTemplateSlug() === 'semi_expendable'),
             ]);
+    }
+
+    /**
+     * @return array<int, Section>
+     */
+    public static function modalDetailSections(): array
+    {
+        return [
+            Section::make('Transaction Details')
+                ->schema([
+                    TextEntry::make('requisition.reference_code')
+                        ->label(OwwaReferenceLabels::RIS)
+                        ->placeholder('—')
+                        ->helperText(fn (Issuance $record): ?string => $record->requisition_id
+                            ? null
+                            : 'Legacy record without a linked requisition.'),
+                    TextEntry::make('office.name')->label('Office'),
+                    TextEntry::make('department.name')->label('Department')->placeholder('—'),
+                    TextEntry::make('unit_cost')->label('Unit cost (₱ per measurement unit)')->money('PHP'),
+                ])
+                ->columns(2)
+                ->columnSpanFull(),
+            Section::make('Assignment')
+                ->schema([
+                    TextEntry::make('issuedTo.name')->label('Issued to')->placeholder('—'),
+                    TextEntry::make('asset_identifier')
+                        ->label(fn (Issuance $record): string => OwwaReferenceLabels::assetIdentifierLabel(
+                            $record->item?->category?->getTemplateSlug()
+                        ))
+                        ->state(fn (Issuance $record): ?string => OwwaReferenceLabels::assetIdentifierForIssuance($record))
+                        ->placeholder('—'),
+                    TextEntry::make('remarks')->label('Remarks')->placeholder('—')->columnSpanFull(),
+                ])
+                ->columns(2)
+                ->columnSpanFull(),
+            Section::make('Useful life')
+                ->schema([
+                    TextEntry::make('estimated_useful_life')
+                        ->label('Estimated useful life')
+                        ->placeholder('—'),
+                    TextEntry::make('eul_expires_at')
+                        ->label('Useful life expires')
+                        ->date('M d, Y')
+                        ->placeholder('—'),
+                    TextEntry::make('eul_status')
+                        ->label('EUL status')
+                        ->state(fn (Issuance $record): string => SemiExpendableUsefulLife::statusLabel(
+                            SemiExpendableUsefulLife::statusForIssuance($record)
+                        )),
+                ])
+                ->columns(3)
+                ->columnSpanFull()
+                ->visible(fn (Issuance $record): bool => $record->item?->category?->getTemplateSlug() === 'semi_expendable'),
+        ];
     }
 
     public static function table(Table $table): Table
@@ -95,7 +196,12 @@ class IssuanceResource extends Resource
     {
         $user = Filament::auth()->user();
 
-        return $user && ($user->isSupplyCustodian() || $user->isAuthorizedPersonnel());
+        return $user?->isSupplyCustodian() ?? false;
+    }
+
+    public static function canCreate(): bool
+    {
+        return false;
     }
 
     public static function getRecordRouteBindingEloquentQuery(): Builder

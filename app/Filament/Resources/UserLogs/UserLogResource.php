@@ -2,19 +2,22 @@
 
 namespace App\Filament\Resources\UserLogs;
 
+use App\Filament\Concerns\HasOwwaViewModalUrl;
 use App\Filament\Resources\UserLogs\Pages\ListUserLogs;
+use App\Filament\Resources\UserLogs\Tables\UserLogsTable;
 use App\Models\UserLog;
 use BackedEnum;
 use Filament\Facades\Filament;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
-use Filament\Tables;
 use Filament\Tables\Table;
 use UnitEnum;
 
 class UserLogResource extends Resource
 {
+    use HasOwwaViewModalUrl;
+
     protected static ?string $model = UserLog::class;
 
     protected static string|UnitEnum|null $navigationGroup = 'Setup';
@@ -56,35 +59,7 @@ class UserLogResource extends Resource
 
     public static function table(Table $table): Table
     {
-        return $table
-            ->columns([
-                Tables\Columns\TextColumn::make('user.name')
-                    ->label('User')
-                    ->sortable()
-                    ->searchable(),
-                Tables\Columns\TextColumn::make('ip_address')
-                    ->label('IP Address')
-                    ->sortable()
-                    ->toggleable(),
-                Tables\Columns\TextColumn::make('panel')
-                    ->label('Panel')
-                    ->sortable()
-                    ->badge(),
-                Tables\Columns\TextColumn::make('path')
-                    ->label('Path')
-                    ->sortable()
-                    ->toggleable(),
-                Tables\Columns\TextColumn::make('user_agent')
-                    ->label('User Agent')
-                    ->limit(50)
-                    ->tooltip(fn ($state) => $state)
-                    ->toggleable(),
-                Tables\Columns\TextColumn::make('logged_in_at')
-                    ->label('Logged In At')
-                    ->dateTime()
-                    ->sortable(),
-            ])
-            ->defaultSort('logged_in_at', 'desc');
+        return UserLogsTable::configure($table);
     }
 
     public static function getRelations(): array
@@ -99,4 +74,3 @@ class UserLogResource extends Resource
         ];
     }
 }
-

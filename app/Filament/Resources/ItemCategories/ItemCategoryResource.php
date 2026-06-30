@@ -2,8 +2,7 @@
 
 namespace App\Filament\Resources\ItemCategories;
 
-use App\Filament\Resources\ItemCategories\Pages\CreateItemCategory;
-use App\Filament\Resources\ItemCategories\Pages\EditItemCategory;
+use App\Filament\Concerns\HasOwwaViewModalUrl;
 use App\Filament\Resources\ItemCategories\Pages\ListItemCategories;
 use App\Filament\Resources\ItemCategories\Schemas\ItemCategoryForm;
 use App\Filament\Resources\ItemCategories\Tables\ItemCategoriesTable;
@@ -18,6 +17,8 @@ use UnitEnum;
 
 class ItemCategoryResource extends Resource
 {
+    use HasOwwaViewModalUrl;
+
     protected static ?string $model = ItemCategory::class;
 
     protected static string|UnitEnum|null $navigationGroup = 'Setup';
@@ -54,8 +55,6 @@ class ItemCategoryResource extends Resource
     {
         return [
             'index' => ListItemCategories::route('/'),
-            'create' => CreateItemCategory::route('/create'),
-            'edit' => EditItemCategory::route('/{record}/edit'),
         ];
     }
 }

@@ -2,17 +2,19 @@
 
 namespace App\Filament\Pages\Auth;
 
+use App\Models\User;
 use Filament\Auth\Http\Responses\Contracts\LoginResponse;
 use Filament\Auth\Pages\Login as BaseLogin;
+use Filament\Facades\Filament;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Components\Component;
+use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Support\Facades\Session;
+use Illuminate\Validation\ValidationException;
 
 class Login extends BaseLogin
 {
     protected string $view = 'filament.pages.auth.login';
-
-    protected static string $layout = 'filament-panels::components.layout.base';
 
     public function authenticate(): ?LoginResponse
     {
@@ -22,7 +24,32 @@ class Login extends BaseLogin
 
         $this->form->fill($this->data);
 
+        $this->throwIfEmailUnverified();
+
         return parent::authenticate();
+    }
+
+    protected function throwIfEmailUnverified(): void
+    {
+        $data = $this->form->getState();
+
+        $authGuard = Filament::auth();
+        $authProvider = $authGuard->getProvider();
+        $credentials = $this->getCredentialsFromFormData($data);
+
+        $user = $authProvider->retrieveByCredentials($credentials);
+
+        if (
+            $user instanceof MustVerifyEmail
+            && $user instanceof User
+            && $authProvider->validateCredentials($user, $credentials)
+            && ! $user->hasVerifiedEmail()
+            && $user->canAccessPanel(Filament::getCurrentOrDefaultPanel())
+        ) {
+            throw ValidationException::withMessages([
+                'data.email' => __('Please verify your email address before signing in.'),
+            ]);
+        }
     }
 
     protected function getEmailFormComponent(): Component

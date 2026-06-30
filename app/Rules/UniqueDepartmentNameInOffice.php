@@ -3,7 +3,6 @@
 namespace App\Rules;
 
 use App\Models\Department;
-use App\Services\FiscalYearService;
 use Closure;
 use Illuminate\Contracts\Validation\DataAwareRule;
 use Illuminate\Contracts\Validation\ValidationRule;
@@ -26,13 +25,7 @@ class UniqueDepartmentNameInOffice implements DataAwareRule, ValidationRule
             return;
         }
 
-        $fiscalYearId = app(FiscalYearService::class)->current()?->id;
-        if (! $fiscalYearId) {
-            return;
-        }
-
         $query = Department::query()
-            ->where('fiscal_year_id', $fiscalYearId)
             ->where('office_id', $officeId)
             ->where('name', $value);
 

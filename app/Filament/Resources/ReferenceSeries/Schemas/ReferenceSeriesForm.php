@@ -6,6 +6,7 @@ use App\Models\ReferenceSeries;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
 
 class ReferenceSeriesForm
@@ -13,29 +14,32 @@ class ReferenceSeriesForm
     public static function configure(Schema $schema): Schema
     {
         return $schema
+            ->columns(1)
             ->components([
                 Section::make('Reference number format')
-                    ->description('Each new record gets a reference number like **RIS-2026-0001**. You choose the letters (code), and the system adds the year and the next number. You only need to change the "Format (advanced)" box if your office uses a different style.')
+                    ->description('Transaction control numbers are assigned automatically when Supply Custodian creates a record. For issuances, transfers, requisitions, disposals, and acquisitions the system outputs OWWA-style **YYYY-MM-####** (e.g. 2026-01-0001). Export filenames add the form label at download time (RIS, RSMI, PTR). Code letters for stock/property series (CON, PPE) still appear in generated stock numbers.')
+                    ->columnSpanFull()
                     ->schema([
                         TextInput::make('type')
-                            ->label('Transaction type')
+                            ->label('Series key')
                             ->disabled()
                             ->dehydrated(false)
                             ->helperText('Fixed for this row; cannot be changed.'),
                         TextInput::make('name')
-                            ->label('Label for reports')
+                            ->label('Label in admin')
                             ->maxLength(100)
-                            ->helperText('Optional. Shown in reports and exports.'),
+                            ->helperText('Describes which OWWA form label this series feeds (e.g. Appendix 63 RIS vs RSMI Serial No.).'),
                         TextInput::make('prefix')
-                            ->label('Code letters')
-                            ->required()
+                            ->label('Code letters (reference)')
+                            ->required(fn (Get $get): bool => ! self::isTransactionSeriesType((string) $get('type')))
+                            ->visible(fn (Get $get): bool => ! self::isTransactionSeriesType((string) $get('type')))
                             ->maxLength(20)
-                            ->helperText('The letters at the start of every number (e.g. RIS, PTR).'),
+                            ->helperText('Used for stock/property series (CON, PPE, SE). Required for item and property number formats.'),
                         TextInput::make('pattern')
                             ->label('Format (advanced)')
                             ->required()
                             ->maxLength(100)
-                            ->helperText('Leave as is unless you need a different style. It means: code letters, then year, then a 4-digit number.'),
+                            ->helperText('Transaction types: keep default; output is normalized to YYYY-MM-####. Item/property types: CON-{Y}-{seq:4}, etc.'),
                         TextInput::make('next_sequence')
                             ->label('Next number to use')
                             ->required()
@@ -62,5 +66,10 @@ class ReferenceSeriesForm
                     ->columns(2)
                     ->compact(),
             ]);
+    }
+
+    public static function isTransactionSeriesType(string $type): bool
+    {
+        return in_array($type, ReferenceSeries::transactionSeriesTypes(), true);
     }
 }

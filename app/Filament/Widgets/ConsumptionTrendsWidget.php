@@ -4,8 +4,8 @@ namespace App\Filament\Widgets;
 
 use App\Models\Department;
 use App\Models\Office;
+use App\Services\AnalyticsDateRangeService;
 use App\Services\ConsumptionAnalyticsService;
-use App\Services\FiscalYearService;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Select;
@@ -13,7 +13,6 @@ use Filament\Forms\Components\Toggle;
 use Filament\Schemas\Schema;
 use Filament\Widgets\ChartWidget;
 use Filament\Widgets\ChartWidget\Concerns\HasFiltersSchema;
-use Illuminate\Support\Carbon;
 
 class ConsumptionTrendsWidget extends ChartWidget
 {
@@ -23,7 +22,11 @@ class ConsumptionTrendsWidget extends ChartWidget
 
     protected static ?int $sort = 2;
 
-    protected int | string | array $columnSpan = 1;
+    protected static bool $isLazy = true;
+
+    // Dashboard default grid is 2 columns, so span 1 to allow side-by-side with
+    // ConsumptionSharePieWidget (columnSpan = 1).
+    protected int|string|array $columnSpan = 1;
 
     protected ?string $heading = 'Consumption trend';
 
@@ -35,7 +38,7 @@ class ConsumptionTrendsWidget extends ChartWidget
     {
         $user = Filament::auth()->user();
 
-        return $user && ! $user->isSystemAdmin();
+        return $user?->isSupplyCustodian() ?? false;
     }
 
     public function getDescription(): ?string
@@ -45,7 +48,7 @@ class ConsumptionTrendsWidget extends ChartWidget
             return 'Monthly issuance trend for your office/department. Based on issuance records (items issued out); only issuances with a department set are included.';
         }
 
-        return 'Monthly issuance trend per department in the selected period. Based on issuance records (items issued out to departments).';
+        return 'Monthly issuance trend per department. Includes all offices (regional and satellite) when All offices is selected.';
     }
 
     public function getShowDepartmentStats(): bool
@@ -84,25 +87,39 @@ class ConsumptionTrendsWidget extends ChartWidget
     public function filtersSchema(Schema $schema): Schema
     {
         $user = Filament::auth()->user();
-        $fyId = app(FiscalYearService::class)->current()?->id;
         $scope = $user?->getConsumptionScope() ?? ['office_ids' => [], 'department_ids' => []];
-        $officeBase = Office::forFiscalYear($fyId)->active()->orderBy('name');
+        $officeBase = Office::query()->active()->orderBy('name');
         $officeOptions = $scope['office_ids'] !== []
             ? (clone $officeBase)->whereIn('id', $scope['office_ids'])->pluck('name', 'id')
             : $officeBase->pluck('name', 'id');
-        $departmentBase = Department::forFiscalYear($fyId)->active()->orderBy('name');
+        $departmentBase = Department::query()->active()->orderBy('name');
         $departmentOptions = $scope['department_ids'] !== []
             ? (clone $departmentBase)->whereIn('id', $scope['department_ids'])->pluck('name', 'id')
             : $departmentBase->pluck('name', 'id');
 
+        $dateRange = app(AnalyticsDateRangeService::class)->getRangeForScope(AnalyticsDateRangeService::SCOPE_CURRENT_YEAR);
+
         return $schema->components([
+            Select::make('analytics_scope')
+                ->label('Analysis scope')
+                ->options([
+                    AnalyticsDateRangeService::SCOPE_CURRENT_YEAR => 'Current calendar year',
+                    AnalyticsDateRangeService::SCOPE_LONG_VIEW => 'Multi-year (up to 5 years)',
+                ])
+                ->default(AnalyticsDateRangeService::SCOPE_CURRENT_YEAR)
+                ->live()
+                ->afterStateUpdated(function ($state, callable $set): void {
+                    $range = app(AnalyticsDateRangeService::class)->getRangeForScope($state ?: AnalyticsDateRangeService::SCOPE_CURRENT_YEAR);
+                    $set('date_from', $range['from']->toDateString());
+                    $set('date_to', $range['to']->toDateString());
+                }),
             DatePicker::make('date_from')
                 ->label('From')
-                ->default(now()->subMonths(11)->startOfMonth())
+                ->default($dateRange['from']->toDateString())
                 ->maxDate(fn () => $this->deferredFilters['date_to'] ?? now()),
             DatePicker::make('date_to')
                 ->label('To')
-                ->default(now())
+                ->default($dateRange['to']->toDateString())
                 ->minDate(fn () => $this->deferredFilters['date_from'] ?? now()->subMonths(11)),
             Select::make('department_ids')
                 ->label('Departments')
@@ -123,8 +140,10 @@ class ConsumptionTrendsWidget extends ChartWidget
     protected function getData(): array
     {
         $f = $this->filters;
-        $from = isset($f['date_from']) ? Carbon::parse($f['date_from'])->startOfDay() : now()->subMonths(11)->startOfMonth();
-        $to = isset($f['date_to']) ? Carbon::parse($f['date_to'])->endOfDay() : now();
+        $resolved = app(AnalyticsDateRangeService::class)->resolveFromWidgetFilters($f);
+        $from = $resolved['from'];
+        $to = $resolved['to'];
+        $includeYearLabels = $resolved['includeYearInLabels'];
         $departmentIds = array_filter($f['department_ids'] ?? []);
         $officeIds = array_filter($f['office_ids'] ?? []);
 
@@ -140,7 +159,7 @@ class ConsumptionTrendsWidget extends ChartWidget
         $showMovingAverage = (bool) ($f['show_moving_average'] ?? false);
 
         $service = app(ConsumptionAnalyticsService::class);
-        $result = $service->getConsumptionByDepartmentAndPeriod($from, $to, $departmentIds, $officeIds);
+        $result = $service->getConsumptionByDepartmentAndPeriod($from, $to, $departmentIds, $officeIds, $includeYearLabels);
 
         $labels = $result['labels'];
         $series = $result['series'];
@@ -159,18 +178,18 @@ class ConsumptionTrendsWidget extends ChartWidget
         foreach ($series as $deptName => $values) {
             $color = $colors[$index % count($colors)];
             $datasets[] = [
-                'label'           => $deptName,
-                'data'            => $values,
-                'borderColor'     => $color,
-                'backgroundColor' => $color . '18',
+                'label' => $deptName,
+                'data' => $values,
+                'borderColor' => $color,
+                'backgroundColor' => $color.'18',
                 'pointBackgroundColor' => $color,
-                'pointBorderColor'     => '#ffffff',
-                'pointBorderWidth'     => 2,
-                'pointRadius'          => 4,
-                'pointHoverRadius'     => 6,
-                'fill'            => false,
-                'tension'         => 0.4,
-                'borderWidth'     => 2.5,
+                'pointBorderColor' => '#ffffff',
+                'pointBorderWidth' => 2,
+                'pointRadius' => 4,
+                'pointHoverRadius' => 6,
+                'fill' => false,
+                'tension' => 0.4,
+                'borderWidth' => 2.5,
             ];
             $index++;
         }
@@ -180,7 +199,7 @@ class ConsumptionTrendsWidget extends ChartWidget
             foreach ($maSeries as $deptName => $maValues) {
                 $color = $colors[$index % count($colors)];
                 $datasets[] = [
-                    'label' => $deptName . ' (MA)',
+                    'label' => $deptName.' (MA)',
                     'data' => $maValues,
                     'borderColor' => $color,
                     'backgroundColor' => 'transparent',
@@ -205,19 +224,22 @@ class ConsumptionTrendsWidget extends ChartWidget
 
     protected function getOptions(): ?array
     {
+        $scope = $this->filters['analytics_scope'] ?? AnalyticsDateRangeService::SCOPE_CURRENT_YEAR;
+        $longView = $scope === AnalyticsDateRangeService::SCOPE_LONG_VIEW;
+
         return [
             'scales' => [
                 'y' => [
                     'beginAtZero' => true,
-                    'grace'       => '8%',
-                    'ticks'       => [
-                        'precision'  => 0,
-                        'color'      => '#94a3b8',
-                        'font'       => ['size' => 11],
-                        'padding'    => 6,
+                    'grace' => '8%',
+                    'ticks' => [
+                        'precision' => 0,
+                        'color' => '#94a3b8',
+                        'font' => ['size' => 11],
+                        'padding' => 6,
                     ],
                     'grid' => [
-                        'color'     => 'rgba(226,232,240,0.7)',
+                        'color' => 'rgba(226,232,240,0.7)',
                         'drawBorder' => false,
                     ],
                     'border' => ['display' => false],
@@ -226,44 +248,44 @@ class ConsumptionTrendsWidget extends ChartWidget
                     'grid' => ['display' => false],
                     'border' => ['display' => false],
                     'ticks' => [
-                        'maxRotation' => 0,
-                        'minRotation' => 0,
-                        'color'       => '#94a3b8',
-                        'font'        => ['size' => 11],
-                        'padding'     => 4,
+                        'maxRotation' => $longView ? 45 : 0,
+                        'minRotation' => $longView ? 45 : 0,
+                        'color' => '#94a3b8',
+                        'font' => ['size' => $longView ? 9 : 11],
+                        'padding' => 4,
                     ],
                 ],
             ],
             'plugins' => [
                 'legend' => [
-                    'display'  => true,
+                    'display' => true,
                     'position' => 'top',
-                    'align'    => 'end',
-                    'labels'   => [
-                        'boxWidth'      => 8,
-                        'boxHeight'     => 8,
-                        'borderRadius'  => 4,
-                        'padding'       => 14,
+                    'align' => 'end',
+                    'labels' => [
+                        'boxWidth' => 8,
+                        'boxHeight' => 8,
+                        'borderRadius' => 4,
+                        'padding' => 14,
                         'usePointStyle' => true,
-                        'pointStyle'    => 'circle',
-                        'color'         => '#475569',
-                        'font'          => ['size' => 11, 'weight' => '500'],
+                        'pointStyle' => 'circle',
+                        'color' => '#475569',
+                        'font' => ['size' => 11, 'weight' => '500'],
                     ],
                 ],
                 'tooltip' => [
                     'backgroundColor' => 'rgba(15,23,42,0.88)',
-                    'titleColor'      => '#f8fafc',
-                    'bodyColor'       => '#cbd5e1',
-                    'borderColor'     => 'rgba(255,255,255,0.08)',
-                    'borderWidth'     => 1,
-                    'padding'         => ['x' => 12, 'y' => 8],
-                    'cornerRadius'    => 8,
-                    'mode'            => 'index',
-                    'intersect'       => false,
+                    'titleColor' => '#f8fafc',
+                    'bodyColor' => '#cbd5e1',
+                    'borderColor' => 'rgba(255,255,255,0.08)',
+                    'borderWidth' => 1,
+                    'padding' => ['x' => 12, 'y' => 8],
+                    'cornerRadius' => 8,
+                    'mode' => 'index',
+                    'intersect' => false,
                 ],
             ],
             'interaction' => [
-                'mode'      => 'index',
+                'mode' => 'index',
                 'intersect' => false,
             ],
         ];
@@ -277,8 +299,10 @@ class ConsumptionTrendsWidget extends ChartWidget
     public function getConsumptionSummary(): array
     {
         $f = $this->filters;
-        $from = isset($f['date_from']) ? Carbon::parse($f['date_from'])->startOfDay() : now()->subMonths(11)->startOfMonth();
-        $to = isset($f['date_to']) ? Carbon::parse($f['date_to'])->endOfDay() : now();
+        $resolved = app(AnalyticsDateRangeService::class)->resolveFromWidgetFilters($f);
+        $from = $resolved['from'];
+        $to = $resolved['to'];
+        $includeYearLabels = $resolved['includeYearInLabels'];
         $departmentIds = array_filter($f['department_ids'] ?? []);
         $officeIds = array_filter($f['office_ids'] ?? []);
 
@@ -291,6 +315,6 @@ class ConsumptionTrendsWidget extends ChartWidget
             }
         }
 
-        return app(ConsumptionAnalyticsService::class)->getConsumptionSummary($from, $to, $departmentIds, $officeIds);
+        return app(ConsumptionAnalyticsService::class)->getConsumptionSummary($from, $to, $departmentIds, $officeIds, $includeYearLabels);
     }
 }

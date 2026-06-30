@@ -10,6 +10,8 @@ use UnitEnum;
 
 class CoaReports extends Page
 {
+    protected static bool $shouldRegisterNavigation = false;
+
     protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-document-text';
 
     protected static string|UnitEnum|null $navigationGroup = 'Analytics';
@@ -28,6 +30,14 @@ class CoaReports extends Page
     public function getTitle(): string
     {
         return 'COA reports';
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    public function getPageClasses(): array
+    {
+        return ['owwa-coa-reports-page'];
     }
 
     protected function getHeaderActions(): array

@@ -2,8 +2,14 @@
 
 namespace App\Filament\Resources\ReferenceSeries\Tables;
 
+use App\Filament\Resources\ReferenceSeries\Schemas\ReferenceSeriesInfolist;
+use App\Filament\Support\ConfiguresOwwaViewAction;
+use App\Filament\Support\OwwaFormModalDefaults;
+use App\Filament\Support\OwwaModalSchema;
 use App\Services\ReferenceCodeService;
-use Filament\Actions\EditAction;
+use App\Support\OwwaTransactionViewPresenter;
+use Filament\Actions\Action;
+use Filament\Actions\ActionGroup;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 
@@ -20,6 +26,11 @@ class ReferenceSeriesTable
                     ->badge()
                     ->color('gray')
                     ->sortable(),
+                TextColumn::make('status')
+                    ->label('Status')
+                    ->state(fn ($record): string => $record->archived_at ? 'Archived' : 'Active')
+                    ->badge()
+                    ->color(fn (string $state): string => $state === 'Archived' ? 'gray' : 'success'),
                 TextColumn::make('name')
                     ->label('Label')
                     ->placeholder('—')
@@ -27,10 +38,11 @@ class ReferenceSeriesTable
                     ->toggleable(),
                 TextColumn::make('prefix')
                     ->label('Code letters')
+                    ->state(fn ($record): string => $record->isTransactionSeries() ? '—' : (string) $record->prefix)
                     ->searchable(),
                 TextColumn::make('pattern_description')
                     ->label('Format')
-                    ->tooltip(fn ($record) => 'Technical: ' . $record->pattern),
+                    ->tooltip(fn ($record) => 'Technical: '.$record->pattern),
                 TextColumn::make('next_sequence')
                     ->label('Next number')
                     ->sortable()
@@ -59,8 +71,38 @@ class ReferenceSeriesTable
             ])
             ->defaultSort('type')
             ->recordActions([
-                EditAction::make(),
+                ConfiguresOwwaViewAction::make(
+                    OwwaModalSchema::withHero(
+                        fn ($record): array => OwwaTransactionViewPresenter::forAdminRecord($record, 'Format'),
+                        ReferenceSeriesInfolist::modalDetailSections(),
+                    ),
+                    [
+                        OwwaFormModalDefaults::editAction(OwwaFormModalDefaults::WIDTH_COMPACT),
+                    ],
+                ),
+                ActionGroup::make([
+                    OwwaFormModalDefaults::editAction(OwwaFormModalDefaults::WIDTH_COMPACT),
+                    Action::make('archive')
+                        ->label('Archive')
+                        ->icon('heroicon-o-archive-box')
+                        ->color('gray')
+                        ->requiresConfirmation()
+                        ->modalHeading('Archive reference format')
+                        ->modalDescription('This format will be hidden from active lists but kept for history. Use the Archived tab to view or restore it.')
+                        ->visible(fn ($record) => $record->archived_at === null)
+                        ->action(fn ($record) => $record->update(['archived_at' => now()])),
+                    Action::make('unarchive')
+                        ->label('Restore')
+                        ->icon('heroicon-o-arrow-uturn-left')
+                        ->visible(fn ($record) => $record->archived_at !== null)
+                        ->action(fn ($record) => $record->update(['archived_at' => null])),
+                ])
+                    ->label('Actions')
+                    ->icon('heroicon-m-ellipsis-vertical')
+                    ->color('gray'),
             ])
+            ->recordUrl(null)
+            ->recordAction('view')
             ->striped()
             ->emptyStateHeading('No reference formats yet')
             ->emptyStateDescription('Run the Reference Series seeder to create default formats for Issuance, Transfer, Disposal, Requisition, and Acquisition.')

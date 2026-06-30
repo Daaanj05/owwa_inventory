@@ -11,9 +11,11 @@ class ItemCategoryForm
     public static function configure(Schema $schema): Schema
     {
         return $schema
+            ->columns(1)
             ->components([
                 Section::make('Category details')
                     ->description('Group items into categories for easier management.')
+                    ->columnSpanFull()
                     ->columns(2)
                     ->schema([
                         TextInput::make('name')

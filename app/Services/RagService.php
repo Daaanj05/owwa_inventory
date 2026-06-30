@@ -12,8 +12,63 @@ class RagService
 {
     public function __construct(
         protected OllamaClient $ollama,
-        protected InventoryStockService $stock
+        protected InventoryStockService $stock,
+        protected RagRetrievalService $retrieval,
     ) {}
+
+    /**
+     * Generate a short narrative summary for a deterministic, pre-computed recommendation set.
+     *
+     * @param  array{from:string,to:string,category:string|null,pairs:int,high:int,medium:int,headline?:string}  $facts
+     * @param  array<int, array{priority:string,item:string,office:string,cover:float,forecast:float,suggested:int|null,has_recent_usage?:bool}>  $items
+     */
+    public function generateNarrativeSummary(array $facts, array $items, array $filters = []): ?string
+    {
+        if (! $this->ollama->isAvailable()) {
+            return null;
+        }
+
+        $systemPrompt = 'You are a procurement advisor for OWWA Regional Office IV-A. Use only the facts provided. Do not invent numbers. Prioritize High-risk items first. Never suggest deprioritizing High-risk items. Keep the summary to at most 2 sentences.';
+
+        $itemsText = collect($items)
+            ->take(8)
+            ->map(function (array $i): string {
+                $suggested = $i['suggested'] ?? 0;
+                $usageNote = ($i['has_recent_usage'] ?? true) ? '' : ', no recent usage';
+
+                return "- {$i['priority']}: {$i['item']} @ {$i['office']} (cover {$i['cover']} mo, forecast {$i['forecast']}/mo, suggested {$suggested}{$usageNote})";
+            })
+            ->implode("\n");
+
+        $categoryLine = $facts['category'] ? "Category scope: {$facts['category']}." : 'Category scope: All categories.';
+        $headlineLine = filled($facts['headline'] ?? null) ? "Summary headline: {$facts['headline']}." : '';
+
+        $retrieved = $this->retrieval->retrieve(
+            query: 'procurement recommendations '.($facts['category'] ?? 'all categories'),
+            filters: $filters,
+            topK: 12,
+            candidateLimit: 400,
+        );
+
+        $retrievedText = $retrieved->isNotEmpty()
+            ? ("\n\nRetrieved context snippets:\n".$retrieved->map(fn ($c) => "- ({$c['source']}) ".mb_substr($c['content'], 0, 180))->implode("\n"))
+            : '';
+
+        $userMessage = <<<TXT
+Period covered: {$facts['from']} to {$facts['to']}.
+{$categoryLine}
+{$headlineLine}
+At-risk pairs: {$facts['pairs']} (High: {$facts['high']}, Medium: {$facts['medium']}).
+
+Top at-risk items (pre-computed):
+{$itemsText}
+{$retrievedText}
+
+Write at most 2 sentences. Lead with High-priority reorders and suggested quantities. Do not output a table.
+TXT;
+
+        return $this->ollama->chat($systemPrompt, $userMessage);
+    }
 
     /**
      * Build inventory/consumption context for the last N months.
@@ -26,16 +81,8 @@ class RagService
      */
     public function buildInventoryContext(int $months = 6, ?int $categoryId = null): string
     {
-        $fiscal = app(\App\Services\FiscalYearService::class);
-        $range = $fiscal->range();
-
-        if ($range !== null) {
-            $fromDate = $range['from'];
-            $toDate   = $range['to'];
-        } else {
-            $fromDate = now()->subMonths($months);
-            $toDate   = now();
-        }
+        $fromDate = now()->subMonths($months);
+        $toDate = now();
 
         $issuanceQuery = Issuance::query()
             ->whereBetween('issuance_date', [$fromDate, $toDate]);
@@ -50,14 +97,14 @@ class RagService
 
         if ($oldest && $newest) {
             $from = \Carbon\Carbon::parse($oldest);
-            $to   = \Carbon\Carbon::parse($newest);
+            $to = \Carbon\Carbon::parse($newest);
         } else {
             $from = $fromDate;
-            $to   = $toDate;
+            $to = $toDate;
         }
 
-        $fromLabel  = $from->format('F Y');
-        $toLabel    = $to->format('F Y');
+        $fromLabel = $from->format('F Y');
+        $toLabel = $to->format('F Y');
         $rangeLabel = "{$fromLabel} to {$toLabel}";
         $monthsSpan = max(1, (int) $from->diffInMonths($to) + 1);
 
@@ -79,7 +126,7 @@ class RagService
             : null;
 
         $lines = [
-            '## Inventory risk metrics (' . $rangeLabel . ')',
+            '## Inventory risk metrics ('.$rangeLabel.')',
             "Approximate period length: {$monthsSpan} months",
         ];
         if ($categoryName !== null) {
@@ -116,16 +163,9 @@ class RagService
         }
 
         $lines[] = "\n## Current stock and reorder points";
-        $items = Item::where('reorder_level', '>', 0)
-            ->when($categoryId !== null, fn ($q) => $q->where('item_category_id', $categoryId))
-            ->get();
-        $offices = Office::all();
-        foreach ($items as $item) {
-            foreach ($offices as $office) {
-                $stock = $this->stock->getStock($item->id, $office->id);
-                $status = $stock <= $item->reorder_level ? 'LOW' : 'OK';
-                $lines[] = "- {$item->name} at {$office->name}: stock={$stock}, reorder_point={$item->reorder_level} ({$status})";
-            }
+        foreach ($this->stock->getStockLevelsList($categoryId) as $position) {
+            $status = $position->is_low ? 'LOW' : 'OK';
+            $lines[] = "- {$position->item_name} at {$position->office_name}: stock={$position->stock}, reorder_point={$position->reorder_level} ({$status})";
         }
 
         return implode("\n", $lines);
@@ -137,9 +177,9 @@ class RagService
      * @param  string|null  $query  Override prompt (optional)
      * @param  int|null  $categoryId  If set, context and recommendations are limited to this item category
      */
-    public function getRecommendation(string $query = null, ?int $categoryId = null): ?string
+    public function getRecommendation(?string $query = null, ?int $categoryId = null): ?string
     {
-        $query ??= <<<MD
+        $query ??= <<<'MD'
 You are advising procurement for OWWA Regional Office IV-A.
 
 1) First write a short summary (2–3 sentences) describing:
@@ -186,12 +226,12 @@ MD;
         }
 
         // Fallback to direct Ollama client
-        if (!$this->ollama->isAvailable()) {
+        if (! $this->ollama->isAvailable()) {
             return null;
         }
 
         $systemPrompt = 'You are a procurement advisor for OWWA Regional Office IV-A. Use only the provided inventory and stock data. Give short, evidence-based reorder recommendations.';
-        $userMessage = "Context:\n" . $context . "\n\nQuestion: " . $query;
+        $userMessage = "Context:\n".$context."\n\nQuestion: ".$query;
 
         return $this->ollama->chat($systemPrompt, $userMessage);
     }

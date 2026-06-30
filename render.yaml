@@ -1,0 +1,60 @@
+databases:
+  - name: owwa-inventory-db
+    databaseName: owwa_inventory
+    user: owwa_inventory
+    plan: free
+    region: singapore
+
+services:
+  - type: web
+    name: owwa-inventory
+    runtime: docker
+    plan: free
+    region: singapore
+    branch: main
+    healthCheckPath: /up
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: APP_DEBUG
+        value: false
+      - key: APP_KEY
+        generateValue: true
+      - key: APP_URL
+        sync: false
+      - key: DB_CONNECTION
+        value: pgsql
+      - key: DB_HOST
+        fromDatabase:
+          name: owwa-inventory-db
+          property: host
+      - key: DB_PORT
+        fromDatabase:
+          name: owwa-inventory-db
+          property: port
+      - key: DB_DATABASE
+        fromDatabase:
+          name: owwa-inventory-db
+          property: database
+      - key: DB_USERNAME
+        fromDatabase:
+          name: owwa-inventory-db
+          property: user
+      - key: DB_PASSWORD
+        fromDatabase:
+          name: owwa-inventory-db
+          property: password
+      - key: SESSION_DRIVER
+        value: database
+      - key: QUEUE_CONNECTION
+        value: database
+      - key: CACHE_STORE
+        value: database
+      - key: BROADCAST_CONNECTION
+        value: log
+      - key: OLLAMA_URL
+        sync: false
+      - key: OLLAMA_EMBED_MODEL
+        value: nomic-embed-text
+      - key: OLLAMA_CHAT_MODEL
+        value: deepseek-r1:7b

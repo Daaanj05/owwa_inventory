@@ -2,21 +2,24 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\LogsUserActivity;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
-use App\Models\Acquisition;
 
 class Issuance extends Model
 {
-    use HasFactory, SoftDeletes;
+    use HasFactory, LogsUserActivity, SoftDeletes;
 
     protected $fillable = [
         'reference_code', 'item_id', 'office_id', 'department_id', 'requisition_id',
         'quantity', 'unit_cost', 'amount', 'issuance_date', 'remarks',
-        'property_number',
+        'property_number', 'estimated_useful_life', 'eul_expires_at', 'received_from_name',
         'custodian_printed_name', 'accounting_staff_printed_name',
+        'custodian_designation', 'issued_to_designation',
         'issued_by', 'issued_to',
     ];
 
@@ -24,6 +27,7 @@ class Issuance extends Model
     {
         return [
             'issuance_date' => 'date',
+            'eul_expires_at' => 'date',
             'unit_cost' => 'decimal:2',
             'amount' => 'decimal:2',
         ];
@@ -85,5 +89,18 @@ class Issuance extends Model
     public function issuedTo(): BelongsTo
     {
         return $this->belongsTo(User::class, 'issued_to');
+    }
+
+    public function inventoryUnit(): HasOne
+    {
+        return $this->hasOne(InventoryUnit::class);
+    }
+
+    /**
+     * @return HasMany<UsefulLifeExtension, $this>
+     */
+    public function usefulLifeExtensions(): HasMany
+    {
+        return $this->hasMany(UsefulLifeExtension::class);
     }
 }

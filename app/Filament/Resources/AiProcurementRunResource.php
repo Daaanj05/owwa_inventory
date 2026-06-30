@@ -2,22 +2,28 @@
 
 namespace App\Filament\Resources;
 
+use App\Filament\Concerns\HasOwwaViewModalUrl;
+use App\Filament\Resources\AiProcurementRunResource\Actions\AiProcurementRunViewActions;
 use App\Filament\Resources\AiProcurementRunResource\Pages;
 use App\Filament\Resources\AiProcurementRunResource\RelationManagers\ItemsRelationManager;
+use App\Filament\Resources\AiProcurementRunResource\Schemas\AiProcurementRunModalSchema;
+use App\Filament\Support\ConfiguresOwwaViewAction;
 use App\Models\AiProcurementRun;
 use BackedEnum;
 use Filament\Facades\Filament;
 use Filament\Infolists;
 use Filament\Resources\Resource;
+use Filament\Support\Icons\Heroicon;
 use Filament\Tables;
 use Filament\Tables\Table;
-use Filament\Support\Icons\Heroicon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Str;
 use UnitEnum;
 
 class AiProcurementRunResource extends Resource
 {
+    use HasOwwaViewModalUrl;
+
     protected static ?string $model = AiProcurementRun::class;
 
     protected static string|UnitEnum|null $navigationGroup = 'Analytics';
@@ -57,10 +63,13 @@ class AiProcurementRunResource extends Resource
                 Tables\Columns\TextColumn::make('summary')
                     ->label('Summary')
                     ->formatStateUsing(function (?string $state): string {
-                        if (! $state) return '—';
+                        if (! $state) {
+                            return '—';
+                        }
                         // Strip markdown symbols so the list looks clean
                         $clean = preg_replace('/[#*_`~>]+/', '', $state);
                         $clean = preg_replace('/\s+/', ' ', $clean);
+
                         return Str::limit(trim((string) $clean), 90);
                     })
                     ->wrap()
@@ -74,15 +83,15 @@ class AiProcurementRunResource extends Resource
                 Tables\Columns\TextColumn::make('status')
                     ->badge()
                     ->formatStateUsing(fn (string $state) => match ($state) {
-                        'draft'        => 'Draft',
+                        'draft' => 'Draft',
                         'for_approval' => 'For Approval',
-                        'approved'     => 'Approved',
-                        'archived'     => 'Archived',
-                        default        => ucfirst($state),
+                        'approved' => 'Approved',
+                        'archived' => 'Archived',
+                        default => ucfirst($state),
                     })
                     ->colors([
-                        'gray'    => 'draft',
-                        'info'    => 'for_approval',
+                        'gray' => 'draft',
+                        'info' => 'for_approval',
                         'success' => 'approved',
                         'warning' => 'archived',
                     ])
@@ -112,7 +121,16 @@ class AiProcurementRunResource extends Resource
                         'archived' => 'Archived',
                     ]),
             ])
-            ->recordUrl(fn ($record) => static::getUrl('view', ['record' => $record]))
+            ->recordActions([
+                ConfiguresOwwaViewAction::make(
+                    schema: AiProcurementRunModalSchema::components(),
+                    footerActions: AiProcurementRunViewActions::modalFooterActions(),
+                    modalWidth: '4xl',
+                    extraModalClass: 'owwa-ai-run-modal',
+                ),
+            ])
+            ->recordUrl(null)
+            ->recordAction('view')
             ->bulkActions([])
             ->emptyStateHeading('No AI runs yet')
             ->emptyStateDescription('Go to Procurement Recommendations and click "Generate Recommendation" to create your first AI analysis.')
@@ -142,4 +160,3 @@ class AiProcurementRunResource extends Resource
         return $user?->isSupplyCustodian();
     }
 }
-

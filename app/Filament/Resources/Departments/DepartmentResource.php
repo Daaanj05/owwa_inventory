@@ -2,13 +2,11 @@
 
 namespace App\Filament\Resources\Departments;
 
-use App\Filament\Resources\Departments\Pages\CreateDepartment;
-use App\Filament\Resources\Departments\Pages\EditDepartment;
+use App\Filament\Concerns\HasOwwaViewModalUrl;
 use App\Filament\Resources\Departments\Pages\ListDepartments;
 use App\Filament\Resources\Departments\Schemas\DepartmentForm;
 use App\Filament\Resources\Departments\Tables\DepartmentsTable;
 use App\Models\Department;
-use App\Services\FiscalYearService;
 use BackedEnum;
 use Filament\Facades\Filament;
 use Filament\Resources\Resource;
@@ -20,6 +18,8 @@ use UnitEnum;
 
 class DepartmentResource extends Resource
 {
+    use HasOwwaViewModalUrl;
+
     protected static ?string $model = Department::class;
 
     protected static string|UnitEnum|null $navigationGroup = 'Setup';
@@ -30,16 +30,7 @@ class DepartmentResource extends Resource
 
     public static function getEloquentQuery(): Builder
     {
-        $query = parent::getEloquentQuery();
-        $fiscal = app(FiscalYearService::class);
-        $current = $fiscal->current();
-        if ($current) {
-            $query->where('fiscal_year_id', $current->id);
-        } else {
-            $query->whereRaw('1 = 0');
-        }
-
-        return $query;
+        return parent::getEloquentQuery()->active();
     }
 
     public static function form(Schema $schema): Schema
@@ -70,8 +61,6 @@ class DepartmentResource extends Resource
     {
         return [
             'index' => ListDepartments::route('/'),
-            'create' => CreateDepartment::route('/create'),
-            'edit' => EditDepartment::route('/{record}/edit'),
         ];
     }
 }

@@ -4,15 +4,14 @@ namespace App\Filament\Widgets;
 
 use App\Models\Department;
 use App\Models\Office;
+use App\Services\AnalyticsDateRangeService;
 use App\Services\ConsumptionAnalyticsService;
-use App\Services\FiscalYearService;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Select;
 use Filament\Schemas\Schema;
 use Filament\Widgets\ChartWidget;
 use Filament\Widgets\ChartWidget\Concerns\HasFiltersSchema;
-use Illuminate\Support\Carbon;
 
 class ConsumptionSharePieWidget extends ChartWidget
 {
@@ -20,13 +19,15 @@ class ConsumptionSharePieWidget extends ChartWidget
 
     protected static ?int $sort = 3;
 
+    protected static bool $isLazy = true;
+
     protected string $view = 'filament.widgets.consumption-share-pie-widget';
 
-    protected int | string | array $columnSpan = 1;
+    protected int|string|array $columnSpan = 1;
 
     protected ?string $heading = 'Consumption share';
 
-    protected ?string $description = 'Overall share of total issued units per department in the selected period.';
+    protected ?string $description = 'Share of total issued units per department. Includes all offices (regional and satellite) when All offices is selected.';
 
     protected bool $hasDeferredFilters = true;
 
@@ -66,25 +67,39 @@ class ConsumptionSharePieWidget extends ChartWidget
     public function filtersSchema(Schema $schema): Schema
     {
         $user = Filament::auth()->user();
-        $fyId = app(FiscalYearService::class)->current()?->id;
         $scope = $user?->getConsumptionScope() ?? ['office_ids' => [], 'department_ids' => []];
-        $officeBase = Office::forFiscalYear($fyId)->active()->orderBy('name');
+        $officeBase = Office::query()->active()->orderBy('name');
         $officeOptions = $scope['office_ids'] !== []
             ? (clone $officeBase)->whereIn('id', $scope['office_ids'])->pluck('name', 'id')
             : $officeBase->pluck('name', 'id');
-        $departmentBase = Department::forFiscalYear($fyId)->active()->orderBy('name');
+        $departmentBase = Department::query()->active()->orderBy('name');
         $departmentOptions = $scope['department_ids'] !== []
             ? (clone $departmentBase)->whereIn('id', $scope['department_ids'])->pluck('name', 'id')
             : $departmentBase->pluck('name', 'id');
 
+        $dateRange = app(AnalyticsDateRangeService::class)->getRangeForScope(AnalyticsDateRangeService::SCOPE_CURRENT_YEAR);
+
         return $schema->components([
+            Select::make('analytics_scope')
+                ->label('Analysis scope')
+                ->options([
+                    AnalyticsDateRangeService::SCOPE_CURRENT_YEAR => 'Current calendar year',
+                    AnalyticsDateRangeService::SCOPE_LONG_VIEW => 'Multi-year (up to 5 years)',
+                ])
+                ->default(AnalyticsDateRangeService::SCOPE_CURRENT_YEAR)
+                ->live()
+                ->afterStateUpdated(function ($state, callable $set): void {
+                    $range = app(AnalyticsDateRangeService::class)->getRangeForScope($state ?: AnalyticsDateRangeService::SCOPE_CURRENT_YEAR);
+                    $set('date_from', $range['from']->toDateString());
+                    $set('date_to', $range['to']->toDateString());
+                }),
             DatePicker::make('date_from')
                 ->label('From')
-                ->default(now()->subMonths(11)->startOfMonth())
+                ->default($dateRange['from']->toDateString())
                 ->maxDate(fn () => $this->deferredFilters['date_to'] ?? now()),
             DatePicker::make('date_to')
                 ->label('To')
-                ->default(now())
+                ->default($dateRange['to']->toDateString())
                 ->minDate(fn () => $this->deferredFilters['date_from'] ?? now()->subMonths(11)),
             Select::make('department_ids')
                 ->label('Departments')
@@ -102,8 +117,10 @@ class ConsumptionSharePieWidget extends ChartWidget
     protected function getData(): array
     {
         $f = $this->filters;
-        $from = isset($f['date_from']) ? Carbon::parse($f['date_from'])->startOfDay() : now()->subMonths(11)->startOfMonth();
-        $to = isset($f['date_to']) ? Carbon::parse($f['date_to'])->endOfDay() : now();
+        $resolved = app(AnalyticsDateRangeService::class)->resolveFromWidgetFilters($f);
+        $from = $resolved['from'];
+        $to = $resolved['to'];
+        $includeYearLabels = $resolved['includeYearInLabels'];
         $departmentIds = array_filter($f['department_ids'] ?? []);
         $officeIds = array_filter($f['office_ids'] ?? []);
 
@@ -120,7 +137,8 @@ class ConsumptionSharePieWidget extends ChartWidget
             $from,
             $to,
             $departmentIds,
-            $officeIds
+            $officeIds,
+            $includeYearLabels
         );
 
         if (empty($result['labels']) || $result['total'] === 0) {
@@ -142,11 +160,11 @@ class ConsumptionSharePieWidget extends ChartWidget
         return [
             'datasets' => [
                 [
-                    'data'            => $result['values'],
+                    'data' => $result['values'],
                     'backgroundColor' => $backgroundColors,
-                    'borderColor'     => $borderColors,
-                    'borderWidth'     => 3,
-                    'hoverOffset'     => 6,
+                    'borderColor' => $borderColors,
+                    'borderWidth' => 3,
+                    'hoverOffset' => 6,
                 ],
             ],
             'labels' => $result['labels'],
@@ -164,28 +182,28 @@ class ConsumptionSharePieWidget extends ChartWidget
             'cutout' => '62%',
             'plugins' => [
                 'legend' => [
-                    'display'  => true,
+                    'display' => true,
                     'position' => 'bottom',
-                    'align'    => 'center',
-                    'labels'   => [
-                        'boxWidth'      => 8,
-                        'boxHeight'     => 8,
-                        'borderRadius'  => 4,
-                        'padding'       => 16,
+                    'align' => 'center',
+                    'labels' => [
+                        'boxWidth' => 8,
+                        'boxHeight' => 8,
+                        'borderRadius' => 4,
+                        'padding' => 16,
                         'usePointStyle' => true,
-                        'pointStyle'    => 'circle',
-                        'color'         => '#475569',
-                        'font'          => ['size' => 11, 'weight' => '500'],
+                        'pointStyle' => 'circle',
+                        'color' => '#475569',
+                        'font' => ['size' => 11, 'weight' => '500'],
                     ],
                 ],
                 'tooltip' => [
                     'backgroundColor' => 'rgba(15,23,42,0.88)',
-                    'titleColor'      => '#f8fafc',
-                    'bodyColor'       => '#cbd5e1',
-                    'borderColor'     => 'rgba(255,255,255,0.08)',
-                    'borderWidth'     => 1,
-                    'padding'         => ['x' => 12, 'y' => 8],
-                    'cornerRadius'    => 8,
+                    'titleColor' => '#f8fafc',
+                    'bodyColor' => '#cbd5e1',
+                    'borderColor' => 'rgba(255,255,255,0.08)',
+                    'borderWidth' => 1,
+                    'padding' => ['x' => 12, 'y' => 8],
+                    'cornerRadius' => 8,
                 ],
             ],
         ];

@@ -12,10 +12,25 @@
 
 <x-filament-widgets::widget class="fi-wi-chart owwa-chart-pie">
     <x-filament::section
-        :description="$description"
-        :heading="$heading"
         :collapsible="$isCollapsible"
     >
+        <x-slot name="heading">
+            @if (filled($description))
+                <span
+                    x-data="{ open: false }"
+                    @mouseenter="open = true"
+                    @mouseleave="open = false"
+                    class="owwa-widget-heading-tip"
+                >
+                    <span>{{ $heading }}</span>
+                    <div x-show="open" x-cloak class="owwa-widget-tip-bubble">
+                        {{ $description }}
+                    </div>
+                </span>
+            @else
+                <span>{{ $heading }}</span>
+            @endif
+        </x-slot>
         @if ($filters || method_exists($this, 'getFiltersSchema'))
             <x-slot name="afterHeader">
                 @if ($filters)

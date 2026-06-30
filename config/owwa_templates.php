@@ -6,69 +6,62 @@ return [
     |--------------------------------------------------------------------------
     | OWWA template filenames (keep original names from OWWA)
     |--------------------------------------------------------------------------
-    |
-    | Map transaction type + category + form to the actual .xlsx/.xls filename.
-    | Place files in storage/app/templates/{category}/ (consumables/, ppe/, semi_expendable/).
-    | Use .xlsx in config; the export service will try .xls if .xlsx is missing.
-    |
-    | Structure: [ 'issuance' => [ 'consumables' => [ 'default' => [...], 'rsmi' => [...] ], ... ], ... ]
-    | Each form entry: 'file' => 'Appendix 64 - RSMI.xlsx', 'label' => 'Appendix 64 - RSMI' (optional)
-    |
     */
+
+    'requisition' => [
+        'default' => [
+            'file' => 'requisition/Appendix 63 - RIS.xls',
+            'label' => 'Appendix 63 - RIS (Requisition and Issue Slip)',
+        ],
+    ],
 
     'issuance' => [
         'consumables' => [
             'default' => [
-                'file'  => 'Appendix 64 - RSMI.xlsx',
+                'file' => 'Consumable/Issuances/Appendix 64 - RSMI.xls',
                 'label' => 'Appendix 64 - RSMI (Report of Supplies and Materials Issued)',
             ],
         ],
         'ppe' => [
             'default' => [
-                'file'  => 'Appendix 71 - PAR.xlsx',
+                'file' => 'ppe/Issuances/Appendix 71 - PAR.xls',
                 'label' => 'Appendix 71 - PAR (Property Acknowledgment Receipt)',
             ],
             'par' => [
-                'file'  => 'Appendix 71 - PAR.xlsx',
+                'file' => 'ppe/Issuances/Appendix 71 - PAR.xls',
                 'label' => 'Appendix 71 - PAR',
             ],
         ],
         'semi_expendable' => [
             'default' => [
-                'file'  => 'Appendix 59 - ICS.xlsx',
+                'file' => 'Semi-Expendable/Issuances/Appendix 59 - ICS.xls',
                 'label' => 'Appendix 59 - ICS (Inventory Custodian Slip)',
             ],
             'ics' => [
-                'file'  => 'Appendix 59 - ICS.xlsx',
+                'file' => 'Semi-Expendable/Issuances/Appendix 59 - ICS.xls',
                 'label' => 'Appendix 59 - ICS',
             ],
         ],
     ],
 
     'transfer' => [
-        'consumables' => [
-            'default' => [
-                'file'  => 'Appendix 64 - RSMI.xlsx',
-                'label' => 'Appendix 64 - RSMI (transfer stand-in)',
-            ],
-        ],
         'ppe' => [
             'default' => [
-                'file'  => 'Appendix 76 - PTR.xlsx',
+                'file' => 'ppe/Transfer/Appendix 76 - PTR.xls',
                 'label' => 'Appendix 76 - PTR (Property Transfer Report)',
             ],
             'ptr' => [
-                'file'  => 'Appendix 76 - PTR.xlsx',
+                'file' => 'ppe/Transfer/Appendix 76 - PTR.xls',
                 'label' => 'Appendix 76 - PTR',
             ],
         ],
         'semi_expendable' => [
             'default' => [
-                'file'  => 'Appendix 76 - PTR.xlsx',
+                'file' => 'Semi-Expendable/Transfer/Appendix 76 - PTR.xls',
                 'label' => 'Appendix 76 - PTR (Property Transfer Report)',
             ],
             'ptr' => [
-                'file'  => 'Appendix 76 - PTR.xlsx',
+                'file' => 'Semi-Expendable/Transfer/Appendix 76 - PTR.xls',
                 'label' => 'Appendix 76 - PTR',
             ],
         ],
@@ -77,40 +70,218 @@ return [
     'disposal' => [
         'consumables' => [
             'default' => [
-                'file'  => 'Appendix 65 - WMR.xlsx',
+                'file' => 'Consumable/Disposal/Appendix 65 - WMR.xls',
                 'label' => 'Appendix 65 - WMR (Waste Materials Report)',
             ],
             'wmr' => [
-                'file'  => 'Appendix 65 - WMR.xlsx',
+                'file' => 'Consumable/Disposal/Appendix 65 - WMR.xls',
                 'label' => 'Appendix 65 - WMR',
             ],
         ],
         'ppe' => [
             'default' => [
-                'file'  => 'Appendix 74 - IIRUP.xlsx',
+                'file' => 'ppe/Disposal/Appendix 74 - IIRUP.xls',
                 'label' => 'Appendix 74 - IIRUP (Unserviceable Property)',
             ],
             'iirup' => [
-                'file'  => 'Appendix 74 - IIRUP.xlsx',
+                'file' => 'ppe/Disposal/Appendix 74 - IIRUP.xls',
                 'label' => 'Appendix 74 - IIRUP',
-            ],
-            'rlsddp' => [
-                'file'  => 'Appendix 75 - RLSDDP.xlsx',
-                'label' => 'Appendix 75 - RLSDDP (Lost/Stolen/Damaged/Destroyed)',
             ],
         ],
         'semi_expendable' => [
             'default' => [
-                'file'  => 'Annex A.10- IIRUSP.xlsx',
-                'label' => 'Annex A.10 - IIRUSP (Unserviceable Semi-Expendable)',
+                'file' => 'Semi-Expendable/Disposal/Appendix 74 - IIRUP.xls',
+                'label' => 'Appendix 74 - IIRUP (Unserviceable Property)',
             ],
-            'iirusp' => [
-                'file'  => 'Annex A.10- IIRUSP.xlsx',
-                'label' => 'Annex A.10 - IIRUSP',
+            'iirup' => [
+                'file' => 'Semi-Expendable/Disposal/Appendix 74 - IIRUP.xls',
+                'label' => 'Appendix 74 - IIRUP',
             ],
-            'rlsddp' => [
-                'file'  => 'Appendix 75 - RLSDDP.xlsx',
-                'label' => 'Appendix 75 - RLSDDP (Lost/Stolen/Damaged/Destroyed)',
+        ],
+    ],
+
+    'incident_report' => [
+        'default' => [
+            'file' => 'Incident report/Appendix 75 - RLSDDP.xls',
+            'label' => 'Appendix 75 - RLSDDP (Lost/Stolen/Damaged/Destroyed)',
+        ],
+        'rlsddp' => [
+            'file' => 'Incident report/Appendix 75 - RLSDDP.xls',
+            'label' => 'Appendix 75 - RLSDDP',
+        ],
+    ],
+
+    'acquisition' => [
+        'consumables' => [
+            'default' => [
+                'file' => 'Consumable/Stock Levels & Recording/Appendix 58 - SC.xls',
+                'label' => 'Appendix 58 - Stock Card (receipt entry)',
+            ],
+        ],
+        'ppe' => [
+            'default' => [
+                'file' => 'ppe/Accquisition/Appendix 69 - PC.xls',
+                'label' => 'Appendix 69 - Property Card (receipt entry)',
+            ],
+        ],
+        'semi_expendable' => [
+            'default' => [
+                'file' => 'Semi-Expendable/Recording (Stock Levels)/Property-Form-Annex-A.1-Semi-expendable-Property-Card.xlsx',
+                'label' => 'Annex A.1 - Semi-Expendable Property Card (receipt entry)',
+            ],
+        ],
+    ],
+
+    'property_class_sheets' => [
+        'generic' => [
+            'ict' => 'ICT',
+            'office_equipment' => 'OFFICE EQUIPMENT',
+            'furnitures_fixtures' => 'FURNITURES & FIXTURES',
+            'sports_equipment' => 'SPORTS EQUIPMENT',
+            'medical_equipment' => 'MEDICAL EQUIPMENT',
+            'vehicle_equipment' => 'VEHICLE EQUIPMENT ',
+        ],
+        'forms' => [
+            'annex_a1' => [
+                'ict' => 'ICT',
+                'office_equipment' => 'OFFICE EQUIPMENT',
+                'furnitures_fixtures' => 'FURNITURES & FIXTURES',
+                'sports_equipment' => 'SPORTS EQUIPMENT',
+                'medical_equipment' => 'MEDICAL EQUIPMENT',
+            ],
+            'annex_a4' => [
+                'ict' => 'ICT',
+                'office_equipment' => 'OFFICE EQUIPMENT',
+                'furnitures_fixtures' => 'F&F',
+                'sports_equipment' => 'SPORTS EQUIPMENT',
+                'medical_equipment' => 'MEDICAL EQUIPMENT',
+                'vehicle_equipment' => 'VEHICLE EQUIPMENT ',
+            ],
+            'rpcsp' => [
+                'ict' => 'ICT',
+                'office_equipment' => 'OFFICE EQUIPMENT',
+                'furnitures_fixtures' => 'FURNITURES & FIXTURES',
+                'sports_equipment' => 'SPORTS EQUIPMENT',
+                'medical_equipment' => 'MEDICAL EQUIPMENT',
+            ],
+        ],
+        'default' => [
+            'annex_a1' => 'OFFICE EQUIPMENT',
+            'annex_a4' => 'OFFICE EQUIPMENT',
+            'rpcsp' => 'OFFICE EQUIPMENT',
+        ],
+    ],
+
+    'item_report' => [
+        'consumables' => [
+            'sc' => [
+                'file' => 'Consumable/Stock Levels & Recording/Appendix 58 - SC.xls',
+                'label' => 'Appendix 58 - Stock Card',
+                'sheet_name' => 'SC',
+            ],
+        ],
+        'ppe' => [
+            'pc' => [
+                'file' => 'ppe/Accquisition/Appendix 69 - PC.xls',
+                'label' => 'Appendix 69 - Property Card',
+            ],
+        ],
+        'semi_expendable' => [
+            'annex_a1' => [
+                'file' => 'Semi-Expendable/Recording (Stock Levels)/Property-Form-Annex-A.1-Semi-expendable-Property-Card.xlsx',
+                'label' => 'Annex A.1 - Semi-Expendable Property Card',
+            ],
+            'annex_a4' => [
+                'file' => 'Semi-Expendable/Property-Form-Annex-A.4-Registry-of-Semi-Expendable-Property-Issued.xls',
+                'label' => 'Annex A.4 - Registry of Semi-Expendable Property Issued',
+            ],
+        ],
+    ],
+
+    'physical_count' => [
+        'consumables' => [
+            'rpci' => [
+                'file' => 'Consumable/Stock Levels & Recording/Appendix 66 - RPCI.xls',
+                'label' => 'Appendix 66 - Report on Physical Count of Inventories',
+            ],
+        ],
+        'ppe' => [
+            'rpcppe' => [
+                'file' => 'ppe/Recording (Stock Level)/Appendix 73 - RPCPPE.xls',
+                'label' => 'Appendix 73 - Report on Physical Count of PPE',
+            ],
+        ],
+        'semi_expendable' => [
+            'rpcsp' => [
+                'file' => 'Semi-Expendable/Recording (Stock Levels)/Inventory-Annex-A.8-RPCSP - REPORT.xlsx',
+                'label' => 'Annex A.8 - Report on Physical Count of Semi-Expendable Property',
+                'sheet_name' => 'RPCSP',
+            ],
+        ],
+    ],
+
+    'distribution' => [
+        'consumables' => [
+            'default' => [
+                'file' => 'Consumable/Issuances/Appendix 64 - RSMI.xls',
+                'label' => 'Appendix 64 - RSMI (distribution acknowledgment)',
+            ],
+        ],
+        'ppe' => [
+            'default' => [
+                'file' => 'ppe/Issuances/Appendix 71 - PAR.xls',
+                'label' => 'Appendix 71 - PAR (distribution acknowledgment)',
+            ],
+        ],
+        'semi_expendable' => [
+            'default' => [
+                'file' => 'Semi-Expendable/Issuances/Appendix 59 - ICS.xls',
+                'label' => 'Appendix 59 - ICS (distribution acknowledgment)',
+            ],
+        ],
+    ],
+
+    'acquisition_paperwork' => [
+        'consumables' => [
+            'pr' => [
+                'file' => 'Consumable/Acquisitions/Appendix 60 - PR.xls',
+                'label' => 'Appendix 60 - Purchase Request',
+            ],
+            'po' => [
+                'file' => 'Consumable/Acquisitions/Appendix 61 - PO.xls',
+                'label' => 'Appendix 61 - Purchase Order',
+            ],
+            'iar' => [
+                'file' => 'Consumable/Acquisitions/Appendix 62- IAR.xls',
+                'label' => 'Appendix 62 - Inspection and Acceptance Report',
+            ],
+        ],
+        'ppe' => [
+            'pr' => [
+                'file' => 'ppe/Accquisition/Appendix 60 - PR.xls',
+                'label' => 'Appendix 60 - Purchase Request',
+            ],
+            'po' => [
+                'file' => 'ppe/Accquisition/Appendix 61 - PO.xls',
+                'label' => 'Appendix 61 - Purchase Order',
+            ],
+            'iar' => [
+                'file' => 'ppe/Accquisition/Appendix 62- IAR.xls',
+                'label' => 'Appendix 62 - Inspection and Acceptance Report',
+            ],
+        ],
+        'semi_expendable' => [
+            'pr' => [
+                'file' => 'Semi-Expendable/Acquisition/Appendix 60 - PR.xls',
+                'label' => 'Appendix 60 - Purchase Request',
+            ],
+            'po' => [
+                'file' => 'Semi-Expendable/Acquisition/Appendix 61 - PO.xls',
+                'label' => 'Appendix 61 - Purchase Order',
+            ],
+            'iar' => [
+                'file' => 'Semi-Expendable/Acquisition/Appendix 62- IAR.xls',
+                'label' => 'Appendix 62 - Inspection and Acceptance Report',
             ],
         ],
     ],

@@ -2,12 +2,14 @@
 
 namespace App\Filament\Resources\Disposals;
 
+use App\Filament\Concerns\HasOwwaViewModalUrl;
 use App\Filament\Resources\Disposals\Pages\ListDisposals;
 use App\Filament\Resources\Disposals\Pages\ViewDisposal;
 use App\Filament\Resources\Disposals\Schemas\DisposalForm;
 use App\Filament\Resources\Disposals\Tables\DisposalsTable;
 use App\Models\Disposal;
-use App\Services\FiscalYearService;
+use App\Support\CustodianOfficeScope;
+use App\Support\OwwaReferenceLabels;
 use BackedEnum;
 use Filament\Facades\Filament;
 use Filament\Infolists\Components\TextEntry;
@@ -22,7 +24,11 @@ use UnitEnum;
 
 class DisposalResource extends Resource
 {
+    use HasOwwaViewModalUrl;
+
     protected static ?string $model = Disposal::class;
+
+    protected static bool $shouldRegisterNavigation = false;
 
     protected static string|UnitEnum|null $navigationGroup = 'Inventory';
 
@@ -33,9 +39,20 @@ class DisposalResource extends Resource
     public static function getEloquentQuery(): Builder
     {
         $query = parent::getEloquentQuery();
-        app(FiscalYearService::class)->applyDateRangeFilter($query, 'disposal_date');
 
-        return $query;
+        $categoryId = session('active_item_category_id');
+        if (filled($categoryId)) {
+            $query->whereHas('item', function (Builder $itemQuery) use ($categoryId): void {
+                $itemQuery->where('item_category_id', (int) $categoryId);
+            });
+        } else {
+            // Don't show disposals until the user selects a category.
+            $query->whereRaw('1 = 0');
+        }
+
+        $query->where('disposal_type', '!=', 'lost_stolen_damaged');
+
+        return CustodianOfficeScope::applyOfficeColumn($query);
     }
 
     public static function form(Schema $schema): Schema
@@ -47,9 +64,12 @@ class DisposalResource extends Resource
     {
         return $schema
             ->components([
-                Section::make('Disposal details')
+                Section::make('Disposal Details')
                     ->schema([
-                        TextEntry::make('reference_code')->label('Reference number'),
+                        TextEntry::make('reference_code')
+                            ->label(fn (Disposal $record): string => OwwaReferenceLabels::disposal(
+                                $record->item?->category?->getTemplateSlug()
+                            )),
                         TextEntry::make('disposal_type')->label('Type')
                             ->badge()
                             ->formatStateUsing(fn (?string $state): string => match ($state) {
@@ -68,14 +88,19 @@ class DisposalResource extends Resource
                         TextEntry::make('item.name')->label('Item'),
                         TextEntry::make('quantity')->label('Quantity'),
                         TextEntry::make('disposal_date')->label('Date')->date('M d, Y'),
-                        TextEntry::make('property_number')->label('Property number')->placeholder('—'),
+                        TextEntry::make('asset_identifier')
+                            ->label(fn (Disposal $record): string => OwwaReferenceLabels::assetIdentifierLabel(
+                                $record->item?->category?->getTemplateSlug()
+                            ))
+                            ->state(fn (Disposal $record): ?string => OwwaReferenceLabels::assetIdentifierForDisposal($record))
+                            ->placeholder('—'),
                         TextEntry::make('acquisition_cost')->label('Acquisition cost')->money('PHP')->placeholder('—'),
                         TextEntry::make('reason')->label('Reason')->placeholder('—'),
                         TextEntry::make('remarks')->label('Remarks')->placeholder('—')->columnSpanFull(),
                     ])
                     ->columns(2)
                     ->columnSpanFull(),
-                Section::make('Sale details')
+                Section::make('Sale Details')
                     ->schema([
                         TextEntry::make('official_receipt_no')->label('Official receipt number')->placeholder('—'),
                         TextEntry::make('sale_date')->label('Date of sale')->date('M d, Y')->placeholder('—'),
@@ -93,6 +118,46 @@ class DisposalResource extends Resource
                     ->columns(2)
                     ->columnSpanFull(),
             ]);
+    }
+
+    /**
+     * @return array<int, Section>
+     */
+    public static function modalDetailSections(): array
+    {
+        return [
+            Section::make('Disposal Details')
+                ->schema([
+                    TextEntry::make('asset_identifier')
+                        ->label(fn (Disposal $record): string => OwwaReferenceLabels::assetIdentifierLabel(
+                            $record->item?->category?->getTemplateSlug()
+                        ))
+                        ->state(fn (Disposal $record): ?string => OwwaReferenceLabels::assetIdentifierForDisposal($record))
+                        ->placeholder('—'),
+                    TextEntry::make('acquisition_cost')->label('Acquisition cost')->money('PHP')->placeholder('—'),
+                    TextEntry::make('reason')->label('Reason')->placeholder('—'),
+                    TextEntry::make('remarks')->label('Remarks')->placeholder('—')->columnSpanFull(),
+                ])
+                ->columns(2)
+                ->columnSpanFull(),
+            Section::make('Sale Details')
+                ->schema([
+                    TextEntry::make('official_receipt_no')->label('Official receipt number')->placeholder('—'),
+                    TextEntry::make('sale_date')->label('Date of sale')->date('M d, Y')->placeholder('—'),
+                    TextEntry::make('sale_amount')->label('Sale amount')->money('PHP')->placeholder('—'),
+                ])
+                ->columns(2)
+                ->columnSpanFull(),
+            Section::make('Signatures')
+                ->schema([
+                    TextEntry::make('custodian_printed_name')->label('Custodian')->placeholder('—'),
+                    TextEntry::make('approved_by_printed_name')->label('Approved by')->placeholder('—'),
+                    TextEntry::make('inspection_officer_printed_name')->label('Inspection officer')->placeholder('—'),
+                    TextEntry::make('witness_printed_name')->label('Witness')->placeholder('—'),
+                ])
+                ->columns(2)
+                ->columnSpanFull(),
+        ];
     }
 
     public static function table(Table $table): Table

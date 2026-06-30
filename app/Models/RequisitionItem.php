@@ -10,7 +10,7 @@ class RequisitionItem extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['requisition_id', 'item_id', 'quantity', 'remarks'];
+    protected $fillable = ['requisition_id', 'item_id', 'quantity', 'stock_available', 'quantity_issued', 'issue_remarks', 'remarks'];
 
     public function requisition(): BelongsTo
     {

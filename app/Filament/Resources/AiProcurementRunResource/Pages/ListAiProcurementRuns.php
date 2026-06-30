@@ -2,12 +2,15 @@
 
 namespace App\Filament\Resources\AiProcurementRunResource\Pages;
 
+use App\Filament\Concerns\HasSystemAdminWizardHeading;
 use App\Filament\Resources\AiProcurementRunResource;
 use Filament\Actions;
 use Filament\Resources\Pages\ListRecords;
 
 class ListAiProcurementRuns extends ListRecords
 {
+    use HasSystemAdminWizardHeading;
+
     protected static string $resource = AiProcurementRunResource::class;
 
     public function getSubheading(): string|\Illuminate\Contracts\Support\Htmlable|null
@@ -30,4 +33,3 @@ class ListAiProcurementRuns extends ListRecords
         ];
     }
 }
-

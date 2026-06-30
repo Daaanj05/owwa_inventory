@@ -2,10 +2,16 @@
 
 namespace App\Providers\Filament;
 
-use App\Http\Middleware\AdminExecutionTimeLimit;
+use App\Filament\Pages\Auth\EditProfile;
 use App\Filament\Pages\Auth\Login;
+use App\Filament\Pages\Auth\ResetPassword;
 use App\Filament\Pages\Dashboard;
 use App\Filament\Widgets\WelcomeWidget;
+use App\Http\Middleware\AdminExecutionTimeLimit;
+use App\Http\Middleware\EnsurePasswordChanged;
+use App\Http\Middleware\TouchUserSessionActivity;
+use App\Livewire\OwwaNotificationDropdown;
+use App\Support\FilamentSessionAudit;
 use Filament\Enums\ThemeMode;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
@@ -32,14 +38,22 @@ class SystemAdminPanelProvider extends PanelProvider
             ->brandName('OWWA Inventory System — System Admin')
             ->favicon(asset('images/owwa-4a_logo_transparent.png'))
             ->login(Login::class)
+            ->emailVerification()
+            ->passwordReset(resetAction: ResetPassword::class)
+            ->profile(EditProfile::class, isSimple: false)
             ->colors([
                 'primary' => Color::Indigo,
             ])
             ->defaultThemeMode(ThemeMode::Light)
             ->darkMode(false)
+            ->databaseNotifications(livewireComponent: OwwaNotificationDropdown::class, isLazy: false)
+            ->databaseNotificationsPolling('30s')
             ->renderHook(PanelsRenderHook::STYLES_AFTER, function (): string {
-                return '<link rel="stylesheet" href="' . asset('css/filament/admin/owwa-theme.css') . '">';
+                return '<link rel="stylesheet" href="'.asset('css/filament/admin/owwa-theme.css').'">';
             })
+            ->renderHook(PanelsRenderHook::BODY_END, function (): string {
+                return FilamentSessionAudit::idleLogoutMonitorHtml();
+            }, scopes: ['authenticated'])
             ->discoverResources(in: app_path('Filament/Resources'), for: 'App\Filament\Resources')
             ->discoverPages(in: app_path('Filament/Pages'), for: 'App\Filament\Pages')
             ->pages([
@@ -60,10 +74,11 @@ class SystemAdminPanelProvider extends PanelProvider
                 SubstituteBindings::class,
                 DisableBladeIconComponents::class,
                 DispatchServingFilamentEvent::class,
+                TouchUserSessionActivity::class,
             ])
             ->authMiddleware([
                 Authenticate::class,
+                EnsurePasswordChanged::class,
             ]);
     }
 }
-

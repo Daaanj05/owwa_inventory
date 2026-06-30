@@ -42,7 +42,7 @@ To **add/remove/reorder columns** or **change form fields**, edit the correspond
 | Page | What controls the UI |
 |------|----------------------|
 | **Stock levels** (items + offices + current stock) | `app/Filament/Pages/StockLevels.php` and `resources/views/filament/pages/stock-levels.blade.php` |
-| **Procurement recommendations** | `app/Filament/Pages/ProcurementRecommendations.php` (header button) and `resources/views/filament/pages/procurement-recommendations.blade.php` (page content and layout) |
+| **Procurement analytics** (coverage KPIs, at-risk table, projected stockouts, optional AI recommendation header action) | `app/Filament/Pages/ProcurementAnalytics.php` and `resources/views/filament/pages/procurement-analytics.blade.php` |
 | **COA reports** | `app/Filament/Pages/CoaReports.php` (header buttons) and `resources/views/filament/pages/coa-reports.blade.php` (page content) |
 
 Edit the **Blade** file to change the HTML and layout; edit the **Page** class to change buttons and behavior.
@@ -54,9 +54,21 @@ Edit the **Blade** file to change the HTML and layout; edit the **Page** class t
 | Widget | File |
 |--------|------|
 | **Low stock alerts** | `app/Filament/Widgets/LowStockWidget.php` |
-| **Issuance trends chart** | `app/Filament/Widgets/IssuanceTrendsChart.php` |
+| **Consumption trend chart** | `app/Filament/Widgets/ConsumptionTrendsWidget.php` |
+| **Consumption share (pie)** | `app/Filament/Widgets/ConsumptionSharePieWidget.php` |
+| **Coverage overview (procurement KPIs)** | `app/Filament/Widgets/CoverageOverviewWidget.php` |
+| **Projected stockouts** | `app/Filament/Widgets/ProjectedStockoutsWidget.php` |
 
 You can change labels, colors, and what data is shown in these files.
+
+### Analytics date ranges (dashboard consumption charts)
+
+| Behavior | Details |
+|----------|---------|
+| **Policy** | [`app/Services/AnalyticsDateRangeService.php`](app/Services/AnalyticsDateRangeService.php) centralizes windows for the **Analysis scope** filter on the consumption trend and consumption share widgets. |
+| **Current calendar year** | Default: `from`/`to` match the current calendar year via [`AnalyticsDateRangeService::currentYearRange()`](app/Services/AnalyticsDateRangeService.php). |
+| **Multi-year (up to 5 years)** | Ends at the latest issuance date (or today) and steps back up to **60 months**, clamped to the earliest issuance so empty history does not stretch the window. Chart month labels use a compact year format in multi-year mode. |
+| **Procurement analytics** | Uses the **date range selected on the page** (URL `from`/`to`) for at-risk items, coverage KPIs, projected stockouts, and AI recommendations—not the dashboard multi-year toggle. |
 
 ---
 

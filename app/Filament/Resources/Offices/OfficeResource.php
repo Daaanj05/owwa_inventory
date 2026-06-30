@@ -2,13 +2,11 @@
 
 namespace App\Filament\Resources\Offices;
 
-use App\Filament\Resources\Offices\Pages\CreateOffice;
-use App\Filament\Resources\Offices\Pages\EditOffice;
+use App\Filament\Concerns\HasOwwaViewModalUrl;
 use App\Filament\Resources\Offices\Pages\ListOffices;
 use App\Filament\Resources\Offices\Schemas\OfficeForm;
 use App\Filament\Resources\Offices\Tables\OfficesTable;
 use App\Models\Office;
-use App\Services\FiscalYearService;
 use BackedEnum;
 use Filament\Facades\Filament;
 use Filament\Resources\Resource;
@@ -20,6 +18,8 @@ use UnitEnum;
 
 class OfficeResource extends Resource
 {
+    use HasOwwaViewModalUrl;
+
     protected static ?string $model = Office::class;
 
     protected static string|UnitEnum|null $navigationGroup = 'Setup';
@@ -30,16 +30,7 @@ class OfficeResource extends Resource
 
     public static function getEloquentQuery(): Builder
     {
-        $query = parent::getEloquentQuery();
-        $fiscal = app(FiscalYearService::class);
-        $current = $fiscal->current();
-        if ($current) {
-            $query->where('fiscal_year_id', $current->id);
-        } else {
-            $query->whereRaw('1 = 0');
-        }
-
-        return $query;
+        return parent::getEloquentQuery()->active();
     }
 
     public static function form(Schema $schema): Schema
@@ -70,8 +61,6 @@ class OfficeResource extends Resource
     {
         return [
             'index' => ListOffices::route('/'),
-            'create' => CreateOffice::route('/create'),
-            'edit' => EditOffice::route('/{record}/edit'),
         ];
     }
 }

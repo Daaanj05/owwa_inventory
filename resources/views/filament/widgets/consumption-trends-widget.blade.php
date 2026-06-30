@@ -12,7 +12,24 @@
 @endphp
 
 <x-filament-widgets::widget class="fi-wi-chart">
-    <x-filament::section :heading="$heading" :description="$description">
+    <x-filament::section>
+        <x-slot name="heading">
+            @if (filled($description))
+                <span
+                    x-data="{ open: false }"
+                    @mouseenter="open = true"
+                    @mouseleave="open = false"
+                    class="owwa-widget-heading-tip"
+                >
+                    <span>{{ $heading }}</span>
+                    <div x-show="open" x-cloak class="owwa-widget-tip-bubble">
+                        {{ $description }}
+                    </div>
+                </span>
+            @else
+                <span>{{ $heading }}</span>
+            @endif
+        </x-slot>
 
         {{-- Filter controls --}}
         @if ($filters || method_exists($this, 'getFiltersSchema'))
@@ -72,7 +89,13 @@
                     {{ number_format($summary['avg_per_period'], 1) }}
                     <span class="owwa-kpi-unit">units</span>
                 </span>
-                <span class="owwa-kpi-meta">Consumption rate</span>
+                <span class="owwa-kpi-meta">
+                    @if($summary['growth_percent'] !== null)
+                        {{ $summary['growth_percent'] > 0 ? '+' : '' }}{{ number_format($summary['growth_percent'], 1) }}% change · trend {{ $summary['trend_slope'] > 0 ? 'up' : ($summary['trend_slope'] < 0 ? 'down' : 'flat') }}
+                    @else
+                        Consumption rate
+                    @endif
+                </span>
             </div>
         </div>
 

@@ -2,12 +2,13 @@
 
 namespace App\Filament\Resources\Transfers;
 
+use App\Filament\Concerns\HasOwwaViewModalUrl;
 use App\Filament\Resources\Transfers\Pages\ListTransfers;
 use App\Filament\Resources\Transfers\Pages\ViewTransfer;
 use App\Filament\Resources\Transfers\Schemas\TransferForm;
 use App\Filament\Resources\Transfers\Tables\TransfersTable;
 use App\Models\Transfer;
-use App\Services\FiscalYearService;
+use App\Support\OwwaReferenceLabels;
 use BackedEnum;
 use Filament\Facades\Filament;
 use Filament\Infolists\Components\TextEntry;
@@ -22,7 +23,11 @@ use UnitEnum;
 
 class TransferResource extends Resource
 {
+    use HasOwwaViewModalUrl;
+
     protected static ?string $model = Transfer::class;
+
+    protected static bool $shouldRegisterNavigation = false;
 
     protected static string|UnitEnum|null $navigationGroup = 'Inventory';
 
@@ -32,10 +37,7 @@ class TransferResource extends Resource
 
     public static function getEloquentQuery(): Builder
     {
-        $query = parent::getEloquentQuery();
-        app(FiscalYearService::class)->applyDateRangeFilter($query, 'transfer_date');
-
-        return $query;
+        return TransferCustodyQuery::apply(parent::getEloquentQuery());
     }
 
     public static function form(Schema $schema): Schema
@@ -47,15 +49,20 @@ class TransferResource extends Resource
     {
         return $schema
             ->components([
-                Section::make('Transfer details')
+                Section::make('Transfer Details')
                     ->schema([
-                        TextEntry::make('reference_code')->label('Reference number'),
+                        TextEntry::make('reference_code')->label(OwwaReferenceLabels::transfer()),
                         TextEntry::make('item.name')->label('Item'),
                         TextEntry::make('quantity')->label('Quantity'),
                         TextEntry::make('transfer_date')->label('Date')->date('M d, Y'),
                         TextEntry::make('fromOffice.name')->label('From office'),
                         TextEntry::make('toOffice.name')->label('To office'),
-                        TextEntry::make('property_number')->label('Property number')->placeholder('—'),
+                        TextEntry::make('asset_identifier')
+                            ->label(fn (Transfer $record): string => OwwaReferenceLabels::assetIdentifierLabel(
+                                $record->item?->category?->getTemplateSlug()
+                            ))
+                            ->state(fn (Transfer $record): ?string => OwwaReferenceLabels::assetIdentifierForTransfer($record))
+                            ->placeholder('—'),
                         TextEntry::make('condition')->label('Condition')
                             ->badge()
                             ->color(fn (?string $state): string => match ($state) {
@@ -80,6 +87,44 @@ class TransferResource extends Resource
             ]);
     }
 
+    /**
+     * @return array<int, Section>
+     */
+    public static function modalDetailSections(): array
+    {
+        return [
+            Section::make('Transfer Details')
+                ->schema([
+                    TextEntry::make('asset_identifier')
+                        ->label(fn (Transfer $record): string => OwwaReferenceLabels::assetIdentifierLabel(
+                            $record->item?->category?->getTemplateSlug()
+                        ))
+                        ->state(fn (Transfer $record): ?string => OwwaReferenceLabels::assetIdentifierForTransfer($record))
+                        ->placeholder('—'),
+                    TextEntry::make('condition')->label('Condition')
+                        ->badge()
+                        ->color(fn (?string $state): string => match ($state) {
+                            'Serviceable', 'Good' => 'success',
+                            'Unserviceable' => 'danger',
+                            'Poor' => 'warning',
+                            default => 'gray',
+                        })
+                        ->placeholder('—'),
+                    TextEntry::make('remarks')->label('Remarks')->placeholder('—')->columnSpanFull(),
+                ])
+                ->columns(2)
+                ->columnSpanFull(),
+            Section::make('Signatures')
+                ->schema([
+                    TextEntry::make('approved_by_printed_name')->label('Approved by')->placeholder('—'),
+                    TextEntry::make('released_by_printed_name')->label('Released by')->placeholder('—'),
+                    TextEntry::make('received_by_printed_name')->label('Received by')->placeholder('—'),
+                ])
+                ->columns(2)
+                ->columnSpanFull(),
+        ];
+    }
+
     public static function table(Table $table): Table
     {
         return TransfersTable::configure($table);
@@ -89,7 +134,18 @@ class TransferResource extends Resource
     {
         $user = Filament::auth()->user();
 
-        return $user !== null && $user->isSupplyCustodian();
+        if ($user === null || ! $user->isSupplyCustodian()) {
+            return false;
+        }
+
+        $categoryId = session('active_item_category_id');
+        if (filled($categoryId)) {
+            $slug = \App\Models\ItemCategory::query()->find((int) $categoryId)?->getTemplateSlug();
+
+            return $slug !== 'consumables';
+        }
+
+        return true;
     }
 
     public static function getRecordRouteBindingEloquentQuery(): Builder

@@ -2,29 +2,31 @@
 
 namespace App\Filament\Resources\Transfers\Tables;
 
+use App\Filament\Resources\Transfers\Actions\TransferViewActions;
 use App\Filament\Resources\Transfers\TransferResource;
-use App\Models\ItemCategory;
+use App\Filament\Support\ConfiguresOwwaViewAction;
+use App\Filament\Support\OwwaFormModalDefaults;
+use App\Filament\Support\OwwaModalSchema;
 use App\Models\Transfer;
-use App\Services\FiscalYearService;
+use App\Support\OwwaReferenceLabels;
+use App\Support\OwwaTransactionViewPresenter;
 use Filament\Actions\Action;
+use Filament\Actions\ActionGroup;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
-use Filament\Actions\EditAction;
 use Filament\Actions\RestoreBulkAction;
 use Filament\Tables\Columns\TextColumn;
-use Filament\Tables\Enums\FiltersLayout;
-use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
-use Illuminate\Database\Eloquent\Builder;
 
 class TransfersTable
 {
     public static function configure(Table $table): Table
     {
         return $table
+            ->deselectAllRecordsWhenFiltered(false)
             ->columns([
                 TextColumn::make('reference_code')
-                    ->label('Reference')
+                    ->label(OwwaReferenceLabels::transfer())
                     ->searchable()
                     ->sortable()
                     ->weight(\Filament\Support\Enums\FontWeight::Medium),
@@ -63,62 +65,55 @@ class TransfersTable
                     ->toggleable(isToggledHiddenByDefault: false),
             ])
             ->defaultSort('transfer_date', 'desc')
-            ->deferFilters(false)
-            ->filters([
-                SelectFilter::make('item_category_id')
-                    ->label('Category')
-                    ->options(fn (): array => cache()->remember(
-                        'item_categories.options',
-                        3600,
-                        fn (): array => ItemCategory::query()->orderBy('name')->pluck('name', 'id')->toArray()
-                    ))
-                    ->default(fn (): mixed => session('active_item_category_id'))
-                    ->query(function (Builder $query, array $data): Builder {
-                        $categoryId = $data['value'] ?? null;
-
-                        if (! filled($categoryId)) {
-                            session()->forget('active_item_category_id');
-                            return $query->whereRaw('1 = 0');
-                        }
-
-                        session()->put('active_item_category_id', (int) $categoryId);
-
-                        return $query->whereHas('item', function (Builder $itemQuery) use ($data): void {
-                            $itemQuery->where('item_category_id', (int) $data['value']);
-                        });
-                    })
-                    ->placeholder('Select a category'),
-            ], layout: FiltersLayout::AboveContent)
             ->emptyStateHeading('No transfers recorded')
             ->emptyStateDescription('Stock transfers between OWWA offices will appear here.')
             ->emptyStateIcon('heroicon-o-arrows-right-left')
-            ->recordUrl(fn (Transfer $record): string => TransferResource::getUrl('view', ['record' => $record]))
             ->recordActions([
-                EditAction::make()
-                    ->modalWidth('5xl'),
-                Action::make('archive')
-                    ->label('Archive')
-                    ->icon('heroicon-o-archive-box')
-                    ->color('warning')
-                    ->requiresConfirmation()
-                    ->modalHeading('Archive transfer')
-                    ->modalDescription('This transfer will be archived and hidden from the default list. You can restore it later using the filter.')
-                    ->action(fn (Transfer $record) => $record->delete())
-                    ->visible(fn (Transfer $record): bool => ! $record->trashed()),
-                Action::make('restore')
-                    ->label('Restore')
-                    ->icon('heroicon-o-arrow-uturn-left')
-                    ->color('success')
-                    ->requiresConfirmation()
-                    ->action(fn (Transfer $record) => $record->restore())
-                    ->visible(fn (Transfer $record): bool => $record->trashed()),
+                ConfiguresOwwaViewAction::make(
+                    OwwaModalSchema::withHero(
+                        fn (Transfer $record): array => OwwaTransactionViewPresenter::forTransfer($record),
+                        TransferResource::modalDetailSections(),
+                    ),
+                    [
+                        TransferViewActions::editAction(),
+                        TransferViewActions::exportOwwaAction(),
+                        TransferViewActions::printViewAction(),
+                    ],
+                    '3xl',
+                ),
+                ActionGroup::make([
+                    OwwaFormModalDefaults::editAction(OwwaFormModalDefaults::WIDTH_STANDARD),
+                    Action::make('archive')
+                        ->label('Archive')
+                        ->icon('heroicon-o-archive-box')
+                        ->color('warning')
+                        ->requiresConfirmation()
+                        ->modalHeading('Archive transfer')
+                        ->modalDescription('This transfer will be archived and hidden from the default list. You can restore it later using the filter.')
+                        ->action(fn (Transfer $record) => $record->delete())
+                        ->visible(fn (Transfer $record): bool => ! $record->trashed()),
+                    Action::make('restore')
+                        ->label('Restore')
+                        ->icon('heroicon-o-arrow-uturn-left')
+                        ->color('success')
+                        ->requiresConfirmation()
+                        ->action(fn (Transfer $record) => $record->restore())
+                        ->visible(fn (Transfer $record): bool => $record->trashed()),
+                ])
+                    ->label('Actions')
+                    ->icon('heroicon-m-ellipsis-vertical')
+                    ->color('gray'),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
                     DeleteBulkAction::make()
-                        ->label('Archive selected'),
-                    RestoreBulkAction::make(),
+                        ->label('Archive selected')
+                        ->visible(fn (): bool => in_array($table->getLivewire()->activeTab ?? 'active', ['active', 'all'], true)),
+                    RestoreBulkAction::make()
+                        ->visible(fn (): bool => in_array($table->getLivewire()->activeTab ?? 'active', ['archived', 'all'], true)),
                 ]),
-            ]);
+            ])
+            ->recordUrl(null)
+            ->recordAction('view');
     }
 }

@@ -13,7 +13,7 @@ return [
     |
     */
 
-    'name' => env('APP_NAME', 'Laravel'),
+    'name' => env('APP_NAME', 'OWWA Region IV-A Inventory System'),
 
     /*
     |--------------------------------------------------------------------------
@@ -66,20 +66,6 @@ return [
     */
 
     'timezone' => 'Asia/Manila',
-
-    /*
-    |--------------------------------------------------------------------------
-    | Fiscal Year Bypass (Development Only)
-    |--------------------------------------------------------------------------
-    |
-    | When true, fiscal year restrictions are ignored. This is useful for
-    | seeding or correcting historical data. In production this should
-    | remain false so that users can only encode data within the active
-    | fiscal year.
-    |
-    */
-
-    'fiscal_year_bypass' => env('FISCAL_YEAR_BYPASS', false),
 
     /*
     |--------------------------------------------------------------------------

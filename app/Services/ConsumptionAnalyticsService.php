@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Department;
 use App\Models\Issuance;
+use Carbon\CarbonInterface;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 
@@ -15,15 +16,17 @@ class ConsumptionAnalyticsService
      *
      * @param  array<int>  $departmentIds  Empty = all departments.
      * @param  array<int>  $officeIds  Empty = all offices.
+     * @param  bool  $includeYearInLabels  When true (multi-year view), chart labels use a compact year format.
      * @return array{labels: array<string>, series: array<string, array<int>>, departments: array<int, string>}
      */
     public function getConsumptionByDepartmentAndPeriod(
-        Carbon $from,
-        Carbon $to,
+        CarbonInterface $from,
+        CarbonInterface $to,
         array $departmentIds = [],
-        array $officeIds = []
+        array $officeIds = [],
+        bool $includeYearInLabels = false
     ): array {
-        $periods = $this->buildPeriods($from, $to);
+        $periods = $this->buildPeriods($from, $to, $includeYearInLabels);
         $labels = $periods->map(fn ($p) => $p['label'])->values()->all();
 
         $query = Issuance::query()
@@ -60,7 +63,7 @@ class ConsumptionAnalyticsService
         $departmentNames = $departments;
         $outSeries = [];
         foreach ($series as $deptId => $values) {
-            $outSeries[$departmentNames[(int) $deptId] ?? 'Department #' . $deptId] = $values;
+            $outSeries[$departmentNames[(int) $deptId] ?? 'Department #'.$deptId] = $values;
         }
 
         return [
@@ -75,15 +78,18 @@ class ConsumptionAnalyticsService
      *
      * @return Collection<int, array{key: string, label: string}>
      */
-    protected function buildPeriods(Carbon $from, Carbon $to): Collection
+    protected function buildPeriods(CarbonInterface $from, CarbonInterface $to, bool $includeYearInLabels = false): Collection
     {
         $periods = collect();
         $current = $from->copy()->startOfMonth();
 
         while ($current->lte($to)) {
+            $label = $includeYearInLabels
+                ? $current->format("M 'y")
+                : $current->format('M Y');
             $periods->push([
                 'key' => $current->format('Y-m'),
-                'label' => $current->format('M Y'),
+                'label' => $label,
             ]);
             $current->addMonth();
         }
@@ -96,19 +102,21 @@ class ConsumptionAnalyticsService
      *
      * @param  array<int>  $departmentIds
      * @param  array<int>  $officeIds
-     * @return array{total: int, top_department_name: string|null, top_department_quantity: int, periods_count: int, avg_per_period: float}
+     * @return array{total: int, top_department_name: string|null, top_department_quantity: int, periods_count: int, avg_per_period: float, growth_percent: float|null, trend_slope: float}
      */
     public function getConsumptionSummary(
-        Carbon $from,
-        Carbon $to,
+        CarbonInterface $from,
+        CarbonInterface $to,
         array $departmentIds = [],
-        array $officeIds = []
+        array $officeIds = [],
+        bool $includeYearInLabels = false
     ): array {
-        $data = $this->getConsumptionByDepartmentAndPeriod($from, $to, $departmentIds, $officeIds);
+        $data = $this->getConsumptionByDepartmentAndPeriod($from, $to, $departmentIds, $officeIds, $includeYearInLabels);
 
         $total = 0;
         $topName = null;
         $topQty = 0;
+        $totalsPerPeriod = array_fill(0, count($data['labels']), 0);
 
         foreach ($data['series'] as $deptName => $values) {
             $sum = array_sum($values);
@@ -117,10 +125,15 @@ class ConsumptionAnalyticsService
                 $topQty = $sum;
                 $topName = $deptName;
             }
+            foreach ($values as $i => $v) {
+                $totalsPerPeriod[$i] = ($totalsPerPeriod[$i] ?? 0) + (int) $v;
+            }
         }
 
         $periodsCount = count($data['labels']);
         $avgPerPeriod = $periodsCount > 0 ? round($total / $periodsCount, 2) : 0.0;
+        $growth = InventoryAlgorithms::periodOverPeriodGrowth($totalsPerPeriod);
+        $slope = InventoryAlgorithms::linearTrendSlope($totalsPerPeriod);
 
         return [
             'total' => $total,
@@ -128,6 +141,8 @@ class ConsumptionAnalyticsService
             'top_department_quantity' => $topQty,
             'periods_count' => $periodsCount,
             'avg_per_period' => $avgPerPeriod,
+            'growth_percent' => $growth,
+            'trend_slope' => round($slope, 3),
         ];
     }
 
@@ -139,12 +154,13 @@ class ConsumptionAnalyticsService
      * @return array{labels: array<string>, values: array<int>, total: int}
      */
     public function getConsumptionTotalsByDepartment(
-        Carbon $from,
-        Carbon $to,
+        CarbonInterface $from,
+        CarbonInterface $to,
         array $departmentIds = [],
-        array $officeIds = []
+        array $officeIds = [],
+        bool $includeYearInLabels = false
     ): array {
-        $data = $this->getConsumptionByDepartmentAndPeriod($from, $to, $departmentIds, $officeIds);
+        $data = $this->getConsumptionByDepartmentAndPeriod($from, $to, $departmentIds, $officeIds, $includeYearInLabels);
 
         $labels = [];
         $values = [];

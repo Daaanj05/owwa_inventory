@@ -1,4 +1,6 @@
 @php
+    use App\Models\AiProcurementRun;
+
     $record = $getRecord();
     $statusMeta = match($record->status) {
         'draft'        => ['bg' => '#f1f5f9', 'text' => '#475569', 'dot' => '#94a3b8', 'label' => 'Draft'],
@@ -11,6 +13,41 @@
     $summary = preg_replace('/[#*_`~>]+/', '', $summary);
     $summary = trim(preg_replace('/\s+/', ' ', $summary));
     $itemCount = $record->items()->count();
+
+    $previous = AiProcurementRun::query()
+        ->whereKeyNot($record->id)
+        ->where('status', '!=', 'archived')
+        ->orderByDesc('ran_at')
+        ->first();
+
+    $comparison = null;
+    if ($previous) {
+        $currentKeys = $record->items()
+            ->get(['item_id', 'office_id', 'item_name', 'office_name'])
+            ->map(fn ($i) => ($i->item_id ?: $i->item_name) . '|' . ($i->office_id ?: $i->office_name))
+            ->unique()
+            ->values()
+            ->toBase();
+
+        $previousKeys = $previous->items()
+            ->get(['item_id', 'office_id', 'item_name', 'office_name'])
+            ->map(fn ($i) => ($i->item_id ?: $i->item_name) . '|' . ($i->office_id ?: $i->office_name))
+            ->unique()
+            ->values()
+            ->toBase();
+
+        $overlap = $currentKeys->intersect($previousKeys)->count();
+        $added = $currentKeys->diff($previousKeys)->count();
+        $removed = $previousKeys->diff($currentKeys)->count();
+
+        $comparison = [
+            'previous_id' => $previous->id,
+            'previous_ran_at' => $previous->ran_at?->format('M d, Y g:i A') ?? '—',
+            'overlap' => $overlap,
+            'added' => $added,
+            'removed' => $removed,
+        ];
+    }
 @endphp
 
 {{-- Run banner --}}
@@ -44,5 +81,17 @@
     <div class="owwa-run-summary" style="margin-top: 1rem;">
         <p class="owwa-run-summary-label">AI Summary</p>
         <p class="owwa-run-summary-text">{{ $summary }}</p>
+    </div>
+@endif
+
+@if($comparison)
+    <div class="owwa-run-summary" style="margin-top: 0.75rem;">
+        <p class="owwa-run-summary-label">Run-to-run comparison</p>
+        <p class="owwa-run-summary-text">
+            Compared to previous run ({{ $comparison['previous_ran_at'] }}):
+            <strong>{{ $comparison['overlap'] }}</strong> repeated,
+            <strong>{{ $comparison['added'] }}</strong> new,
+            <strong>{{ $comparison['removed'] }}</strong> removed.
+        </p>
     </div>
 @endif

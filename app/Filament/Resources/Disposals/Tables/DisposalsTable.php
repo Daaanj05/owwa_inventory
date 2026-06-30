@@ -2,29 +2,31 @@
 
 namespace App\Filament\Resources\Disposals\Tables;
 
+use App\Filament\Resources\Disposals\Actions\DisposalViewActions;
 use App\Filament\Resources\Disposals\DisposalResource;
+use App\Filament\Support\ConfiguresOwwaViewAction;
+use App\Filament\Support\OwwaFormModalDefaults;
+use App\Filament\Support\OwwaModalSchema;
 use App\Models\Disposal;
-use App\Models\ItemCategory;
-use App\Services\FiscalYearService;
+use App\Support\OwwaReferenceLabels;
+use App\Support\OwwaTransactionViewPresenter;
 use Filament\Actions\Action;
+use Filament\Actions\ActionGroup;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
-use Filament\Actions\EditAction;
 use Filament\Actions\RestoreBulkAction;
 use Filament\Tables\Columns\TextColumn;
-use Filament\Tables\Enums\FiltersLayout;
-use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
-use Illuminate\Database\Eloquent\Builder;
 
 class DisposalsTable
 {
     public static function configure(Table $table): Table
     {
         return $table
+            ->deselectAllRecordsWhenFiltered(false)
             ->columns([
                 TextColumn::make('reference_code')
-                    ->label('Reference')
+                    ->label(fn (): string => OwwaReferenceLabels::disposal())
                     ->searchable()
                     ->sortable()
                     ->weight(\Filament\Support\Enums\FontWeight::Medium),
@@ -70,62 +72,55 @@ class DisposalsTable
                     ->toggleable(isToggledHiddenByDefault: false),
             ])
             ->defaultSort('disposal_date', 'desc')
-            ->deferFilters(false)
-            ->filters([
-                SelectFilter::make('item_category_id')
-                    ->label('Category')
-                    ->options(fn (): array => cache()->remember(
-                        'item_categories.options',
-                        3600,
-                        fn (): array => ItemCategory::query()->orderBy('name')->pluck('name', 'id')->toArray()
-                    ))
-                    ->default(fn (): mixed => session('active_item_category_id'))
-                    ->query(function (Builder $query, array $data): Builder {
-                        $categoryId = $data['value'] ?? null;
-
-                        if (! filled($categoryId)) {
-                            session()->forget('active_item_category_id');
-                            return $query->whereRaw('1 = 0');
-                        }
-
-                        session()->put('active_item_category_id', (int) $categoryId);
-
-                        return $query->whereHas('item', function (Builder $itemQuery) use ($data): void {
-                            $itemQuery->where('item_category_id', (int) $data['value']);
-                        });
-                    })
-                    ->placeholder('Select a category'),
-            ], layout: FiltersLayout::AboveContent)
             ->emptyStateHeading('No disposals recorded')
             ->emptyStateDescription('Items written off, damaged, or expired will be listed here.')
             ->emptyStateIcon('heroicon-o-trash')
-            ->recordUrl(fn (Disposal $record): string => DisposalResource::getUrl('view', ['record' => $record]))
             ->recordActions([
-                EditAction::make()
-                    ->modalWidth('5xl'),
-                Action::make('archive')
-                    ->label('Archive')
-                    ->icon('heroicon-o-archive-box')
-                    ->color('warning')
-                    ->requiresConfirmation()
-                    ->modalHeading('Archive disposal')
-                    ->modalDescription('This disposal will be archived and hidden from the default list. You can restore it later using the filter.')
-                    ->action(fn (Disposal $record) => $record->delete())
-                    ->visible(fn (Disposal $record): bool => ! $record->trashed()),
-                Action::make('restore')
-                    ->label('Restore')
-                    ->icon('heroicon-o-arrow-uturn-left')
-                    ->color('success')
-                    ->requiresConfirmation()
-                    ->action(fn (Disposal $record) => $record->restore())
-                    ->visible(fn (Disposal $record): bool => $record->trashed()),
+                ConfiguresOwwaViewAction::make(
+                    OwwaModalSchema::withHero(
+                        fn (Disposal $record): array => OwwaTransactionViewPresenter::forDisposal($record),
+                        DisposalResource::modalDetailSections(),
+                    ),
+                    [
+                        DisposalViewActions::editAction(),
+                        DisposalViewActions::exportOwwaAction(),
+                        DisposalViewActions::printViewAction(),
+                    ],
+                    '3xl',
+                ),
+                ActionGroup::make([
+                    OwwaFormModalDefaults::editAction(OwwaFormModalDefaults::WIDTH_STANDARD),
+                    Action::make('archive')
+                        ->label('Archive')
+                        ->icon('heroicon-o-archive-box')
+                        ->color('warning')
+                        ->requiresConfirmation()
+                        ->modalHeading('Archive disposal')
+                        ->modalDescription('This disposal will be archived and hidden from the default list. You can restore it later using the filter.')
+                        ->action(fn (Disposal $record) => $record->delete())
+                        ->visible(fn (Disposal $record): bool => ! $record->trashed()),
+                    Action::make('restore')
+                        ->label('Restore')
+                        ->icon('heroicon-o-arrow-uturn-left')
+                        ->color('success')
+                        ->requiresConfirmation()
+                        ->action(fn (Disposal $record) => $record->restore())
+                        ->visible(fn (Disposal $record): bool => $record->trashed()),
+                ])
+                    ->label('Actions')
+                    ->icon('heroicon-m-ellipsis-vertical')
+                    ->color('gray'),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
                     DeleteBulkAction::make()
-                        ->label('Archive selected'),
-                    RestoreBulkAction::make(),
+                        ->label('Archive selected')
+                        ->visible(fn (): bool => in_array($table->getLivewire()->activeTab ?? 'active', ['active', 'all'], true)),
+                    RestoreBulkAction::make()
+                        ->visible(fn (): bool => in_array($table->getLivewire()->activeTab ?? 'active', ['archived', 'all'], true)),
                 ]),
-            ]);
+            ])
+            ->recordUrl(null)
+            ->recordAction('view');
     }
 }

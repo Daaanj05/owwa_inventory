@@ -3,6 +3,7 @@
 namespace App\Observers;
 
 use App\Models\Transfer;
+use App\Services\PropertyReturnService;
 use App\Services\ReferenceCodeService;
 
 class TransferObserver
@@ -15,5 +16,10 @@ class TransferObserver
         if (empty($transfer->recorded_by) && auth()->check()) {
             $transfer->recorded_by = auth()->id();
         }
+    }
+
+    public function created(Transfer $transfer): void
+    {
+        app(PropertyReturnService::class)->processReturnTransfer($transfer);
     }
 }

@@ -2,20 +2,23 @@
 
 namespace App\Filament\Resources\Departments\Pages;
 
+use App\Filament\Concerns\HasSystemAdminWizardHeading;
 use App\Filament\Resources\Departments\DepartmentResource;
-use Filament\Actions\CreateAction;
+use App\Filament\Support\OwwaFormModalDefaults;
 use Filament\Resources\Pages\ListRecords;
 use Filament\Schemas\Components\Actions;
-use Filament\Schemas\Components\Flex;
 use Filament\Schemas\Components\EmbeddedTable;
+use Filament\Schemas\Components\Flex;
 use Filament\Schemas\Components\RenderHook;
 use Filament\Schemas\Components\Tabs\Tab;
-use Illuminate\Database\Eloquent\Builder;
 use Filament\Schemas\Schema;
 use Filament\View\PanelsRenderHook;
+use Illuminate\Database\Eloquent\Builder;
 
 class ListDepartments extends ListRecords
 {
+    use HasSystemAdminWizardHeading;
+
     protected static string $resource = DepartmentResource::class;
 
     /**
@@ -52,7 +55,7 @@ class ListDepartments extends ListRecords
                 Flex::make([
                     $this->getTabsContentComponent(),
                     Actions::make([
-                        CreateAction::make(),
+                        OwwaFormModalDefaults::createAction(OwwaFormModalDefaults::WIDTH_COMPACT),
                     ])->alignEnd(),
                 ])->alignBetween()->verticallyAlignCenter(),
                 RenderHook::make(PanelsRenderHook::RESOURCE_PAGES_LIST_RECORDS_TABLE_BEFORE),
