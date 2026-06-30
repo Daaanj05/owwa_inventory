@@ -57,7 +57,13 @@ RUN composer install --no-dev --no-scripts --no-autoloader --prefer-dist
 COPY . .
 COPY --from=assets /app/public/build ./public/build
 
-RUN composer dump-autoload --optimize --classmap-authoritative \
+RUN mkdir -p bootstrap/cache \
+    storage/framework/cache \
+    storage/framework/sessions \
+    storage/framework/views \
+    storage/logs \
+    && chmod -R 775 bootstrap/cache storage \
+    && composer dump-autoload --optimize --classmap-authoritative \
     && php artisan package:discover --ansi \
     && php artisan filament:upgrade \
     && chmod +x docker/render-entrypoint.sh \
