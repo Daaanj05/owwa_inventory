@@ -44,6 +44,10 @@
                 {{ $this->content }}
             </div>
 
+            @if (!$this instanceof \Filament\Tables\Contracts\HasTable)
+                <x-filament-actions::modals />
+            @endif
+
             <p class="owwa-login-footer-note">
                 OWWA-4A personnel only. Unauthorized access is strictly prohibited.
             </p>
@@ -51,7 +55,3 @@
     </div>
 
 </div>
-
-@if (!$this instanceof \Filament\Tables\Contracts\HasTable)
-    <x-filament-actions::modals />
-@endif

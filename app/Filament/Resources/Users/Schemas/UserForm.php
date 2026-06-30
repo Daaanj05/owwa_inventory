@@ -28,7 +28,7 @@ class UserForm
                     ->columnSpanFull()
                     ->columns(3)
                     ->compact()
-                    ->visible(fn (string $context): bool => $context === 'create')
+                    ->visible(fn (string $operation): bool => self::isCreateOperation($operation))
                     ->schema([
                         self::firstNameField(),
                         self::middleNameField(),
@@ -42,7 +42,7 @@ class UserForm
                     ->description('User login credentials and role assignment.')
                     ->columnSpanFull()
                     ->columns(2)
-                    ->visible(fn (string $context): bool => $context === 'edit')
+                    ->visible(fn (string $operation): bool => self::isEditOperation($operation))
                     ->schema([
                         self::firstNameField(),
                         self::middleNameField(),
@@ -55,7 +55,7 @@ class UserForm
                     ->description('Office and department this user belongs to.')
                     ->columnSpanFull()
                     ->columns(2)
-                    ->visible(fn (string $context): bool => $context === 'edit')
+                    ->visible(fn (string $operation): bool => self::isEditOperation($operation))
                     ->schema([
                         self::officeField($isUnitConsolidator, $user),
                         self::departmentField($isUnitConsolidator, $user),
@@ -108,7 +108,7 @@ class UserForm
             ->dehydrated(fn ($state) => filled($state))
             ->minLength(8)
             ->maxLength(255)
-            ->visible(fn (string $context): bool => $context === 'edit')
+            ->visible(fn (string $operation): bool => self::isEditOperation($operation))
             ->columnSpanFull();
     }
 
@@ -216,5 +216,15 @@ class UserForm
                 fn ($query) => $query->where('office_id', $get('office_id'))
             ),
         ];
+    }
+
+    protected static function isCreateOperation(string $operation): bool
+    {
+        return $operation === 'create' || str_ends_with($operation, '.create');
+    }
+
+    protected static function isEditOperation(string $operation): bool
+    {
+        return $operation === 'edit' || str_ends_with($operation, '.edit');
     }
 }

@@ -125,7 +125,7 @@ class ListItems extends ListRecords
      */
     public function getPageClasses(): array
     {
-        return array_merge(parent::getPageClasses(), ['owwa-items-list-page']);
+        return array_merge(parent::getPageClasses(), ['owwa-items-list-page', 'owwa-wide-table-page']);
     }
 
     public function getTableColumnsSessionKey(): string

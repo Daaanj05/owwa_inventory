@@ -788,13 +788,18 @@ button[type="submit"].fi-btn:hover {
 }
 
 .fi-resource-list-records-page .fi-ta-table {
-    width: max-content !important;
+    width: 100% !important;
     max-width: 100% !important;
 }
 
-.fi-page.owwa-items-list-page .fi-ta-table {
-    width: 100% !important;
-    max-width: 100% !important;
+.fi-page.owwa-wide-table-page .fi-ta-content-ctn {
+    overflow-x: auto !important;
+}
+
+.fi-page.owwa-wide-table-page .fi-ta-table {
+    width: max-content !important;
+    min-width: 100% !important;
+    max-width: none !important;
 }
 
 /* Empty state: connects to content-ctn above, bottom rounding */
