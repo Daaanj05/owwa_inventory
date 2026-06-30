@@ -14,7 +14,6 @@ use Filament\Actions\ActionGroup;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Auth\Notifications\VerifyEmail as FilamentVerifyEmail;
-use Filament\Facades\Filament;
 use Filament\Notifications\Notification;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
@@ -96,9 +95,8 @@ class UsersTable
                             ->icon('heroicon-o-envelope')
                             ->visible(fn (User $record): bool => ! $record->hasVerifiedEmail())
                             ->action(function (User $record): void {
-                                $panel = Filament::getPanel($record->isSystemAdmin() ? 'system-admin' : 'admin');
                                 $notification = app(FilamentVerifyEmail::class);
-                                $notification->url = $panel->getVerifyEmailUrl($record);
+                                $notification->url = User::guestEmailVerificationUrlFor($record);
 
                                 $sent = MailDelivery::attempt(fn (): mixed => $record->notify($notification));
 

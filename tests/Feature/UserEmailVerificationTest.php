@@ -55,9 +55,42 @@ class UserEmailVerificationTest extends TestCase
 
         Notification::assertSentTo($user, UserWelcomeNotification::class, function (UserWelcomeNotification $notification): bool {
             return filled($notification->verificationUrl)
+                && str_contains($notification->verificationUrl, '/email/verify/')
+                && ! str_contains($notification->verificationUrl, '/admin/email-verification/')
                 && filled($notification->temporaryPassword)
                 && filled($notification->panelLoginUrl);
         });
+    }
+
+    public function test_guest_verification_link_marks_email_verified_without_login(): void
+    {
+        $office = Office::factory()->create();
+        $user = User::factory()->unverified()->create([
+            'role' => User::ROLE_EMPLOYEE,
+            'office_id' => $office->id,
+            'email' => 'guest.verify@example.com',
+        ]);
+
+        $url = User::guestEmailVerificationUrlFor($user);
+
+        $this->get($url)
+            ->assertRedirect(User::panelLoginUrlFor($user))
+            ->assertSessionHas('status', 'email-verified');
+
+        $this->assertNotNull($user->fresh()->email_verified_at);
+    }
+
+    public function test_guest_verification_link_requires_valid_signature(): void
+    {
+        $user = User::factory()->unverified()->create([
+            'role' => User::ROLE_EMPLOYEE,
+            'email' => 'unsigned@example.com',
+        ]);
+
+        $this->get('/email/verify/'.$user->id.'/'.sha1($user->getEmailForVerification()))
+            ->assertForbidden();
+
+        $this->assertNull($user->fresh()->email_verified_at);
     }
 
     public function test_unverified_user_cannot_login_and_sees_verification_message(): void

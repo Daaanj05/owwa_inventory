@@ -3,18 +3,22 @@
 use App\Http\Controllers\AiProcurementRunPrintController;
 use App\Http\Controllers\AuditSessionController;
 use App\Http\Controllers\CoaReportController;
+use App\Http\Controllers\GuestEmailVerificationController;
 use App\Http\Controllers\InventoryQrLabelController;
 use App\Http\Controllers\OwwaBulkExportController;
 use App\Http\Controllers\OwwaExportController;
 use App\Http\Controllers\OwwaPrintController;
 use App\Http\Controllers\PublicAssetController;
-use Illuminate\Foundation\Auth\EmailVerificationRequest;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
     return redirect('/admin/login');
 });
+
+Route::get('/email/verify/{id}/{hash}', GuestEmailVerificationController::class)
+    ->middleware(['signed', 'throttle:6,1'])
+    ->name('verification.verify.guest');
 
 Route::get('/assets/{propertyNumber}', [PublicAssetController::class, 'show'])
     ->where('propertyNumber', '.+')
@@ -25,18 +29,6 @@ Route::middleware(['auth', 'web'])->group(function () {
     Route::get('/email/verify', function () {
         return view('welcome');
     })->name('verification.notice');
-
-    Route::get('/email/verify/{id}/{hash}', function (EmailVerificationRequest $request) {
-        $request->fulfill();
-
-        $user = $request->user();
-
-        if ($user !== null && $user->isSystemAdmin()) {
-            return redirect('/system-admin');
-        }
-
-        return redirect('/admin');
-    })->middleware(['signed'])->name('verification.verify');
 
     Route::post('/email/verification-notification', function (Request $request) {
         if ($request->user()->hasVerifiedEmail()) {

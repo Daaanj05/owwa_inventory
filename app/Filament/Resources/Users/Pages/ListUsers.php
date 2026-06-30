@@ -8,7 +8,6 @@ use App\Filament\Support\OwwaFormModalDefaults;
 use App\Models\User;
 use App\Notifications\UserWelcomeNotification;
 use App\Support\MailDelivery;
-use Filament\Facades\Filament;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ListRecords;
 use Filament\Schemas\Components\Actions;
@@ -79,12 +78,10 @@ class ListUsers extends ListRecords
                 return $data;
             })
             ->after(function (User $record) use (&$generatedPassword, &$welcomeEmailSent): void {
-                $panel = Filament::getPanel($record->isSystemAdmin() ? 'system-admin' : 'admin');
-
                 $welcomeEmailSent = MailDelivery::attempt(fn (): mixed => $record->notify(new UserWelcomeNotification(
                     $generatedPassword ?? '',
                     User::panelLoginUrlFor($record),
-                    $panel->getVerifyEmailUrl($record),
+                    User::guestEmailVerificationUrlFor($record),
                 )));
             })
             ->successNotification(function (Model $record) use (&$generatedPassword, &$welcomeEmailSent): Notification {

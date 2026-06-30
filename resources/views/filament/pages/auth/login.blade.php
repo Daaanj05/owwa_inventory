@@ -93,6 +93,12 @@
                     <h2 class="owwa-login-form-title">Welcome!</h2>
                 </div>
 
+                @if (session('status') === 'email-verified')
+                    <div class="owwa-login-verified-banner" role="status">
+                        Your email has been verified. You can sign in now.
+                    </div>
+                @endif
+
                 <form wire:submit="authenticate" class="owwa-login-form">
                     <x-login-outlined-input label="{{ __('filament-panels::auth/pages/login.form.email.label') }}"
                         name="data.email" type="email" />

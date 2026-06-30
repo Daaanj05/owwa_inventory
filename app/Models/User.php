@@ -10,6 +10,7 @@ use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Facades\URL;
 
 class User extends Authenticatable implements FilamentUser, MustVerifyEmail
 {
@@ -141,6 +142,18 @@ class User extends Authenticatable implements FilamentUser, MustVerifyEmail
         }
 
         return url('/admin/login');
+    }
+
+    public static function guestEmailVerificationUrlFor(self $user): string
+    {
+        return URL::temporarySignedRoute(
+            'verification.verify.guest',
+            now()->addMinutes(config('auth.verification.expire', 60)),
+            [
+                'id' => $user->getKey(),
+                'hash' => sha1($user->getEmailForVerification()),
+            ],
+        );
     }
 
     /**
