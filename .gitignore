@@ -22,7 +22,8 @@
 Homestead.json
 Homestead.yaml
 Thumbs.db
-
+/docs/
+/.cursor/
 /vendor/
 /node_modules/
 /.env
