@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\LogsUserActivity;
+use App\Support\CustodianOfficeScope;
 use Filament\Models\Contracts\FilamentUser;
 use Filament\Panel;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
