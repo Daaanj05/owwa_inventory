@@ -45,7 +45,7 @@ class AdminPanelProvider extends PanelProvider
 {
     public function panel(Panel $panel): Panel
     {
-        return $panel
+        $panel = $panel
             ->default()
             ->id('admin')
             ->path('admin')
@@ -74,9 +74,15 @@ class AdminPanelProvider extends PanelProvider
             ->defaultThemeMode(ThemeMode::Light)
             ->darkMode(false)
             ->breadcrumbs(false)
-            ->unsavedChangesAlerts()
-            ->databaseNotifications(livewireComponent: OwwaNotificationDropdown::class, isLazy: false)
-            ->databaseNotificationsPolling('30s')
+            ->unsavedChangesAlerts();
+
+        if (Schema::hasTable('notifications')) {
+            $panel = $panel
+                ->databaseNotifications(livewireComponent: OwwaNotificationDropdown::class, isLazy: false)
+                ->databaseNotificationsPolling('30s');
+        }
+
+        return $panel
             ->renderHook(PanelsRenderHook::STYLES_AFTER, function (): string {
                 return '<link rel="stylesheet" href="'.asset('css/filament/admin/owwa-theme.css').'">';
             })

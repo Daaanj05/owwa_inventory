@@ -26,13 +26,14 @@ use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
 use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Session\Middleware\StartSession;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
 
 class SystemAdminPanelProvider extends PanelProvider
 {
     public function panel(Panel $panel): Panel
     {
-        return $panel
+        $panel = $panel
             ->id('system-admin')
             ->path('system-admin')
             ->brandName('OWWA Inventory System — System Admin')
@@ -45,9 +46,15 @@ class SystemAdminPanelProvider extends PanelProvider
                 'primary' => Color::Indigo,
             ])
             ->defaultThemeMode(ThemeMode::Light)
-            ->darkMode(false)
-            ->databaseNotifications(livewireComponent: OwwaNotificationDropdown::class, isLazy: false)
-            ->databaseNotificationsPolling('30s')
+            ->darkMode(false);
+
+        if (Schema::hasTable('notifications')) {
+            $panel = $panel
+                ->databaseNotifications(livewireComponent: OwwaNotificationDropdown::class, isLazy: false)
+                ->databaseNotificationsPolling('30s');
+        }
+
+        return $panel
             ->renderHook(PanelsRenderHook::STYLES_AFTER, function (): string {
                 return '<link rel="stylesheet" href="'.asset('css/filament/admin/owwa-theme.css').'">';
             })

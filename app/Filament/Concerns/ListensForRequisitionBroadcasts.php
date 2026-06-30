@@ -11,6 +11,10 @@ trait ListensForRequisitionBroadcasts
      */
     protected function requisitionBroadcastListeners(): array
     {
+        if (! filled(config('filament.broadcasting.echo.key'))) {
+            return [];
+        }
+
         $user = Filament::auth()->user();
         $listeners = [];
 

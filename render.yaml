@@ -32,7 +32,7 @@ services:
       - key: SESSION_SECURE_COOKIE
         value: "true"
       - key: QUEUE_CONNECTION
-        value: database
+        value: sync
       - key: CACHE_STORE
         value: database
       - key: BROADCAST_CONNECTION

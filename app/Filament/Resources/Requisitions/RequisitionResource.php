@@ -40,25 +40,29 @@ class RequisitionResource extends Resource
 
     public static function getNavigationBadge(): ?string
     {
-        /** @var User|null $user */
-        $user = Filament::auth()->user();
-        $query = static::getModel()::query();
-        if ($user && $user->isUnitConsolidator() && $user->office_id) {
-            $query->where('office_id', $user->office_id)
-                ->where('status', Requisition::STATUS_PENDING);
-        } elseif ($user && $user->isSupplyCustodian()) {
-            $query->whereHas('requestedBy', function (Builder $q): void {
-                $q->where('role', User::ROLE_UNIT_CONSOLIDATOR);
-            })->where('status', Requisition::STATUS_PENDING);
-        } elseif ($user && $user->isEmployee()) {
-            $query->where('requested_by', $user->id)
-                ->where('status', Requisition::STATUS_PENDING);
-        } else {
-            $query->whereRaw('1 = 0');
-        }
-        $pending = $query->count();
+        try {
+            /** @var User|null $user */
+            $user = Filament::auth()->user();
+            $query = static::getModel()::query();
+            if ($user && $user->isUnitConsolidator() && $user->office_id) {
+                $query->where('office_id', $user->office_id)
+                    ->where('status', Requisition::STATUS_PENDING);
+            } elseif ($user && $user->isSupplyCustodian()) {
+                $query->whereHas('requestedBy', function (Builder $q): void {
+                    $q->where('role', User::ROLE_UNIT_CONSOLIDATOR);
+                })->where('status', Requisition::STATUS_PENDING);
+            } elseif ($user && $user->isEmployee()) {
+                $query->where('requested_by', $user->id)
+                    ->where('status', Requisition::STATUS_PENDING);
+            } else {
+                $query->whereRaw('1 = 0');
+            }
+            $pending = $query->count();
 
-        return $pending > 0 ? (string) $pending : null;
+            return $pending > 0 ? (string) $pending : null;
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     public static function getNavigationBadgeColor(): string|array|null
