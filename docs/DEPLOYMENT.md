@@ -199,6 +199,10 @@ Local development keeps `OLLAMA_URL=http://127.0.0.1:11434`.
 
 Deploy the app on [Render](https://render.com) using the repo [`Dockerfile`](Dockerfile) at the project root. Choose **Docker** as the runtime (not Node — `package.json` is only for Vite assets).
 
+**Fastest path:** Render Dashboard → **New** → **Blueprint** → connect `Daaanj05/owwa_inventory` → Render reads [`render.yaml`](../render.yaml) and creates Postgres + the Docker web service. After deploy, set `APP_URL` and `OLLAMA_URL` in the service environment (Blueprint marks these `sync: false`).
+
+### Manual setup (alternative)
+
 ### 1. Push code to GitHub
 
 Connect Render to `https://github.com/Daaanj05/owwa_inventory` on branch `main` after pushing local changes.
