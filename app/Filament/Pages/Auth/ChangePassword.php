@@ -28,7 +28,7 @@ class ChangePassword extends Page
 
     protected static string $layout = 'filament-panels::components.layout.simple';
 
-    protected string $view = 'filament-panels::pages.simple';
+    protected string $view = 'filament.pages.auth.change-password';
 
     /**
      * @var array<string, mixed>|null
@@ -155,8 +155,13 @@ class ChangePassword extends Page
             ]);
     }
 
+    public function hasTopbar(): bool
+    {
+        return false;
+    }
+
     public function hasLogo(): bool
     {
-        return true;
+        return false;
     }
 }

@@ -1662,6 +1662,59 @@ button[type="submit"].fi-btn:hover {
 }
 
 /* ═══════════════════════════════════════════════════════════
+   CHANGE PASSWORD PAGE (forced password setup)
+═══════════════════════════════════════════════════════════ */
+
+.fi-body:has(.owwa-change-password-page) .fi-simple-layout-header {
+    display: none !important;
+}
+
+.owwa-change-password-page .fi-simple-page {
+    padding: 0 !important;
+    margin: 0 !important;
+    max-width: none !important;
+}
+
+.owwa-change-password-notice {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.625rem;
+    margin-bottom: 1.25rem;
+    padding: 0.75rem 1rem;
+    border-radius: 0.5rem;
+    border: 1px solid #bfdbfe;
+    background: #eff6ff;
+    color: #1e40af;
+    font-size: 0.875rem;
+    font-weight: 500;
+    line-height: 1.45;
+}
+
+.owwa-change-password-notice-icon {
+    width: 1.25rem;
+    height: 1.25rem;
+    flex-shrink: 0;
+    margin-top: 0.05rem;
+}
+
+.owwa-change-password-form {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.owwa-change-password-form .fi-fo-field-wrp-helper-text {
+    font-size: 0.75rem !important;
+    color: #64748b !important;
+    line-height: 1.45 !important;
+    margin-top: 0.25rem !important;
+}
+
+.owwa-change-password-form .fi-sc-form {
+    gap: 1.25rem !important;
+}
+
+/* ═══════════════════════════════════════════════════════════
    WELCOME WIDGET
 ═══════════════════════════════════════════════════════════ */
 .owwa-welcome {
