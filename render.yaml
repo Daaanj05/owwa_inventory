@@ -25,7 +25,7 @@ services:
       - key: APP_KEY
         generateValue: true
       - key: APP_URL
-        sync: false
+        value: https://owwa-inventory.onrender.com
       - key: DB_CONNECTION
         value: pgsql
       - key: DB_HOST
@@ -59,7 +59,7 @@ services:
       - key: BROADCAST_CONNECTION
         value: log
       - key: OLLAMA_URL
-        sync: false
+        value: http://127.0.0.1:11434
       - key: OLLAMA_EMBED_MODEL
         value: nomic-embed-text
       - key: OLLAMA_CHAT_MODEL
