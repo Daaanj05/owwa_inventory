@@ -63,9 +63,7 @@ RUN mkdir -p bootstrap/cache \
     storage/framework/views \
     storage/logs \
     && chmod -R 775 bootstrap/cache storage \
-    && composer dump-autoload --optimize --classmap-authoritative \
-    && php artisan package:discover --ansi \
-    && php artisan filament:upgrade \
+    && composer dump-autoload --optimize --classmap-authoritative --no-scripts \
     && chmod +x docker/render-entrypoint.sh \
     && chown -R www-data:www-data storage bootstrap/cache
 
