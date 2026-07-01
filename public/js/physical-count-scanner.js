@@ -16,6 +16,24 @@ window.owwaQrScanner = function owwaQrScanner({
         (countedPropertyNumbers ?? []).map((value) => String(value).trim()).filter(Boolean),
     );
 
+    const waitForHtml5Qrcode = async () => {
+        if (typeof Html5Qrcode !== 'undefined') {
+            return;
+        }
+
+        const deadline = Date.now() + 3000;
+
+        while (typeof Html5Qrcode === 'undefined' && Date.now() < deadline) {
+            if (document.readyState === 'complete') {
+                await new Promise((resolve) => setTimeout(resolve, 50));
+            } else {
+                await new Promise((resolve) => {
+                    window.addEventListener('load', resolve, { once: true });
+                });
+            }
+        }
+    };
+
     const resolveQrboxSize = () => {
         if (qrboxSize !== null && qrboxSize > 0) {
             return qrboxSize;
@@ -116,6 +134,30 @@ window.owwaQrScanner = function owwaQrScanner({
         started = true;
     };
 
+    const cleanupScanner = async () => {
+        if (! html5QrCode) {
+            return;
+        }
+
+        if (html5QrCode.isScanning) {
+            try {
+                await html5QrCode.stop();
+            } catch (error) {
+                console.error('OWWA QR scanner failed to stop', error);
+            }
+        }
+
+        try {
+            await html5QrCode.clear();
+        } catch (error) {
+            console.error('OWWA QR scanner failed to clear', error);
+        }
+
+        html5QrCode = null;
+        started = false;
+        initializing = false;
+    };
+
     return {
         cameraUnavailable: false,
 
@@ -140,11 +182,7 @@ window.owwaQrScanner = function owwaQrScanner({
                 return;
             }
 
-            if (typeof Html5Qrcode === 'undefined') {
-                await new Promise((resolve) => {
-                    window.addEventListener('load', resolve, { once: true });
-                });
-            }
+            await waitForHtml5Qrcode();
 
             if (typeof Html5Qrcode === 'undefined') {
                 console.error('Html5Qrcode library is not loaded.');
@@ -163,29 +201,21 @@ window.owwaQrScanner = function owwaQrScanner({
                 return;
             }
 
-            html5QrCode = new Html5QrCode(elementId);
+            html5QrCode = new Html5Qrcode(elementId);
 
             try {
                 await startScanner();
             } catch (error) {
                 console.error('OWWA QR scanner failed to start', error);
                 this.cameraUnavailable = true;
+                await cleanupScanner();
             } finally {
                 initializing = false;
             }
         },
 
         async stop() {
-            if (html5QrCode?.isScanning) {
-                try {
-                    await html5QrCode.stop();
-                } catch (error) {
-                    console.error('OWWA QR scanner failed to stop', error);
-                }
-            }
-
-            started = false;
-            initializing = false;
+            await cleanupScanner();
         },
 
         registerCountedPropertyNumber(propertyNumber) {
@@ -212,9 +242,16 @@ window.owwaQrScanner = function owwaQrScanner({
             }
 
             try {
-                await html5QrCode.stop();
-                started = false;
+                await cleanupScanner();
                 await new Promise((resolve) => setTimeout(resolve, 800));
+
+                const container = document.getElementById(elementId);
+
+                if (! container) {
+                    return;
+                }
+
+                html5QrCode = new Html5Qrcode(elementId);
                 await startScanner();
             } catch (error) {
                 console.error('OWWA QR scanner failed to pause', error);

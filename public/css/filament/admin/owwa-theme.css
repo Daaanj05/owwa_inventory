@@ -5491,24 +5491,18 @@ a.owwa-pagination-page:hover {
 
 .owwa-scan-asset-page .owwa-scan-asset-camera-box {
     position: relative;
-    aspect-ratio: 4 / 3;
-    min-height: 240px;
+    max-height: 280px;
+    overflow: hidden;
 }
 
 .owwa-scan-asset-page .owwa-pc-qr-reader {
-    min-height: 240px;
-    width: 100%;
-}
-
-.owwa-scan-asset-page #asset-lookup-qr-reader {
-    width: 100%;
-    min-height: 240px;
+    min-height: 0;
 }
 
 .owwa-scan-asset-page #asset-lookup-qr-reader video {
     max-height: 260px;
     width: 100% !important;
-    object-fit: contain;
+    object-fit: cover;
 }
 
 .owwa-scan-asset-frame {
@@ -5521,14 +5515,7 @@ a.owwa-pagination-page:hover {
 }
 
 .owwa-scan-asset-page #asset-lookup-qr-reader #qr-shaded-region {
-    border: none !important;
-}
-
-.owwa-scan-asset-page #asset-lookup-qr-reader #qr-shaded-region > div {
-    border-color: rgb(255 255 255 / 0.9) !important;
-    border-width: 3px !important;
-    border-radius: 0.375rem;
-    box-shadow: none !important;
+    display: none !important;
 }
 
 .owwa-scan-asset-divider {

@@ -1,4 +1,7 @@
 <x-filament-panels::page>
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+    <script src="{{ asset('js/physical-count-scanner.js') }}"></script>
+
     <div class="owwa-physical-count-scan-page owwa-pc-scan-container">
         <div class="owwa-pc-scan-card owwa-scan-asset-card">
             <p class="owwa-scan-asset-intro">Point your camera at the property QR tag.</p>
@@ -38,7 +41,4 @@
             </form>
         </div>
     </div>
-
-    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
-    <script src="{{ asset('js/physical-count-scanner.js') }}"></script>
 </x-filament-panels::page>
