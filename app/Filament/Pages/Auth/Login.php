@@ -3,6 +3,7 @@
 namespace App\Filament\Pages\Auth;
 
 use App\Models\User;
+use App\Support\FriendlyMessages;
 use Filament\Auth\Http\Responses\Contracts\LoginResponse;
 use Filament\Auth\Pages\Login as BaseLogin;
 use Filament\Facades\Filament;
@@ -50,7 +51,7 @@ class Login extends BaseLogin
             && $user->canAccessPanel(Filament::getCurrentOrDefaultPanel())
         ) {
             throw ValidationException::withMessages([
-                'data.email' => __('Please verify your email address before signing in.'),
+                'data.email' => FriendlyMessages::emailNotVerifiedLogin(),
             ]);
         }
     }

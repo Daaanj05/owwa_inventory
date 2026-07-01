@@ -88,7 +88,8 @@ class UserEmailVerificationTest extends TestCase
         ]);
 
         $this->get('/email/verify/'.$user->id.'/'.sha1($user->getEmailForVerification()))
-            ->assertForbidden();
+            ->assertRedirect('/admin/login')
+            ->assertSessionHas('verification_error');
 
         $this->assertNull($user->fresh()->email_verified_at);
     }
@@ -112,7 +113,7 @@ class UserEmailVerificationTest extends TestCase
                 'remember' => false,
             ])
             ->call('authenticate')
-            ->assertHasFormErrors(['email' => 'Please verify your email address before signing in.']);
+            ->assertHasFormErrors(['email' => \App\Support\FriendlyMessages::emailNotVerifiedLogin()]);
     }
 
     public function test_login_with_unknown_email_shows_generic_failure_message(): void

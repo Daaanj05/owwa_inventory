@@ -7,6 +7,7 @@ use App\Filament\Support\ConfiguresOwwaViewAction;
 use App\Filament\Support\OwwaFormModalDefaults;
 use App\Filament\Support\OwwaModalSchema;
 use App\Models\User;
+use App\Support\FriendlyMessages;
 use App\Support\MailDelivery;
 use App\Support\OwwaTransactionViewPresenter;
 use Filament\Actions\Action;
@@ -98,12 +99,22 @@ class UsersTable
                                 $notification = app(FilamentVerifyEmail::class);
                                 $notification->url = User::guestEmailVerificationUrlFor($record);
 
-                                $sent = MailDelivery::attempt(fn (): mixed => $record->notify($notification));
+                                $result = MailDelivery::notify($record, $notification);
 
-                                if ($sent) {
+                                if ($result->success && $result->wasQueued) {
+                                    Notification::make()
+                                        ->title('Verification email queued')
+                                        ->body(FriendlyMessages::verificationResendQueued($record->email))
+                                        ->success()
+                                        ->send();
+
+                                    return;
+                                }
+
+                                if ($result->success) {
                                     Notification::make()
                                         ->title('Verification email sent')
-                                        ->body("A new verification link was sent to {$record->email}.")
+                                        ->body(FriendlyMessages::verificationResendSent($record->email))
                                         ->success()
                                         ->send();
 
@@ -112,7 +123,7 @@ class UsersTable
 
                                 Notification::make()
                                     ->title('Email could not be sent')
-                                    ->body('The mail server is unreachable from this host. Configure an HTTP mail provider (e.g. Resend) in production, or share a verification link manually.')
+                                    ->body(FriendlyMessages::verificationResendFailed())
                                     ->warning()
                                     ->send();
                             }),

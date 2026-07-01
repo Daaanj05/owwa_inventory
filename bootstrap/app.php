@@ -24,5 +24,9 @@ return Application::configure(basePath: dirname(__DIR__))
         $schedule->command('inventory:eul-reminders')->dailyAt('08:30');
     })
     ->withExceptions(function (Exceptions $exceptions): void {
-        //
+        $exceptions->render(function (\Illuminate\Routing\Exceptions\InvalidSignatureException $exception, \Illuminate\Http\Request $request) {
+            return redirect()
+                ->to('/admin/login')
+                ->with('verification_error', \App\Support\FriendlyMessages::emailVerificationExpiredLink());
+        });
     })->create();

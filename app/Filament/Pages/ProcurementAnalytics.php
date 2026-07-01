@@ -3,11 +3,11 @@
 namespace App\Filament\Pages;
 
 use App\Filament\Resources\AiProcurementRunResource;
-use App\Models\AiProcurementItem;
+use App\Jobs\GenerateAiProcurementRecommendationJob;
 use App\Models\AiProcurementRun;
 use App\Models\ItemCategory;
+use App\Services\AiProcurementRecommendationService;
 use App\Services\ProcurementDecisionSupportService;
-use App\Services\RagService;
 use App\Support\OwwaExportFilename;
 use BackedEnum;
 use Carbon\Carbon;
@@ -19,7 +19,6 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\HtmlString;
-use Illuminate\Support\Str;
 use Livewire\Attributes\Url;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 use UnitEnum;
@@ -59,6 +58,8 @@ class ProcurementAnalytics extends Page
     public bool $loading = false;
 
     public ?int $lastAiRunId = null;
+
+    public ?int $processingRunId = null;
 
     /** @var array{headline: string, priority_actions: array<int, array{item: string, stock: int, suggested: int|null, stock_url: string|null}>, reorder_suggestions: array<int, array{item: string, suggested: int, stock_url: string|null}>}|null */
     public ?array $actionSummary = null;
@@ -151,6 +152,8 @@ class ProcurementAnalytics extends Page
         $this->actionSummary = null;
         $this->recommendation = null;
         $this->lastAiRunId = null;
+        $this->processingRunId = null;
+        $this->loading = false;
     }
 
     /**
@@ -233,15 +236,6 @@ class ProcurementAnalytics extends Page
         }
 
         return implode(' · ', $parts);
-    }
-
-    protected function formatAiRecommendationError(string $message): string
-    {
-        if (preg_match('/cURL error 7|Connection refused|Could not connect to server|Failed to connect/i', $message)) {
-            return 'Cannot connect to the local AI server (Ollama). Start Ollama on this computer, or set `OLLAMA_URL` / `services.ollama.url` to a reachable host, then try again.';
-        }
-
-        return 'An error occurred: '.$message;
     }
 
     public function getTitle(): string
@@ -526,61 +520,39 @@ class ProcurementAnalytics extends Page
         $this->loading = true;
         $this->recommendation = null;
         $this->lastAiRunId = null;
-        $this->actionSummary = null;
-
-        set_time_limit(120);
+        $this->processingRunId = null;
 
         try {
             $rows = $this->queryAtRiskRows(self::AT_RISK_LIMIT);
             $this->actionSummary = $this->buildProcurementActionSummary($rows);
-            $actionSummary = $this->actionSummary;
 
             ['from' => $from, 'to' => $to] = $this->resolveDateRange();
             $categoryId = $this->categoryId !== '' ? (int) $this->categoryId : null;
-            $categoryName = $categoryId ? (ItemCategory::find($categoryId)?->name ?? null) : null;
+            $officeIds = Filament::auth()->user()?->office_id ? [(int) Filament::auth()->user()->office_id] : [];
 
-            $facts = [
-                'from' => $from->toDateString(),
-                'to' => $to->toDateString(),
-                'category' => $categoryName,
-                'pairs' => $rows->count(),
-                'high' => $rows->where('priority', 'High')->count(),
-                'medium' => $rows->where('priority', 'Medium')->count(),
-                'headline' => $actionSummary['headline'],
-            ];
+            $run = app(AiProcurementRecommendationService::class)->createProcessingRun(
+                from: $from,
+                to: $to,
+                createdBy: Auth::id(),
+            );
 
-            $itemFacts = $rows->map(fn ($row) => [
-                'priority' => $row->priority,
-                'item' => $row->item_name,
-                'office' => $row->office_name,
-                'cover' => (float) ($row->months_cover ?? 0),
-                'forecast' => (float) $row->forecast_monthly_usage,
-                'suggested' => $row->suggested_reorder_qty ?? null,
-                'has_recent_usage' => (bool) ($row->has_recent_usage ?? true),
-            ])->values()->all();
+            $this->processingRunId = $run->id;
+            $this->lastAiRunId = $run->id;
 
-            $summary = app(RagService::class)->generateNarrativeSummary($facts, $itemFacts, [
-                'category_id' => $categoryId,
-            ]);
+            GenerateAiProcurementRecommendationJob::dispatch(
+                runId: $run->id,
+                periodFrom: $from->toDateString(),
+                periodTo: $to->toDateString(),
+                categoryId: $categoryId,
+                officeIds: $officeIds,
+            );
 
-            if (! $summary) {
-                $this->recommendation = '__OLLAMA_UNAVAILABLE__';
+            if (config('queue.default') === 'sync') {
+                $this->syncProcessingRun();
             } else {
-                $this->recommendation = trim($summary);
-            }
-
-            $table = $this->buildDeterministicMarkdownTable($rows);
-            $rawForStorage = $this->recommendation === '__OLLAMA_UNAVAILABLE__'
-                ? 'Ollama is not available. Showing deterministic recommendations without AI narrative summary.'."\n\n".$table
-                : trim($this->recommendation)."\n\n".$table;
-
-            $run = $this->storeAiProcurementRunFromRows($rawForStorage, $rows, $from, $to);
-            if ($run !== null) {
-                $this->lastAiRunId = $run->id;
-
                 Notification::make()
-                    ->title('AI recommendation saved')
-                    ->body('Review the recommendation below or open the saved run.')
+                    ->title('Recommendation queued')
+                    ->body('Keep queue:work running on the operations laptop. The AI narrative will appear when processing completes.')
                     ->success()
                     ->actions([
                         \Filament\Actions\Action::make('view')
@@ -590,15 +562,74 @@ class ProcurementAnalytics extends Page
                     ->send();
             }
         } catch (\Throwable $e) {
-            $message = $e->getMessage();
-            if (str_contains($message, 'Maximum execution time') || str_contains($message, 'exceeded')) {
-                $this->recommendation = 'The request took too long (the model may be slow). Try again, or increase max_execution_time in php.ini.';
-            } else {
-                $this->recommendation = $this->formatAiRecommendationError($message);
-            }
-        } finally {
+            $this->recommendation = app(AiProcurementRecommendationService::class)
+                ->formatErrorMessage($e->getMessage());
             $this->loading = false;
+            $this->processingRunId = null;
         }
+    }
+
+    public function syncProcessingRun(): void
+    {
+        if ($this->processingRunId === null) {
+            return;
+        }
+
+        $run = AiProcurementRun::query()->find($this->processingRunId);
+        if ($run === null) {
+            $this->processingRunId = null;
+            $this->loading = false;
+
+            return;
+        }
+
+        if ($run->status === 'processing') {
+            return;
+        }
+
+        $this->processingRunId = null;
+        $this->loading = false;
+        $this->lastAiRunId = $run->id;
+
+        if ($run->status === 'failed') {
+            $this->recommendation = $run->error_message
+                ?? 'AI recommendation failed. Check that Ollama is running and queue:work is active on the operations laptop.';
+
+            Notification::make()
+                ->title('AI recommendation failed')
+                ->body($this->recommendation)
+                ->danger()
+                ->send();
+
+            return;
+        }
+
+        $this->hydrateRecommendationFromRun($run);
+
+        Notification::make()
+            ->title('AI recommendation saved')
+            ->body('Review the recommendation below or open the saved run.')
+            ->success()
+            ->actions([
+                \Filament\Actions\Action::make('view')
+                    ->label('View run')
+                    ->url(AiProcurementRunResource::getUrl('view', ['record' => $run->id])),
+            ])
+            ->send();
+    }
+
+    protected function hydrateRecommendationFromRun(AiProcurementRun $run): void
+    {
+        $parts = $this->splitRecommendation($run->raw_response);
+        $narrative = $parts['narrative'];
+
+        if (str_contains($narrative, 'Ollama is not available')) {
+            $this->recommendation = '__OLLAMA_UNAVAILABLE__';
+
+            return;
+        }
+
+        $this->recommendation = $narrative !== '' ? $narrative : null;
     }
 
     public function exportAtRiskCsv(): StreamedResponse
@@ -646,109 +677,5 @@ class ProcurementAnalytics extends Page
         }, $filename, [
             'Content-Type' => 'text/csv',
         ]);
-    }
-
-    protected function storeAiProcurementRunFromRows(string $response, Collection $rows, Carbon $from, Carbon $to): ?AiProcurementRun
-    {
-        $clean = preg_replace('/<think>.*?<\/think>/s', '', $response);
-        $clean = str_replace(["\r\n", "\r"], "\n", trim((string) $clean));
-
-        if ($clean === '') {
-            return null;
-        }
-
-        $lines = explode("\n", $clean);
-
-        $summaryLines = [];
-        foreach ($lines as $line) {
-            $t = trim($line);
-            if ($t === '') {
-                if (! empty($summaryLines)) {
-                    break;
-                }
-
-                continue;
-            }
-            if (str_starts_with($t, '|')) {
-                break;
-            }
-            $summaryLines[] = $t;
-        }
-        $summary = Str::limit(implode(' ', $summaryLines), 500);
-
-        $run = AiProcurementRun::create([
-            'ran_at' => now(),
-            'period_from' => $from->toDateString(),
-            'period_to' => $to->toDateString(),
-            'summary' => $summary !== '' ? $summary : null,
-            'raw_response' => $clean,
-            'status' => 'draft',
-            'created_by' => Auth::id(),
-        ]);
-
-        foreach ($rows as $row) {
-            $reason = sprintf(
-                'Stock %d (reorder %d), forecast %.1f/mo, cover %.1f months.',
-                (int) $row->current_stock,
-                (int) $row->reorder_level,
-                (float) $row->forecast_monthly_usage,
-                (float) ($row->months_cover ?? 0)
-            );
-
-            $suggested = $row->suggested_reorder_qty ?? null;
-
-            AiProcurementItem::create([
-                'run_id' => $run->id,
-                'section' => 'urgent',
-                'priority' => $row->priority,
-                'item_name' => $row->item_name,
-                'item_id' => $row->item_id,
-                'office_name' => $row->office_name,
-                'office_id' => $row->office_id,
-                'current_stock' => (int) $row->current_stock,
-                'avg_monthly_usage' => (float) $row->forecast_monthly_usage,
-                'months_cover' => (float) ($row->months_cover ?? 0),
-                'suggested_qty_min' => $suggested,
-                'suggested_qty_max' => $suggested,
-                'reason' => $reason,
-                'include_in_request' => true,
-            ]);
-        }
-
-        return $run;
-    }
-
-    protected function buildDeterministicMarkdownTable(Collection $rows): string
-    {
-        if ($rows->isEmpty()) {
-            return 'No at-risk items identified based on current forecast and stock.';
-        }
-
-        $lines = [];
-        $lines[] = '| Priority | Item | Office | Current stock | Forecast/mo | Months of cover | Suggested reorder | Reason |';
-        $lines[] = '| --- | --- | --- | ---: | ---: | ---: | ---: | --- |';
-
-        foreach ($rows as $row) {
-            $reason = sprintf(
-                'Stock %d vs reorder %d; forecast %.1f/mo.',
-                (int) $row->current_stock,
-                (int) $row->reorder_level,
-                (float) $row->forecast_monthly_usage,
-            );
-
-            $lines[] = sprintf(
-                '| %s | %s | %s | %d | %.1f | %s | %s | %s |',
-                $row->priority,
-                str_replace('|', '/', (string) $row->item_name),
-                str_replace('|', '/', (string) $row->office_name),
-                (int) $row->current_stock,
-                (float) $row->forecast_monthly_usage,
-                $row->months_cover !== null ? number_format((float) $row->months_cover, 1) : '—',
-                $row->suggested_reorder_qty !== null ? (string) (int) $row->suggested_reorder_qty : '—',
-                str_replace('|', '/', $reason),
-            );
-        }
-
-        return implode("\n", $lines);
     }
 }

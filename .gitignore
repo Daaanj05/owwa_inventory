@@ -30,6 +30,8 @@ Thumbs.db
 .env.*
 !.env.example
 !.env.testing.example
+!.env.mysql.local.example
+!.env.uat-worker.example
 /storage/*.key
 /storage/logs/
 /storage/framework/cache/

@@ -20,6 +20,7 @@ class AiProcurementRun extends Model
         'summary',
         'raw_response',
         'status',
+        'error_message',
         'created_by',
     ];
 

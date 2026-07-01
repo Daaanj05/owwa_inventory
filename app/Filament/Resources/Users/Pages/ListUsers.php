@@ -7,6 +7,7 @@ use App\Filament\Resources\Users\UserResource;
 use App\Filament\Support\OwwaFormModalDefaults;
 use App\Models\User;
 use App\Notifications\UserWelcomeNotification;
+use App\Support\FriendlyMessages;
 use App\Support\MailDelivery;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ListRecords;
@@ -66,7 +67,7 @@ class ListUsers extends ListRecords
     public function content(Schema $schema): Schema
     {
         $generatedPassword = null;
-        $welcomeEmailSent = false;
+        $welcomeMailResult = null;
 
         $createAction = OwwaFormModalDefaults::createAction(OwwaFormModalDefaults::WIDTH_COMPACT)
             ->mutateDataUsing(function (array $data) use (&$generatedPassword): array {
@@ -77,37 +78,37 @@ class ListUsers extends ListRecords
 
                 return $data;
             })
-            ->after(function (User $record) use (&$generatedPassword, &$welcomeEmailSent): void {
-                $welcomeEmailSent = MailDelivery::attempt(fn (): mixed => $record->notify(new UserWelcomeNotification(
+            ->after(function (User $record) use (&$generatedPassword, &$welcomeMailResult): void {
+                $welcomeMailResult = MailDelivery::notify($record, new UserWelcomeNotification(
                     $generatedPassword ?? '',
                     User::panelLoginUrlFor($record),
                     User::guestEmailVerificationUrlFor($record),
-                )));
+                ));
             })
-            ->successNotification(function (Model $record) use (&$generatedPassword, &$welcomeEmailSent): Notification {
+            ->successNotification(function (Model $record) use (&$generatedPassword, &$welcomeMailResult): Notification {
                 $password = $generatedPassword ?? '—';
 
-                if ($welcomeEmailSent) {
+                if ($welcomeMailResult?->success && $welcomeMailResult->wasQueued) {
                     return Notification::make()
                         ->title('User created')
                         ->success()
-                        ->body(sprintf(
-                            'Welcome email sent to %s. Temporary password (backup): %s',
-                            $record->email,
-                            $password,
-                        ))
+                        ->body(FriendlyMessages::welcomeEmailQueued($record->email, $password))
+                        ->seconds(16);
+                }
+
+                if ($welcomeMailResult?->success) {
+                    return Notification::make()
+                        ->title('User created')
+                        ->success()
+                        ->body(FriendlyMessages::welcomeEmailSent($record->email, $password))
                         ->seconds(12);
                 }
 
                 return Notification::make()
                     ->title('User created')
                     ->warning()
-                    ->body(sprintf(
-                        'User saved, but the welcome email could not be sent (mail server unreachable). Share these credentials manually — Email: %s · Temporary password: %s',
-                        $record->email,
-                        $password,
-                    ))
-                    ->seconds(20);
+                    ->body(FriendlyMessages::welcomeEmailFailed($record->email, $password))
+                    ->seconds(24);
             });
 
         return $schema

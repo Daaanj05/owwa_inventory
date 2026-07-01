@@ -31,7 +31,14 @@
 
             @if (session('status') === 'email-verified')
                 <div class="owwa-login-verified-banner" role="status">
-                    Your email has been verified. You can sign in now.
+                    {{ \App\Support\FriendlyMessages::emailVerificationSuccess() }}
+                </div>
+            @endif
+
+            @if (session('verification_error'))
+                <div class="owwa-login-error" role="alert">
+                    <p class="owwa-login-error-title">Verification link problem</p>
+                    <p class="owwa-login-error-text">{{ session('verification_error') }}</p>
                 </div>
             @endif
 

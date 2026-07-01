@@ -4,13 +4,18 @@ namespace Tests\Feature;
 
 use App\Filament\Pages\ProcurementAnalytics;
 use App\Filament\Widgets\CoverageOverviewWidget;
+use App\Jobs\GenerateAiProcurementRecommendationJob;
+use App\Models\AiProcurementRun;
 use App\Models\Item;
 use App\Models\ItemCategory;
 use App\Models\Office;
 use App\Models\User;
+use App\Services\AiProcurementRecommendationService;
+use App\Services\RagService;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Queue;
 use Livewire\Livewire;
 use Tests\TestCase;
 
@@ -246,7 +251,150 @@ class ProcurementAnalyticsPageTest extends TestCase
             ->call('generateAiRecommendation')
             ->assertSet('actionSummary.headline', fn (?string $headline): bool => filled($headline) && str_contains($headline, 'at-risk'))
             ->assertSee('High priority')
-            ->assertSee('AI recommendation unavailable');
+            ->assertSee('AI recommendation unavailable')
+            ->assertSet('processingRunId', null);
+    }
+
+    public function test_generate_dispatches_background_job_when_queue_is_database(): void
+    {
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+
+        $office = Office::factory()->create();
+        $category = ItemCategory::factory()->create();
+        $item = Item::factory()->create(['item_category_id' => $category->id, 'reorder_level' => 10]);
+
+        $this->seedMonthlyIssuances($item->id, $office->id, 10, 6);
+        $this->createAcquisition($item->id, $office->id, 5 + 60);
+
+        $custodian = User::factory()->create([
+            'role' => User::ROLE_SUPPLY_CUSTODIAN,
+            'office_id' => $office->id,
+        ]);
+
+        config(['queue.default' => 'database']);
+        Queue::fake();
+
+        Livewire::actingAs($custodian)
+            ->test(ProcurementAnalytics::class)
+            ->call('generateAiRecommendation')
+            ->assertSet('loading', true)
+            ->assertNotSet('processingRunId', null);
+
+        Queue::assertPushed(GenerateAiProcurementRecommendationJob::class);
+
+        $run = AiProcurementRun::query()->latest('id')->first();
+        $this->assertNotNull($run);
+        $this->assertSame('processing', $run->status);
+    }
+
+    public function test_recommendation_job_completes_run_to_draft(): void
+    {
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+
+        $office = Office::factory()->create();
+        $category = ItemCategory::factory()->create();
+        $item = Item::factory()->create(['item_category_id' => $category->id, 'reorder_level' => 10]);
+
+        $this->seedMonthlyIssuances($item->id, $office->id, 10, 6);
+        $this->createAcquisition($item->id, $office->id, 5 + 60);
+
+        $custodian = User::factory()->create([
+            'role' => User::ROLE_SUPPLY_CUSTODIAN,
+            'office_id' => $office->id,
+        ]);
+
+        $this->mock(RagService::class, function ($mock): void {
+            $mock->shouldReceive('generateNarrativeSummary')->once()->andReturn('Reorder high-priority toner immediately.');
+        });
+
+        $run = AiProcurementRun::create([
+            'ran_at' => now(),
+            'period_from' => now()->subMonths(11)->startOfMonth()->toDateString(),
+            'period_to' => now()->endOfMonth()->toDateString(),
+            'status' => 'processing',
+            'created_by' => $custodian->id,
+        ]);
+
+        $job = new GenerateAiProcurementRecommendationJob(
+            runId: $run->id,
+            periodFrom: $run->period_from->toDateString(),
+            periodTo: $run->period_to->toDateString(),
+            categoryId: null,
+            officeIds: [$office->id],
+        );
+
+        $job->handle(app(AiProcurementRecommendationService::class));
+
+        $run->refresh();
+        $this->assertSame('draft', $run->status);
+        $this->assertStringContainsString('Reorder high-priority toner', (string) $run->raw_response);
+        $this->assertGreaterThan(0, $run->items()->count());
+    }
+
+    public function test_recommendation_job_marks_run_failed_when_rag_throws(): void
+    {
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+
+        $office = Office::factory()->create();
+        $custodian = User::factory()->create([
+            'role' => User::ROLE_SUPPLY_CUSTODIAN,
+            'office_id' => $office->id,
+        ]);
+
+        $this->mock(RagService::class, function ($mock): void {
+            $mock->shouldReceive('generateNarrativeSummary')->once()->andThrow(new \RuntimeException('Connection refused'));
+        });
+
+        $run = AiProcurementRun::create([
+            'ran_at' => now(),
+            'period_from' => now()->subMonths(11)->startOfMonth()->toDateString(),
+            'period_to' => now()->endOfMonth()->toDateString(),
+            'status' => 'processing',
+            'created_by' => $custodian->id,
+        ]);
+
+        $job = new GenerateAiProcurementRecommendationJob(
+            runId: $run->id,
+            periodFrom: $run->period_from->toDateString(),
+            periodTo: $run->period_to->toDateString(),
+            categoryId: null,
+            officeIds: [$office->id],
+        );
+
+        $job->handle(app(AiProcurementRecommendationService::class));
+
+        $run->refresh();
+        $this->assertSame('failed', $run->status);
+        $this->assertStringContainsString('Cannot connect', (string) $run->error_message);
+    }
+
+    public function test_sync_processing_run_hydrates_narrative_when_run_completes(): void
+    {
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+
+        $office = Office::factory()->create();
+        $custodian = User::factory()->create([
+            'role' => User::ROLE_SUPPLY_CUSTODIAN,
+            'office_id' => $office->id,
+        ]);
+
+        $run = AiProcurementRun::create([
+            'ran_at' => now(),
+            'period_from' => now()->subMonths(11)->startOfMonth()->toDateString(),
+            'period_to' => now()->endOfMonth()->toDateString(),
+            'status' => 'draft',
+            'raw_response' => "Reorder paper supplies now.\n\n| Priority | Item |",
+            'created_by' => $custodian->id,
+        ]);
+
+        Livewire::actingAs($custodian)
+            ->test(ProcurementAnalytics::class)
+            ->set('processingRunId', $run->id)
+            ->set('loading', true)
+            ->call('syncProcessingRun')
+            ->assertSet('processingRunId', null)
+            ->assertSet('loading', false)
+            ->assertSet('recommendation', 'Reorder paper supplies now.');
     }
 
     public function test_procurement_summary_cleared_on_filter_change(): void

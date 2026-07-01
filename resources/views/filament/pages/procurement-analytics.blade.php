@@ -77,14 +77,17 @@
     ])
 
     {{-- Procurement summary + optional AI recommendation --}}
-    <div class="owwa-pa-card fi-section rounded-xl bg-white shadow-sm ring-1 ring-gray-950/5 dark:bg-gray-900 dark:ring-white/10">
+    <div
+        class="owwa-pa-card fi-section rounded-xl bg-white shadow-sm ring-1 ring-gray-950/5 dark:bg-gray-900 dark:ring-white/10"
+        @if($processingRunId) wire:poll.5s="syncProcessingRun" @endif
+    >
         <div class="fi-section-header-ctn px-5 py-3 border-b border-gray-200 dark:border-white/10">
             <div class="owwa-pa-ai-header">
                 <div>
                     <h2 class="fi-section-header-heading">Procurement summary</h2>
                     <p class="fi-section-header-description mt-1">
                         Click <strong>Generate recommendation</strong> to build a reorder summary from the table above.
-                        An AI narrative is included when Ollama is available.
+                        The AI narrative runs in the background via the operations laptop queue worker (Ollama local).
                         Runs are saved under
                         <a href="{{ AiProcurementRunResource::getUrl('index') }}" class="owwa-pa-section-desc-link">AI procurement runs</a>.
                     </p>
@@ -158,7 +161,12 @@
                         <div class="owwa-pr-ai-spinner" aria-hidden="true"></div>
                         <div>
                             <p class="owwa-pr-ai-loading-title">Generating recommendation…</p>
-                            <p class="owwa-pr-ai-loading-sub">This may take up to two minutes if the local model is slow.</p>
+                            <p class="owwa-pr-ai-loading-sub">Queued for the laptop worker. Keep <code>php artisan queue:work</code> and Ollama running.</p>
+                            @if($lastAiRunId)
+                                <p class="owwa-pr-ai-loading-sub">
+                                    <a href="{{ AiProcurementRunResource::getUrl('view', ['record' => $lastAiRunId]) }}" class="owwa-pa-inline-link">View run #{{ $lastAiRunId }}</a>
+                                </p>
+                            @endif
                         </div>
                     </div>
                 @elseif($recommendation === '__OLLAMA_UNAVAILABLE__')
