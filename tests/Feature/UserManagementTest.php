@@ -15,6 +15,30 @@ class UserManagementTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_users_table_shows_verification_status(): void
+    {
+        Filament::setCurrentPanel(Filament::getPanel('system-admin'));
+
+        $admin = User::factory()->create([
+            'role' => User::ROLE_SYSTEM_ADMIN,
+            'email_verified_at' => now(),
+        ]);
+        $verifiedEmployee = User::factory()->create([
+            'role' => User::ROLE_EMPLOYEE,
+            'email_verified_at' => now(),
+        ]);
+        $pendingEmployee = User::factory()->unverified()->create([
+            'role' => User::ROLE_EMPLOYEE,
+        ]);
+
+        $this->actingAs($admin);
+
+        Livewire::test(ListUsers::class)
+            ->assertCanSeeTableRecords([$verifiedEmployee, $pendingEmployee])
+            ->assertTableColumnStateSet('email_verified_at', 'Verified', $verifiedEmployee)
+            ->assertTableColumnStateSet('email_verified_at', 'Pending', $pendingEmployee);
+    }
+
     public function test_edit_user_from_actions_menu_shows_form_fields(): void
     {
         Filament::setCurrentPanel(Filament::getPanel('system-admin'));

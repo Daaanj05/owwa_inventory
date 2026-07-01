@@ -19,6 +19,7 @@ use Filament\Notifications\Notification;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 
 class UsersTable
 {
@@ -33,6 +34,12 @@ class UsersTable
                 TextColumn::make('email')
                     ->label('Email')
                     ->searchable()
+                    ->sortable(),
+                TextColumn::make('email_verified_at')
+                    ->label('Verification')
+                    ->badge()
+                    ->state(fn (User $record): string => $record->hasVerifiedEmail() ? 'Verified' : 'Pending')
+                    ->color(fn (User $record): string => $record->hasVerifiedEmail() ? 'success' : 'warning')
                     ->sortable(),
                 TextColumn::make('role')
                     ->badge()
@@ -79,6 +86,20 @@ class UsersTable
                     ->searchable()
                     ->preload()
                     ->placeholder('All offices'),
+                SelectFilter::make('verification_status')
+                    ->label('Verification')
+                    ->options([
+                        'verified' => 'Verified',
+                        'pending' => 'Pending',
+                    ])
+                    ->placeholder('All statuses')
+                    ->query(function (Builder $query, array $data): Builder {
+                        return match ($data['value'] ?? null) {
+                            'verified' => $query->whereNotNull('email_verified_at'),
+                            'pending' => $query->whereNull('email_verified_at'),
+                            default => $query,
+                        };
+                    }),
             ])
             ->emptyStateHeading('No users yet')
             ->emptyStateDescription('Add system users here. Supply Custodians can approve requisitions and manage inventory.')

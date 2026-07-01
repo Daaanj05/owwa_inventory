@@ -21,6 +21,11 @@ class UserInfolist
                         ->label('Name'),
                     TextEntry::make('email')
                         ->label('Email'),
+                    TextEntry::make('email_verified_at')
+                        ->label('Verification')
+                        ->badge()
+                        ->formatStateUsing(fn (?string $state, User $record): string => $record->hasVerifiedEmail() ? 'Verified' : 'Pending')
+                        ->color(fn (User $record): string => $record->hasVerifiedEmail() ? 'success' : 'warning'),
                     TextEntry::make('role')
                         ->label('Role')
                         ->formatStateUsing(fn (string $state): string => match ($state) {
