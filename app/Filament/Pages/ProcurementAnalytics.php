@@ -552,7 +552,7 @@ class ProcurementAnalytics extends Page
             } else {
                 Notification::make()
                     ->title('Recommendation queued')
-                    ->body('Keep queue:work running on the operations laptop. The AI narrative will appear when processing completes.')
+                    ->body('The AI narrative will appear when processing completes.')
                     ->success()
                     ->actions([
                         \Filament\Actions\Action::make('view')
@@ -593,7 +593,7 @@ class ProcurementAnalytics extends Page
 
         if ($run->status === 'failed') {
             $this->recommendation = $run->error_message
-                ?? 'AI recommendation failed. Check that Ollama is running and queue:work is active on the operations laptop.';
+                ?? 'AI recommendation failed. Check that the device worker is active on the operation device.';
 
             Notification::make()
                 ->title('AI recommendation failed')

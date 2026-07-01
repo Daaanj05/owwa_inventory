@@ -244,7 +244,7 @@ class AiProcurementRecommendationService
         }
 
         if (preg_match('/cURL error 7|Connection refused|Could not connect to server|Failed to connect/i', $message)) {
-            return 'Cannot connect to the local AI server (Ollama). Start Ollama on the operations laptop and keep queue:work running, then try again.';
+            return 'Cannot connect to the local AI server (Ollama). Start Ollama on the operation device and ensure the device worker is running, then try again.';
         }
 
         return 'An error occurred: '.$message;
