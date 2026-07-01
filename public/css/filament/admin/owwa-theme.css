@@ -1499,6 +1499,23 @@ button[type="submit"].fi-btn:hover {
     color: #dc2626;
 }
 
+.owwa-login-forgot {
+    margin: -0.25rem 0 0.25rem;
+    text-align: right;
+}
+
+.owwa-login-forgot-link {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: #003f8a;
+    text-decoration: none;
+}
+
+.owwa-login-forgot-link:hover {
+    color: #002a5c;
+    text-decoration: underline;
+}
+
 .owwa-login-remember {
     display: flex;
     align-items: center;

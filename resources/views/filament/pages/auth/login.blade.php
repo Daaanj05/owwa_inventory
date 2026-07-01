@@ -47,6 +47,13 @@
                     name="data.email" type="email" />
                 <x-login-outlined-input label="{{ __('filament-panels::auth/pages/login.form.password.label') }}"
                     name="data.password" type="password" :revealable="filament()->arePasswordsRevealable()" />
+                @if (filament()->hasPasswordReset())
+                    <p class="owwa-login-forgot">
+                        <a href="{{ filament()->getRequestPasswordResetUrl() }}" class="owwa-login-forgot-link" tabindex="-1">
+                            {{ __('filament-panels::auth/pages/login.actions.request_password_reset.label') }}
+                        </a>
+                    </p>
+                @endif
                 <label class="owwa-login-remember">
                     <input type="checkbox" wire:model="data.remember" class="owwa-login-remember-input">
                     <span>{{ __('filament-panels::auth/pages/login.form.remember.label') }}</span>

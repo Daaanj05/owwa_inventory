@@ -75,6 +75,16 @@ class PasswordResetRequestTest extends TestCase
             ->assertDontSee(__('filament-panels::auth/pages/login.actions.request_password_reset.label'));
     }
 
+    public function test_admin_login_shows_forgot_password_link(): void
+    {
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+
+        $this->assertTrue(Filament::getCurrentPanel()->hasPasswordReset());
+
+        Livewire::test(Login::class)
+            ->assertSee(__('filament-panels::auth/pages/login.actions.request_password_reset.label'));
+    }
+
     public function test_admin_send_password_reset_email_queues_notification(): void
     {
         Notification::fake();
