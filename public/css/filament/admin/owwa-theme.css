@@ -5398,6 +5398,29 @@ a.owwa-pagination-page:hover {
 .owwa-pc-qr-reader {
     width: 100%;
     min-height: 280px;
+    position: relative;
+}
+
+.owwa-physical-count-scan-page #physical-count-qr-reader video {
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: cover !important;
+}
+
+.owwa-physical-count-scan-page #physical-count-qr-reader #qr-shaded-region {
+    border: none !important;
+}
+
+.owwa-physical-count-scan-page #physical-count-qr-reader #qr-shaded-region > div {
+    border-color: rgb(255 255 255 / 0.9) !important;
+    border-width: 3px !important;
+    border-radius: 0.375rem;
+    box-shadow: none !important;
+}
+
+.owwa-physical-count-scan-page #physical-count-qr-reader video:not(:first-of-type),
+.owwa-physical-count-scan-page #physical-count-qr-reader canvas:not(:first-of-type) {
+    display: none !important;
 }
 
 .owwa-pc-manual-form {
@@ -5484,9 +5507,9 @@ a.owwa-pagination-page:hover {
 
 .owwa-scan-asset-page #asset-lookup-qr-reader video {
     width: 100% !important;
-    height: auto !important;
+    height: 100% !important;
     max-height: none;
-    object-fit: contain;
+    object-fit: cover !important;
 }
 
 .owwa-scan-asset-page #asset-lookup-qr-reader #qr-shaded-region {
@@ -5497,7 +5520,7 @@ a.owwa-pagination-page:hover {
     border-color: rgb(255 255 255 / 0.9) !important;
     border-width: 3px !important;
     border-radius: 0.375rem;
-    box-shadow: 0 0 0 9999px rgb(0 0 0 / 0.45);
+    box-shadow: none !important;
 }
 
 .owwa-scan-asset-divider {

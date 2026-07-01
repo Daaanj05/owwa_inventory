@@ -69,7 +69,7 @@ class PhysicalCountScanService
                     PhysicalCountScanOutcome::Duplicate,
                     $line,
                     $userId,
-                    "Property {$propertyNumber} was already counted.",
+                    'Already scanned.',
                 );
             }
 

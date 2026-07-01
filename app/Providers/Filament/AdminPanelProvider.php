@@ -88,7 +88,14 @@ class AdminPanelProvider extends PanelProvider
                 return '<link rel="stylesheet" href="'.asset('css/filament/admin/owwa-theme.css').'">';
             })
             ->renderHook(PanelsRenderHook::BODY_END, function (): string {
-                return FilamentSessionAudit::idleLogoutMonitorHtml();
+                $scripts = '';
+
+                if (request()->is('admin/*')) {
+                    $scripts .= '<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>';
+                    $scripts .= '<script src="'.asset('js/physical-count-scanner.js').'"></script>';
+                }
+
+                return $scripts.FilamentSessionAudit::idleLogoutMonitorHtml();
             }, scopes: ['authenticated'])
             ->navigationGroups([
                 NavigationGroup::make('Inventory'),

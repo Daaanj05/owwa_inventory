@@ -144,6 +144,7 @@ class PhysicalCountQrTest extends TestCase
         $duplicate = $scanner->resolve($session->fresh(), InventoryUnitQrPayload::encode($unit));
 
         $this->assertSame(PhysicalCountScanOutcome::Duplicate, $duplicate->outcome);
+        $this->assertSame('Already scanned.', $duplicate->message);
     }
 
     public function test_scan_first_creates_found_line_without_preload(): void

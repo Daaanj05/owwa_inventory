@@ -6,11 +6,12 @@ readonly class PublicAssetCardData
 {
     public function __construct(
         public string $propertyNumber,
-        public string $itemName,
-        public string $categoryName,
-        public string $officeName,
-        public string $statusLabel,
-        public ?string $unitCostFormatted,
-        public ?string $adminUrl = null,
+        public string $article,
+        public string $description,
+        public string $unitSection,
+        public string $stockNumber,
+        public ?string $endUser,
+        public ?string $acquisitionCostFormatted,
+        public ?string $dateAcquiredFormatted,
     ) {}
 }

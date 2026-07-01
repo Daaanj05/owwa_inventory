@@ -86,7 +86,10 @@ class ScanPhysicalCountSession extends Page
 
     public function resolveScan(string $code): void
     {
-        $result = app(PhysicalCountScanService::class)->resolve(
+        $scanner = app(PhysicalCountScanService::class);
+        $propertyNumber = $scanner->normalizePropertyNumber($code);
+
+        $result = $scanner->resolve(
             $this->getRecord(),
             $code,
             auth()->id(),
@@ -102,13 +105,36 @@ class ScanPhysicalCountSession extends Page
 
         array_unshift($this->recentScans, [
             'time' => now()->format('H:i:s'),
-            'property_number' => app(PhysicalCountScanService::class)->normalizePropertyNumber($code),
+            'property_number' => $propertyNumber,
             'result' => $result->outcome->value,
             'message' => (string) $result->message,
         ]);
         $this->recentScans = array_slice($this->recentScans, 0, 10);
 
-        $this->dispatch('physical-count-scan-processed', tone: $this->lastScanTone);
+        $this->dispatch(
+            'physical-count-scan-processed',
+            propertyNumber: $propertyNumber,
+            outcome: $result->outcome->value,
+        );
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    public function countedPropertyNumbers(): array
+    {
+        /** @var PhysicalCountSession $session */
+        $session = $this->getRecord();
+
+        return $session->lines()
+            ->whereNotNull('property_number')
+            ->get()
+            ->filter(fn (PhysicalCountLine $line): bool => $line->on_hand_count >= $line->balance_per_card
+                && $line->on_hand_count > 0)
+            ->pluck('property_number')
+            ->map(fn ($value): string => (string) $value)
+            ->values()
+            ->all();
     }
 
     public function submitManualCode(): void

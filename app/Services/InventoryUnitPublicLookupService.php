@@ -2,12 +2,10 @@
 
 namespace App\Services;
 
-use App\Filament\Resources\Issuances\IssuanceResource;
-use App\Filament\Resources\Items\ItemResource;
 use App\Models\InventoryUnit;
 use App\Models\Issuance;
-use App\Models\User;
 use App\Support\PublicAssetCardData;
+use Illuminate\Support\Carbon;
 
 class InventoryUnitPublicLookupService
 {
@@ -23,7 +21,7 @@ class InventoryUnitPublicLookupService
         }
 
         $unit = InventoryUnit::query()
-            ->with(['item.category', 'office', 'acquisition', 'issuance'])
+            ->with(['item', 'office', 'acquisition', 'issuance.issuedTo', 'issuance.department'])
             ->where('property_number', $propertyNumber)
             ->first();
 
@@ -32,7 +30,7 @@ class InventoryUnitPublicLookupService
         }
 
         $issuance = Issuance::query()
-            ->with(['item.category', 'office'])
+            ->with(['item', 'office', 'department', 'issuedTo'])
             ->where('property_number', $propertyNumber)
             ->first();
 
@@ -43,41 +41,20 @@ class InventoryUnitPublicLookupService
         return null;
     }
 
-    public function adminUrlFor(?InventoryUnit $unit, ?Issuance $issuance): ?string
-    {
-        $user = auth()->user();
-        if (! $user instanceof User || ! $user->isSupplyCustodian()) {
-            return null;
-        }
-
-        $categoryId = $unit?->item?->item_category_id
-            ?? $issuance?->item?->item_category_id;
-
-        $extraParams = $categoryId ? ['category' => (string) $categoryId] : [];
-
-        if ($issuance !== null) {
-            return IssuanceResource::viewModalUrl($issuance, $extraParams);
-        }
-
-        if ($unit?->item_id !== null) {
-            return ItemResource::viewModalUrl($unit->item_id, $extraParams);
-        }
-
-        return null;
-    }
-
     protected function fromInventoryUnit(InventoryUnit $unit): PublicAssetCardData
     {
         $unitCost = $unit->acquisition?->unit_cost ?? $unit->issuance?->unit_cost;
+        $issuance = $unit->issuance;
 
         return new PublicAssetCardData(
             propertyNumber: (string) $unit->property_number,
-            itemName: $unit->article ?? $unit->item?->name ?? 'Item',
-            categoryName: $unit->item?->category?->name ?? '—',
-            officeName: $unit->office?->name ?? '—',
-            statusLabel: $this->statusLabel($unit->status),
-            unitCostFormatted: $this->formatCost($unitCost),
-            adminUrl: $this->adminUrlFor($unit, $unit->issuance),
+            article: $unit->article ?? $unit->item?->name ?? '—',
+            description: $unit->description ?? $unit->item?->name ?? '—',
+            unitSection: $this->unitSectionLabel($unit->office?->name, $issuance?->department?->name),
+            stockNumber: filled($unit->stock_number) ? (string) $unit->stock_number : '—',
+            endUser: $this->endUserLabel($issuance),
+            acquisitionCostFormatted: $this->formatCost($unitCost),
+            dateAcquiredFormatted: $this->formatDate($unit->acquisition?->acquisition_date ?? $issuance?->issuance_date),
         );
     }
 
@@ -85,24 +62,32 @@ class InventoryUnitPublicLookupService
     {
         return new PublicAssetCardData(
             propertyNumber: (string) $issuance->property_number,
-            itemName: $issuance->item?->name ?? 'Item',
-            categoryName: $issuance->item?->category?->name ?? '—',
-            officeName: $issuance->office?->name ?? '—',
-            statusLabel: 'Issued',
-            unitCostFormatted: $this->formatCost($issuance->unit_cost),
-            adminUrl: $this->adminUrlFor(null, $issuance),
+            article: $issuance->item?->name ?? '—',
+            description: $issuance->item?->name ?? '—',
+            unitSection: $this->unitSectionLabel($issuance->office?->name, $issuance->department?->name),
+            stockNumber: '—',
+            endUser: $this->endUserLabel($issuance),
+            acquisitionCostFormatted: $this->formatCost($issuance->unit_cost),
+            dateAcquiredFormatted: $this->formatDate($issuance->issuance_date),
         );
     }
 
-    protected function statusLabel(?string $status): string
+    protected function unitSectionLabel(?string $officeName, ?string $departmentName): string
     {
-        return match ($status) {
-            InventoryUnit::STATUS_IN_STOCK => 'In stock',
-            InventoryUnit::STATUS_ISSUED => 'Issued',
-            InventoryUnit::STATUS_TRANSFERRED => 'Transferred',
-            InventoryUnit::STATUS_DISPOSED => 'Disposed',
-            default => ucfirst(str_replace('_', ' ', (string) $status)),
-        };
+        $office = filled($officeName) ? $officeName : '—';
+
+        if (filled($departmentName)) {
+            return "{$office} / {$departmentName}";
+        }
+
+        return $office;
+    }
+
+    protected function endUserLabel(?Issuance $issuance): ?string
+    {
+        $name = $issuance?->issuedTo?->name;
+
+        return filled($name) ? (string) $name : null;
     }
 
     protected function formatCost(mixed $unitCost): ?string
@@ -112,5 +97,18 @@ class InventoryUnitPublicLookupService
         }
 
         return '₱'.number_format((float) $unitCost, 2);
+    }
+
+    protected function formatDate(mixed $date): ?string
+    {
+        if ($date === null) {
+            return null;
+        }
+
+        if ($date instanceof Carbon) {
+            return $date->format('M j, Y');
+        }
+
+        return Carbon::parse($date)->format('M j, Y');
     }
 }

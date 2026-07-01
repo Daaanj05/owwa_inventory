@@ -179,8 +179,10 @@
 
             <div
                 wire:ignore
-                x-data="physicalCountScanner({ componentId: @js($this->getId()) })"
+                x-data="physicalCountScanner({ componentId: @js($this->getId()), countedPropertyNumbers: @js($this->countedPropertyNumbers()) })"
                 x-init="init()"
+                x-on:destroy="destroy()"
+                x-on:physical-count-scan-processed.window="handleScanProcessed($event)"
             >
                 <div x-show="cameraUnavailable" x-cloak class="owwa-pc-camera-notice">
                     Camera access is unavailable (HTTPS required on mobile). Enter property numbers manually below.
@@ -227,8 +229,5 @@
                 </div>
             @endif
         </div>
-
-        <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
-        <script src="{{ asset('js/physical-count-scanner.js') }}"></script>
     @endif
 </x-filament-panels::page>

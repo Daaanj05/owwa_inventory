@@ -16,21 +16,45 @@ class PublicAssetLookupTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_public_asset_page_shows_asset_details(): void
+    public function test_public_asset_page_shows_sticker_details(): void
     {
         [$office, $category, $item, $unit] = $this->createInventoryUnitFixtures();
 
         $response = $this->get(route('inventory.assets.show', ['propertyNumber' => $unit->property_number]));
 
         $response->assertOk()
+            ->assertSee('Semi-Expendable Property No.')
+            ->assertSee('Semi-Expendable Property')
+            ->assertSee('Description')
+            ->assertSee('Unit / Section')
+            ->assertSee('Stock No.')
+            ->assertSee('Acquisition Cost')
+            ->assertSee('Date Acquired')
             ->assertSee($unit->property_number)
             ->assertSee($item->name)
-            ->assertSee($category->name)
             ->assertSee($office->name)
-            ->assertSee('In stock')
             ->assertSee('₱500.00')
+            ->assertDontSee('In stock')
+            ->assertDontSee('Open in admin')
             ->assertDontSee('custodian_printed_name')
             ->assertDontSee('received_from_name');
+    }
+
+    public function test_public_asset_page_hides_admin_link_for_custodian(): void
+    {
+        [$office, $category, $item, $unit] = $this->createInventoryUnitFixtures();
+        $custodian = User::factory()->create([
+            'role' => User::ROLE_SUPPLY_CUSTODIAN,
+            'office_id' => $office->id,
+        ]);
+
+        session()->put('active_item_category_id', $category->id);
+
+        $this->actingAs($custodian)
+            ->get(route('inventory.assets.show', ['propertyNumber' => $unit->property_number]))
+            ->assertOk()
+            ->assertDontSee('Open in admin')
+            ->assertDontSee('In stock');
     }
 
     public function test_public_asset_page_returns_not_found_for_unknown_property_number(): void
@@ -47,22 +71,6 @@ class PublicAssetLookupTest extends TestCase
 
         $this->get(route('inventory.assets.show', ['propertyNumber' => $unit->property_number]))
             ->assertNotFound();
-    }
-
-    public function test_custodian_sees_admin_link_on_public_asset_page(): void
-    {
-        [$office, $category, $item, $unit] = $this->createInventoryUnitFixtures();
-        $custodian = User::factory()->create([
-            'role' => User::ROLE_SUPPLY_CUSTODIAN,
-            'office_id' => $office->id,
-        ]);
-
-        session()->put('active_item_category_id', $category->id);
-
-        $this->actingAs($custodian)
-            ->get(route('inventory.assets.show', ['propertyNumber' => $unit->property_number]))
-            ->assertOk()
-            ->assertSee('Open in admin');
     }
 
     public function test_qr_encode_uses_public_url_when_lookup_enabled(): void
