@@ -63,7 +63,7 @@ class AcquisitionPaperworkInfolist
 
     public static function prSection(): Section
     {
-        return Section::make('Purchase request (Appendix 60)')
+        return Section::make('Purchase request')
             ->columns(2)
             ->schema([
                 TextEntry::make('pr_number')->label('PR No.')->placeholder('—'),

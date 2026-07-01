@@ -32,10 +32,12 @@ class AcquisitionPaperworkViewPresenter
                 'description' => $paperwork->isPrApproved()
                     ? 'PR '.$paperwork->pr_number.' — approved'
                     : ($paperwork->pr_status === AcquisitionPaperwork::STATUS_PENDING_APPROVAL
-                        ? 'PR submitted — mark approved after offline sign-off'
-                        : ($prEval['can_submit'] ? 'Fill PR and submit for approval' : 'Fill PR header and item lines')),
+                        ? 'PR submitted — record offline approval when signed'
+                        : ($prEval['can_submit'] ? 'Fill PR and save for export' : 'Fill PR header and item lines')),
                 'state' => $prState,
                 'actionKey' => 'viewPr',
+                'navigable' => $paperwork->isPrApproved()
+                    || $paperwork->pr_status === AcquisitionPaperwork::STATUS_PENDING_APPROVAL,
                 'url' => $paperwork->isPrApproved() ? route('owwa.export.acquisition-paperwork.pr', $paperwork) : null,
             ],
             [
@@ -48,6 +50,8 @@ class AcquisitionPaperworkViewPresenter
                     : ($paperwork->isPrApproved() ? 'Enter supplier and costs' : 'Unlocks after PR approval'),
                 'state' => $poState,
                 'actionKey' => 'viewPo',
+                'navigable' => $paperwork->isPoApproved()
+                    || $paperwork->po_status === AcquisitionPaperwork::STATUS_PENDING_APPROVAL,
                 'url' => $paperwork->isPoApproved() ? route('owwa.export.acquisition-paperwork.po', $paperwork) : null,
             ],
             [
@@ -60,6 +64,8 @@ class AcquisitionPaperworkViewPresenter
                     : ($paperwork->isPoApproved() ? 'Record inspection signatories' : 'Unlocks after PO approval'),
                 'state' => $iarState,
                 'actionKey' => 'viewIar',
+                'navigable' => $paperwork->isIarApproved()
+                    || $paperwork->iar_status === AcquisitionPaperwork::STATUS_PENDING_APPROVAL,
                 'url' => $paperwork->isIarApproved() ? route('owwa.export.acquisition-paperwork.iar', $paperwork) : null,
             ],
             [
@@ -74,9 +80,59 @@ class AcquisitionPaperworkViewPresenter
                         : 'Unlocks after IAR approval'),
                 'state' => $receivedState,
                 'actionKey' => null,
+                'navigable' => false,
                 'url' => null,
             ],
         ];
+    }
+
+    public static function currentEditPhase(?AcquisitionPaperwork $record, string $operation = 'edit'): ?string
+    {
+        if ($operation === 'create' || $record === null) {
+            return AcquisitionPaperwork::PHASE_PR;
+        }
+
+        if ($record->isReceived()) {
+            return null;
+        }
+
+        if (! $record->isPrApproved()) {
+            return AcquisitionPaperwork::PHASE_PR;
+        }
+
+        if (! $record->isPoApproved()) {
+            return AcquisitionPaperwork::PHASE_PO;
+        }
+
+        if (! $record->isIarApproved()) {
+            return AcquisitionPaperwork::PHASE_IAR;
+        }
+
+        return null;
+    }
+
+    public static function isCurrentPhasePending(?AcquisitionPaperwork $record): bool
+    {
+        if ($record === null) {
+            return false;
+        }
+
+        return match (self::currentEditPhase($record)) {
+            AcquisitionPaperwork::PHASE_PR => $record->pr_status === AcquisitionPaperwork::STATUS_PENDING_APPROVAL,
+            AcquisitionPaperwork::PHASE_PO => $record->po_status === AcquisitionPaperwork::STATUS_PENDING_APPROVAL,
+            AcquisitionPaperwork::PHASE_IAR => $record->iar_status === AcquisitionPaperwork::STATUS_PENDING_APPROVAL,
+            default => false,
+        };
+    }
+
+    public static function editModalHeading(AcquisitionPaperwork $record): string
+    {
+        return match (self::currentEditPhase($record)) {
+            AcquisitionPaperwork::PHASE_PR => 'Edit purchase request',
+            AcquisitionPaperwork::PHASE_PO => 'Edit purchase order',
+            AcquisitionPaperwork::PHASE_IAR => 'Edit inspection & acceptance',
+            default => 'Edit acquisition',
+        };
     }
 
     public static function workflowStepsForForm(?AcquisitionPaperwork $record): array

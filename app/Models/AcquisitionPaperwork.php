@@ -30,6 +30,7 @@ class AcquisitionPaperwork extends Model
         'reference_code',
         'item_category_id',
         'office_id',
+        'requesting_office_id',
         'department_id',
         'recorded_by',
         'phase',
@@ -103,6 +104,11 @@ class AcquisitionPaperwork extends Model
     public function office(): BelongsTo
     {
         return $this->belongsTo(Office::class);
+    }
+
+    public function requestingOffice(): BelongsTo
+    {
+        return $this->belongsTo(Office::class, 'requesting_office_id');
     }
 
     public function department(): BelongsTo
@@ -243,8 +249,8 @@ class AcquisitionPaperwork extends Model
             }
         }
 
-        if (blank($this->department_id)) {
-            $missing[] = 'department / section';
+        if (blank($this->requesting_office_id)) {
+            $missing[] = 'office / section';
         }
 
         if ($this->lines()->count() === 0) {

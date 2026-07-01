@@ -1679,24 +1679,22 @@ class OwwaTemplateExportService
      */
     public function cellValuesForProcurementPr(AcquisitionPaperwork $case): array
     {
-        $case->loadMissing(['office', 'department', 'lines.item']);
+        $case->loadMissing(['office', 'requestingOffice', 'department', 'lines.item']);
         $office = $case->office;
-        $department = $case->department;
-        $responsibilityCenterCode = $department?->code ?? $office?->code ?? '';
         $prMap = OwwaCellMapping::form('PR');
         $values = [];
 
         OwwaCellMapping::applyHeader($values, (array) ($prMap['header'] ?? []), [
             'entity_name' => $office?->name ?? '',
             'fund_cluster' => $office?->fund_cluster ?? '',
-            'office_section' => $department?->name ?? $office?->name ?? '',
+            'office_section' => $this->requestingOfficeSectionName($case),
             'pr_no' => $this->ensureControlNumberFormat(
                 $case->pr_number,
                 $case->pr_date?->format('Y-m-d'),
                 'yearly'
             ),
             'date' => $case->pr_date?->format('Y-m-d') ?? '',
-            'responsibility_center_code' => $responsibilityCenterCode,
+            'responsibility_center_code' => $this->requestingOfficeResponsibilityCenterCode($case),
             'purpose' => $case->purpose ?? '',
         ]);
 
@@ -1763,11 +1761,9 @@ class OwwaTemplateExportService
      */
     public function cellValuesForProcurementIar(AcquisitionPaperwork $case): array
     {
-        $case->loadMissing(['office', 'department', 'lines.item']);
+        $case->loadMissing(['office', 'requestingOffice', 'department', 'lines.item']);
         $office = $case->office;
-        $department = $case->department;
         $iarData = (array) ($case->iar_data ?? []);
-        $responsibilityCenterCode = $department?->code ?? $office?->code ?? '';
         $poNoDate = trim(($case->po_number ?? '').' / '.($case->po_date?->format('Y-m-d') ?? ''), ' /');
         $iarMap = OwwaCellMapping::form('IAR');
         $values = [];
@@ -1783,9 +1779,9 @@ class OwwaTemplateExportService
             ),
             'po_no_date' => $poNoDate,
             'date' => $case->iar_date?->format('Y-m-d') ?? '',
-            'requisitioning_office' => $department?->name ?? $office?->name ?? '',
+            'requisitioning_office' => $this->requestingOfficeSectionName($case),
             'invoice_no' => $iarData['invoice_no'] ?? '',
-            'responsibility_center_code' => $responsibilityCenterCode,
+            'responsibility_center_code' => $this->requestingOfficeResponsibilityCenterCode($case),
             'invoice_date' => $iarData['invoice_date'] ?? '',
             'date_inspected' => $iarData['date_inspected'] ?? '',
             'date_received' => $iarData['date_received'] ?? '',
@@ -1804,6 +1800,26 @@ class OwwaTemplateExportService
         ]);
 
         return $values;
+    }
+
+    protected function requestingOfficeSectionName(AcquisitionPaperwork $case): string
+    {
+        $case->loadMissing(['office', 'requestingOffice', 'department']);
+
+        return $case->requestingOffice?->name
+            ?? $case->department?->name
+            ?? $case->office?->name
+            ?? '';
+    }
+
+    protected function requestingOfficeResponsibilityCenterCode(AcquisitionPaperwork $case): string
+    {
+        $case->loadMissing(['office', 'requestingOffice', 'department']);
+
+        return $case->requestingOffice?->code
+            ?? $case->department?->code
+            ?? $case->office?->code
+            ?? '';
     }
 
     /**

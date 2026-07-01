@@ -5,12 +5,14 @@ namespace App\Filament\Resources\Acquisitions\Paperwork\Schemas;
 use App\Models\AcquisitionPaperwork;
 use App\Models\Item;
 use App\Models\ItemCategory;
+use App\Models\Office;
 use App\Models\ReferenceSeries;
 use App\Services\ReferenceCodeService;
 use App\Support\AcquisitionPaperworkViewPresenter;
 use App\Support\CustodianOfficeScope;
 use App\Support\OwwaReferenceLabels;
 use Filament\Forms\Components\DatePicker;
+use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
@@ -20,6 +22,7 @@ use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\View as SchemaView;
 use Filament\Schemas\Schema;
+use Filament\Support\Icons\Heroicon;
 
 class AcquisitionPaperworkForm
 {
@@ -42,27 +45,24 @@ class AcquisitionPaperworkForm
                         'clickable' => false,
                         'compact' => true,
                     ]),
+                Placeholder::make('phase_pending_notice')
+                    ->label('')
+                    ->content('Awaiting offline approval. Review the form using the workflow step above, then use Record offline approval below.')
+                    ->visible(fn (string $operation, ?AcquisitionPaperwork $record): bool => $operation === 'edit'
+                        && AcquisitionPaperworkViewPresenter::isCurrentPhasePending($record))
+                    ->columnSpanFull(),
                 Section::make('Acquisition paperwork')
-                    ->description('Fill details, complete each phase, then export and print the OWWA form for offline approval.')
+                    ->description('Fill details, then save and submit for export. After offline sign-off, record approval.')
                     ->columns(2)
+                    ->visible(fn (string $operation, ?AcquisitionPaperwork $record): bool => ($operation === 'create'
+                            || AcquisitionPaperworkViewPresenter::currentEditPhase($record) === AcquisitionPaperwork::PHASE_PR)
+                        && ! AcquisitionPaperworkViewPresenter::isCurrentPhasePending($record))
                     ->schema([
                         TextInput::make('reference_code')
                             ->label(OwwaReferenceLabels::acquisitionPaperwork())
                             ->disabled()
                             ->visible(fn (string $operation): bool => $operation !== 'create'),
-                        Select::make('office_id')
-                            ->label('Office')
-                            ->relationship(
-                                'office',
-                                'name',
-                                fn ($query) => CustodianOfficeScope::officeQuery($query),
-                            )
-                            ->required()
-                            ->searchable()
-                            ->preload()
-                            ->default(fn (): ?int => CustodianOfficeScope::inventoryOfficeId())
-                            ->disabled(fn (?AcquisitionPaperwork $record): bool => CustodianOfficeScope::hasFixedInventoryOffice() || ! self::isPrEditable($record))
-                            ->dehydrated(),
+                        ...self::officeFieldComponents(),
                         Select::make('item_category_id')
                             ->label('Item category')
                             ->options(fn (): array => ItemCategory::query()->whereNull('archived_at')->orderBy('name')->pluck('name', 'id')->all())
@@ -70,19 +70,28 @@ class AcquisitionPaperworkForm
                             ->required()
                             ->searchable()
                             ->disabled(fn (string $operation): bool => $operation === 'edit'),
-                        Select::make('department_id')
-                            ->label('Department / section')
-                            ->relationship('department', 'name')
+                        Select::make('requesting_office_id')
+                            ->label('Office/Section')
+                            ->hintIcon(Heroicon::QuestionMarkCircle, 'Regional or satellite office requesting this purchase.')
+                            ->relationship(
+                                'requestingOffice',
+                                'name',
+                                fn ($query) => $query->active()->orderBy('name'),
+                            )
                             ->required()
                             ->searchable()
                             ->preload()
+                            ->default(fn (): ?int => auth()->user()?->office_id)
                             ->disabled(fn (?AcquisitionPaperwork $record): bool => ! self::isPrEditable($record)),
                     ]),
-                Section::make('Purchase request (Appendix 60)')
-                    ->description(fn (?AcquisitionPaperwork $record): ?string => self::isPrEditable($record)
-                        ? 'Fill PR header and line items, then submit for approval.'
+                Section::make('Purchase request')
+                    ->description(fn (string $operation, ?AcquisitionPaperwork $record): ?string => $operation === 'create' || self::isPrEditable($record)
+                        ? 'Fill PR header and line items, then save and submit for export.'
                         : 'PR submitted — awaiting approval.')
-                    ->visible(fn (string $operation, ?AcquisitionPaperwork $record): bool => $operation === 'create' || ! ($record?->isPrApproved() ?? false))
+                    ->visible(fn (string $operation, ?AcquisitionPaperwork $record): bool => ($operation === 'create'
+                            || AcquisitionPaperworkViewPresenter::currentEditPhase($record) === AcquisitionPaperwork::PHASE_PR)
+                        && ! ($record?->isPrApproved() ?? false)
+                        && ! AcquisitionPaperworkViewPresenter::isCurrentPhasePending($record))
                     ->columns(2)
                     ->schema(self::prHeaderFields()),
                 Section::make('Line items')
@@ -91,26 +100,83 @@ class AcquisitionPaperworkForm
                         self::isPrEditable($record) => 'Add items, quantities, and unit costs for this purchase request.',
                         default => 'Line items for this acquisition.',
                     })
+                    ->visible(fn (string $operation, ?AcquisitionPaperwork $record): bool => ($operation === 'create'
+                            || AcquisitionPaperworkViewPresenter::currentEditPhase($record) === AcquisitionPaperwork::PHASE_PR
+                            || (AcquisitionPaperworkViewPresenter::currentEditPhase($record) === AcquisitionPaperwork::PHASE_PO
+                                && $record?->po_status === AcquisitionPaperwork::STATUS_DRAFT))
+                        && ! AcquisitionPaperworkViewPresenter::isCurrentPhasePending($record))
                     ->columns(2)
                     ->schema([
                         self::prLineItemsRepeater($scopeActive)->columnSpanFull(),
                     ]),
-                Section::make('Purchase order (Appendix 61)')
-                    ->description('Fill supplier and delivery details, then Submit PO for approval.')
+                Section::make('Purchase order')
+                    ->description('Fill supplier and delivery details, then save and submit for export.')
                     ->visible(fn (string $operation, ?AcquisitionPaperwork $record): bool => $operation !== 'create'
-                        && ($record?->isPrApproved() ?? false)
-                        && ! ($record?->isPoApproved() ?? false))
+                        && AcquisitionPaperworkViewPresenter::currentEditPhase($record) === AcquisitionPaperwork::PHASE_PO
+                        && ! ($record?->isPoApproved() ?? false)
+                        && ! AcquisitionPaperworkViewPresenter::isCurrentPhasePending($record))
                     ->disabled(fn (?AcquisitionPaperwork $record): bool => ! self::isPoEditable($record))
                     ->columns(2)
                     ->schema(self::poFields()),
-                Section::make('Inspection & acceptance (Appendix 62)')
-                    ->description('Record inspection signatories, then Submit IAR for approval.')
+                Section::make('Inspection & acceptance')
+                    ->description('Record inspection signatories, then save and submit for export.')
                     ->visible(fn (string $operation, ?AcquisitionPaperwork $record): bool => $operation !== 'create'
-                        && ($record?->isPoApproved() ?? false)
-                        && ! ($record?->isIarApproved() ?? false))
+                        && AcquisitionPaperworkViewPresenter::currentEditPhase($record) === AcquisitionPaperwork::PHASE_IAR
+                        && ! ($record?->isIarApproved() ?? false)
+                        && ! AcquisitionPaperworkViewPresenter::isCurrentPhasePending($record))
                     ->disabled(fn (?AcquisitionPaperwork $record): bool => ! self::isIarEditable($record))
                     ->schema(self::iarFields()),
             ]);
+    }
+
+    protected static function showsOfficeAsDisplay(?AcquisitionPaperwork $record): bool
+    {
+        return CustodianOfficeScope::hasFixedInventoryOffice()
+            || ($record !== null && ! self::isPrEditable($record));
+    }
+
+    /**
+     * @return array<int, Hidden|Placeholder|Select>
+     */
+    protected static function officeFieldComponents(): array
+    {
+        return [
+            Placeholder::make('office_display')
+                ->label('Office')
+                ->hintIcon(Heroicon::QuestionMarkCircle, 'Agency or entity name printed on the purchase request.')
+                ->content(function (?AcquisitionPaperwork $record): string {
+                    if (filled($record?->office?->name)) {
+                        return $record->office->name;
+                    }
+
+                    $officeId = CustodianOfficeScope::inventoryOfficeId();
+
+                    if ($officeId === null) {
+                        return '—';
+                    }
+
+                    return Office::query()->find($officeId)?->name ?? '—';
+                })
+                ->visible(fn (?AcquisitionPaperwork $record): bool => self::showsOfficeAsDisplay($record)),
+            Hidden::make('office_id')
+                ->default(fn (): ?int => CustodianOfficeScope::inventoryOfficeId())
+                ->dehydrated()
+                ->visible(fn (?AcquisitionPaperwork $record): bool => self::showsOfficeAsDisplay($record) && $record === null),
+            Select::make('office_id')
+                ->label('Office')
+                ->hintIcon(Heroicon::QuestionMarkCircle, 'Agency or entity name printed on the purchase request.')
+                ->relationship(
+                    'office',
+                    'name',
+                    fn ($query) => CustodianOfficeScope::officeQuery($query),
+                )
+                ->required()
+                ->searchable()
+                ->preload()
+                ->default(fn (): ?int => CustodianOfficeScope::inventoryOfficeId())
+                ->dehydrated()
+                ->visible(fn (?AcquisitionPaperwork $record): bool => ! self::showsOfficeAsDisplay($record)),
+        ];
     }
 
     protected static function isReceived(?AcquisitionPaperwork $record): bool
@@ -120,8 +186,11 @@ class AcquisitionPaperworkForm
 
     protected static function isPrEditable(?AcquisitionPaperwork $record): bool
     {
-        return $record !== null
-            && $record->pr_status === AcquisitionPaperwork::STATUS_DRAFT
+        if ($record === null) {
+            return true;
+        }
+
+        return $record->pr_status === AcquisitionPaperwork::STATUS_DRAFT
             && ! self::isReceived($record);
     }
 
@@ -192,7 +261,7 @@ class AcquisitionPaperworkForm
                 ->content(fn (?AcquisitionPaperwork $record): string => filled($record?->pr_number)
                     ? (string) $record->pr_number
                     : 'Next: '.app(ReferenceCodeService::class)->previewNext(ReferenceSeries::typeForAcquisitionPaperworkPr()))
-                ->helperText('Assigned automatically when you complete the PR phase.')
+                ->hintIcon(Heroicon::QuestionMarkCircle, 'Assigned automatically when you complete the PR phase.')
                 ->visible(fn (string $operation): bool => $operation !== 'create')
                 ->columnSpanFull(),
             DatePicker::make('pr_date')
@@ -215,6 +284,7 @@ class AcquisitionPaperworkForm
                 ->disabled(fn (?AcquisitionPaperwork $record): bool => ! self::isPrEditable($record)),
             Textarea::make('remarks')
                 ->label('Remarks')
+                ->hintIcon(Heroicon::QuestionMarkCircle, 'Internal note only — not printed on the purchase request.')
                 ->rows(2)
                 ->disabled(fn (?AcquisitionPaperwork $record): bool => ! self::isPrEditable($record))
                 ->columnSpanFull(),
@@ -226,7 +296,7 @@ class AcquisitionPaperworkForm
         return Repeater::make('lines')
             ->relationship()
             ->label('')
-            ->helperText('Stock No. comes from the item catalog. Register the item under Items first if it is not in the list.')
+            ->hintIcon(Heroicon::QuestionMarkCircle, 'Stock numbers come from the item catalog. Register the item under Items first if it is not listed.')
             ->addable(fn (?AcquisitionPaperwork $record): bool => self::isPrEditable($record))
             ->deletable(fn (?AcquisitionPaperwork $record): bool => self::isPrEditable($record))
             ->schema([
@@ -334,7 +404,7 @@ class AcquisitionPaperworkForm
                 ->content(fn (?AcquisitionPaperwork $record): string => filled($record?->po_number)
                     ? (string) $record->po_number
                     : 'Next: '.app(ReferenceCodeService::class)->previewNext(ReferenceSeries::typeForAcquisitionPaperworkPo()))
-                ->helperText('Assigned automatically when you complete the PO phase.'),
+                ->hintIcon(Heroicon::QuestionMarkCircle, 'Assigned automatically when you complete the PO phase.'),
             TextInput::make('supplier')
                 ->label('Supplier')
                 ->required(fn (?AcquisitionPaperwork $record): bool => $record?->isPrApproved() ?? false),
@@ -370,7 +440,7 @@ class AcquisitionPaperworkForm
                 ->content(fn (?AcquisitionPaperwork $record): string => filled($record?->iar_number)
                     ? (string) $record->iar_number
                     : 'Next: '.app(ReferenceCodeService::class)->previewNext(ReferenceSeries::typeForAcquisitionPaperworkIar()))
-                ->helperText('Assigned automatically when you complete the IAR phase.'),
+                ->hintIcon(Heroicon::QuestionMarkCircle, 'Assigned automatically when you complete the IAR phase.'),
             DatePicker::make('iar_date')
                 ->label('IAR date')
                 ->default(now())

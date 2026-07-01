@@ -37,6 +37,7 @@ class ScanAssetPageTest extends TestCase
             ->assertSee('owwa-pa-page-title', false)
             ->assertSee('Scan asset')
             ->assertSee('Point your camera at the property QR tag')
+            ->assertSee('asset-lookup-qr-reader', false)
             ->assertSee('Look up');
     }
 

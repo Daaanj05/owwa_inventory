@@ -6,7 +6,7 @@
             <div
                 wire:ignore
                 class="owwa-scan-asset-camera-wrap"
-                x-data="owwaQrScanner({ componentId: @js($this->getId()), elementId: 'asset-lookup-qr-reader', qrboxSize: 200 })"
+                x-data="owwaQrScanner({ componentId: @js($this->getId()), elementId: 'asset-lookup-qr-reader' })"
                 x-init="init()"
             >
                 <div x-show="cameraUnavailable" x-cloak class="owwa-pc-camera-notice">
@@ -15,7 +15,6 @@
 
                 <div class="owwa-pc-camera-box owwa-scan-asset-camera-box">
                     <div id="asset-lookup-qr-reader" class="owwa-pc-qr-reader"></div>
-                    <div class="owwa-scan-asset-frame" aria-hidden="true"></div>
                 </div>
             </div>
 

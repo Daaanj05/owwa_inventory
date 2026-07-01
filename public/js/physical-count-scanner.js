@@ -2,11 +2,33 @@ window.owwaQrScanner = function owwaQrScanner({
     componentId,
     elementId = 'physical-count-qr-reader',
     method = 'resolveScan',
-    qrboxSize = 250,
+    qrboxSize = null,
 }) {
     let html5QrCode = null;
     let lastScannedAt = 0;
     const debounceMs = 1500;
+
+    const resolveQrboxSize = () => {
+        if (qrboxSize !== null && qrboxSize > 0) {
+            return qrboxSize;
+        }
+
+        const container = document.getElementById(elementId);
+
+        if (! container) {
+            return 250;
+        }
+
+        const width = container.clientWidth || container.offsetWidth || 0;
+        const height = container.clientHeight || container.offsetHeight || 0;
+        const dimension = Math.min(width, height);
+
+        if (dimension <= 0) {
+            return 250;
+        }
+
+        return Math.min(Math.floor(dimension * 0.7), 280);
+    };
 
     return {
         cameraUnavailable: false,
@@ -38,13 +60,14 @@ window.owwaQrScanner = function owwaQrScanner({
             }
 
             html5QrCode = new Html5Qrcode(elementId);
+            const boxSize = resolveQrboxSize();
 
             try {
                 await html5QrCode.start(
                     { facingMode: 'environment' },
                     {
                         fps: 10,
-                        qrbox: { width: qrboxSize, height: qrboxSize },
+                        qrbox: { width: boxSize, height: boxSize },
                         aspectRatio: 1,
                     },
                     (decodedText) => {

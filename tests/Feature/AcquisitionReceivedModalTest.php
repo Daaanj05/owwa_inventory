@@ -6,7 +6,6 @@ use App\Filament\Resources\Acquisitions\AcquisitionResource;
 use App\Filament\Resources\Acquisitions\Pages\ListAcquisitions;
 use App\Models\AcquisitionPaperwork;
 use App\Models\AcquisitionPaperworkLine;
-use App\Models\Department;
 use App\Models\Item;
 use App\Models\ItemCategory;
 use App\Models\Office;
@@ -108,25 +107,51 @@ class AcquisitionReceivedModalTest extends TestCase
         $this->assertSame('edit', $table->getRecordAction($paperwork));
     }
 
+    public function test_received_acquisition_with_edit_url_opens_view_modal(): void
+    {
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+
+        $paperwork = $this->createReceivedPaperwork();
+        $custodian = User::query()->find($paperwork->recorded_by);
+        session()->put('active_item_category_id', $paperwork->item_category_id);
+
+        $this->actingAs($custodian);
+
+        Livewire::test(ListAcquisitions::class)
+            ->set('defaultTableAction', 'edit')
+            ->set('defaultTableActionRecord', (string) $paperwork->getKey())
+            ->assertSet('defaultTableAction', 'view');
+    }
+
+    public function test_paperwork_resource_view_modal_url_uses_view_for_received(): void
+    {
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+
+        $paperwork = $this->createReceivedPaperwork();
+
+        $url = \App\Filament\Resources\Acquisitions\Paperwork\AcquisitionPaperworkResource::viewModalUrl($paperwork);
+
+        $this->assertStringContainsString('tableAction=view', $url);
+    }
+
     protected function createInProgressPaperwork(): AcquisitionPaperwork
     {
         $office = Office::factory()->create();
+        $requestingOffice = Office::factory()->create([
+            'name' => 'OWWA Satellite Office — Laguna',
+            'code' => 'OWWA-LAG',
+            'is_satellite' => true,
+        ]);
         $category = ItemCategory::factory()->create(['name' => 'Semi-Expendable']);
         $item = Item::factory()->create(['item_category_id' => $category->id]);
         $user = User::factory()->create(['role' => User::ROLE_SUPPLY_CUSTODIAN, 'office_id' => $office->id]);
-
-        $department = Department::query()->create([
-            'office_id' => $office->id,
-            'name' => 'Supply',
-            'code' => 'SUP',
-        ]);
 
         session()->put('active_item_category_id', $category->id);
 
         $paperwork = AcquisitionPaperwork::query()->create([
             'office_id' => $office->id,
             'item_category_id' => $category->id,
-            'department_id' => $department->id,
+            'requesting_office_id' => $requestingOffice->id,
             'recorded_by' => $user->id,
             'purpose' => 'Office equipment',
             'pr_date' => now(),

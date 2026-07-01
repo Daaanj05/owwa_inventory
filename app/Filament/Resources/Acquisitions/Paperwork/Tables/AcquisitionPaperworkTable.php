@@ -5,7 +5,6 @@ namespace App\Filament\Resources\Acquisitions\Paperwork\Tables;
 use App\Filament\Resources\Acquisitions\Paperwork\Actions\AcquisitionPaperworkActions;
 use App\Filament\Resources\Acquisitions\Paperwork\Schemas\AcquisitionPaperworkModalSchema;
 use App\Filament\Support\ConfiguresOwwaViewAction;
-use App\Filament\Support\OwwaFormModalDefaults;
 use App\Models\AcquisitionPaperwork;
 use App\Support\OwwaReferenceLabels;
 use Filament\Actions\ActionGroup;
@@ -66,14 +65,20 @@ class AcquisitionPaperworkTable
             ->emptyStateHeading('No acquisition paperwork yet')
             ->emptyStateDescription('Start PR / PO / IAR paperwork to fill and export OWWA forms.')
             ->recordActions([
-                ConfiguresOwwaViewAction::make(
-                    schema: AcquisitionPaperworkModalSchema::components(),
-                    footerActions: AcquisitionPaperworkActions::modalFooterActions(),
-                    modalWidth: '5xl',
-                    extraModalClass: 'owwa-acquisition-paperwork-modal',
+                tap(
+                    ConfiguresOwwaViewAction::make(
+                        schema: AcquisitionPaperworkModalSchema::components(),
+                        footerActions: AcquisitionPaperworkActions::viewModalFooterActions(),
+                        modalWidth: '5xl',
+                        extraModalClass: 'owwa-acquisition-paperwork-modal',
+                        modalHeading: 'View acquisition',
+                    ),
+                    fn (\Filament\Actions\ViewAction $action) => $action->registerModalActions(
+                        AcquisitionPaperworkActions::hiddenPhaseViewActionsForStepper(),
+                    ),
                 ),
                 ActionGroup::make([
-                    OwwaFormModalDefaults::editAction(OwwaFormModalDefaults::WIDTH_WIDE),
+                    AcquisitionPaperworkActions::configureEditAction(),
                 ])
                     ->label('Actions')
                     ->icon('heroicon-m-ellipsis-vertical')

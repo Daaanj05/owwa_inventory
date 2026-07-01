@@ -6,7 +6,6 @@ use App\Filament\Concerns\HasSystemAdminWizardHeading;
 use App\Filament\Concerns\SyncsActiveItemCategory;
 use App\Filament\Pages\InventoryCategoryDashboard;
 use App\Filament\Resources\Acquisitions\AcquisitionResource;
-use App\Filament\Resources\Acquisitions\Paperwork\AcquisitionPaperworkResource;
 use App\Filament\Support\OwwaFormModalDefaults;
 use App\Models\AcquisitionPaperwork;
 use App\Models\ItemCategory;
@@ -64,6 +63,30 @@ class ListAcquisitions extends ListRecords
         parent::mount();
 
         $this->syncActiveItemCategoryFromRequest();
+        $this->normalizeTableActionForReceivedPaperwork();
+    }
+
+    public function updatedDefaultTableAction(): void
+    {
+        $this->normalizeTableActionForReceivedPaperwork();
+    }
+
+    public function updatedDefaultTableActionRecord(): void
+    {
+        $this->normalizeTableActionForReceivedPaperwork();
+    }
+
+    protected function normalizeTableActionForReceivedPaperwork(): void
+    {
+        if ($this->defaultTableAction !== 'edit' || blank($this->defaultTableActionRecord)) {
+            return;
+        }
+
+        $paperwork = AcquisitionPaperwork::query()->find($this->defaultTableActionRecord);
+
+        if ($paperwork?->isReceived()) {
+            $this->defaultTableAction = 'view';
+        }
     }
 
     public function getDefaultActiveTab(): string|int|null
@@ -118,7 +141,7 @@ class ListAcquisitions extends ListRecords
 
                     return $data;
                 })
-                ->successRedirectUrl(fn (AcquisitionPaperwork $record): string => AcquisitionPaperworkResource::viewModalUrl($record)),
+                ->successRedirectUrl(fn (AcquisitionPaperwork $record): string => AcquisitionResource::viewModalUrl($record)),
         ]);
 
         /** @var mixed $actionsComponent */

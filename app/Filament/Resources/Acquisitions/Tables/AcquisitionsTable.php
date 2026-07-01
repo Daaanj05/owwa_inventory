@@ -81,21 +81,20 @@ class AcquisitionsTable
             ->emptyStateDescription('Start a new acquisition to fill PR, PO, and IAR paperwork.')
             ->emptyStateIcon('heroicon-o-arrow-down-tray')
             ->recordActions([
-                ConfiguresOwwaViewAction::make(
-                    schema: AcquisitionPaperworkModalSchema::components(),
-                    footerActions: AcquisitionPaperworkActions::modalFooterActions(),
-                    modalWidth: OwwaFormModalDefaults::WIDTH_WIDE,
-                    extraModalClass: 'owwa-acquisition-paperwork-modal',
+                tap(
+                    ConfiguresOwwaViewAction::make(
+                        schema: AcquisitionPaperworkModalSchema::components(),
+                        footerActions: AcquisitionPaperworkActions::viewModalFooterActions(),
+                        modalWidth: OwwaFormModalDefaults::WIDTH_WIDE,
+                        extraModalClass: 'owwa-acquisition-paperwork-modal',
+                        modalHeading: 'View acquisition',
+                    ),
+                    fn (\Filament\Actions\ViewAction $action) => $action->registerModalActions(
+                        AcquisitionPaperworkActions::hiddenPhaseViewActionsForStepper(),
+                    ),
                 ),
-                OwwaFormModalDefaults::editAction(OwwaFormModalDefaults::WIDTH_WIDE)
-                    ->label('')
-                    ->tableIcon(null)
-                    ->extraAttributes(['class' => 'sr-only'])
-                    ->extraModalWindowAttributes(['class' => 'owwa-view-record-modal owwa-record-modal owwa-acquisition-paperwork-modal'])
-                    ->extraModalFooterActions(AcquisitionPaperworkActions::modalFooterActions()),
-                AcquisitionPaperworkActions::viewPrAction()->extraAttributes(['class' => 'sr-only']),
-                AcquisitionPaperworkActions::viewPoAction()->extraAttributes(['class' => 'sr-only']),
-                AcquisitionPaperworkActions::viewIarAction()->extraAttributes(['class' => 'sr-only']),
+                AcquisitionPaperworkActions::configureEditAction(),
+                AcquisitionPaperworkActions::phaseViewsActionGroup(),
             ])
             ->recordUrl(null)
             ->recordAction(fn (AcquisitionPaperwork $record): string => $record->isReceived() ? 'view' : 'edit');

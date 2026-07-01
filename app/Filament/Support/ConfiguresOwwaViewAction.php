@@ -15,6 +15,7 @@ class ConfiguresOwwaViewAction
         array $footerActions = [],
         string $modalWidth = '5xl',
         ?string $extraModalClass = null,
+        ?string $modalHeading = null,
     ): ViewAction {
         $windowClass = 'owwa-view-record-modal owwa-record-modal';
         if ($extraModalClass !== null) {
@@ -37,6 +38,10 @@ class ConfiguresOwwaViewAction
 
         if ($footerActions !== []) {
             $action->extraModalFooterActions($footerActions);
+        }
+
+        if ($modalHeading !== null) {
+            $action->modalHeading($modalHeading);
         }
 
         return $action;

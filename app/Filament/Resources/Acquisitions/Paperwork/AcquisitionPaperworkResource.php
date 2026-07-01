@@ -75,17 +75,6 @@ class AcquisitionPaperworkResource extends Resource
      */
     public static function viewModalUrl(\Illuminate\Database\Eloquent\Model|int $record, array $extraParams = []): string
     {
-        $id = $record instanceof \Illuminate\Database\Eloquent\Model ? $record->getKey() : $record;
-
-        $params = array_merge([
-            'tableAction' => 'edit',
-            'tableActionRecord' => $id,
-        ], $extraParams);
-
-        if ($categoryId = session('active_item_category_id')) {
-            $params['category'] ??= $categoryId;
-        }
-
-        return AcquisitionResource::getUrl('index', $params);
+        return AcquisitionResource::viewModalUrl($record, $extraParams);
     }
 }

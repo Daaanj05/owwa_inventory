@@ -51,7 +51,7 @@
         'clickable' => true,
         'recordKey' => $paperwork->getKey(),
         'title' => 'Workflow',
-        'hint' => 'Click a step to review PR / PO / IAR details. During PO or IAR, use the workflow to open earlier forms.',
+        'hint' => 'Click a completed step to review earlier forms. Use Save & submit for export when the current phase is ready.',
     ])
 
     @if ($custodyReceipts->isNotEmpty())

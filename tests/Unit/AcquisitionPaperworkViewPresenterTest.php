@@ -4,7 +4,6 @@ namespace Tests\Unit;
 
 use App\Models\AcquisitionPaperwork;
 use App\Models\AcquisitionPaperworkLine;
-use App\Models\Department;
 use App\Models\Item;
 use App\Models\ItemCategory;
 use App\Models\Office;
@@ -125,16 +124,10 @@ class AcquisitionPaperworkViewPresenterTest extends TestCase
         $category = ItemCategory::factory()->create(['name' => 'Consumables']);
         $item = Item::factory()->create(['item_category_id' => $category->id]);
         $user = User::factory()->create();
-        $department = Department::query()->create([
-            'office_id' => $office->id,
-            'name' => 'Supply Section',
-            'code' => 'SUP',
-        ]);
-
         $paperwork = AcquisitionPaperwork::query()->create(array_merge([
             'office_id' => $office->id,
             'item_category_id' => $category->id,
-            'department_id' => $department->id,
+            'requesting_office_id' => $office->id,
             'recorded_by' => $user->id,
             'phase' => AcquisitionPaperwork::PHASE_PR,
         ], $overrides));

@@ -4,7 +4,6 @@ namespace Tests\Feature;
 
 use App\Models\AcquisitionPaperwork;
 use App\Models\AcquisitionPaperworkLine;
-use App\Models\Department;
 use App\Models\InventoryUnit;
 use App\Models\Item;
 use App\Models\ItemCategory;
@@ -125,16 +124,10 @@ class AcquisitionPaperworkQrLabelsTest extends TestCase
         $item = Item::factory()->create(['item_category_id' => $category->id]);
         $user = User::factory()->create(['role' => User::ROLE_SUPPLY_CUSTODIAN, 'office_id' => $office->id]);
 
-        $department = Department::query()->create([
-            'office_id' => $office->id,
-            'name' => 'Supply',
-            'code' => 'SUP',
-        ]);
-
         $paperwork = AcquisitionPaperwork::query()->create([
             'office_id' => $office->id,
             'item_category_id' => $category->id,
-            'department_id' => $department->id,
+            'requesting_office_id' => $office->id,
             'recorded_by' => $user->id,
             'purpose' => 'Office equipment',
             'pr_date' => now(),
@@ -172,16 +165,10 @@ class AcquisitionPaperworkQrLabelsTest extends TestCase
         $item = Item::factory()->create(['item_category_id' => $category->id]);
         $user = User::factory()->create(['role' => User::ROLE_SUPPLY_CUSTODIAN, 'office_id' => $office->id]);
 
-        $department = Department::query()->create([
-            'office_id' => $office->id,
-            'name' => 'Supply Section',
-            'code' => 'SUP',
-        ]);
-
         $paperwork = AcquisitionPaperwork::query()->create([
             'office_id' => $office->id,
             'item_category_id' => $category->id,
-            'department_id' => $department->id,
+            'requesting_office_id' => $office->id,
             'recorded_by' => $user->id,
             'purpose' => 'Office supplies',
             'pr_date' => now(),
