@@ -6,7 +6,7 @@
             <div
                 wire:ignore
                 class="owwa-scan-asset-camera-wrap"
-                x-data="owwaQrScanner({ componentId: @js($this->getId()), elementId: 'asset-lookup-qr-reader', aspectRatio: 4 / 3 })"
+                x-data="owwaQrScanner({ componentId: @js($this->getId()), elementId: 'asset-lookup-qr-reader', qrboxSize: 200 })"
                 x-init="init()"
                 x-on:destroy="destroy()"
             >
@@ -16,6 +16,7 @@
 
                 <div class="owwa-pc-camera-box owwa-scan-asset-camera-box">
                     <div id="asset-lookup-qr-reader" class="owwa-pc-qr-reader"></div>
+                    <div class="owwa-scan-asset-frame" aria-hidden="true"></div>
                 </div>
             </div>
 
@@ -37,4 +38,7 @@
             </form>
         </div>
     </div>
+
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+    <script src="{{ asset('js/physical-count-scanner.js') }}"></script>
 </x-filament-panels::page>

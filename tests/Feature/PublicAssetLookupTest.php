@@ -16,24 +16,25 @@ class PublicAssetLookupTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_public_asset_page_shows_sticker_details(): void
+    public function test_public_asset_page_shows_card_layout_with_sticker_fields(): void
     {
         [$office, $category, $item, $unit] = $this->createInventoryUnitFixtures();
 
         $response = $this->get(route('inventory.assets.show', ['propertyNumber' => $unit->property_number]));
 
         $response->assertOk()
-            ->assertSee('Semi-Expendable Property No.')
-            ->assertSee('Semi-Expendable Property')
+            ->assertSee('OWWA Inventory — Asset tag')
             ->assertSee('Description')
             ->assertSee('Unit / Section')
             ->assertSee('Stock No.')
+            ->assertSee('End-user')
             ->assertSee('Acquisition Cost')
             ->assertSee('Date Acquired')
             ->assertSee($unit->property_number)
             ->assertSee($item->name)
             ->assertSee($office->name)
             ->assertSee('₱500.00')
+            ->assertDontSee('Caveat')
             ->assertDontSee('In stock')
             ->assertDontSee('Open in admin')
             ->assertDontSee('custodian_printed_name')

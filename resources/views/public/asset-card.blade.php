@@ -3,136 +3,104 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{{ $asset->propertyNumber }} — OWWA Property Tag</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;600&display=swap" rel="stylesheet">
+    <title>{{ $asset->propertyNumber }} — OWWA Inventory</title>
     <style>
         * { box-sizing: border-box; }
         body {
             margin: 0;
             font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
-            background: #e8edf5;
+            background: linear-gradient(160deg, #1e3a8a 0%, #7f1d1d 100%);
             min-height: 100vh;
             color: #111827;
             padding: 16px;
         }
         .wrap { max-width: 420px; margin: 0 auto; }
-        .sticker {
-            background: #fff;
-            border: 2px solid #1e3a8a;
-            border-radius: 4px;
-            overflow: hidden;
-            box-shadow: 0 8px 24px rgba(30, 58, 138, 0.12);
-        }
-        .sticker-header {
-            background: linear-gradient(180deg, #1e40af 0%, #1e3a8a 100%);
-            color: #fff;
-            text-align: center;
-            padding: 14px 12px 12px;
-        }
-        .sticker-header .republic {
-            margin: 0;
-            font-size: 10px;
-            font-weight: 600;
-            letter-spacing: 0.06em;
-            text-transform: uppercase;
-        }
-        .sticker-header .agency {
-            margin: 4px 0 0;
+        .brand {
+            color: rgba(255, 255, 255, 0.95);
             font-size: 13px;
-            font-weight: 700;
+            font-weight: 600;
             letter-spacing: 0.02em;
-            line-height: 1.25;
+            margin-bottom: 12px;
         }
-        .sticker-header .address {
-            margin: 6px 0 0;
-            font-size: 10px;
-            line-height: 1.35;
-            opacity: 0.92;
+        .card {
+            background: #fff;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18);
         }
-        .sticker-body { padding: 0; }
-        .sticker-row {
-            display: grid;
-            grid-template-columns: 9.5rem 1fr;
-            gap: 8px;
-            align-items: baseline;
-            padding: 9px 14px;
-            border-bottom: 1px solid #d1d5db;
-            font-size: 12px;
-            line-height: 1.35;
+        h1 {
+            margin: 0 0 4px;
+            font-size: 15px;
+            font-weight: 700;
+            word-break: break-word;
         }
-        .sticker-row:last-child { border-bottom: none; }
-        .sticker-label {
+        .subtitle {
+            margin: 0 0 16px;
+            font-size: 13px;
+            color: #6b7280;
+        }
+        dl { margin: 0; }
+        .row {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 10px 0;
+            border-bottom: 1px solid #f3f4f6;
+            font-size: 14px;
+        }
+        .row:last-child { border-bottom: none; }
+        dt { margin: 0; color: #6b7280; flex-shrink: 0; }
+        dd {
             margin: 0;
             font-weight: 600;
-            color: #1e3a8a;
-        }
-        .sticker-value {
-            margin: 0;
-            font-family: 'Caveat', 'Segoe Script', 'Bradley Hand', cursive;
-            font-size: 17px;
-            font-weight: 600;
-            color: #111827;
+            text-align: right;
             word-break: break-word;
         }
         .footer {
-            margin-top: 14px;
+            margin-top: 16px;
             text-align: center;
-            color: #6b7280;
+            color: rgba(255, 255, 255, 0.75);
             font-size: 11px;
-            line-height: 1.4;
         }
     </style>
 </head>
 <body>
     <div class="wrap">
-        <div class="sticker">
-            <div class="sticker-header">
-                <p class="republic">Republic of the Philippines</p>
-                <p class="agency">OVERSEAS WORKERS WELFARE ADMINISTRATION</p>
-                <p class="address">OWWA Building, 7th St. cor. F.B. Harrison St.,<br>1300 Pasay City, Philippines</p>
-            </div>
+        <div class="brand">OWWA Inventory — Asset tag</div>
 
-            <div class="sticker-body">
-                <div class="sticker-row">
-                    <p class="sticker-label">Semi-Expendable Property No.</p>
-                    <p class="sticker-value">{{ $asset->propertyNumber }}</p>
+        <div class="card">
+            <h1>{{ $asset->article }}</h1>
+            <p class="subtitle">{{ $asset->propertyNumber }}</p>
+
+            <dl>
+                <div class="row">
+                    <dt>Description</dt>
+                    <dd>{{ $asset->description }}</dd>
                 </div>
-                <div class="sticker-row">
-                    <p class="sticker-label">Semi-Expendable Property</p>
-                    <p class="sticker-value">{{ $asset->article }}</p>
+                <div class="row">
+                    <dt>Unit / Section</dt>
+                    <dd>{{ $asset->unitSection }}</dd>
                 </div>
-                <div class="sticker-row">
-                    <p class="sticker-label">Description</p>
-                    <p class="sticker-value">{{ $asset->description }}</p>
+                <div class="row">
+                    <dt>Stock No.</dt>
+                    <dd>{{ $asset->stockNumber }}</dd>
                 </div>
-                <div class="sticker-row">
-                    <p class="sticker-label">Unit / Section</p>
-                    <p class="sticker-value">{{ $asset->unitSection }}</p>
+                <div class="row">
+                    <dt>End-user</dt>
+                    <dd>{{ $asset->endUser ?? '—' }}</dd>
                 </div>
-                <div class="sticker-row">
-                    <p class="sticker-label">Stock No.</p>
-                    <p class="sticker-value">{{ $asset->stockNumber }}</p>
+                <div class="row">
+                    <dt>Acquisition Cost</dt>
+                    <dd>{{ $asset->acquisitionCostFormatted ?? '—' }}</dd>
                 </div>
-                @if ($asset->endUser !== null)
-                    <div class="sticker-row">
-                        <p class="sticker-label">End-user</p>
-                        <p class="sticker-value">{{ $asset->endUser }}</p>
-                    </div>
-                @endif
-                <div class="sticker-row">
-                    <p class="sticker-label">Acquisition Cost</p>
-                    <p class="sticker-value">{{ $asset->acquisitionCostFormatted ?? '—' }}</p>
+                <div class="row">
+                    <dt>Date Acquired</dt>
+                    <dd>{{ $asset->dateAcquiredFormatted ?? '—' }}</dd>
                 </div>
-                <div class="sticker-row">
-                    <p class="sticker-label">Date Acquired</p>
-                    <p class="sticker-value">{{ $asset->dateAcquiredFormatted ?? '—' }}</p>
-                </div>
-            </div>
+            </dl>
         </div>
 
-        <p class="footer">Read-only property tag information. No login required to view this page.</p>
+        <p class="footer">Read-only asset information. No login required to view this page.</p>
     </div>
 </body>
 </html>
