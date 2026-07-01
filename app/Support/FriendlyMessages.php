@@ -49,6 +49,34 @@ final class FriendlyMessages
         return 'We could not send the verification email right now. The website may be online, but outbound email is unavailable. Ask your administrator to start the mail worker or share a verification link manually.';
     }
 
+    public static function passwordResetRequestSubmitted(): string
+    {
+        return 'If an account exists for that email, your administrator will review the request and send a reset link.';
+    }
+
+    public static function passwordResetEmailSent(string $email): string
+    {
+        return sprintf('A password reset link was sent to %s.', $email);
+    }
+
+    public static function passwordResetEmailQueued(string $email): string
+    {
+        return sprintf(
+            'Password reset email queued for %s. It will arrive shortly when the mail worker is running.',
+            $email,
+        );
+    }
+
+    public static function passwordResetEmailFailed(): string
+    {
+        return 'We could not send the password reset email right now. The website may be online, but outbound email is unavailable. Ask your administrator to start the mail worker or reset the password manually.';
+    }
+
+    public static function passwordResetRequestDismissed(string $email): string
+    {
+        return sprintf('The password reset request for %s was dismissed.', $email);
+    }
+
     public static function emailNotVerifiedLogin(): string
     {
         return 'Please verify your email address before signing in. Check your inbox for the verification link, or ask your administrator to resend it.';

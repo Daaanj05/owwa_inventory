@@ -7,6 +7,7 @@ use App\Filament\Resources\Users\UserResource;
 use App\Filament\Support\OwwaFormModalDefaults;
 use App\Models\User;
 use App\Notifications\UserWelcomeNotification;
+use App\Services\PasswordResetRequestService;
 use App\Support\FriendlyMessages;
 use App\Support\MailDelivery;
 use Filament\Notifications\Notification;
@@ -35,6 +36,13 @@ class ListUsers extends ListRecords
     public function getRecord(): mixed
     {
         return null;
+    }
+
+    public function mount(): void
+    {
+        parent::mount();
+
+        app(PasswordResetRequestService::class)->pruneExpired();
     }
 
     public function getSubheading(): string|\Illuminate\Contracts\Support\Htmlable|null

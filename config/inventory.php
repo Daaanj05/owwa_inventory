@@ -97,6 +97,8 @@ return [
 
     'audit_log_archive_days' => (int) env('AUDIT_LOG_ARCHIVE_DAYS', 30),
 
+    'password_reset_request_retention_days' => (int) env('PASSWORD_RESET_REQUEST_RETENTION_DAYS', 30),
+
     /*
     |--------------------------------------------------------------------------
     | QR public asset lookup

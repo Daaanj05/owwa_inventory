@@ -8,6 +8,8 @@ use Filament\Models\Contracts\FilamentUser;
 use Filament\Panel;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Facades\URL;
@@ -90,6 +92,24 @@ class User extends Authenticatable implements FilamentUser, MustVerifyEmail
     public function department()
     {
         return $this->belongsTo(Department::class);
+    }
+
+    /**
+     * @return HasOne<PasswordResetRequest, $this>
+     */
+    public function pendingPasswordResetRequest(): HasOne
+    {
+        return $this->hasOne(PasswordResetRequest::class)
+            ->where('status', PasswordResetRequest::STATUS_PENDING)
+            ->latestOfMany('requested_at');
+    }
+
+    /**
+     * @return HasMany<PasswordResetRequest, $this>
+     */
+    public function passwordResetRequests(): HasMany
+    {
+        return $this->hasMany(PasswordResetRequest::class);
     }
 
     public function isSupplyCustodian(): bool

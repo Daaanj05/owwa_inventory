@@ -31,7 +31,7 @@ class UserResource extends Resource
 
     public static function getEloquentQuery(): Builder
     {
-        $query = parent::getEloquentQuery();
+        $query = parent::getEloquentQuery()->with(['pendingPasswordResetRequest']);
         $user = Filament::auth()->user();
         if ($user && $user->isUnitConsolidator() && $user->office_id) {
             $query->where('office_id', $user->office_id)

@@ -7,6 +7,7 @@ use App\Filament\Support\ConfiguresOwwaViewAction;
 use App\Filament\Support\OwwaFormModalDefaults;
 use App\Filament\Support\OwwaModalSchema;
 use App\Models\User;
+use App\Services\PasswordResetRequestService;
 use App\Support\FriendlyMessages;
 use App\Support\MailDelivery;
 use App\Support\OwwaTransactionViewPresenter;
@@ -15,6 +16,7 @@ use Filament\Actions\ActionGroup;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Auth\Notifications\VerifyEmail as FilamentVerifyEmail;
+use Filament\Facades\Filament;
 use Filament\Notifications\Notification;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
@@ -41,6 +43,12 @@ class UsersTable
                     ->state(fn (User $record): string => $record->hasVerifiedEmail() ? 'Verified' : 'Pending')
                     ->color(fn (User $record): string => $record->hasVerifiedEmail() ? 'success' : 'warning')
                     ->sortable(),
+                TextColumn::make('pendingPasswordResetRequest.requested_at')
+                    ->label('Password reset')
+                    ->badge()
+                    ->state(fn (User $record): ?string => $record->pendingPasswordResetRequest !== null ? 'Reset requested' : null)
+                    ->color('warning')
+                    ->placeholder('—'),
                 TextColumn::make('role')
                     ->badge()
                     ->formatStateUsing(function (string $state): string {
@@ -100,6 +108,20 @@ class UsersTable
                             default => $query,
                         };
                     }),
+                SelectFilter::make('password_reset_status')
+                    ->label('Password reset')
+                    ->options([
+                        'pending' => 'Reset requested',
+                        'none' => 'No pending request',
+                    ])
+                    ->placeholder('All statuses')
+                    ->query(function (Builder $query, array $data): Builder {
+                        return match ($data['value'] ?? null) {
+                            'pending' => $query->whereHas('pendingPasswordResetRequest'),
+                            'none' => $query->whereDoesntHave('pendingPasswordResetRequest'),
+                            default => $query,
+                        };
+                    }),
             ])
             ->emptyStateHeading('No users yet')
             ->emptyStateDescription('Add system users here. Supply Custodians can approve requisitions and manage inventory.')
@@ -148,6 +170,47 @@ class UsersTable
                                     ->warning()
                                     ->send();
                             }),
+                        Action::make('sendPasswordResetEmail')
+                            ->label('Send password reset email')
+                            ->icon('heroicon-o-key')
+                            ->visible(fn (User $record): bool => $record->canAccessPanel(Filament::getPanel('admin')))
+                            ->action(function (User $record): void {
+                                $admin = auth()->user();
+
+                                if (! $admin instanceof User) {
+                                    return;
+                                }
+
+                                $service = app(PasswordResetRequestService::class);
+                                $pending = $record->pendingPasswordResetRequest;
+                                $result = $pending !== null
+                                    ? $service->sendResetEmail($pending, $admin)
+                                    : $service->sendResetEmailForUser($record, $admin);
+
+                                self::notifyPasswordResetEmailResult($record->email, $result);
+                            }),
+                        Action::make('dismissPasswordResetRequest')
+                            ->label('Dismiss reset request')
+                            ->icon('heroicon-o-x-circle')
+                            ->color('gray')
+                            ->visible(fn (User $record): bool => $record->pendingPasswordResetRequest !== null)
+                            ->requiresConfirmation()
+                            ->action(function (User $record): void {
+                                $admin = auth()->user();
+                                $pending = $record->pendingPasswordResetRequest;
+
+                                if (! $admin instanceof User || $pending === null) {
+                                    return;
+                                }
+
+                                app(PasswordResetRequestService::class)->dismiss($pending, $admin);
+
+                                Notification::make()
+                                    ->title('Reset request dismissed')
+                                    ->body(FriendlyMessages::passwordResetRequestDismissed($record->email))
+                                    ->success()
+                                    ->send();
+                            }),
                     ],
                 ),
                 ActionGroup::make([
@@ -164,5 +227,34 @@ class UsersTable
                     DeleteBulkAction::make(),
                 ]),
             ]);
+    }
+
+    protected static function notifyPasswordResetEmailResult(string $email, \App\Support\MailDeliveryResult $result): void
+    {
+        if ($result->success && $result->wasQueued) {
+            Notification::make()
+                ->title('Password reset email queued')
+                ->body(FriendlyMessages::passwordResetEmailQueued($email))
+                ->success()
+                ->send();
+
+            return;
+        }
+
+        if ($result->success) {
+            Notification::make()
+                ->title('Password reset email sent')
+                ->body(FriendlyMessages::passwordResetEmailSent($email))
+                ->success()
+                ->send();
+
+            return;
+        }
+
+        Notification::make()
+            ->title('Email could not be sent')
+            ->body(FriendlyMessages::passwordResetEmailFailed())
+            ->warning()
+            ->send();
     }
 }

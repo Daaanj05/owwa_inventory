@@ -20,6 +20,7 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withSchedule(function (Schedule $schedule): void {
         $schedule->command('sessions:close-stale')->everyFiveMinutes();
         $schedule->command('audit:archive-old-logs')->daily();
+        $schedule->command('password-reset-requests:prune')->daily();
         $schedule->command('inventory:send-plan-reminders')->dailyAt('08:00');
         $schedule->command('inventory:eul-reminders')->dailyAt('08:30');
     })

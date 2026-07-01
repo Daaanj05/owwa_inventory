@@ -4,6 +4,7 @@ namespace App\Providers\Filament;
 
 use App\Filament\Pages\Auth\EditProfile;
 use App\Filament\Pages\Auth\Login;
+use App\Filament\Pages\Auth\RequestPasswordReset;
 use App\Filament\Pages\Auth\ResetPassword;
 use App\Filament\Pages\Dashboard;
 use App\Filament\Pages\InventoryCategoryDashboard;
@@ -53,7 +54,7 @@ class AdminPanelProvider extends PanelProvider
             ->favicon('/images/owwa-4a_logo_transparent.png')
             ->login(Login::class)
             ->emailVerification()
-            ->passwordReset(resetAction: ResetPassword::class)
+            ->passwordReset(requestAction: RequestPasswordReset::class, resetAction: ResetPassword::class)
             ->profile(EditProfile::class, isSimple: false)
             ->colors([
                 // Filament\Support\Colors\Color::Blue (inlined to avoid IDE false positives).
