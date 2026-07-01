@@ -193,6 +193,7 @@
 
                 <div class="owwa-pc-camera-box">
                     <div id="physical-count-qr-reader" class="owwa-pc-qr-reader"></div>
+                    <div class="owwa-pc-scan-frame" aria-hidden="true"></div>
                 </div>
             </div>
 
