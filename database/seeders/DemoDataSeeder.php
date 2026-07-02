@@ -567,5 +567,7 @@ class DemoDataSeeder extends Seeder
         \App\Models\ReferenceSeries::where('type', 'transfer')->update(['next_sequence' => $trSeq, 'last_generated_at' => now()]);
         \App\Models\ReferenceSeries::where('type', 'disposal')->update(['next_sequence' => $dspSeq, 'last_generated_at' => now()]);
         \App\Models\ReferenceSeries::where('type', 'requisition')->update(['next_sequence' => 6, 'last_generated_at' => now()]);
+
+        $this->call(SemiExpendablePropertyClassSeeder::class);
     }
 }

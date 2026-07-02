@@ -67,7 +67,9 @@ class ScanPhysicalCountSession extends Page
         };
 
         return $this->physicalCountSessionBreadcrumbHtml($session, [
-            ['label' => $lastSegment],
+            [
+                'label' => $lastSegment,
+            ],
         ]);
     }
 

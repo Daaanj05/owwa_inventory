@@ -56,6 +56,28 @@ class ListRequisitions extends ListRecords
     {
         parent::mount();
 
+        static $pollHookRegistered = false;
+
+        if (! $pollHookRegistered) {
+            $pollHookRegistered = true;
+
+            FilamentView::registerRenderHook(
+                PanelsRenderHook::PAGE_END,
+                function (): ?HtmlString {
+                    $interval = $this->requisitionRefreshPollingInterval();
+
+                    if (! filled($interval)) {
+                        return null;
+                    }
+
+                    return new HtmlString(
+                        '<div wire:poll.'.$interval.'="$refresh" class="hidden" aria-hidden="true"></div>',
+                    );
+                },
+                scopes: static::class,
+            );
+        }
+
         if ((int) ($this->create ?? 0) !== 1 || ! RequisitionResource::canCreate()) {
             return;
         }

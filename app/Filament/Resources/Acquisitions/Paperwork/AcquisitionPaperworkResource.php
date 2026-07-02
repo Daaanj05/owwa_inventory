@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Acquisitions\Paperwork;
 
 use App\Filament\Concerns\HasOwwaViewModalUrl;
+use App\Filament\Concerns\SyncsActiveItemCategory;
 use App\Filament\Resources\Acquisitions\AcquisitionResource;
 use App\Filament\Resources\Acquisitions\Paperwork\Schemas\AcquisitionPaperworkForm;
 use App\Filament\Resources\Acquisitions\Paperwork\Schemas\AcquisitionPaperworkInfolist;
@@ -37,7 +38,7 @@ class AcquisitionPaperworkResource extends Resource
     {
         $query = CustodianOfficeScope::applyOfficeColumn(parent::getEloquentQuery());
 
-        $categoryId = (int) session('active_item_category_id', 0);
+        $categoryId = SyncsActiveItemCategory::resolveCategoryIdFromContext();
         if ($categoryId > 0) {
             $query->where('item_category_id', $categoryId);
         }

@@ -13,7 +13,20 @@ if [ "$SEED_DEMO" = "true" ]; then
     php artisan db:seed --class=DemoDataSeeder --force || echo "WARN: DemoDataSeeder failed; continuing startup"
 fi
 
-mkdir -p bootstrap/cache/filament storage/framework/views
+mkdir -p bootstrap/cache/filament storage/framework/views storage/app/templates
+
+if [ ! -f storage/app/templates/.synced ] && [ -d resources/owwa-templates ]; then
+    cp -r resources/owwa-templates/. storage/app/templates/ 2>/dev/null || true
+    touch storage/app/templates/.synced
+fi
+
+php artisan app:audit-owwa-templates --json > /tmp/owwa-template-audit.json 2>&1 || true
+if [ -f /tmp/owwa-template-audit.json ]; then
+    missing=$(php -r 'echo count(json_decode(file_get_contents("/tmp/owwa-template-audit.json"), true)["missing_configured_templates"] ?? []);' 2>/dev/null || echo "0")
+    if [ "$missing" != "0" ]; then
+        echo "WARN: OWWA template audit reports ${missing} missing configured template(s). Run: php artisan owwa:sync-templates"
+    fi
+fi
 
 php artisan config:cache
 

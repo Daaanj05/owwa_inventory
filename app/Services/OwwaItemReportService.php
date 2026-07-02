@@ -11,6 +11,7 @@ use App\Models\Office;
 use App\Models\PhysicalCountSession;
 use App\Models\Transfer;
 use App\Support\AnnexA1BlockLayout;
+use App\Support\AnnexA4Layout;
 use App\Support\ItemPropertyClass;
 use App\Support\OwwaCellMapping;
 use App\Support\OwwaExportFilename;
@@ -37,119 +38,171 @@ class OwwaItemReportService
      */
     public function buildTransactionHistory(Item $item, ?int $officeId = null, bool $newestFirst = false): array
     {
-        $rows = [];
+        $histories = $this->buildTransactionHistoriesForItems(
+            [$item->id],
+            $officeId,
+            $newestFirst,
+            collect([$item->id => $item]),
+        );
 
-        $acquisitions = Acquisition::query()
-            ->where('item_id', $item->id)
-            ->when($officeId, fn ($q) => $q->where('office_id', $officeId))
-            ->orderBy('acquisition_date')
-            ->get();
+        return $histories[$item->id] ?? [];
+    }
 
-        foreach ($acquisitions as $acquisition) {
-            $rows[] = [
-                'sort_date' => $acquisition->acquisition_date,
-                'date' => $acquisition->acquisition_date?->format('Y-m-d'),
-                'reference' => $acquisition->reference_code,
-                'type' => 'receipt',
-                'receipt_qty' => $acquisition->quantity,
-                'issue_qty' => null,
-                'issue_office' => null,
-                'office_officer' => $acquisition->office?->name,
-                'remarks' => $acquisition->remarks,
-                'property_number' => null,
-                'unit_cost' => $acquisition->unit_cost,
-                'item_code' => $item->item_code,
-            ];
+    /**
+     * @param  array<int, int>  $itemIds
+     * @param  int|array<int, int>|null  $officeIds
+     * @return array<int, array<int, array<string, mixed>>>
+     */
+    public function buildTransactionHistoriesForItems(
+        array $itemIds,
+        int|array|null $officeIds = null,
+        bool $newestFirst = false,
+        ?Collection $itemsById = null,
+    ): array {
+        $itemIds = array_values(array_unique(array_filter($itemIds, fn (int $id): bool => $id > 0)));
+
+        if ($itemIds === []) {
+            return [];
         }
 
-        $issuances = Issuance::query()
-            ->with(['office', 'issuedTo', 'requisition'])
-            ->where('item_id', $item->id)
-            ->when($officeId, fn ($q) => $q->where('office_id', $officeId))
-            ->orderBy('issuance_date')
-            ->get();
+        $normalizedOfficeIds = match (true) {
+            $officeIds === null => [],
+            is_int($officeIds) => $officeIds > 0 ? [$officeIds] : [],
+            default => array_values(array_unique(array_filter($officeIds, fn (int $id): bool => $id > 0))),
+        };
 
-        foreach ($issuances as $issuance) {
-            $rows[] = [
-                'sort_date' => $issuance->issuance_date,
-                'date' => $issuance->issuance_date?->format('Y-m-d'),
-                'reference' => $issuance->requisition?->reference_code ?? $issuance->reference_code,
-                'type' => 'issue',
-                'receipt_qty' => null,
-                'issue_qty' => $issuance->quantity,
-                'issue_office' => $issuance->office?->name,
-                'office_officer' => $issuance->issuedTo?->name ?? $issuance->office?->name,
-                'remarks' => $issuance->remarks,
-                'property_number' => $issuance->property_number,
-            ];
-        }
+        $itemsById ??= Item::query()->whereIn('id', $itemIds)->get()->keyBy('id');
 
-        $transfersIn = Transfer::query()
-            ->with(['fromOffice', 'toOffice'])
-            ->where('item_id', $item->id)
-            ->when($officeId, fn ($q) => $q->where('to_office_id', $officeId))
-            ->orderBy('transfer_date')
-            ->get();
+        /** @var array<int, array<int, array<string, mixed>>> $rowsByItem */
+        $rowsByItem = array_fill_keys($itemIds, []);
 
-        foreach ($transfersIn as $transfer) {
-            $rows[] = [
-                'sort_date' => $transfer->transfer_date,
-                'date' => $transfer->transfer_date?->format('Y-m-d'),
-                'reference' => $transfer->reference_code,
-                'type' => 'transfer_in',
-                'receipt_qty' => $transfer->quantity,
-                'issue_qty' => null,
-                'issue_office' => $transfer->fromOffice?->name,
-                'office_officer' => $transfer->to_accountable_officer ?? $transfer->toOffice?->name,
-                'remarks' => $transfer->remarks,
-                'property_number' => $transfer->property_number,
-            ];
-        }
-
-        $transfersOut = Transfer::query()
-            ->with(['fromOffice', 'toOffice'])
-            ->where('item_id', $item->id)
-            ->when($officeId, fn ($q) => $q->where('from_office_id', $officeId))
-            ->orderBy('transfer_date')
-            ->get();
-
-        foreach ($transfersOut as $transfer) {
-            $rows[] = [
-                'sort_date' => $transfer->transfer_date,
-                'date' => $transfer->transfer_date?->format('Y-m-d'),
-                'reference' => $transfer->reference_code,
-                'type' => 'transfer_out',
-                'receipt_qty' => null,
-                'issue_qty' => $transfer->quantity,
-                'issue_office' => $transfer->toOffice?->name,
-                'office_officer' => $transfer->from_accountable_officer ?? $transfer->fromOffice?->name,
-                'remarks' => $transfer->remarks,
-                'property_number' => $transfer->property_number,
-            ];
-        }
-
-        $disposals = Disposal::query()
+        Acquisition::query()
             ->with('office')
-            ->where('item_id', $item->id)
-            ->when($officeId, fn ($q) => $q->where('office_id', $officeId))
-            ->orderBy('disposal_date')
-            ->get();
+            ->whereIn('item_id', $itemIds)
+            ->when($normalizedOfficeIds !== [], fn ($q) => $q->whereIn('office_id', $normalizedOfficeIds))
+            ->orderBy('acquisition_date')
+            ->get()
+            ->each(function (Acquisition $acquisition) use (&$rowsByItem, $itemsById): void {
+                $item = $itemsById->get($acquisition->item_id);
 
-        foreach ($disposals as $disposal) {
-            $rows[] = [
-                'sort_date' => $disposal->disposal_date,
-                'date' => $disposal->disposal_date?->format('Y-m-d'),
-                'reference' => $disposal->reference_code,
-                'type' => 'disposal',
-                'receipt_qty' => null,
-                'issue_qty' => $disposal->quantity,
-                'issue_office' => $disposal->office?->name,
-                'office_officer' => $disposal->office?->name,
-                'remarks' => $disposal->reason,
-                'property_number' => $disposal->property_number,
-            ];
+                $rowsByItem[$acquisition->item_id][] = [
+                    'office_id' => $acquisition->office_id,
+                    'sort_date' => $acquisition->acquisition_date,
+                    'date' => $acquisition->acquisition_date?->format('Y-m-d'),
+                    'reference' => $acquisition->reference_code,
+                    'type' => 'receipt',
+                    'receipt_qty' => $acquisition->quantity,
+                    'issue_qty' => null,
+                    'issue_office' => null,
+                    'office_officer' => $acquisition->office?->name,
+                    'remarks' => $acquisition->remarks,
+                    'property_number' => null,
+                    'unit_cost' => $acquisition->unit_cost,
+                    'item_code' => $item?->item_code,
+                ];
+            });
+
+        Issuance::query()
+            ->with(['office', 'issuedTo', 'requisition'])
+            ->whereIn('item_id', $itemIds)
+            ->when($normalizedOfficeIds !== [], fn ($q) => $q->whereIn('office_id', $normalizedOfficeIds))
+            ->orderBy('issuance_date')
+            ->get()
+            ->each(function (Issuance $issuance) use (&$rowsByItem): void {
+                $rowsByItem[$issuance->item_id][] = [
+                    'office_id' => $issuance->office_id,
+                    'sort_date' => $issuance->issuance_date,
+                    'date' => $issuance->issuance_date?->format('Y-m-d'),
+                    'reference' => $issuance->requisition?->reference_code ?? $issuance->reference_code,
+                    'type' => 'issue',
+                    'receipt_qty' => null,
+                    'issue_qty' => $issuance->quantity,
+                    'issue_office' => $issuance->office?->name,
+                    'office_officer' => $issuance->issuedTo?->name ?? $issuance->office?->name,
+                    'remarks' => $issuance->remarks,
+                    'property_number' => $issuance->property_number,
+                ];
+            });
+
+        Transfer::query()
+            ->with(['fromOffice', 'toOffice'])
+            ->whereIn('item_id', $itemIds)
+            ->when($normalizedOfficeIds !== [], fn ($q) => $q->whereIn('to_office_id', $normalizedOfficeIds))
+            ->orderBy('transfer_date')
+            ->get()
+            ->each(function (Transfer $transfer) use (&$rowsByItem): void {
+                $rowsByItem[$transfer->item_id][] = [
+                    'office_id' => $transfer->to_office_id,
+                    'sort_date' => $transfer->transfer_date,
+                    'date' => $transfer->transfer_date?->format('Y-m-d'),
+                    'reference' => $transfer->reference_code,
+                    'type' => 'transfer_in',
+                    'receipt_qty' => $transfer->quantity,
+                    'issue_qty' => null,
+                    'issue_office' => $transfer->fromOffice?->name,
+                    'office_officer' => $transfer->to_accountable_officer ?? $transfer->toOffice?->name,
+                    'remarks' => $transfer->remarks,
+                    'property_number' => $transfer->property_number,
+                ];
+            });
+
+        Transfer::query()
+            ->with(['fromOffice', 'toOffice'])
+            ->whereIn('item_id', $itemIds)
+            ->when($normalizedOfficeIds !== [], fn ($q) => $q->whereIn('from_office_id', $normalizedOfficeIds))
+            ->orderBy('transfer_date')
+            ->get()
+            ->each(function (Transfer $transfer) use (&$rowsByItem): void {
+                $rowsByItem[$transfer->item_id][] = [
+                    'office_id' => $transfer->from_office_id,
+                    'sort_date' => $transfer->transfer_date,
+                    'date' => $transfer->transfer_date?->format('Y-m-d'),
+                    'reference' => $transfer->reference_code,
+                    'type' => 'transfer_out',
+                    'receipt_qty' => null,
+                    'issue_qty' => $transfer->quantity,
+                    'issue_office' => $transfer->toOffice?->name,
+                    'office_officer' => $transfer->from_accountable_officer ?? $transfer->fromOffice?->name,
+                    'remarks' => $transfer->remarks,
+                    'property_number' => $transfer->property_number,
+                ];
+            });
+
+        Disposal::query()
+            ->with('office')
+            ->whereIn('item_id', $itemIds)
+            ->when($normalizedOfficeIds !== [], fn ($q) => $q->whereIn('office_id', $normalizedOfficeIds))
+            ->orderBy('disposal_date')
+            ->get()
+            ->each(function (Disposal $disposal) use (&$rowsByItem): void {
+                $rowsByItem[$disposal->item_id][] = [
+                    'office_id' => $disposal->office_id,
+                    'sort_date' => $disposal->disposal_date,
+                    'date' => $disposal->disposal_date?->format('Y-m-d'),
+                    'reference' => $disposal->reference_code,
+                    'type' => 'disposal',
+                    'receipt_qty' => null,
+                    'issue_qty' => $disposal->quantity,
+                    'issue_office' => $disposal->office?->name,
+                    'office_officer' => $disposal->office?->name,
+                    'remarks' => $disposal->reason,
+                    'property_number' => $disposal->property_number,
+                ];
+            });
+
+        foreach ($itemIds as $itemId) {
+            $rowsByItem[$itemId] = $this->finalizeTransactionHistoryRows($rowsByItem[$itemId], $newestFirst);
         }
 
+        return $rowsByItem;
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $rows
+     * @return array<int, array<string, mixed>>
+     */
+    protected function finalizeTransactionHistoryRows(array $rows, bool $newestFirst): array
+    {
         usort($rows, fn (array $a, array $b): int => ($a['sort_date'] ?? '') <=> ($b['sort_date'] ?? ''));
 
         $balance = 0;
@@ -175,20 +228,54 @@ class OwwaItemReportService
      */
     public function buildRegistryRows(Item $item, ?int $officeId = null): array
     {
-        $rows = [];
+        $rowsByItem = $this->buildRegistryRowsForItems([$item->id], $officeId, collect([$item->id => $item]));
+
+        return $rowsByItem[$item->id] ?? [];
+    }
+
+    /**
+     * @param  array<int, int>  $itemIds
+     * @param  int|array<int, int>|null  $officeIds
+     * @return array<int, array<int, array<string, mixed>>>
+     */
+    public function buildRegistryRowsForItems(
+        array $itemIds,
+        int|array|null $officeIds = null,
+        ?Collection $itemsById = null,
+    ): array {
+        $itemIds = array_values(array_unique(array_filter($itemIds, fn (int $id): bool => $id > 0)));
+
+        if ($itemIds === []) {
+            return [];
+        }
+
+        $normalizedOfficeIds = match (true) {
+            $officeIds === null => [],
+            is_int($officeIds) => $officeIds > 0 ? [$officeIds] : [],
+            default => array_values(array_unique(array_filter($officeIds, fn (int $id): bool => $id > 0))),
+        };
+
+        $itemsById ??= Item::query()->whereIn('id', $itemIds)->get()->keyBy('id');
+
+        /** @var array<int, array<int, array<string, mixed>>> $rowsByItem */
+        $rowsByItem = array_fill_keys($itemIds, []);
 
         Issuance::query()
-            ->with(['office', 'issuedTo'])
-            ->where('item_id', $item->id)
-            ->when($officeId, fn ($q) => $q->where('office_id', $officeId))
+            ->with(['office', 'issuedTo', 'item'])
+            ->whereIn('item_id', $itemIds)
+            ->when($normalizedOfficeIds !== [], fn ($q) => $q->whereIn('office_id', $normalizedOfficeIds))
             ->orderBy('issuance_date')
-            ->each(function (Issuance $issuance) use (&$rows): void {
-                $rows[] = [
+            ->get()
+            ->each(function (Issuance $issuance) use (&$rowsByItem, $itemsById): void {
+                $item = $issuance->item ?? $itemsById->get($issuance->item_id);
+
+                $rowsByItem[$issuance->item_id][] = [
+                    'office_id' => $issuance->office_id,
                     'date' => $issuance->issuance_date?->format('Y-m-d'),
                     'reference' => $issuance->reference_code,
-                    'property_number' => $issuance->property_number ?? $issuance->item?->item_code,
-                    'description' => $this->itemDescription($issuance->item),
-                    'estimated_useful_life' => $issuance->estimated_useful_life ?? $issuance->item?->estimated_useful_life,
+                    'property_number' => $issuance->property_number ?? $item?->item_code,
+                    'description' => $this->itemDescription($item),
+                    'estimated_useful_life' => $issuance->estimated_useful_life ?? $item?->estimated_useful_life,
                     'issued_qty' => $issuance->quantity,
                     'issued_office' => $issuance->issuedTo?->name ?? $issuance->office?->name,
                     'returned_qty' => null,
@@ -202,16 +289,21 @@ class OwwaItemReportService
             });
 
         Disposal::query()
-            ->where('item_id', $item->id)
-            ->when($officeId, fn ($q) => $q->where('office_id', $officeId))
+            ->with('item')
+            ->whereIn('item_id', $itemIds)
+            ->when($normalizedOfficeIds !== [], fn ($q) => $q->whereIn('office_id', $normalizedOfficeIds))
             ->orderBy('disposal_date')
-            ->each(function (Disposal $disposal) use (&$rows): void {
-                $rows[] = [
+            ->get()
+            ->each(function (Disposal $disposal) use (&$rowsByItem, $itemsById): void {
+                $item = $disposal->item ?? $itemsById->get($disposal->item_id);
+
+                $rowsByItem[$disposal->item_id][] = [
+                    'office_id' => $disposal->office_id,
                     'date' => $disposal->disposal_date?->format('Y-m-d'),
                     'reference' => $disposal->reference_code,
-                    'property_number' => $disposal->property_number ?? $disposal->item?->item_code,
-                    'description' => $this->itemDescription($disposal->item),
-                    'estimated_useful_life' => $disposal->item?->estimated_useful_life,
+                    'property_number' => $disposal->property_number ?? $item?->item_code,
+                    'description' => $this->itemDescription($item),
+                    'estimated_useful_life' => $item?->estimated_useful_life,
                     'issued_qty' => null,
                     'issued_office' => null,
                     'returned_qty' => null,
@@ -224,7 +316,7 @@ class OwwaItemReportService
                 ];
             });
 
-        return $rows;
+        return $rowsByItem;
     }
 
     public function downloadItemReport(Item $item, string $formSlug, ?int $officeId = null): StreamedResponse
@@ -232,14 +324,6 @@ class OwwaItemReportService
         $item->loadMissing('category');
         $office = $officeId ? Office::query()->find($officeId) : null;
         $templatePath = $this->resolveItemReportTemplate($item, $formSlug);
-        $cellValues = match ($formSlug) {
-            'sc' => $this->cellValuesForSc($item, $office, $officeId),
-            'pc' => $this->cellValuesForPropertyCard($item, $office, $officeId),
-            'annex_a1' => $this->cellValuesForAnnexA1($item, $office, $officeId),
-            'annex_a4' => $this->cellValuesForAnnexA4($item, $office, $officeId),
-            default => [],
-        };
-
         $filename = OwwaExportFilename::itemReport($formSlug, (string) ($item->item_code ?? $item->id));
 
         if ($formSlug === 'annex_a1') {
@@ -250,13 +334,40 @@ class OwwaItemReportService
                 [
                     [
                         'sheetName' => $sheetName,
-                        'cellValues' => $cellValues,
+                        'blocks' => [$this->buildAnnexA1Block($item, $office, $officeId)],
                     ],
                 ],
                 $filename,
                 $templatePath,
             );
         }
+
+        if ($formSlug === 'annex_a4') {
+            $propertyClass = ItemPropertyClass::resolveForExport($item->property_class);
+            $sheetName = ItemPropertyClass::sheetNameForForm('annex_a4', $propertyClass) ?? 'OFFICE EQUIPMENT';
+
+            return $this->templateExport->downloadAnnexA4Spreadsheet(
+                [
+                    [
+                        'sheetName' => $sheetName,
+                        'header' => [
+                            'entity_name' => $office?->name ?? '',
+                            'fund_cluster' => $office?->fund_cluster ?? '',
+                            'property_type' => ItemPropertyClass::propertyTypeLabel($propertyClass),
+                        ],
+                        'entries' => $this->buildRegistryRows($item, $officeId),
+                    ],
+                ],
+                $filename,
+                $templatePath,
+            );
+        }
+
+        $cellValues = match ($formSlug) {
+            'sc' => $this->cellValuesForSc($item, $office, $officeId),
+            'pc' => $this->cellValuesForPropertyCard($item, $office, $officeId),
+            default => [],
+        };
 
         $sheet = $this->resolveItemReportSheet($item, $formSlug);
 
@@ -403,8 +514,133 @@ class OwwaItemReportService
 
     public function downloadAnnexA1Bulk(Collection $pairs): StreamedResponse
     {
+        $resolvedPairs = $this->resolveSemiExpendableBulkPairs($pairs);
+
+        $allItemIds = $resolvedPairs->pluck('item_id')->unique()->values()->all();
+        $allOfficeIds = $resolvedPairs->pluck('office_id')->unique()->values()->all();
+        $itemsById = $resolvedPairs->pluck('item', 'item_id');
+
+        $allHistories = $this->buildTransactionHistoriesForItems(
+            $allItemIds,
+            $allOfficeIds,
+            true,
+            $itemsById,
+        );
+
+        $latestPropertyNumbers = Issuance::query()
+            ->whereIn('item_id', $allItemIds)
+            ->whereNotNull('property_number')
+            ->orderByDesc('issuance_date')
+            ->get()
+            ->unique('item_id')
+            ->pluck('property_number', 'item_id');
+
         /** @var array<string, array<int, array{item: Item, office: ?Office, office_id: ?int}>> $grouped */
         $grouped = [];
+
+        foreach ($resolvedPairs as $pair) {
+            $propertyClass = ItemPropertyClass::resolveForExport($pair['item']->property_class);
+            $grouped[$propertyClass][] = $pair;
+        }
+
+        $tabs = [];
+        foreach ($grouped as $propertyClass => $entries) {
+            $sheetName = ItemPropertyClass::sheetNameForForm('annex_a1', $propertyClass) ?? 'OFFICE EQUIPMENT';
+            $tabs[] = [
+                'sheetName' => $sheetName,
+                'blocks' => array_map(
+                    function (array $entry) use ($allHistories, $latestPropertyNumbers): array {
+                        $itemHistory = $allHistories[$entry['item_id']] ?? [];
+                        $officeHistory = array_values(array_filter(
+                            $itemHistory,
+                            fn (array $txn): bool => (int) ($txn['office_id'] ?? 0) === (int) $entry['office_id'],
+                        ));
+
+                        return $this->buildAnnexA1Block(
+                            $entry['item'],
+                            $entry['office'],
+                            $entry['office_id'],
+                            $officeHistory,
+                            $latestPropertyNumbers->get($entry['item_id']),
+                        );
+                    },
+                    $entries,
+                ),
+            ];
+        }
+
+        usort($tabs, fn (array $a, array $b): int => strcmp($a['sheetName'], $b['sheetName']));
+
+        $filename = OwwaExportFilename::batch('AnnexA1');
+
+        return $this->templateExport->downloadAnnexA1Spreadsheet($tabs, $filename);
+    }
+
+    public function downloadAnnexA4Bulk(Collection $pairs): StreamedResponse
+    {
+        $resolvedPairs = $this->resolveSemiExpendableBulkPairs($pairs);
+
+        /** @var array<string, array<int, array{item: Item, office: ?Office, office_id: ?int}>> $grouped */
+        $grouped = [];
+
+        foreach ($resolvedPairs as $pair) {
+            $propertyClass = ItemPropertyClass::resolveForExport($pair['item']->property_class);
+            $grouped[$propertyClass][] = $pair;
+        }
+
+        $tabs = [];
+        foreach ($grouped as $propertyClass => $entries) {
+            $itemIds = collect($entries)->pluck('item_id')->unique()->values()->all();
+            $officeIds = collect($entries)->pluck('office_id')->unique()->values()->all();
+            $itemsById = collect($entries)->mapWithKeys(
+                fn (array $entry): array => [$entry['item_id'] => $entry['item']],
+            );
+
+            $rowsByItem = $this->buildRegistryRowsForItems($itemIds, $officeIds, $itemsById);
+
+            $registryRows = [];
+            foreach ($entries as $entry) {
+                foreach ($rowsByItem[$entry['item_id']] ?? [] as $row) {
+                    if ((int) ($row['office_id'] ?? 0) !== (int) $entry['office_id']) {
+                        continue;
+                    }
+
+                    unset($row['office_id']);
+                    $registryRows[] = $row;
+                }
+            }
+
+            if ($registryRows === []) {
+                continue;
+            }
+
+            $office = $entries[0]['office'];
+            $sheetName = ItemPropertyClass::sheetNameForForm('annex_a4', $propertyClass) ?? 'OFFICE EQUIPMENT';
+
+            $tabs[] = [
+                'sheetName' => $sheetName,
+                'header' => [
+                    'entity_name' => $office?->name ?? '',
+                    'fund_cluster' => $office?->fund_cluster ?? '',
+                    'property_type' => ItemPropertyClass::propertyTypeLabel($propertyClass),
+                ],
+                'entries' => $registryRows,
+            ];
+        }
+
+        usort($tabs, fn (array $a, array $b): int => strcmp($a['sheetName'], $b['sheetName']));
+
+        $filename = OwwaExportFilename::batch('AnnexA4');
+
+        return $this->templateExport->downloadAnnexA4Spreadsheet($tabs, $filename);
+    }
+
+    /**
+     * @return Collection<int, array{item_id: int, office_id: int, item: Item, office: ?Office}>
+     */
+    protected function resolveSemiExpendableBulkPairs(Collection $pairs): Collection
+    {
+        $normalized = [];
 
         foreach ($pairs as $pair) {
             $itemId = (int) ($pair['item_id'] ?? 0);
@@ -414,34 +650,40 @@ class OwwaItemReportService
                 continue;
             }
 
-            $item = Item::query()->with('category')->find($itemId);
-            if ($item === null || $item->category?->getTemplateSlug() !== 'semi_expendable') {
-                continue;
-            }
-
-            $office = Office::query()->find($officeId);
-            $propertyClass = ItemPropertyClass::resolveForExport($item->property_class);
-            $grouped[$propertyClass][] = [
-                'item' => $item,
-                'office' => $office,
+            $normalized[] = [
+                'item_id' => $itemId,
                 'office_id' => $officeId,
             ];
         }
 
-        $tabs = [];
-        foreach ($grouped as $propertyClass => $entries) {
-            $sheetName = ItemPropertyClass::sheetNameForForm('annex_a1', $propertyClass) ?? 'OFFICE EQUIPMENT';
-            $tabs[] = [
-                'sheetName' => $sheetName,
-                'cellValues' => $this->cellValuesForAnnexA1Blocks($entries),
-            ];
+        if ($normalized === []) {
+            return collect();
         }
 
-        usort($tabs, fn (array $a, array $b): int => strcmp($a['sheetName'], $b['sheetName']));
+        $itemIds = collect($normalized)->pluck('item_id')->unique()->values()->all();
+        $officeIds = collect($normalized)->pluck('office_id')->unique()->values()->all();
 
-        $filename = OwwaExportFilename::batch('AnnexA1');
+        $items = Item::query()->with('category')->whereIn('id', $itemIds)->get()->keyBy('id');
+        $offices = Office::query()->whereIn('id', $officeIds)->get()->keyBy('id');
 
-        return $this->templateExport->downloadAnnexA1Spreadsheet($tabs, $filename);
+        $resolved = collect();
+
+        foreach ($normalized as $pair) {
+            $item = $items->get($pair['item_id']);
+
+            if ($item === null || $item->category?->getTemplateSlug() !== 'semi_expendable') {
+                continue;
+            }
+
+            $resolved->push([
+                'item_id' => $pair['item_id'],
+                'office_id' => $pair['office_id'],
+                'item' => $item,
+                'office' => $offices->get($pair['office_id']),
+            ]);
+        }
+
+        return $resolved;
     }
 
     /**
@@ -517,11 +759,9 @@ class OwwaItemReportService
         }
 
         if ($slug === 'semi_expendable' && $formSlug === 'annex_a4') {
-            $sheetName = ItemPropertyClass::sheetNameForForm($formSlug, $item->property_class);
-
             return [
                 'sheetIndex' => 0,
-                'sheetName' => $sheetName,
+                'sheetName' => AnnexA4Layout::templateSheetName(),
             ];
         }
 
@@ -609,7 +849,7 @@ class OwwaItemReportService
             'sc' => 'Consumable/Stock Levels & Recording/Appendix 58 - SC.xls',
             'pc' => 'ppe/Accquisition/Appendix 69 - PC.xls',
             'annex_a1' => 'Semi-Expendable/Recording (Stock Levels)/Property-Form-Annex-A.1-Semi-expendable-Property-Card.xlsx',
-            'annex_a4' => 'Semi-Expendable/Property-Form-Annex-A.4-Registry-of-Semi-Expendable-Property-Issued.xls',
+            'annex_a4' => 'Semi-Expendable/Property-Form-Annex-A.4-Registry-of-Semi-Expendable-Property-Issued.xlsx',
             default => 'Consumable/Stock Levels & Recording/Appendix 58 - SC.xls',
         };
     }
@@ -649,32 +889,96 @@ class OwwaItemReportService
     }
 
     /**
-     * @return array<string, string|int|float|null>
+     * @return array{header: array<string, string|null>, transactions: array<int, array<string, mixed>>}
      */
-    protected function cellValuesForAnnexA1(Item $item, ?Office $office, ?int $officeId): array
-    {
-        return $this->cellValuesForAnnexA1Block($item, $office, $officeId, 0);
+    public function buildAnnexA1Block(
+        Item $item,
+        ?Office $office,
+        ?int $officeId,
+        ?array $transactions = null,
+        ?string $latestPropertyNumber = null,
+    ): array {
+        $propertyClass = ItemPropertyClass::resolveForExport($item->property_class);
+
+        if ($latestPropertyNumber === null) {
+            $latestPropertyNumber = Issuance::query()
+                ->where('item_id', $item->id)
+                ->whereNotNull('property_number')
+                ->orderByDesc('issuance_date')
+                ->value('property_number');
+        }
+
+        return [
+            'header' => [
+                'entity_name' => $office?->name ?? '',
+                'fund_cluster' => $office?->fund_cluster ?? '',
+                'property_type' => ItemPropertyClass::propertyTypeLabel($propertyClass),
+                'property_number' => $latestPropertyNumber ?? $item->item_code ?? '',
+                'description' => $this->itemDescription($item),
+            ],
+            'transactions' => $transactions ?? $this->buildTransactionHistory($item, $officeId, newestFirst: true),
+        ];
     }
 
     /**
-     * Stack one property card per item on the same sheet tab (block 0, 1, 2, …).
+     * @param  array<int, array{item: Item, office: ?Office, office_id: ?int}>  $entries
+     * @return array<int, array{header: array<string, string|null>, transactions: array<int, array<string, mixed>>}>
+     */
+    public function buildAnnexA1Blocks(array $entries): array
+    {
+        return array_map(
+            fn (array $entry): array => $this->buildAnnexA1Block(
+                $entry['item'],
+                $entry['office'],
+                $entry['office_id'],
+            ),
+            array_values($entries),
+        );
+    }
+
+    /**
+     * @return array<string, string|int|float|null>
      *
+     * @deprecated Use buildAnnexA1Block() with blocks export API
+     */
+    protected function cellValuesForAnnexA1(Item $item, ?Office $office, ?int $officeId): array
+    {
+        $block = $this->buildAnnexA1Block($item, $office, $officeId);
+        $blockStart = AnnexA1BlockLayout::FIRST_BLOCK_START_ROW;
+        $ledgerStart = AnnexA1BlockLayout::ledgerStartRowForBlockStart($blockStart);
+        $values = [];
+        AnnexA1BlockLayout::applyHeader($values, $block['header'], $blockStart);
+
+        return array_merge(
+            $values,
+            app(OwwaTemplateExportService::class)->annexA1LedgerCellValues($block['transactions'], $ledgerStart),
+        );
+    }
+
+    /**
      * @param  array<int, array{item: Item, office: ?Office, office_id: ?int}>  $entries
      * @return array<string, string|int|float|null>
+     *
+     * @deprecated Use buildAnnexA1Blocks() with blocks export API
      */
     public function cellValuesForAnnexA1Blocks(array $entries): array
     {
         $values = [];
+        $blockStarts = AnnexA1BlockLayout::blockStartRows(
+            array_map(
+                fn (array $entry): int => count($this->buildTransactionHistory($entry['item'], $entry['office_id'], newestFirst: true)),
+                array_values($entries),
+            ),
+        );
 
-        foreach (array_values($entries) as $blockIndex => $entry) {
+        foreach (array_values($entries) as $index => $entry) {
+            $block = $this->buildAnnexA1Block($entry['item'], $entry['office'], $entry['office_id']);
+            $blockStart = $blockStarts[$index];
+            $ledgerStart = AnnexA1BlockLayout::ledgerStartRowForBlockStart($blockStart);
+            AnnexA1BlockLayout::applyHeader($values, $block['header'], $blockStart);
             $values = array_merge(
                 $values,
-                $this->cellValuesForAnnexA1Block(
-                    $entry['item'],
-                    $entry['office'],
-                    $entry['office_id'],
-                    $blockIndex,
-                ),
+                app(OwwaTemplateExportService::class)->annexA1LedgerCellValues($block['transactions'], $ledgerStart),
             );
         }
 
@@ -682,7 +986,7 @@ class OwwaItemReportService
     }
 
     /**
-     * @return array<string, string|int|float|null>
+     * @deprecated Use buildAnnexA1Block()
      */
     protected function cellValuesForAnnexA1Block(
         Item $item,
@@ -690,65 +994,17 @@ class OwwaItemReportService
         ?int $officeId,
         int $blockIndex,
     ): array {
-        $annexMap = OwwaCellMapping::form('ANNEX_A1');
-        $ledgerStart = AnnexA1BlockLayout::ledgerStartRow($blockIndex);
-        $maxRows = (int) ($annexMap['ledger']['max_rows'] ?? 11);
-        $ledgerCols = (array) ($annexMap['ledger']['columns'] ?? []);
-        $propertyClass = ItemPropertyClass::resolveForExport($item->property_class);
-
-        $latestProperty = Issuance::query()
-            ->where('item_id', $item->id)
-            ->whereNotNull('property_number')
-            ->orderByDesc('issuance_date')
-            ->value('property_number');
-
+        $blockStarts = AnnexA1BlockLayout::blockStartRows([count($this->buildTransactionHistory($item, $officeId, newestFirst: true))]);
+        $blockStart = $blockStarts[$blockIndex] ?? AnnexA1BlockLayout::FIRST_BLOCK_START_ROW;
+        $block = $this->buildAnnexA1Block($item, $office, $officeId);
+        $ledgerStart = AnnexA1BlockLayout::ledgerStartRowForBlockStart($blockStart);
         $values = [];
-        AnnexA1BlockLayout::applyHeader($values, [
-            'entity_name' => $office?->name ?? '',
-            'fund_cluster' => $office?->fund_cluster ?? '',
-            'property_type' => ItemPropertyClass::propertyTypeLabel($propertyClass),
-            'property_number' => $latestProperty ?? $item->item_code ?? '',
-            'description' => $this->itemDescription($item),
-        ], $blockIndex);
+        AnnexA1BlockLayout::applyHeader($values, $block['header'], $blockStart);
 
-        $row = $ledgerStart;
-        foreach ($this->buildTransactionHistory($item, $officeId, newestFirst: true) as $txn) {
-            if ($row > $ledgerStart + $maxRows - 1) {
-                break;
-            }
-
-            $values[OwwaCellMapping::columnCell($ledgerCols['date'] ?? 'A', $row)] = $txn['date'] ?? '';
-            $values[OwwaCellMapping::columnCell($ledgerCols['reference'] ?? 'B', $row)] = $txn['reference'] ?? '';
-
-            if ($txn['receipt_qty']) {
-                $receiptQty = (int) $txn['receipt_qty'];
-                $values[OwwaCellMapping::columnCell($ledgerCols['receipt_qty'] ?? 'C', $row)] = $receiptQty;
-                $values[OwwaCellMapping::columnCell($ledgerCols['receipt_qty_dup'] ?? 'F', $row)] = $receiptQty;
-
-                if (isset($txn['unit_cost']) && $txn['unit_cost'] !== null && $txn['unit_cost'] !== '') {
-                    $unitCost = (float) $txn['unit_cost'];
-                    $values[OwwaCellMapping::columnCell($ledgerCols['unit_cost'] ?? 'D', $row)] = $unitCost;
-                    $values[OwwaCellMapping::columnCell($ledgerCols['total_cost'] ?? 'E', $row)] = $unitCost * $receiptQty;
-                }
-            }
-
-            if ($txn['issue_qty']) {
-                $values[OwwaCellMapping::columnCell($ledgerCols['issue_qty'] ?? 'H', $row)] = (int) $txn['issue_qty'];
-                $values[OwwaCellMapping::columnCell($ledgerCols['office_officer'] ?? 'I', $row)] = $txn['office_officer'] ?? $txn['issue_office'] ?? '';
-            }
-
-            if (filled($txn['item_code'] ?? null)) {
-                $values[OwwaCellMapping::columnCell($ledgerCols['item_no'] ?? 'G', $row)] = $txn['item_code'];
-            } elseif (filled($txn['property_number'] ?? null)) {
-                $values[OwwaCellMapping::columnCell($ledgerCols['item_no'] ?? 'G', $row)] = $txn['property_number'];
-            }
-
-            $values[OwwaCellMapping::columnCell($ledgerCols['balance_qty'] ?? 'J', $row)] = $txn['balance'] ?? 0;
-            $values[OwwaCellMapping::columnCell($ledgerCols['remarks'] ?? 'L', $row)] = $txn['remarks'] ?? '';
-            $row++;
-        }
-
-        return $values;
+        return array_merge(
+            $values,
+            app(OwwaTemplateExportService::class)->annexA1LedgerCellValues($block['transactions'], $ledgerStart),
+        );
     }
 
     /**
@@ -772,7 +1028,9 @@ class OwwaItemReportService
         $values = [
             'A6' => 'Entity Name: '.($office?->name ?? ''),
             'L6' => 'Fund Cluster : '.($office?->fund_cluster ?? ''),
-            'A7' => 'Semi-Expendable Property: '.$item->name,
+            'A7' => 'Semi-Expendable Property: '.ItemPropertyClass::propertyTypeLabel(
+                ItemPropertyClass::resolveForExport($item->property_class),
+            ),
         ];
 
         $startRow = 12;
@@ -891,7 +1149,7 @@ class OwwaItemReportService
             return '';
         }
 
-        $parts = array_filter([$item->name, $item->description, $item->serial_number ? 'S/N: '.$item->serial_number : null]);
+        $parts = array_filter([$item->name, $item->description]);
 
         return implode(' — ', $parts);
     }

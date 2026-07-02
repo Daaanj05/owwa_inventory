@@ -7,8 +7,6 @@ use App\Filament\Resources\PhysicalInventoryPlans\Schemas\PhysicalInventoryPlanM
 use App\Filament\Support\ConfiguresOwwaViewAction;
 use App\Filament\Support\OwwaFormModalDefaults;
 use App\Models\PhysicalInventoryPlan;
-use Filament\Actions\Action;
-use Filament\Actions\ActionGroup;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\RestoreBulkAction;
@@ -73,28 +71,6 @@ class PhysicalInventoryPlansTable
                     modalWidth: OwwaFormModalDefaults::WIDTH_STANDARD,
                     extraModalClass: 'owwa-inventory-plan-modal',
                 ),
-                ActionGroup::make([
-                    PhysicalInventoryPlanActions::editAction(),
-                    Action::make('archive')
-                        ->label('Archive')
-                        ->icon('heroicon-o-archive-box')
-                        ->color('warning')
-                        ->requiresConfirmation()
-                        ->modalHeading('Archive inventory schedule')
-                        ->modalDescription('This schedule will be archived and hidden from the default list. You can restore it later using the filter.')
-                        ->action(fn (PhysicalInventoryPlan $record) => $record->delete())
-                        ->visible(fn (PhysicalInventoryPlan $record): bool => ! $record->trashed()),
-                    Action::make('restore')
-                        ->label('Restore')
-                        ->icon('heroicon-o-arrow-uturn-left')
-                        ->color('success')
-                        ->requiresConfirmation()
-                        ->action(fn (PhysicalInventoryPlan $record) => $record->restore())
-                        ->visible(fn (PhysicalInventoryPlan $record): bool => $record->trashed()),
-                ])
-                    ->label('Actions')
-                    ->icon('heroicon-m-ellipsis-vertical')
-                    ->color('gray'),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([

@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Distributions;
 
 use App\Filament\Concerns\HasOwwaViewModalUrl;
+use App\Filament\Concerns\SyncsActiveItemCategory;
 use App\Filament\Resources\Distributions\Pages\ListDistributions;
 use App\Filament\Resources\Distributions\Schemas\DistributionForm;
 use App\Filament\Resources\Distributions\Schemas\DistributionInfolist;
@@ -41,7 +42,7 @@ class DistributionResource extends Resource
         $query = parent::getEloquentQuery();
 
         $user = Filament::auth()->user();
-        $categoryId = session('active_item_category_id');
+        $categoryId = SyncsActiveItemCategory::resolveCategoryIdFromContext();
 
         if ($user instanceof User && $user->isUnitConsolidator()) {
             if ($user->office_id) {
@@ -54,9 +55,9 @@ class DistributionResource extends Resource
             $query->whereRaw('1 = 0');
         }
 
-        if (filled($categoryId)) {
+        if ($categoryId > 0) {
             $query->whereHas('item', function (Builder $itemQuery) use ($categoryId): void {
-                $itemQuery->where('item_category_id', (int) $categoryId);
+                $itemQuery->where('item_category_id', $categoryId);
             });
         } else {
             $query->whereRaw('1 = 0');

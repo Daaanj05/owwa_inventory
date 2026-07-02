@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\PhysicalInventoryPlans\Schemas;
 
+use App\Filament\Concerns\SyncsActiveItemCategory;
 use App\Models\ItemCategory;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Hidden;
@@ -17,9 +18,7 @@ class PhysicalInventoryPlanForm
     public static function configure(Schema $schema): Schema
     {
         $scopeActive = fn ($query) => $query->active();
-        $sessionCategoryId = filled(session('active_item_category_id'))
-            ? (int) session('active_item_category_id')
-            : null;
+        $sessionCategoryId = SyncsActiveItemCategory::resolveCategoryIdFromContext();
         $today = now()->startOfDay();
 
         return $schema

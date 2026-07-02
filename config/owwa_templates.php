@@ -4,6 +4,17 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Strict template mode
+    |--------------------------------------------------------------------------
+    |
+    | When true, exports fail if the OWWA Excel template file is missing instead
+    | of generating a plain spreadsheet with raw cell values.
+    |
+    */
+    'strict' => env('OWWA_TEMPLATES_STRICT', env('APP_ENV') === 'production'),
+
+    /*
+    |--------------------------------------------------------------------------
     | OWWA template filenames (keep original names from OWWA)
     |--------------------------------------------------------------------------
     */
@@ -145,7 +156,7 @@ return [
             'annex_a1' => [
                 'ict' => 'ICT',
                 'office_equipment' => 'OFFICE EQUIPMENT',
-                'furnitures_fixtures' => 'FURNITURES & FIXTURES',
+                'furnitures_fixtures' => 'F&F',
                 'sports_equipment' => 'SPORTS EQUIPMENT',
                 'medical_equipment' => 'MEDICAL EQUIPMENT',
             ],
@@ -192,7 +203,7 @@ return [
                 'label' => 'Annex A.1 - Semi-Expendable Property Card',
             ],
             'annex_a4' => [
-                'file' => 'Semi-Expendable/Property-Form-Annex-A.4-Registry-of-Semi-Expendable-Property-Issued.xls',
+                'file' => 'Semi-Expendable/Property-Form-Annex-A.4-Registry-of-Semi-Expendable-Property-Issued.xlsx',
                 'label' => 'Annex A.4 - Registry of Semi-Expendable Property Issued',
             ],
         ],

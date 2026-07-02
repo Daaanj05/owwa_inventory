@@ -41,6 +41,12 @@ class ItemInfolist
         return Section::make('Item details')
             ->columns(2)
             ->schema([
+                TextEntry::make('category.name')
+                    ->label('Category')
+                    ->placeholder('—'),
+                TextEntry::make('item_code')
+                    ->label('Stock number')
+                    ->placeholder('—'),
                 TextEntry::make('description')
                     ->label('Description')
                     ->placeholder('—')
@@ -52,9 +58,6 @@ class ItemInfolist
                     ->placeholder('—'),
                 TextEntry::make('estimated_useful_life')
                     ->label('Estimated useful life')
-                    ->placeholder('—'),
-                TextEntry::make('serial_number')
-                    ->label('Serial number')
                     ->placeholder('—'),
                 TextEntry::make('property_class')
                     ->label('Property class')

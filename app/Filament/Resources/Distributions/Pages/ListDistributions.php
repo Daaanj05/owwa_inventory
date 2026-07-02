@@ -12,11 +12,15 @@ use Filament\Facades\Filament;
 use Filament\Resources\Pages\ListRecords;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Support\HtmlString;
+use Livewire\Attributes\Url;
 
 class ListDistributions extends ListRecords
 {
     use HasSystemAdminWizardHeading;
     use SyncsActiveItemCategory;
+
+    #[Url]
+    public int|string|null $category = null;
 
     protected static string $resource = DistributionResource::class;
 
@@ -27,7 +31,7 @@ class ListDistributions extends ListRecords
 
     public function getHeading(): string|Htmlable
     {
-        $categoryName = ItemCategory::query()->whereKey((int) session('active_item_category_id'))->value('name');
+        $categoryName = ItemCategory::query()->whereKey($this->activeItemCategoryId())->value('name');
 
         if (! $categoryName) {
             return 'Distributions';
@@ -55,7 +59,7 @@ class ListDistributions extends ListRecords
 
     protected function getWizardHeaderBreadcrumb(string $categoryName, string $taskLabel): string
     {
-        $categoryId = (int) session('active_item_category_id', 0);
+        $categoryId = $this->activeItemCategoryId();
         $dashboardUrl = InventoryCategoryDashboard::getUrl(['category' => $categoryId]);
 
         return sprintf(

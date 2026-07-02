@@ -236,39 +236,6 @@ class AcquisitionPaperworkActions
         ]);
     }
 
-    public static function phaseViewsActionGroup(): ActionGroup
-    {
-        return ActionGroup::make([
-            self::viewPrAction()
-                ->visible(fn (AcquisitionPaperwork $record): bool => self::isPhaseViewable($record, AcquisitionPaperwork::PHASE_PR)),
-            self::viewPoAction()
-                ->visible(fn (AcquisitionPaperwork $record): bool => self::isPhaseViewable($record, AcquisitionPaperwork::PHASE_PO)),
-            self::viewIarAction()
-                ->visible(fn (AcquisitionPaperwork $record): bool => self::isPhaseViewable($record, AcquisitionPaperwork::PHASE_IAR)),
-        ])
-            ->label('')
-            ->tooltip('View forms')
-            ->icon('heroicon-m-ellipsis-vertical')
-            ->color('gray')
-            ->button()
-            ->visible(fn (AcquisitionPaperwork $record): bool => self::isPhaseViewable($record, AcquisitionPaperwork::PHASE_PR)
-                || self::isPhaseViewable($record, AcquisitionPaperwork::PHASE_PO)
-                || self::isPhaseViewable($record, AcquisitionPaperwork::PHASE_IAR));
-    }
-
-    protected static function isPhaseViewable(AcquisitionPaperwork $record, string $phase): bool
-    {
-        return match ($phase) {
-            AcquisitionPaperwork::PHASE_PR => $record->isPrApproved()
-                || $record->pr_status === AcquisitionPaperwork::STATUS_PENDING_APPROVAL,
-            AcquisitionPaperwork::PHASE_PO => $record->isPoApproved()
-                || $record->po_status === AcquisitionPaperwork::STATUS_PENDING_APPROVAL,
-            AcquisitionPaperwork::PHASE_IAR => $record->isIarApproved()
-                || $record->iar_status === AcquisitionPaperwork::STATUS_PENDING_APPROVAL,
-            default => false,
-        };
-    }
-
     public static function exportPrAction(): Action
     {
         return Action::make('exportPr')

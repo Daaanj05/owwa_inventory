@@ -35,6 +35,9 @@ class ListPhysicalInventoryPlans extends ListRecords
     protected static string $resource = PhysicalInventoryPlanResource::class;
 
     #[Url]
+    public int|string|null $category = null;
+
+    #[Url]
     public ?int $create = null;
 
     public function getTitle(): string|Htmlable
@@ -44,7 +47,7 @@ class ListPhysicalInventoryPlans extends ListRecords
 
     public function getHeading(): string|Htmlable
     {
-        $categoryName = ItemCategory::query()->whereKey((int) session('active_item_category_id'))->value('name');
+        $categoryName = ItemCategory::query()->whereKey($this->activeItemCategoryId())->value('name');
 
         if (! $categoryName) {
             return 'Inventory Schedules';
@@ -114,7 +117,7 @@ class ListPhysicalInventoryPlans extends ListRecords
                 ->createAnother(false)
                 ->extraModalWindowAttributes(['class' => OwwaFormModalDefaults::MODAL_WINDOW_CLASS.' owwa-inventory-plan-modal'])
                 ->mutateFormDataUsing(function (array $data): array {
-                    $categoryId = (int) session('active_item_category_id', 0);
+                    $categoryId = $this->activeItemCategoryId();
                     if ($categoryId > 0) {
                         $data['item_category_id'] = $categoryId;
                     }
@@ -160,7 +163,7 @@ class ListPhysicalInventoryPlans extends ListRecords
 
     protected function getWizardHeaderBreadcrumb(string $categoryName, string $taskLabel): string
     {
-        $categoryId = (int) session('active_item_category_id', 0);
+        $categoryId = $this->activeItemCategoryId();
         $dashboardUrl = InventoryCategoryDashboard::getUrl(['category' => $categoryId]);
 
         return sprintf(

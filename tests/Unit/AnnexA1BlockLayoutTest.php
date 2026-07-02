@@ -7,13 +7,20 @@ use Tests\TestCase;
 
 class AnnexA1BlockLayoutTest extends TestCase
 {
-    public function test_uses_uniform_eighteen_row_stride(): void
+    public function test_uses_dynamic_block_heights(): void
     {
-        $this->assertSame(18, AnnexA1BlockLayout::blockStride());
-        $this->assertSame(8, AnnexA1BlockLayout::entityRow(0));
-        $this->assertSame(26, AnnexA1BlockLayout::entityRow(1));
-        $this->assertSame(15, AnnexA1BlockLayout::ledgerStartRow(0));
-        $this->assertSame(33, AnnexA1BlockLayout::ledgerStartRow(1));
+        $this->assertSame(7, AnnexA1BlockLayout::owwaHeaderRows());
+        $this->assertSame(14, AnnexA1BlockLayout::headerSectionRows());
+        $this->assertSame(5, AnnexA1BlockLayout::blankStyleRows());
+        $this->assertSame(20, AnnexA1BlockLayout::blockHeight(0));
+        $this->assertSame(22, AnnexA1BlockLayout::blockHeight(2));
+        $this->assertSame(23, AnnexA1BlockLayout::blockHeight(3));
+        $this->assertSame(25, AnnexA1BlockLayout::blockHeight(5));
+        $this->assertSame(26, AnnexA1BlockLayout::blockHeight(6));
+        $this->assertSame(8, AnnexA1BlockLayout::entityRowForBlockStart(1));
+        $this->assertSame(15, AnnexA1BlockLayout::ledgerStartRowForBlockStart(1));
+        $this->assertSame([1, 21], AnnexA1BlockLayout::blockStartRows([0, 0]));
+        $this->assertSame(7, AnnexA1BlockLayout::ledgerRowsForTransactionCount(2));
     }
 
     public function test_master_template_sheet_name_is_spc(): void
@@ -30,18 +37,18 @@ class AnnexA1BlockLayoutTest extends TestCase
             'property_type' => 'SPORTS EQUIPMENT',
             'property_number' => 'SEM-100',
             'description' => 'Weight bench',
-        ], 0);
+        ], 1);
         AnnexA1BlockLayout::applyHeader($values, [
             'entity_name' => 'RWO IV-A',
             'fund_cluster' => '01',
             'property_type' => 'SPORTS EQUIPMENT',
             'property_number' => 'SEM-101',
             'description' => 'Spin bike',
-        ], 1);
+        ], 21);
 
         $this->assertSame('Description : Weight bench', $values['A12']);
-        $this->assertSame('Description : Spin bike', $values['A30']);
+        $this->assertSame('Description : Spin bike', $values['A32']);
         $this->assertSame('Semi-expendable Property Number: SEM-100', $values['K11']);
-        $this->assertSame('Semi-expendable Property Number: SEM-101', $values['K29']);
+        $this->assertSame('Semi-expendable Property Number: SEM-101', $values['K31']);
     }
 }

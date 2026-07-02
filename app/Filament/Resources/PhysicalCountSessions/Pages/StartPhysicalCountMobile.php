@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\PhysicalCountSessions\Pages;
 
+use App\Filament\Concerns\SyncsActiveItemCategory;
 use App\Filament\Resources\PhysicalCountSessions\Concerns\HasPhysicalCountWizardBreadcrumbs;
 use App\Filament\Resources\PhysicalCountSessions\PhysicalCountSessionResource;
 use App\Models\ItemCategory;
@@ -12,10 +13,14 @@ use App\Support\OfficeSignatoryDefaults;
 use Filament\Resources\Pages\Page;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Validation\ValidationException;
+use Livewire\Attributes\Url;
 
 class StartPhysicalCountMobile extends Page
 {
     use HasPhysicalCountWizardBreadcrumbs;
+
+    #[Url]
+    public int|string|null $category = null;
 
     protected static string $resource = PhysicalCountSessionResource::class;
 
@@ -31,7 +36,9 @@ class StartPhysicalCountMobile extends Page
 
     public function mount(): void
     {
-        $categoryId = session('active_item_category_id') ? (int) session('active_item_category_id') : null;
+        $categoryId = filled($this->category)
+            ? (int) $this->category
+            : SyncsActiveItemCategory::resolveCategoryIdFromContext();
 
         if ($categoryId) {
             $slug = ItemCategory::query()->find($categoryId)?->getTemplateSlug();
@@ -51,7 +58,9 @@ class StartPhysicalCountMobile extends Page
     public function getHeading(): string|Htmlable
     {
         return $this->physicalCountBreadcrumbHtml([
-            ['label' => 'Start count'],
+            [
+                'label' => 'Start count',
+            ],
         ]);
     }
 

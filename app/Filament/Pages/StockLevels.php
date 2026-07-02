@@ -12,8 +12,8 @@ use App\Services\OwwaItemReportService;
 use App\Services\StockLedgerViewService;
 use BackedEnum;
 use Filament\Actions\Action;
+use Filament\Actions\ActionGroup;
 use Filament\Facades\Filament;
-use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Filament\Support\Enums\Width;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -109,9 +109,14 @@ class StockLevels extends Page
 
     protected function getHeaderActions(): array
     {
+        return [];
+    }
+
+    public function buildExportDownloadsActionGroup(): ActionGroup
+    {
         $actions = [
             Action::make('coaStockLevel')
-                ->label('Download COA summary (PDF)')
+                ->label('Summary PDF')
                 ->icon('heroicon-o-document-arrow-down')
                 ->color('gray')
                 ->url(route('reports.coa.stock-level'))
@@ -123,25 +128,21 @@ class StockLevels extends Page
                 ->label('Export Annex A.1 property cards (XLS)')
                 ->icon('heroicon-o-document-arrow-down')
                 ->color('gray')
-                ->action(function (): void {
-                    $missing = app(OwwaItemReportService::class)->countStockLevelItemsMissingPropertyClass(
-                        (int) $this->category,
-                        filled($this->search) ? $this->search : null,
-                    );
+                ->url(route('owwa.export.bulk.annex-a1', array_filter([
+                    'category' => $this->category,
+                    'search' => filled($this->search) ? $this->search : null,
+                ])))
+                ->openUrlInNewTab(false);
 
-                    if ($missing > 0) {
-                        Notification::make()
-                            ->warning()
-                            ->title('Property class missing')
-                            ->body("{$missing} item(s) have no property class and will export under Office equipment.")
-                            ->send();
-                    }
-
-                    $this->redirect(route('owwa.export.bulk.annex-a1', array_filter([
-                        'category' => $this->category,
-                        'search' => filled($this->search) ? $this->search : null,
-                    ])));
-                });
+            $actions[] = Action::make('exportAnnexA4')
+                ->label('Export Annex A.4 registry (XLS)')
+                ->icon('heroicon-o-document-arrow-down')
+                ->color('gray')
+                ->url(route('owwa.export.bulk.annex-a4', array_filter([
+                    'category' => $this->category,
+                    'search' => filled($this->search) ? $this->search : null,
+                ])))
+                ->openUrlInNewTab(false);
         }
 
         if ($this->categoryRecord?->getTemplateSlug() === 'ppe') {
@@ -155,7 +156,24 @@ class StockLevels extends Page
                 ])));
         }
 
-        return $actions;
+        return ActionGroup::make($actions)
+            ->label('Export / Download')
+            ->icon('heroicon-o-document-arrow-down')
+            ->color('gray')
+            ->button()
+            ->livewire($this);
+    }
+
+    public function getMissingPropertyClassCount(): int
+    {
+        if ($this->categoryRecord?->getTemplateSlug() !== 'semi_expendable') {
+            return 0;
+        }
+
+        return app(OwwaItemReportService::class)->countStockLevelItemsMissingPropertyClass(
+            (int) $this->category,
+            filled($this->search) ? $this->search : null,
+        );
     }
 
     /**
@@ -323,6 +341,7 @@ class StockLevels extends Page
                     Action::make('exportLedger')
                         ->label($ledger['exportLabel'])
                         ->icon('heroicon-o-document-arrow-down')
+                        ->color('gray')
                         ->url($ledger['exportUrl'])
                         ->openUrlInNewTab(false),
                 ];

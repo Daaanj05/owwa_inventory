@@ -15,22 +15,6 @@
 
 <x-filament-panels::page>
     <div class="owwa-inventory-layout">
-        <style>
-            .owwa-stock-levels-toolbar {
-                display: flex !important;
-                flex-direction: row !important;
-                flex-wrap: nowrap !important;
-                align-items: center !important;
-                gap: 0.75rem !important;
-                width: 100%;
-                box-sizing: border-box;
-            }
-            .owwa-stock-levels-toolbar .owwa-toolbar-left {
-                flex: 0 1 auto;
-                min-width: 0;
-                max-width: min(28rem, 100%);
-            }
-        </style>
         {{-- KPI cards row --}}
         <div class="owwa-kpi-grid">
             <div class="owwa-kpi-card owwa-kpi-card-total">
@@ -56,7 +40,18 @@
             </div>
         </div>
 
-        {{-- Toolbar: search --}}
+        @if ($isSemiExpendable && ($missingPropertyClassCount = $this->getMissingPropertyClassCount()) > 0)
+            <div class="owwa-data-panel-alert owwa-data-panel-alert-full" role="alert">
+                <svg class="owwa-alert-icon" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126z" />
+                </svg>
+                <div>
+                    {{ number_format($missingPropertyClassCount) }} item(s) have no property class and will export under Office equipment.
+                </div>
+            </div>
+        @endif
+
+        {{-- Toolbar: search + export --}}
         <div class="owwa-toolbar owwa-stock-levels-toolbar">
             <div class="owwa-toolbar-left">
                 <input
@@ -65,6 +60,9 @@
                     placeholder="Search items or category…"
                     class="owwa-search-bar"
                 />
+            </div>
+            <div class="owwa-toolbar-right">
+                {{ $this->buildExportDownloadsActionGroup() }}
             </div>
         </div>
 
@@ -177,4 +175,6 @@
 
         {{ $rows->links('vendor.pagination.owwa') }}
     </div>
+
+    <x-filament-actions::modals />
 </x-filament-panels::page>

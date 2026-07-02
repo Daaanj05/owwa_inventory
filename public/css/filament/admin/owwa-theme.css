@@ -853,6 +853,15 @@ button[type="submit"].fi-btn:hover {
     margin-right: auto !important;
 }
 
+/* Inventory task lists: hide redundant filter and column manager toolbar icons */
+.fi-resource-list-records-page .fi-ta-filters-dropdown,
+.fi-resource-list-records-page .fi-ta-filters-modal,
+.fi-resource-list-records-page .fi-ta-filters-trigger-action-ctn,
+.fi-resource-list-records-page .fi-ta-col-manager-dropdown,
+.fi-resource-list-records-page .fi-ta-col-manager-modal {
+    display: none !important;
+}
+
 .fi-ta-header-cell {
     font-size: 0.6875rem !important;
     font-weight: 600 !important;
@@ -2394,11 +2403,46 @@ button[type="submit"].fi-btn:hover {
 }
 
 .owwa-wizard-step {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
     color: inherit;
     font-size: inherit;
     line-height: inherit;
     font-weight: inherit;
     white-space: nowrap;
+}
+
+.owwa-wizard-step-label {
+    display: inline-block;
+}
+
+.owwa-wizard-step-icon {
+    display: inline-block;
+    width: 1.125rem;
+    height: 1.125rem;
+    flex-shrink: 0;
+    background: center / contain no-repeat;
+}
+
+.owwa-wizard-step-icon--semi-expendable {
+    background-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22none%22%20viewBox%3D%220%200%2024%2024%22%20stroke-width%3D%221.5%22%20stroke%3D%22%232563eb%22%3E%3Cpath%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20d%3D%22M11.42%2015.17%2017.25%2021A2.652%202.652%200%200021%2017.25l-5.877-5.877M11.42%2015.17%202.81%206.58a2.652%202.652%200%20013.12-4.24l2.87%202.87m-5.18%2010.06%205.18-5.18m5.18%205.18%202.87%202.87a2.652%202.652%200%20004.24-3.12l-2.87-2.87m-5.18-10.06-5.18%205.18%22%2F%3E%3C%2Fsvg%3E");
+}
+
+.owwa-wizard-step-icon--ppe {
+    background-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22none%22%20viewBox%3D%220%200%2024%2024%22%20stroke-width%3D%221.5%22%20stroke%3D%22%232563eb%22%3E%3Cpath%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20d%3D%22M9%2012.75%2011.25%2015%2015%209.75m-3-7.036A11.959%2011.959%200%20013.598%206%2011.99%2011.99%200%20003%209.749c0%205.592%203.824%2010.29%209%2011.623%205.176-1.332%209-6.03%209-11.622%200-1.31-.21-2.571-.598-3.751h-.152c-3.196%200-6.1-1.248-8.25-3.285z%22%2F%3E%3C%2Fsvg%3E");
+}
+
+.owwa-wizard-step-icon--consumables {
+    background-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22none%22%20viewBox%3D%220%200%2024%2024%22%20stroke-width%3D%221.5%22%20stroke%3D%22%232563eb%22%3E%3Cpath%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20d%3D%22M20.25%207.5l-.625%2010.632a2.25%202.25%200%2001-2.247%202.118H6.622a2.25%202.25%200%2001-2.247-2.118L3.75%207.5M10%2011.25h4M3.375%207.5h17.25c.621%200%201.125-.504%201.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621%200-1.125.504-1.125%201.125v1.5c0%20.621.504%201.125%201.125%201.125z%22%2F%3E%3C%2Fsvg%3E");
+}
+
+.owwa-wizard-step-icon--default {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke-width='1.5' stroke='%232563eb'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M3.75 6A2.25 2.25 0 0 1 6 3.75h2.25A2.25 2.25 0 0 1 10.5 6v2.25a2.25 2.25 0 0 1-2.25 2.25H6a2.25 2.25 0 0 1-2.25-2.25V6ZM13.5 15.75a2.25 2.25 0 0 1 2.25-2.25H18a2.25 2.25 0 0 1 2.25 2.25V18A2.25 2.25 0 0 1 18 20.25h-2.25a2.25 2.25 0 0 1-2.25-2.25v-2.25ZM13.5 6.75a2.25 2.25 0 0 1 2.25-2.25H18A2.25 2.25 0 0 1 20.25 6v2.25A2.25 2.25 0 0 1 18 10.5h-2.25A2.25 2.25 0 0 1 13.5 8.25V6.75ZM3.75 15.75a2.25 2.25 0 0 1 2.25-2.25h2.25a2.25 2.25 0 0 1 2.25 2.25V18a2.25 2.25 0 0 1-2.25 2.25H6a2.25 2.25 0 0 1-2.25-2.25v-2.25Z' /%3E%3C/svg%3E");
+}
+
+.fi-page[class*="fi-resource-"] .fi-header-heading:has(.owwa-wizard-title)::before {
+    display: none;
 }
 
 .owwa-wizard-step-link,
@@ -2581,6 +2625,10 @@ button[type="submit"].fi-btn:hover {
         flex-wrap: wrap;
         justify-content: flex-end;
     }
+}
+
+.owwa-stock-levels-toolbar .owwa-toolbar-right .fi-btn {
+    white-space: nowrap;
 }
 
 /* Stock levels: scoped selects — solid fill + border (Filament can reset native selects) */
@@ -5701,7 +5749,13 @@ a.owwa-pagination-page:hover {
 
 /* Physical count start page */
 .owwa-physical-count-start-page.owwa-pc-scan-container {
-    max-width: 32rem;
+    max-width: 36rem;
+    margin-inline: auto;
+    padding-inline: 0.5rem;
+    padding-bottom: 2rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
 }
 
 .owwa-pc-start-info-title {

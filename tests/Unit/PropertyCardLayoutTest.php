@@ -22,6 +22,8 @@ class PropertyCardLayoutTest extends TestCase
             'item_category_id' => $category->id,
             'item_code' => 'PPE-001',
             'name' => 'Office Desk',
+            'description' => 'Steel frame, mahogany top',
+            'serial_number' => 'SN-LEGACY',
         ]);
         $office = Office::factory()->create(['name' => 'OWWA RO4A', 'fund_cluster' => '01']);
 
@@ -39,6 +41,9 @@ class PropertyCardLayoutTest extends TestCase
         $values = PropertyCardLayout::buildFromAcquisition($acquisition);
 
         $this->assertStringContainsString('OWWA RO4A', (string) ($values['B6'] ?? ''));
+        $this->assertStringContainsString('Office Desk', (string) ($values['B10'] ?? ''));
+        $this->assertStringContainsString('Steel frame', (string) ($values['B10'] ?? ''));
+        $this->assertStringNotContainsString('S/N:', (string) ($values['B10'] ?? ''));
         $this->assertStringContainsString('PPE-001', (string) ($values['I9'] ?? ''));
         $this->assertSame('2026-01-15', $values['B12'] ?? null);
         $this->assertSame('ACQ-2026-001', $values['C12'] ?? null);

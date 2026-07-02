@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Disposals\Schemas;
 
+use App\Filament\Concerns\SyncsActiveItemCategory;
 use App\Models\Item;
 use App\Models\ItemCategory;
 use App\Services\DisposalInventoryUnitService;
@@ -323,11 +324,7 @@ class DisposalForm
 
     protected static function activeCategorySlug(): ?string
     {
-        $categoryId = session('active_item_category_id');
-
-        if (blank($categoryId) && filled(request()->query('category'))) {
-            $categoryId = (int) request()->query('category');
-        }
+        $categoryId = SyncsActiveItemCategory::resolveCategoryIdFromContext();
 
         if (blank($categoryId)) {
             return null;
@@ -353,7 +350,7 @@ class DisposalForm
     protected static function isCategoryScoped(): bool
     {
         return Filament::getCurrentPanel()?->getId() === 'admin'
-            && filled(session('active_item_category_id'));
+            && (filled(request()->query('category')) || filled(session('active_item_category_id')));
     }
 
     protected static function activeCategoryFilter(): ?int
@@ -362,6 +359,6 @@ class DisposalForm
             return null;
         }
 
-        return (int) session('active_item_category_id');
+        return SyncsActiveItemCategory::resolveCategoryIdFromContext();
     }
 }

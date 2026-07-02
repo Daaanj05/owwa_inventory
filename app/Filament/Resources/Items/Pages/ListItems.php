@@ -18,11 +18,15 @@ use Filament\Schemas\Schema;
 use Filament\View\PanelsRenderHook;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\HtmlString;
+use Livewire\Attributes\Url;
 
 class ListItems extends ListRecords
 {
     use HasSystemAdminWizardHeading;
     use SyncsActiveItemCategory;
+
+    #[Url]
+    public int|string|null $category = null;
 
     protected static string $resource = ItemResource::class;
 
@@ -48,7 +52,7 @@ class ListItems extends ListRecords
             return parent::getHeading();
         }
 
-        $categoryName = ItemCategory::query()->whereKey((int) session('active_item_category_id'))->value('name');
+        $categoryName = ItemCategory::query()->whereKey($this->activeItemCategoryId())->value('name');
 
         if (! $categoryName) {
             return 'Items';
@@ -64,7 +68,7 @@ class ListItems extends ListRecords
 
     protected function getWizardHeaderBreadcrumb(string $categoryName, string $taskLabel): string
     {
-        $categoryId = (int) session('active_item_category_id', 0);
+        $categoryId = $this->activeItemCategoryId();
         $dashboardUrl = InventoryCategoryDashboard::getUrl(['category' => $categoryId]);
 
         return sprintf(
@@ -97,10 +101,10 @@ class ListItems extends ListRecords
                     Actions::make([
                         OwwaFormModalDefaults::createAction(OwwaFormModalDefaults::WIDTH_COMPACT)
                             ->fillForm(fn (): array => [
-                                'item_category_id' => (int) session('active_item_category_id', 0) ?: null,
+                                'item_category_id' => $this->activeItemCategoryId() ?: null,
                             ])
                             ->mutateDataUsing(function (array $data): array {
-                                $categoryId = (int) session('active_item_category_id', 0);
+                                $categoryId = $this->activeItemCategoryId();
                                 if ($categoryId > 0) {
                                     $data['item_category_id'] = $categoryId;
                                 }
@@ -130,7 +134,7 @@ class ListItems extends ListRecords
 
     public function getTableColumnsSessionKey(): string
     {
-        $categoryId = (int) session('active_item_category_id', 0);
+        $categoryId = $this->activeItemCategoryId();
 
         return parent::getTableColumnsSessionKey().'_cat_'.$categoryId;
     }

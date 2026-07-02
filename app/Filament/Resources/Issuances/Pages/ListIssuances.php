@@ -21,12 +21,16 @@ use Filament\View\PanelsRenderHook;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
 use Illuminate\Support\HtmlString;
+use Livewire\Attributes\Url;
 
 class ListIssuances extends ListRecords
 {
     use CoaListPageExports;
     use HasSystemAdminWizardHeading;
     use SyncsActiveItemCategory;
+
+    #[Url]
+    public int|string|null $category = null;
 
     protected static string $resource = IssuanceResource::class;
 
@@ -37,7 +41,7 @@ class ListIssuances extends ListRecords
 
     public function getHeading(): string|\Illuminate\Contracts\Support\Htmlable
     {
-        $categoryName = ItemCategory::query()->whereKey((int) session('active_item_category_id'))->value('name');
+        $categoryName = ItemCategory::query()->whereKey($this->activeItemCategoryId())->value('name');
 
         if (! $categoryName) {
             return 'Issuances';
@@ -62,7 +66,7 @@ class ListIssuances extends ListRecords
 
     protected function getWizardHeaderBreadcrumb(string $categoryName, string $taskLabel): string
     {
-        $categoryId = (int) session('active_item_category_id', 0);
+        $categoryId = $this->activeItemCategoryId();
         $dashboardUrl = InventoryCategoryDashboard::getUrl(['category' => $categoryId]);
 
         return sprintf(
@@ -98,7 +102,7 @@ class ListIssuances extends ListRecords
     public function content(Schema $schema): Schema
     {
         $categorySlug = ItemCategory::query()
-            ->whereKey((int) session('active_item_category_id'))
+            ->whereKey($this->activeItemCategoryId())
             ->first()
             ?->getTemplateSlug();
 

@@ -5,10 +5,8 @@ namespace App\Filament\Resources\PhysicalCountSessions\Tables;
 use App\Filament\Resources\PhysicalCountSessions\Actions\PhysicalCountSessionActions;
 use App\Filament\Resources\PhysicalCountSessions\Schemas\PhysicalCountSessionModalSchema;
 use App\Filament\Support\ConfiguresOwwaViewAction;
-use App\Filament\Support\OwwaFormModalDefaults;
 use App\Models\PhysicalCountSession;
 use App\Support\OwwaReferenceLabels;
-use Filament\Actions\ActionGroup;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
@@ -87,12 +85,6 @@ class PhysicalCountSessionsTable
                     modalWidth: '5xl',
                     extraModalClass: 'owwa-physical-count-modal',
                 ),
-                ActionGroup::make([
-                    OwwaFormModalDefaults::editAction(OwwaFormModalDefaults::WIDTH_STANDARD),
-                ])
-                    ->label('Actions')
-                    ->icon('heroicon-m-ellipsis-vertical')
-                    ->color('gray'),
             ])
             ->recordUrl(null)
             ->recordAction('view');

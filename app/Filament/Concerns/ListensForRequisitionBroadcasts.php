@@ -6,6 +6,8 @@ use Filament\Facades\Filament;
 
 trait ListensForRequisitionBroadcasts
 {
+    use HasRequisitionRefreshFallback;
+
     /**
      * @return array<string, string>
      */

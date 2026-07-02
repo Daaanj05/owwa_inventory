@@ -13,6 +13,7 @@ class OwwaReferenceLabels
 {
     public const RIS = 'RIS No.';
 
+    /** RSMI Appendix 64 header label — maps to issuance {@see Issuance::$reference_code}, not item serial metadata. */
     public const SERIAL = 'Serial No.';
 
     public const PAR = 'PAR No.';
@@ -66,6 +67,12 @@ class OwwaReferenceLabels
         return self::RLSDDP;
     }
 
+    /**
+     * OWWA control-number label for issuance exports and UI.
+     *
+     * Consumables: RSMI "Serial No." ({@see Issuance::$reference_code}, YYYY-MM-####).
+     * PPE: PAR No. Semi-expendable: ICS No.
+     */
     public static function issuanceControl(?string $categorySlug = null): string
     {
         $slug = $categorySlug ?? self::activeCategorySlug();

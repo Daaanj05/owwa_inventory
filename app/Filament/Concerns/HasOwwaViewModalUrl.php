@@ -18,7 +18,7 @@ trait HasOwwaViewModalUrl
             'tableActionRecord' => $id,
         ], $extraParams);
 
-        if ($categoryId = session('active_item_category_id')) {
+        if ($categoryId = SyncsActiveItemCategory::resolveCategoryIdFromContext()) {
             $params['category'] ??= $categoryId;
         }
 

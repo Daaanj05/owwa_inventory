@@ -6,6 +6,10 @@ services:
     region: singapore
     branch: main
     healthCheckPath: /up
+    disk:
+      name: owwa-templates
+      mountPath: /var/www/html/storage/app/templates
+      sizeGB: 1
     envVars:
       - key: APP_ENV
         value: production
@@ -43,3 +47,5 @@ services:
         value: nomic-embed-text
       - key: OLLAMA_CHAT_MODEL
         value: deepseek-r1:7b
+      - key: OWWA_TEMPLATES_STRICT
+        value: "true"

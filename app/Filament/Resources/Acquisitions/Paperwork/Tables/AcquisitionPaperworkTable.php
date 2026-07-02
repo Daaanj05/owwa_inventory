@@ -7,7 +7,6 @@ use App\Filament\Resources\Acquisitions\Paperwork\Schemas\AcquisitionPaperworkMo
 use App\Filament\Support\ConfiguresOwwaViewAction;
 use App\Models\AcquisitionPaperwork;
 use App\Support\OwwaReferenceLabels;
-use Filament\Actions\ActionGroup;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
@@ -77,12 +76,6 @@ class AcquisitionPaperworkTable
                         AcquisitionPaperworkActions::hiddenPhaseViewActionsForStepper(),
                     ),
                 ),
-                ActionGroup::make([
-                    AcquisitionPaperworkActions::configureEditAction(),
-                ])
-                    ->label('Actions')
-                    ->icon('heroicon-m-ellipsis-vertical')
-                    ->color('gray'),
             ])
             ->recordUrl(null)
             ->recordAction('view');

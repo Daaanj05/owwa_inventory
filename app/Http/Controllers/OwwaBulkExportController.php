@@ -142,6 +142,24 @@ class OwwaBulkExportController extends Controller
         return $this->itemReport->downloadAnnexA1Bulk($pairs);
     }
 
+    public function annexA4(Request $request): StreamedResponse
+    {
+        abort_unless(StockLevels::canAccess(), 403);
+
+        $categoryId = $request->query('category');
+        $search = $request->query('search');
+        $pairs = $this->itemReport->stockLevelPairsForAnnexA1Bulk(
+            $categoryId !== null && $categoryId !== '' ? (int) $categoryId : null,
+            is_string($search) && $search !== '' ? $search : null,
+        );
+
+        abort_if($pairs->isEmpty(), 404);
+
+        $this->logExportActivity('Exported bulk Annex A.4 registry', properties: ['count' => $pairs->count()]);
+
+        return $this->itemReport->downloadAnnexA4Bulk($pairs);
+    }
+
     public function propertyCards(Request $request): StreamedResponse
     {
         abort_unless(StockLevels::canAccess(), 403);

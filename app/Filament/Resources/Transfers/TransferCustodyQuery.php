@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Transfers;
 
+use App\Filament\Concerns\SyncsActiveItemCategory;
 use App\Models\ItemCategory;
 use App\Models\Transfer;
 use Illuminate\Database\Eloquent\Builder;
@@ -24,10 +25,10 @@ class TransferCustodyQuery
             $itemQuery->whereIn('item_category_id', $transferCategoryIds);
         });
 
-        $categoryId = session('active_item_category_id');
-        if (filled($categoryId)) {
+        $categoryId = SyncsActiveItemCategory::resolveCategoryIdFromContext();
+        if ($categoryId > 0) {
             $query->whereHas('item', function (Builder $itemQuery) use ($categoryId): void {
-                $itemQuery->where('item_category_id', (int) $categoryId);
+                $itemQuery->where('item_category_id', $categoryId);
             });
         } else {
             $query->whereRaw('1 = 0');

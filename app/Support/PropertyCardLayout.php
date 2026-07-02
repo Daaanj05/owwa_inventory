@@ -129,7 +129,7 @@ class PropertyCardLayout
             return '';
         }
 
-        $parts = array_filter([$item->name, $item->description, $item->serial_number ? 'S/N: '.$item->serial_number : null]);
+        $parts = array_filter([$item->name, $item->description]);
 
         return implode(' — ', $parts);
     }

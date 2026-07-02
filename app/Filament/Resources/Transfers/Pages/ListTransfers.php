@@ -32,6 +32,9 @@ class ListTransfers extends ListRecords
     protected static string $resource = TransferResource::class;
 
     #[Url]
+    public int|string|null $category = null;
+
+    #[Url]
     public ?int $create = null;
 
     #[Url]
@@ -47,7 +50,7 @@ class ListTransfers extends ListRecords
 
     public function getHeading(): string|\Illuminate\Contracts\Support\Htmlable
     {
-        $categoryName = ItemCategory::query()->whereKey((int) session('active_item_category_id'))->value('name');
+        $categoryName = ItemCategory::query()->whereKey($this->activeItemCategoryId())->value('name');
 
         if (! $categoryName) {
             return 'Transfers';
@@ -72,7 +75,7 @@ class ListTransfers extends ListRecords
 
     protected function getWizardHeaderBreadcrumb(string $categoryName, string $taskLabel): string
     {
-        $categoryId = (int) session('active_item_category_id', 0);
+        $categoryId = $this->activeItemCategoryId();
         $dashboardUrl = InventoryCategoryDashboard::getUrl(['category' => $categoryId]);
 
         return sprintf(
@@ -93,7 +96,7 @@ class ListTransfers extends ListRecords
             return;
         }
 
-        $categoryId = (int) session('active_item_category_id', 0);
+        $categoryId = $this->activeItemCategoryId();
         $categorySlug = $categoryId > 0
             ? \App\Models\ItemCategory::query()->find($categoryId)?->getTemplateSlug()
             : null;
@@ -112,7 +115,7 @@ class ListTransfers extends ListRecords
         $this->mountAction('create', array_filter([
             'item_id' => $itemId > 0 ? $itemId : null,
             'from_office_id' => $fromOfficeId > 0 ? $fromOfficeId : CustodianOfficeScope::inventoryOfficeId(),
-            'item_category_filter' => (int) session('active_item_category_id', 0) ?: null,
+            'item_category_filter' => $this->activeItemCategoryId() ?: null,
         ]), ['schemaComponent' => 'content']);
     }
 
@@ -137,7 +140,7 @@ class ListTransfers extends ListRecords
             $this->coaExportReportAction('coaTransfer', 'owwa.export.bulk.transfers'),
             OwwaFormModalDefaults::createAction(OwwaFormModalDefaults::WIDTH_STANDARD)
                 ->fillForm(fn (): array => [
-                    'item_category_filter' => (int) session('active_item_category_id', 0) ?: null,
+                    'item_category_filter' => $this->activeItemCategoryId() ?: null,
                     'from_office_id' => CustodianOfficeScope::inventoryOfficeId(),
                     'transfer_date' => now()->toDateString(),
                 ]),

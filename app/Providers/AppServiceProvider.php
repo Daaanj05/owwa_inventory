@@ -17,6 +17,7 @@ use App\Observers\PhysicalCountSessionObserver;
 use App\Observers\RequisitionObserver;
 use App\Observers\TransferObserver;
 use App\Support\RetryingFilesystem;
+use Filament\Actions\Action;
 use Filament\Tables\Table;
 use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Filesystem\Filesystem;
@@ -56,7 +57,10 @@ class AppServiceProvider extends ServiceProvider
 
         Table::configureUsing(fn (Table $table): Table => $table
             ->paginationPageOptions([10])
-            ->defaultPaginationPageOption(10));
+            ->defaultPaginationPageOption(10)
+            ->columnManager(false)
+            ->filtersTriggerAction(fn (Action $action) => $action->visible(false))
+            ->columnManagerTriggerAction(fn (Action $action) => $action->visible(false)));
 
         Acquisition::observe(AcquisitionObserver::class);
         Item::observe(ItemObserver::class);

@@ -16,11 +16,15 @@ use Filament\Notifications\Actions\Action as NotificationAction;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ListRecords;
 use Illuminate\Contracts\Support\Htmlable;
+use Livewire\Attributes\Url;
 
 class ListPhysicalCountSessions extends ListRecords
 {
     use HasPhysicalCountWizardBreadcrumbs;
     use SyncsActiveItemCategory;
+
+    #[Url]
+    public int|string|null $category = null;
 
     protected static string $resource = PhysicalCountSessionResource::class;
 
@@ -53,10 +57,12 @@ class ListPhysicalCountSessions extends ListRecords
                 ->label('Start count (mobile)')
                 ->icon('heroicon-o-device-phone-mobile')
                 ->color('primary')
-                ->url(fn (): string => PhysicalCountSessionResource::getUrl('start-mobile')),
+                ->url(fn (): string => PhysicalCountSessionResource::getUrl('start-mobile', [
+                    'category' => $this->activeItemCategoryId(),
+                ])),
             OwwaFormModalDefaults::createAction(OwwaFormModalDefaults::WIDTH_STANDARD)
                 ->mutateFormDataUsing(function (array $data): array {
-                    $categoryId = (int) session('active_item_category_id', 0);
+                    $categoryId = $this->activeItemCategoryId();
                     if ($categoryId > 0) {
                         $data['item_category_id'] = $categoryId;
                     }

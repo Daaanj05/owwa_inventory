@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\PhysicalCountSessions\Schemas;
 
+use App\Filament\Concerns\SyncsActiveItemCategory;
 use App\Filament\Resources\PhysicalCountSessions\Pages\EditPhysicalCountSession;
 use App\Models\Item;
 use App\Models\ItemCategory;
@@ -74,7 +75,7 @@ class PhysicalCountSessionForm
                         Select::make('item_category_id')
                             ->label('Item category')
                             ->options(fn (): array => ItemCategory::query()->whereNull('archived_at')->orderBy('name')->pluck('name', 'id')->all())
-                            ->default(fn (): mixed => session('active_item_category_id'))
+                            ->default(fn (): mixed => SyncsActiveItemCategory::resolveCategoryIdFromContext())
                             ->searchable()
                             ->live(),
                         DatePicker::make('count_date')

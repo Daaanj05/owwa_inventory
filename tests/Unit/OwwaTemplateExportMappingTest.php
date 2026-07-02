@@ -168,6 +168,24 @@ class OwwaTemplateExportMappingTest extends TestCase
         $this->assertSame('', $values['A12']);
     }
 
+    public function test_ppe_description_export_uses_name_and_description_only(): void
+    {
+        $item = new Item([
+            'name' => 'Laptop',
+            'description' => 'Dell Latitude, silver',
+            'serial_number' => 'SN-999',
+        ]);
+
+        $service = app(OwwaTemplateExportService::class);
+        $method = new \ReflectionMethod($service, 'formatItemDescription');
+        $description = $method->invoke($service, $item);
+
+        $this->assertStringContainsString('Laptop', $description);
+        $this->assertStringContainsString('Dell Latitude', $description);
+        $this->assertStringNotContainsString('S/N:', $description);
+        $this->assertStringNotContainsString('SN-999', $description);
+    }
+
     public function test_demo_seeder_does_not_assign_ris_prefix_to_issuances(): void
     {
         $source = file_get_contents(base_path('database/seeders/DemoDataSeeder.php'));

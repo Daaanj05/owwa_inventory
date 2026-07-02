@@ -62,6 +62,8 @@ RUN mkdir -p bootstrap/cache \
     storage/framework/sessions \
     storage/framework/views \
     storage/logs \
+    storage/app/templates \
+    && if [ -d resources/owwa-templates ]; then cp -r resources/owwa-templates/. storage/app/templates/; fi \
     && chmod -R 775 bootstrap/cache storage \
     && composer dump-autoload --optimize --classmap-authoritative --no-scripts \
     && chmod +x docker/render-entrypoint.sh \

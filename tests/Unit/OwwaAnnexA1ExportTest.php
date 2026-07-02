@@ -11,10 +11,14 @@ use App\Services\OwwaTemplateExportService;
 use App\Support\AnnexA1BlockLayout;
 use App\Support\ItemPropertyClass;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use PhpOffice\PhpSpreadsheet\Style\Border;
+use PHPUnit\Framework\Attributes\DataProvider;
+use Tests\Support\CreatesSemiExpendableAnnexA4Fixtures;
 use Tests\TestCase;
 
 class OwwaAnnexA1ExportTest extends TestCase
 {
+    use CreatesSemiExpendableAnnexA4Fixtures;
     use RefreshDatabase;
 
     public function test_item_report_config_uses_recording_stock_levels_template(): void
@@ -30,7 +34,8 @@ class OwwaAnnexA1ExportTest extends TestCase
         $map = config('owwa_cell_maps.ANNEX_A1');
 
         $this->assertSame('SPC', $map['template_sheet']);
-        $this->assertSame(18, $map['block_stride']);
+        $this->assertSame(7, $map['owwa_header_rows']);
+        $this->assertSame(5, $map['ledger']['blank_style_rows']);
         $this->assertSame('A8', $map['header']['entity_name']['cell']);
         $this->assertSame('K11', $map['header']['property_number']['cell']);
         $this->assertSame(15, $map['ledger']['start_row']);
@@ -117,7 +122,246 @@ class OwwaAnnexA1ExportTest extends TestCase
         $this->assertSame(AnnexA1BlockLayout::templateSheetName(), $sheet['sheetName']);
     }
 
-    public function test_stacked_ict_items_use_eighteen_row_block_offsets(): void
+    public function test_stacked_blocks_repeat_owwa_header_on_bulk_sheet(): void
+    {
+        if (! extension_loaded('zip')) {
+            $this->markTestSkipped('The zip extension is required to read OWWA .xlsx templates.');
+        }
+
+        $office = Office::factory()->create(['name' => 'RWO IV-A', 'fund_cluster' => '01']);
+        $category = ItemCategory::factory()->create(['name' => 'Semi-Expendable']);
+
+        $itemOne = Item::factory()->create([
+            'item_category_id' => $category->id,
+            'name' => 'Router A',
+            'item_code' => 'SEM-100',
+            'property_class' => ItemPropertyClass::Ict,
+        ]);
+
+        $itemTwo = Item::factory()->create([
+            'item_category_id' => $category->id,
+            'name' => 'Router B',
+            'item_code' => 'SEM-101',
+            'property_class' => ItemPropertyClass::Ict,
+        ]);
+
+        $reportService = app(OwwaItemReportService::class);
+        $spreadsheet = app(OwwaTemplateExportService::class)->buildAnnexA1Spreadsheet(
+            [
+                [
+                    'sheetName' => 'ICT',
+                    'blocks' => $reportService->buildAnnexA1Blocks([
+                        ['item' => $itemOne, 'office' => $office, 'office_id' => $office->id],
+                        ['item' => $itemTwo, 'office' => $office, 'office_id' => $office->id],
+                    ]),
+                ],
+            ],
+        );
+
+        $sheet = $spreadsheet->getSheetByName('ICT');
+        $this->assertNotNull($sheet);
+        $this->assertStringContainsString('SEMI-EXPENDABLE PROPERTY CARD', (string) $sheet->getCell('A5')->getValue());
+        $secondHeaderRow = AnnexA1BlockLayout::blockStartRows([0, 0])[1] + 4;
+        $this->assertStringContainsString(
+            'SEMI-EXPENDABLE PROPERTY CARD',
+            (string) $sheet->getCell('A'.$secondHeaderRow)->getValue(),
+        );
+        $this->assertStringContainsString('SEM-101', (string) $sheet->getCell('K31')->getValue());
+    }
+
+    public function test_annex_a1_ledger_dates_use_uniform_ten_point_font(): void
+    {
+        if (! extension_loaded('zip')) {
+            $this->markTestSkipped('The zip extension is required to read OWWA .xlsx templates.');
+        }
+
+        $office = Office::factory()->create(['name' => 'RWO IV-A', 'fund_cluster' => '01']);
+        $category = ItemCategory::factory()->create(['name' => 'Semi-Expendable']);
+        $custodian = \App\Models\User::factory()->create(['office_id' => $office->id]);
+
+        $item = Item::factory()->create([
+            'item_category_id' => $category->id,
+            'name' => 'Desk Organizer',
+            'item_code' => 'SEM-003',
+            'property_class' => ItemPropertyClass::OfficeEquipment,
+        ]);
+
+        foreach (['2026-01-22', '2026-02-01', '2026-02-05'] as $index => $date) {
+            Acquisition::query()->create([
+                'reference_code' => 'ACQ-'.$index,
+                'item_id' => $item->id,
+                'office_id' => $office->id,
+                'quantity' => 1,
+                'acquisition_date' => $date,
+                'recorded_by' => $custodian->id,
+            ]);
+        }
+
+        $spreadsheet = app(OwwaTemplateExportService::class)->buildAnnexA1Spreadsheet(
+            [
+                [
+                    'sheetName' => 'OFFICE EQUIPMENT',
+                    'blocks' => [
+                        app(OwwaItemReportService::class)->buildAnnexA1Block($item, $office, $office->id),
+                    ],
+                ],
+            ],
+        );
+
+        $sheet = $spreadsheet->getSheetByName('OFFICE EQUIPMENT');
+        $this->assertNotNull($sheet);
+
+        foreach ([15, 16, 17] as $row) {
+            foreach (['A', 'B', 'C', 'J', 'L'] as $column) {
+                $this->assertSame(
+                    'Times New Roman',
+                    $sheet->getStyle($column.$row)->getFont()->getName(),
+                    "Font on {$column}{$row} should be Times New Roman",
+                );
+                $this->assertSame(
+                    10.0,
+                    $sheet->getStyle($column.$row)->getFont()->getSize(),
+                    "Font size on {$column}{$row} should be 10pt",
+                );
+                $this->assertFalse($sheet->getStyle($column.$row)->getFont()->getBold());
+            }
+        }
+    }
+
+    public function test_two_transactions_plus_five_blanks_equals_seven_ledger_rows(): void
+    {
+        if (! extension_loaded('zip')) {
+            $this->markTestSkipped('The zip extension is required to read OWWA .xlsx templates.');
+        }
+
+        $office = Office::factory()->create(['name' => 'RWO IV-A', 'fund_cluster' => '01']);
+        $category = ItemCategory::factory()->create(['name' => 'Semi-Expendable']);
+        $custodian = \App\Models\User::factory()->create(['office_id' => $office->id]);
+
+        $item = Item::factory()->create([
+            'item_category_id' => $category->id,
+            'item_code' => 'SEM-010',
+            'property_class' => ItemPropertyClass::OfficeEquipment,
+        ]);
+
+        foreach (['2026-01-22', '2026-02-01'] as $index => $date) {
+            Acquisition::query()->create([
+                'reference_code' => 'ACQ-'.$index,
+                'item_id' => $item->id,
+                'office_id' => $office->id,
+                'quantity' => 1,
+                'acquisition_date' => $date,
+                'recorded_by' => $custodian->id,
+            ]);
+        }
+
+        $spreadsheet = app(OwwaTemplateExportService::class)->buildAnnexA1Spreadsheet(
+            [
+                [
+                    'sheetName' => 'OFFICE EQUIPMENT',
+                    'blocks' => [
+                        app(OwwaItemReportService::class)->buildAnnexA1Block($item, $office, $office->id),
+                    ],
+                ],
+            ],
+        );
+
+        $sheet = $spreadsheet->getSheetByName('OFFICE EQUIPMENT');
+        $this->assertNotNull($sheet);
+        $this->assertSame('2026-02-01', $sheet->getCell('A15')->getValue());
+        $this->assertSame('2026-01-22', $sheet->getCell('A16')->getValue());
+
+        foreach ([17, 18, 19, 20, 21] as $row) {
+            $this->assertNull($sheet->getCell('A'.$row)->getValue(), "Row {$row} should be blank");
+        }
+    }
+
+    public function test_annex_a1_single_item_has_five_styled_blank_ledger_rows(): void
+    {
+        if (! extension_loaded('zip')) {
+            $this->markTestSkipped('The zip extension is required to read OWWA .xlsx templates.');
+        }
+
+        $office = Office::factory()->create(['name' => 'RWO IV-A', 'fund_cluster' => '01']);
+        $category = ItemCategory::factory()->create(['name' => 'Semi-Expendable']);
+        $custodian = \App\Models\User::factory()->create(['office_id' => $office->id]);
+
+        $item = Item::factory()->create([
+            'item_category_id' => $category->id,
+            'name' => 'Desk Organizer',
+            'item_code' => 'SEM-003',
+            'property_class' => ItemPropertyClass::OfficeEquipment,
+        ]);
+
+        Acquisition::query()->create([
+            'reference_code' => 'ACQ-1',
+            'item_id' => $item->id,
+            'office_id' => $office->id,
+            'quantity' => 1,
+            'acquisition_date' => '2026-01-22',
+            'recorded_by' => $custodian->id,
+        ]);
+
+        $spreadsheet = app(OwwaTemplateExportService::class)->buildAnnexA1Spreadsheet(
+            [
+                [
+                    'sheetName' => 'OFFICE EQUIPMENT',
+                    'blocks' => [
+                        app(OwwaItemReportService::class)->buildAnnexA1Block($item, $office, $office->id),
+                    ],
+                ],
+            ],
+        );
+
+        $sheet = $spreadsheet->getSheetByName('OFFICE EQUIPMENT');
+        $this->assertNotNull($sheet);
+        $this->assertSame('2026-01-22', $sheet->getCell('A15')->getValue());
+
+        foreach ([16, 17, 18, 19, 20] as $row) {
+            $this->assertNull($sheet->getCell('A'.$row)->getValue());
+            $this->assertSame(10.0, $sheet->getStyle('A'.$row)->getFont()->getSize());
+        }
+    }
+
+    public function test_stacked_blocks_duplicate_header_drawings(): void
+    {
+        if (! extension_loaded('zip')) {
+            $this->markTestSkipped('The zip extension is required to read OWWA .xlsx templates.');
+        }
+
+        $office = Office::factory()->create(['name' => 'RWO IV-A', 'fund_cluster' => '01']);
+        $category = ItemCategory::factory()->create(['name' => 'Semi-Expendable']);
+
+        $itemOne = Item::factory()->create([
+            'item_category_id' => $category->id,
+            'item_code' => 'SEM-100',
+            'property_class' => ItemPropertyClass::Ict,
+        ]);
+
+        $itemTwo = Item::factory()->create([
+            'item_category_id' => $category->id,
+            'item_code' => 'SEM-101',
+            'property_class' => ItemPropertyClass::Ict,
+        ]);
+
+        $spreadsheet = app(OwwaTemplateExportService::class)->buildAnnexA1Spreadsheet(
+            [
+                [
+                    'sheetName' => 'ICT',
+                    'blocks' => app(OwwaItemReportService::class)->buildAnnexA1Blocks([
+                        ['item' => $itemOne, 'office' => $office, 'office_id' => $office->id],
+                        ['item' => $itemTwo, 'office' => $office, 'office_id' => $office->id],
+                    ]),
+                ],
+            ],
+        );
+
+        $sheet = $spreadsheet->getSheetByName('ICT');
+        $this->assertNotNull($sheet);
+        $this->assertGreaterThanOrEqual(4, $sheet->getDrawingCollection()->count());
+    }
+
+    public function test_stacked_ict_items_use_dynamic_block_offsets(): void
     {
         $office = Office::factory()->create(['name' => 'RWO IV-A', 'fund_cluster' => '01']);
         $category = ItemCategory::factory()->create(['name' => 'Semi-Expendable']);
@@ -142,8 +386,114 @@ class OwwaAnnexA1ExportTest extends TestCase
         ]);
 
         $this->assertStringContainsString('SEM-100', (string) ($values['K11'] ?? ''));
-        $this->assertStringContainsString('SEM-101', (string) ($values['K29'] ?? ''));
+        $this->assertStringContainsString('SEM-101', (string) ($values['K31'] ?? ''));
         $this->assertSame(8, AnnexA1BlockLayout::entityRow(0));
-        $this->assertSame(26, AnnexA1BlockLayout::entityRow(1));
+        $this->assertSame(28, AnnexA1BlockLayout::entityRow(1));
+    }
+
+    /**
+     * @return array<string, array{0: string, 1: string}>
+     */
+    public static function propertyClassSheetProvider(): array
+    {
+        return [
+            'ict' => [ItemPropertyClass::Ict, 'ICT'],
+            'office_equipment' => [ItemPropertyClass::OfficeEquipment, 'OFFICE EQUIPMENT'],
+            'furnitures_fixtures' => [ItemPropertyClass::FurnituresFixtures, 'F&F'],
+            'sports_equipment' => [ItemPropertyClass::SportsEquipment, 'SPORTS EQUIPMENT'],
+            'medical_equipment' => [ItemPropertyClass::MedicalEquipment, 'MEDICAL EQUIPMENT'],
+            'vehicle_equipment' => [ItemPropertyClass::VehicleEquipment, 'VEHICLE EQUIPMENT'],
+        ];
+    }
+
+    #[DataProvider('propertyClassSheetProvider')]
+    public function test_single_item_tab_clears_ghost_rows_below_last_block(
+        string $propertyClass,
+        string $expectedSheetName,
+    ): void {
+        if (! extension_loaded('zip')) {
+            $this->markTestSkipped('The zip extension is required to read OWWA .xlsx templates.');
+        }
+
+        $fixture = $this->createSemiItemWithIssuance($propertyClass);
+        $block = app(OwwaItemReportService::class)->buildAnnexA1Block(
+            $fixture['item'],
+            $fixture['office'],
+            $fixture['office']->id,
+        );
+
+        $spreadsheet = app(OwwaTemplateExportService::class)->buildAnnexA1Spreadsheet(
+            [
+                [
+                    'sheetName' => $expectedSheetName,
+                    'blocks' => [$block],
+                ],
+            ],
+        );
+
+        $sheet = $spreadsheet->getSheetByName($expectedSheetName);
+        $this->assertNotNull($sheet, "Expected sheet [{$expectedSheetName}] for {$propertyClass}");
+
+        $transactionCount = count($block['transactions']);
+        $lastUsedRow = AnnexA1BlockLayout::FIRST_BLOCK_START_ROW
+            + AnnexA1BlockLayout::blockHeight($transactionCount)
+            - 1;
+        $ghostRow = $lastUsedRow + 5;
+
+        $this->assertNull($sheet->getCell('A'.$ghostRow)->getValue());
+        $this->assertSame(
+            Border::BORDER_NONE,
+            $sheet->getStyle('A'.$ghostRow)->getBorders()->getTop()->getBorderStyle(),
+            "Row {$ghostRow} should not retain template borders on {$expectedSheetName}",
+        );
+    }
+
+    public function test_data_row_expands_height_for_wrapped_office_officer_text(): void
+    {
+        if (! extension_loaded('zip')) {
+            $this->markTestSkipped('The zip extension is required to read OWWA .xlsx templates.');
+        }
+
+        $longOffice = str_repeat('OWWA Regional Office IV-A ', 8);
+
+        $spreadsheet = app(OwwaTemplateExportService::class)->buildAnnexA1Spreadsheet(
+            [
+                [
+                    'sheetName' => 'ICT',
+                    'blocks' => [
+                        [
+                            'header' => [
+                                'entity_name' => 'RWO IV-A',
+                                'fund_cluster' => '01',
+                                'property_type' => 'INFORMATION & COMMUNICATION TECHNOLOGY',
+                                'property_number' => 'SEM-ICT-001',
+                                'description' => 'Router',
+                            ],
+                            'transactions' => [
+                                [
+                                    'date' => '2026-07-01',
+                                    'reference' => '2026-07-9000',
+                                    'issue_qty' => 1,
+                                    'office_officer' => $longOffice,
+                                    'balance' => 0,
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+            ],
+        );
+
+        $sheet = $spreadsheet->getSheetByName('ICT');
+        $this->assertNotNull($sheet);
+
+        $dataRowHeight = $sheet->getRowDimension(15)->getRowHeight();
+        $blankRowHeight = $sheet->getRowDimension(16)->getRowHeight();
+
+        $this->assertTrue(
+            $dataRowHeight > $blankRowHeight,
+            'Wrapped data row should be taller than the blank padding row beneath it',
+        );
+        $this->assertTrue($sheet->getStyle('I15')->getAlignment()->getWrapText());
     }
 }

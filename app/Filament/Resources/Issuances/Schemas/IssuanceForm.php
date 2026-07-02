@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Issuances\Schemas;
 
+use App\Filament\Concerns\SyncsActiveItemCategory;
 use App\Models\Acquisition;
 use App\Models\Issuance;
 use App\Models\Item;
@@ -76,7 +77,7 @@ class IssuanceForm
                                 fn (): array => ItemCategory::query()->orderBy('name')->pluck('name', 'id')->toArray()
                             ))
                             ->placeholder('All categories')
-                            ->default(fn (): mixed => session('active_item_category_id'))
+                            ->default(fn (): mixed => SyncsActiveItemCategory::resolveCategoryIdFromContext())
                             ->live()
                             ->dehydrated(false)
                             ->afterStateUpdated(function (Set $set): void {

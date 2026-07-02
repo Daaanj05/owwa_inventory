@@ -12,7 +12,7 @@ return [
 
     'auto_generate_property_numbers' => env('INVENTORY_AUTO_PROPERTY_NUMBERS', true),
 
-    'require_serial_number_for_ppe' => env('INVENTORY_REQUIRE_SERIAL_PPE', true),
+    'require_serial_number_for_ppe' => env('INVENTORY_REQUIRE_SERIAL_PPE', false),
 
     /*
     |--------------------------------------------------------------------------
@@ -110,5 +110,17 @@ return [
     */
 
     'qr_public_lookup' => env('INVENTORY_QR_PUBLIC_LOOKUP', true),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Requisition list refresh when WebSockets are unavailable
+    |--------------------------------------------------------------------------
+    |
+    | When Filament Echo / Reverb is not configured, requisition pages poll on
+    | this interval (e.g. 60s). Set to null or empty to disable polling.
+    |
+    */
+
+    'requisition_poll_interval' => env('REQUISITION_POLL_INTERVAL', '60s'),
 
 ];

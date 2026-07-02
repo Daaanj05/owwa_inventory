@@ -2,8 +2,10 @@
 
 namespace App\Observers;
 
+use App\Events\IssuanceChanged;
 use App\Models\Issuance;
 use App\Models\Item;
+use App\Services\IssuanceNotificationService;
 use App\Services\IssuanceUnitAssignmentService;
 use App\Services\ReferenceCodeService;
 use App\Services\SemiExpendablePropertyNumberBuilder;
@@ -66,6 +68,15 @@ class IssuanceObserver
 
         if (empty($issuance->issued_by) && auth()->check()) {
             $issuance->issued_by = auth()->id();
+        }
+    }
+
+    public function created(Issuance $issuance): void
+    {
+        app(IssuanceNotificationService::class)->handleCreated($issuance);
+
+        if (filled(config('filament.broadcasting.echo.key'))) {
+            IssuanceChanged::dispatch($issuance);
         }
     }
 

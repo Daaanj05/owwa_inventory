@@ -22,12 +22,16 @@ use Filament\View\PanelsRenderHook;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
 use Illuminate\Support\HtmlString;
+use Livewire\Attributes\Url;
 
 class ListDisposals extends ListRecords
 {
     use CoaListPageExports;
     use HasSystemAdminWizardHeading;
     use SyncsActiveItemCategory;
+
+    #[Url]
+    public int|string|null $category = null;
 
     protected static string $resource = DisposalResource::class;
 
@@ -38,7 +42,7 @@ class ListDisposals extends ListRecords
 
     public function getHeading(): string|\Illuminate\Contracts\Support\Htmlable
     {
-        $categoryName = ItemCategory::query()->whereKey((int) session('active_item_category_id'))->value('name');
+        $categoryName = ItemCategory::query()->whereKey($this->activeItemCategoryId())->value('name');
 
         if (! $categoryName) {
             return 'Disposals';
@@ -63,7 +67,7 @@ class ListDisposals extends ListRecords
 
     protected function getWizardHeaderBreadcrumb(string $categoryName, string $taskLabel): string
     {
-        $categoryId = (int) session('active_item_category_id', 0);
+        $categoryId = $this->activeItemCategoryId();
         $dashboardUrl = InventoryCategoryDashboard::getUrl(['category' => $categoryId]);
 
         return sprintf(
@@ -103,7 +107,7 @@ class ListDisposals extends ListRecords
             OwwaFormModalDefaults::createAction(OwwaFormModalDefaults::WIDTH_MEDIUM)
                 ->fillForm(fn (): array => [
                     'disposal_type' => DisposalForm::defaultDisposalType(),
-                    'item_category_filter' => (int) session('active_item_category_id', 0) ?: null,
+                    'item_category_filter' => $this->activeItemCategoryId() ?: null,
                     'office_id' => CustodianOfficeScope::inventoryOfficeId(),
                     'disposal_date' => now()->toDateString(),
                 ]),

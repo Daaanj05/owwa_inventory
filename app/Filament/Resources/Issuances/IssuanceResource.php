@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Issuances;
 
 use App\Filament\Concerns\HasOwwaViewModalUrl;
+use App\Filament\Concerns\SyncsActiveItemCategory;
 use App\Filament\Resources\Issuances\Pages\ListIssuances;
 use App\Filament\Resources\Issuances\Pages\ViewIssuance;
 use App\Filament\Resources\Issuances\Schemas\IssuanceForm;
@@ -49,10 +50,10 @@ class IssuanceResource extends Resource
             $query->where('office_id', $user->office_id);
         }
 
-        $categoryId = session('active_item_category_id');
-        if (filled($categoryId)) {
+        $categoryId = SyncsActiveItemCategory::resolveCategoryIdFromContext();
+        if ($categoryId > 0) {
             $query->whereHas('item', function (Builder $itemQuery) use ($categoryId): void {
-                $itemQuery->where('item_category_id', (int) $categoryId);
+                $itemQuery->where('item_category_id', $categoryId);
             });
         } else {
             // Don't show issuances until the user selects a category.

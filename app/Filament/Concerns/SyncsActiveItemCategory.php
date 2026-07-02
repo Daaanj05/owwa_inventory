@@ -8,19 +8,24 @@ use App\Models\ItemCategory;
 trait SyncsActiveItemCategory
 {
     /**
-     * Resolve the active inventory category from the request query or session,
-     * persist it to the session, and optionally send first-time visitors to the dashboard.
+     * Resolve the active inventory category from URL/Livewire state, persist to session,
+     * and optionally send first-time visitors to the dashboard.
      */
     protected function syncActiveItemCategoryFromRequest(bool $redirectWhenMissing = true): int
     {
         $hadSession = session()->has('active_item_category_id');
-        $fromQuery = filled(request()->query('category'));
+        $fromQuery = filled(request()->query('category'))
+            || (property_exists($this, 'category') && filled($this->category));
 
-        $categoryId = $fromQuery
-            ? (int) request()->query('category')
-            : (int) session('active_item_category_id', 0);
+        $categoryId = self::resolveCategoryIdFromContext(
+            property_exists($this, 'category') && filled($this->category)
+                ? (int) $this->category
+                : null,
+        );
 
-        $categoryId = self::resolveActiveItemCategoryId($categoryId);
+        if (property_exists($this, 'category')) {
+            $this->category = $categoryId;
+        }
 
         session()->put('active_item_category_id', $categoryId);
 
@@ -29,6 +34,28 @@ trait SyncsActiveItemCategory
         }
 
         return $categoryId;
+    }
+
+    protected function activeItemCategoryId(): int
+    {
+        $livewireCategory = property_exists($this, 'category') && filled($this->category)
+            ? (int) $this->category
+            : null;
+
+        return self::resolveCategoryIdFromContext($livewireCategory);
+    }
+
+    public static function resolveCategoryIdFromContext(?int $livewireCategory = null): int
+    {
+        if (filled($livewireCategory) && (int) $livewireCategory > 0) {
+            return self::resolveActiveItemCategoryId((int) $livewireCategory);
+        }
+
+        if (filled(request()->query('category'))) {
+            return self::resolveActiveItemCategoryId((int) request()->query('category'));
+        }
+
+        return self::resolveActiveItemCategoryId((int) session('active_item_category_id', 0));
     }
 
     protected static function resolveActiveItemCategoryId(int $categoryId): int

@@ -6,6 +6,7 @@ use App\Filament\Resources\Acquisitions\Paperwork\Actions\AcquisitionPaperworkAc
 use App\Filament\Resources\Acquisitions\Paperwork\Schemas\AcquisitionPaperworkModalSchema;
 use App\Filament\Support\ConfiguresOwwaViewAction;
 use App\Filament\Support\OwwaFormModalDefaults;
+use App\Filament\Support\OwwaTableDefaults;
 use App\Models\AcquisitionPaperwork;
 use App\Support\OwwaReferenceLabels;
 use Filament\Tables\Columns\TextColumn;
@@ -16,7 +17,7 @@ class AcquisitionsTable
 {
     public static function configure(Table $table): Table
     {
-        return $table
+        $table = $table
             ->columns([
                 TextColumn::make('reference_code')
                     ->label(OwwaReferenceLabels::acquisitionPaperwork())
@@ -94,9 +95,10 @@ class AcquisitionsTable
                     ),
                 ),
                 AcquisitionPaperworkActions::configureEditAction(),
-                AcquisitionPaperworkActions::phaseViewsActionGroup(),
             ])
             ->recordUrl(null)
             ->recordAction(fn (AcquisitionPaperwork $record): string => $record->isReceived() ? 'view' : 'edit');
+
+        return OwwaTableDefaults::hideRedundantToolbarIcons($table);
     }
 }

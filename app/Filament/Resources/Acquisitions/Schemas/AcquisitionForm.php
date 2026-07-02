@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Acquisitions\Schemas;
 
+use App\Filament\Concerns\SyncsActiveItemCategory;
 use App\Models\Item;
 use App\Models\ItemCategory;
 use App\Support\OwwaReferenceLabels;
@@ -218,7 +219,7 @@ class AcquisitionForm
     protected static function isCategoryScoped(): bool
     {
         return Filament::getCurrentPanel()?->getId() === 'admin'
-            && filled(session('active_item_category_id'));
+            && (filled(request()->query('category')) || filled(session('active_item_category_id')));
     }
 
     protected static function activeCategoryFilter(): ?int
@@ -227,6 +228,6 @@ class AcquisitionForm
             return null;
         }
 
-        return (int) session('active_item_category_id');
+        return SyncsActiveItemCategory::resolveCategoryIdFromContext();
     }
 }

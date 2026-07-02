@@ -81,7 +81,7 @@ class OwwaAnnexA1BulkExportTest extends TestCase
 
             $ictSheet = $spreadsheet->getSheetByName('ICT');
             $this->assertStringContainsString('SEM-100', (string) $ictSheet->getCell('K11')->getValue());
-            $this->assertStringContainsString('SEM-101', (string) $ictSheet->getCell('K29')->getValue());
+            $this->assertStringContainsString('SEM-101', (string) $ictSheet->getCell('K32')->getValue());
         } finally {
             @unlink($tmp);
         }

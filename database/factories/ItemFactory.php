@@ -4,6 +4,7 @@ namespace Database\Factories;
 
 use App\Models\Item;
 use App\Models\ItemCategory;
+use App\Support\ItemPropertyClass;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 class ItemFactory extends Factory
@@ -21,5 +22,35 @@ class ItemFactory extends Factory
             'reorder_level' => fake()->numberBetween(0, 20),
             'description' => fake()->optional(0.5)->sentence(),
         ];
+    }
+
+    public function ict(): static
+    {
+        return $this->state(fn (): array => ['property_class' => ItemPropertyClass::Ict]);
+    }
+
+    public function officeEquipment(): static
+    {
+        return $this->state(fn (): array => ['property_class' => ItemPropertyClass::OfficeEquipment]);
+    }
+
+    public function furnituresFixtures(): static
+    {
+        return $this->state(fn (): array => ['property_class' => ItemPropertyClass::FurnituresFixtures]);
+    }
+
+    public function sportsEquipment(): static
+    {
+        return $this->state(fn (): array => ['property_class' => ItemPropertyClass::SportsEquipment]);
+    }
+
+    public function medicalEquipment(): static
+    {
+        return $this->state(fn (): array => ['property_class' => ItemPropertyClass::MedicalEquipment]);
+    }
+
+    public function vehicleEquipment(): static
+    {
+        return $this->state(fn (): array => ['property_class' => ItemPropertyClass::VehicleEquipment]);
     }
 }

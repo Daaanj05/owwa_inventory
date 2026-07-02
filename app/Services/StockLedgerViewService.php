@@ -94,7 +94,7 @@ class StockLedgerViewService
             'semi_expendable' => [
                 'title' => 'Semi-Expendable Property Card (Annex A.1)',
                 'exportForm' => 'annex_a1',
-                'exportLabel' => 'Export Property Card (XLS)',
+                'exportLabel' => 'Export Annex A.1 Property Card (XLS)',
                 'columns' => $propertyColumns,
             ],
             default => [

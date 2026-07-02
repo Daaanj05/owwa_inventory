@@ -9,9 +9,13 @@ use App\Models\Issuance;
 use App\Models\Requisition;
 use App\Models\Transfer;
 use App\Support\AnnexA1BlockLayout;
+use App\Support\AnnexA4Layout;
 use App\Support\DisposalExportLayout;
 use App\Support\OwwaCellMapping;
 use App\Support\OwwaExportFilename;
+use App\Support\OwwaExportStandards;
+use App\Support\OwwaSpreadsheetLayoutHelper;
+use App\Support\OwwaTemplateLoader;
 use App\Support\PhpExtensionGuard;
 use App\Support\PropertyCardLayout;
 use App\Support\PtrSignatureLayout;
@@ -91,7 +95,7 @@ class OwwaTemplateExportService
                 PhpExtensionGuard::ensureZipArchive();
             }
 
-            $spreadsheet = IOFactory::load($absolutePath);
+            $spreadsheet = OwwaTemplateLoader::load($absolutePath);
             $sheet = filled($sheetName)
                 ? ($spreadsheet->getSheetByName($sheetName) ?? $spreadsheet->getSheet($sheetIndex))
                 : $spreadsheet->getSheet($sheetIndex);
@@ -99,7 +103,23 @@ class OwwaTemplateExportService
             if ($this->isAnnexA1PropertyCardTemplate($templateFilename)) {
                 $this->clearAnnexA1SampleData($sheet);
             }
+
+            if ($this->isAnnexA4Template($templateFilename)) {
+                $masterSheetName = AnnexA4Layout::templateSheetName();
+                $sheet = $spreadsheet->getSheetByName($masterSheetName)
+                    ?? $spreadsheet->getSheet($sheetIndex);
+                $this->clearAnnexA4SampleData(
+                    $sheet,
+                    $this->countLedgerRowsFromCellValues('ANNEX_A4', $cellValues),
+                );
+            }
         } else {
+            if (config('owwa_templates.strict', false)) {
+                throw new \RuntimeException(
+                    'OWWA template not found: '.$templateFilename.'. Place the file under storage/app/templates/ or run php artisan owwa:sync-templates.'
+                );
+            }
+
             Log::warning('OWWA Excel template missing; generated plain spreadsheet instead.', [
                 'expected_relative' => $templateFilename,
                 'expected_absolute' => $this->templatesPath.DIRECTORY_SEPARATOR.str_replace('/', DIRECTORY_SEPARATOR, $templateFilename),
@@ -115,7 +135,183 @@ class OwwaTemplateExportService
             $this->setExportCellValue($sheet, $cellRef, $value);
         }
 
+        $this->finalizeExportStyling($sheet, $templateFilename, $cellValues);
+
         return $spreadsheet;
+    }
+
+    /**
+     * @param  array<string, string|int|float|null>  $cellValues
+     */
+    protected function finalizeExportStyling(Worksheet $sheet, string $templateFilename, array $cellValues): void
+    {
+        if ($this->isAnnexA1PropertyCardTemplate($templateFilename)) {
+            return;
+        }
+
+        $formKey = $this->resolveFormKeyFromTemplate($templateFilename);
+        if ($formKey === null) {
+            return;
+        }
+
+        if (in_array($formKey, ['PC', 'SC'], true)) {
+            $transactionCount = $this->countLedgerRowsFromCellValues($formKey, $cellValues);
+            $this->finalizeLedgerSection($formKey, $sheet, $transactionCount);
+
+            return;
+        }
+
+        if ($formKey === 'ANNEX_A4') {
+            $transactionCount = $this->countLedgerRowsFromCellValues('ANNEX_A4', $cellValues);
+            $this->finalizeAnnexA4Sheet($sheet, $transactionCount);
+
+            return;
+        }
+
+        if (in_array($formKey, ['RSMI', 'RIS', 'PAR', 'ICS'], true)) {
+            $detailCount = $this->countDetailRowsFromCellValues($formKey, $cellValues);
+            if ($detailCount > 0) {
+                $this->finalizeDetailSection($formKey, $sheet, $detailCount);
+            }
+        }
+    }
+
+    protected function resolveFormKeyFromTemplate(string $templateFilename): ?string
+    {
+        $normalized = str_replace('\\', '/', $templateFilename);
+
+        return match (true) {
+            str_contains($normalized, 'Appendix 69') || str_contains($normalized, ' - PC.') => 'PC',
+            str_contains($normalized, 'Appendix 58') || str_contains($normalized, ' - SC.') => 'SC',
+            str_contains($normalized, 'Annex-A.4') || str_contains($normalized, 'Annex A.4') => 'ANNEX_A4',
+            str_contains($normalized, 'Appendix 64') || str_contains($normalized, ' - RSMI.') => 'RSMI',
+            str_contains($normalized, 'Appendix 63') || str_contains($normalized, ' - RIS.') => 'RIS',
+            str_contains($normalized, 'Appendix 71') || str_contains($normalized, ' - PAR.') => 'PAR',
+            str_contains($normalized, 'Appendix 59') || str_contains($normalized, ' - ICS.') => 'ICS',
+            default => null,
+        };
+    }
+
+    protected function finalizeLedgerSection(string $formKey, Worksheet $sheet, int $transactionCount): void
+    {
+        $ledger = (array) OwwaCellMapping::form($formKey)['ledger'];
+        $startRow = (int) ($ledger['start_row'] ?? 12);
+        $blankRows = (int) ($ledger['blank_style_rows'] ?? OwwaExportStandards::blankRowsAfterTransactions());
+        $styleRow = (int) ($ledger['style_row'] ?? $startRow);
+        $highestColumn = (string) ($ledger['highest_column'] ?? 'J');
+        $clearTo = (int) ($ledger['clear_to_row'] ?? 0);
+        $ledgerRowsNeeded = OwwaExportStandards::ledgerRowsForTransactionCount($transactionCount, $blankRows);
+
+        $columnTypes = (array) ($ledger['column_types'] ?? []);
+        $alignments = $columnTypes !== []
+            ? OwwaExportStandards::resolveColumnAlignments($columnTypes)
+            : OwwaSpreadsheetLayoutHelper::alignmentMapFromConfig((array) ($ledger['alignments'] ?? []));
+
+        if ($ledgerRowsNeeded > 0) {
+            OwwaSpreadsheetLayoutHelper::normalizeLedgerRows(
+                $sheet,
+                $startRow,
+                $ledgerRowsNeeded,
+                $styleRow,
+                $alignments,
+                [],
+                OwwaExportStandards::fontSize(),
+                $highestColumn,
+                $transactionCount,
+                OwwaExportStandards::resolveWrapTextColumns($ledger),
+                OwwaExportStandards::minWrapLinesForExpansion($ledger),
+            );
+        }
+
+        if ($clearTo > $startRow) {
+            $this->clearLedgerRowsBelow($sheet, $startRow + $ledgerRowsNeeded, $clearTo, $highestColumn);
+        }
+    }
+
+    protected function clearLedgerRowsBelow(Worksheet $sheet, int $fromRow, int $toRow, string $highestColumn): void
+    {
+        OwwaSpreadsheetLayoutHelper::clearRowRange($sheet, $fromRow, $toRow, $highestColumn);
+    }
+
+    protected function finalizeDetailSection(string $formKey, Worksheet $sheet, int $detailRowCount): void
+    {
+        $detail = (array) OwwaCellMapping::form($formKey)['detail'];
+        $startRow = (int) ($detail['start_row'] ?? 12);
+        $styleRow = (int) ($detail['style_row'] ?? $startRow);
+        $highestColumn = (string) ($detail['highest_column'] ?? 'H');
+        $columnTypes = (array) ($detail['column_types'] ?? []);
+        $alignments = OwwaExportStandards::resolveColumnAlignments($columnTypes);
+
+        OwwaSpreadsheetLayoutHelper::normalizeDetailRows(
+            $sheet,
+            $startRow,
+            $detailRowCount,
+            $styleRow,
+            $alignments,
+            $highestColumn,
+        );
+    }
+
+    protected function finalizeAnnexA4Sheet(Worksheet $sheet, int $entryCount): void
+    {
+        $this->finalizeLedgerSection('ANNEX_A4', $sheet, $entryCount);
+    }
+
+    /**
+     * @param  array<string, string|int|float|null>  $cellValues
+     */
+    protected function countLedgerRowsFromCellValues(string $formKey, array $cellValues): int
+    {
+        $ledger = (array) OwwaCellMapping::form($formKey)['ledger'];
+        $startRow = (int) ($ledger['start_row'] ?? 12);
+        $maxRows = (int) ($ledger['max_rows'] ?? 50);
+        $dateColumn = (string) ($ledger['columns']['date'] ?? 'A');
+        $count = 0;
+
+        for ($row = $startRow; $row < $startRow + $maxRows; $row++) {
+            $key = OwwaCellMapping::columnCell($dateColumn, $row);
+            if (filled($cellValues[$key] ?? null)) {
+                $count++;
+            }
+        }
+
+        return $count;
+    }
+
+    /**
+     * @param  array<string, string|int|float|null>  $cellValues
+     */
+    protected function countDetailRowsFromCellValues(string $formKey, array $cellValues): int
+    {
+        $detail = (array) OwwaCellMapping::form($formKey)['detail'];
+        $startRow = (int) ($detail['start_row'] ?? 12);
+        $maxRows = (int) ($detail['max_rows'] ?? ($detail['end_row'] ?? $startRow) - $startRow + 1);
+        $columns = (array) ($detail['columns'] ?? []);
+        $firstColumn = (string) (reset($columns) ?: 'A');
+        $count = 0;
+
+        for ($row = $startRow; $row < $startRow + $maxRows; $row++) {
+            $key = OwwaCellMapping::columnCell($firstColumn, $row);
+            if (filled($cellValues[$key] ?? null)) {
+                $count++;
+            }
+        }
+
+        return $count;
+    }
+
+    /**
+     * @param  array<string, string|int|float|null>  $cellValues
+     */
+    protected function countPcLedgerRows(array $cellValues): int
+    {
+        return $this->countLedgerRowsFromCellValues('PC', $cellValues);
+    }
+
+    /** @deprecated Use finalizeLedgerSection('PC', ...) */
+    protected function finalizePropertyCardLedger(Worksheet $sheet, int $transactionCount): void
+    {
+        $this->finalizeLedgerSection('PC', $sheet, $transactionCount);
     }
 
     protected function setExportCellValue(Worksheet $sheet, string $cellRef, mixed $value): void
@@ -186,7 +382,11 @@ class OwwaTemplateExportService
     }
 
     /**
-     * @param  array<int, array{sheetName: string, cellValues: array<string, string|int|float|null>}>  $tabs
+     * @param  array<int, array{
+     *     sheetName: string,
+     *     blocks?: array<int, array{header: array<string, string|null>, transactions: array<int, array<string, mixed>>}>,
+     *     cellValues?: array<string, string|int|float|null>
+     * }>  $tabs
      */
     public function buildAnnexA1Spreadsheet(array $tabs, ?string $templateFilename = null): Spreadsheet
     {
@@ -200,12 +400,12 @@ class OwwaTemplateExportService
             throw new \RuntimeException('Annex A.1 template not found: '.$templateFilename);
         }
 
-        $spreadsheet = IOFactory::load($absolutePath);
+        $spreadsheet = OwwaTemplateLoader::load($absolutePath);
         $masterSheet = $spreadsheet->getSheetByName($masterSheetName) ?? $spreadsheet->getSheet(0);
         $masterIndex = $spreadsheet->getIndex($masterSheet);
 
         if ($tabs === []) {
-            $this->clearAnnexA1SampleData($masterSheet);
+            $this->clearAnnexA1FirstBlockData($masterSheet);
             $masterSheet->setTitle($this->sanitizeExcelSheetTitle('Export'));
 
             return $spreadsheet;
@@ -214,15 +414,186 @@ class OwwaTemplateExportService
         foreach ($tabs as $tab) {
             $cloned = clone $masterSheet;
             $cloned->setTitle($this->sanitizeExcelSheetTitle($tab['sheetName']));
-            $this->clearAnnexA1SampleData($cloned);
-            $this->applyCellValues($cloned, $tab['cellValues']);
             $spreadsheet->addSheet($cloned);
+
+            if (isset($tab['blocks']) && is_array($tab['blocks'])) {
+                $this->populateAnnexA1Sheet($cloned, $masterSheet, $tab['blocks']);
+            } else {
+                $this->clearAnnexA1FirstBlockData($cloned);
+                $this->applyCellValues($cloned, (array) ($tab['cellValues'] ?? []));
+                $this->finalizeAnnexA1LedgerSection(
+                    $cloned,
+                    AnnexA1BlockLayout::FIRST_BLOCK_START_ROW,
+                    $this->countAnnexA1LedgerRows((array) ($tab['cellValues'] ?? []), AnnexA1BlockLayout::FIRST_BLOCK_START_ROW),
+                );
+                $transactionCount = $this->countAnnexA1LedgerRows(
+                    (array) ($tab['cellValues'] ?? []),
+                    AnnexA1BlockLayout::FIRST_BLOCK_START_ROW,
+                );
+                $this->finalizeAnnexA1Sheet(
+                    $cloned,
+                    AnnexA1BlockLayout::FIRST_BLOCK_START_ROW
+                        + AnnexA1BlockLayout::blockHeight($transactionCount)
+                        - 1,
+                );
+            }
         }
 
         $spreadsheet->removeSheetByIndex($masterIndex);
         $spreadsheet->setActiveSheetIndex(0);
 
         return $spreadsheet;
+    }
+
+    /**
+     * @param  array<int, array{header: array<string, string|null>, transactions: array<int, array<string, mixed>>}>  $blocks
+     */
+    protected function populateAnnexA1Sheet(Worksheet $sheet, Worksheet $masterSheet, array $blocks): void
+    {
+        $blockStartRow = AnnexA1BlockLayout::FIRST_BLOCK_START_ROW;
+
+        foreach (array_values($blocks) as $index => $block) {
+            $transactions = (array) ($block['transactions'] ?? []);
+            $transactionCount = count($transactions);
+            $blankRows = AnnexA1BlockLayout::blankStyleRows();
+
+            if ($index > 0) {
+                OwwaSpreadsheetLayoutHelper::copyWorksheetRows(
+                    $masterSheet,
+                    $sheet,
+                    AnnexA1BlockLayout::FIRST_BLOCK_START_ROW,
+                    $blockStartRow,
+                    AnnexA1BlockLayout::masterTemplateBlockRows(),
+                    'L',
+                );
+
+                OwwaSpreadsheetLayoutHelper::duplicateHeaderDrawings(
+                    $masterSheet,
+                    $sheet,
+                    $blockStartRow - AnnexA1BlockLayout::FIRST_BLOCK_START_ROW,
+                    AnnexA1BlockLayout::owwaHeaderRows(),
+                );
+            } else {
+                $this->clearAnnexA1FirstBlockData($sheet);
+            }
+
+            $ledgerStart = AnnexA1BlockLayout::ledgerStartRowForBlockStart($blockStartRow);
+
+            if ($transactionCount > 0) {
+                OwwaSpreadsheetLayoutHelper::insertStyledLedgerRows(
+                    $sheet,
+                    $ledgerStart + $blankRows,
+                    $transactionCount,
+                    $ledgerStart,
+                    'L',
+                );
+            }
+
+            $headerValues = [];
+            AnnexA1BlockLayout::applyHeader($headerValues, (array) ($block['header'] ?? []), $blockStartRow);
+            $this->applyCellValues($sheet, $headerValues);
+            $this->applyCellValues(
+                $sheet,
+                $this->annexA1LedgerCellValues($transactions, $ledgerStart),
+                resolveMergeAnchors: false,
+            );
+
+            $this->finalizeAnnexA1LedgerSection($sheet, $blockStartRow, $transactionCount);
+
+            $blockStartRow += AnnexA1BlockLayout::blockHeight($transactionCount);
+        }
+
+        $this->finalizeAnnexA1Sheet($sheet, $blockStartRow - 1);
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $transactions
+     * @return array<string, string|int|float|null>
+     */
+    public function annexA1LedgerCellValues(array $transactions, int $ledgerStartRow): array
+    {
+        $ledgerCols = (array) (OwwaCellMapping::form('ANNEX_A1')['ledger']['columns'] ?? []);
+        $values = [];
+        $row = $ledgerStartRow;
+
+        foreach ($transactions as $txn) {
+            $values[OwwaCellMapping::columnCell($ledgerCols['date'] ?? 'A', $row)] = $txn['date'] ?? '';
+            $values[OwwaCellMapping::columnCell($ledgerCols['reference'] ?? 'B', $row)] = $txn['reference'] ?? '';
+
+            if (filled($txn['receipt_qty'] ?? null)) {
+                $receiptQty = (int) $txn['receipt_qty'];
+                $values[OwwaCellMapping::columnCell($ledgerCols['receipt_qty'] ?? 'C', $row)] = $receiptQty;
+                $values[OwwaCellMapping::columnCell($ledgerCols['receipt_qty_dup'] ?? 'F', $row)] = $receiptQty;
+
+                if (isset($txn['unit_cost']) && $txn['unit_cost'] !== null && $txn['unit_cost'] !== '') {
+                    $unitCost = (float) $txn['unit_cost'];
+                    $values[OwwaCellMapping::columnCell($ledgerCols['unit_cost'] ?? 'D', $row)] = $unitCost;
+                    $values[OwwaCellMapping::columnCell($ledgerCols['total_cost'] ?? 'E', $row)] = $unitCost * $receiptQty;
+                }
+            }
+
+            if (filled($txn['issue_qty'] ?? null)) {
+                $values[OwwaCellMapping::columnCell($ledgerCols['issue_qty'] ?? 'H', $row)] = (int) $txn['issue_qty'];
+                $values[OwwaCellMapping::columnCell($ledgerCols['office_officer'] ?? 'I', $row)] = $txn['office_officer'] ?? $txn['issue_office'] ?? '';
+            }
+
+            if (filled($txn['item_code'] ?? null)) {
+                $values[OwwaCellMapping::columnCell($ledgerCols['item_no'] ?? 'G', $row)] = $txn['item_code'];
+            } elseif (filled($txn['property_number'] ?? null)) {
+                $values[OwwaCellMapping::columnCell($ledgerCols['item_no'] ?? 'G', $row)] = $txn['property_number'];
+            }
+
+            $values[OwwaCellMapping::columnCell($ledgerCols['balance_qty'] ?? 'J', $row)] = $txn['balance'] ?? 0;
+            $values[OwwaCellMapping::columnCell($ledgerCols['remarks'] ?? 'L', $row)] = $txn['remarks'] ?? '';
+            $row++;
+        }
+
+        return $values;
+    }
+
+    protected function finalizeAnnexA1LedgerSection(Worksheet $sheet, int $blockStartRow, int $transactionCount): void
+    {
+        $ledgerStart = AnnexA1BlockLayout::ledgerStartRowForBlockStart($blockStartRow);
+        $ledgerRowsNeeded = AnnexA1BlockLayout::ledgerRowsForTransactionCount($transactionCount);
+        $styleSourceRow = $blockStartRow + (AnnexA1BlockLayout::ledgerStyleRow() - AnnexA1BlockLayout::FIRST_BLOCK_START_ROW);
+        $ledger = (array) OwwaCellMapping::form('ANNEX_A1')['ledger'];
+        $columnTypes = (array) ($ledger['column_types'] ?? []);
+        $alignments = $columnTypes !== []
+            ? OwwaExportStandards::resolveColumnAlignments($columnTypes)
+            : OwwaSpreadsheetLayoutHelper::alignmentMapFromConfig(AnnexA1BlockLayout::ledgerColumnAlignments());
+
+        OwwaSpreadsheetLayoutHelper::normalizeLedgerRows(
+            $sheet,
+            $ledgerStart,
+            $ledgerRowsNeeded,
+            $styleSourceRow,
+            $alignments,
+            AnnexA1BlockLayout::ledgerDateColumns(),
+            AnnexA1BlockLayout::ledgerDateFontSize(),
+            'L',
+            $transactionCount,
+            OwwaExportStandards::resolveWrapTextColumns($ledger),
+            OwwaExportStandards::minWrapLinesForExpansion($ledger),
+        );
+    }
+
+    /**
+     * @param  array<string, string|int|float|null>  $cellValues
+     */
+    protected function countAnnexA1LedgerRows(array $cellValues, int $blockStartRow): int
+    {
+        $ledgerStart = AnnexA1BlockLayout::ledgerStartRowForBlockStart($blockStartRow);
+        $dateColumn = (string) (OwwaCellMapping::form('ANNEX_A1')['ledger']['columns']['date'] ?? 'A');
+        $count = 0;
+
+        for ($row = $ledgerStart; $row < $ledgerStart + (int) (OwwaCellMapping::form('ANNEX_A1')['ledger']['max_rows'] ?? 50); $row++) {
+            $key = OwwaCellMapping::columnCell($dateColumn, $row);
+            if (filled($cellValues[$key] ?? null)) {
+                $count++;
+            }
+        }
+
+        return $count;
     }
 
     /**
@@ -255,10 +626,285 @@ class OwwaTemplateExportService
     }
 
     /**
+     * @param  array<int, array{
+     *     sheetName: string,
+     *     header: array<string, string|null>,
+     *     entries: array<int, array<string, mixed>>
+     * }>  $tabs
+     */
+    public function buildAnnexA4Spreadsheet(array $tabs, ?string $templateFilename = null): Spreadsheet
+    {
+        $templateFilename ??= (string) OwwaCellMapping::form('ANNEX_A4')['template'];
+        $absolutePath = $this->tryResolveTemplateAbsolutePath($templateFilename);
+        if ($absolutePath === null) {
+            throw new \RuntimeException('Annex A.4 template not found: '.$templateFilename);
+        }
+
+        $spreadsheet = OwwaTemplateLoader::load($absolutePath);
+        $masterSheetName = AnnexA4Layout::templateSheetName();
+        $masterSheet = $spreadsheet->getSheetByName($masterSheetName);
+
+        if ($masterSheet === null) {
+            throw new \RuntimeException(
+                'Annex A.4 master sheet ['.$masterSheetName.'] not found in template. '
+                .'Use a RegSPI-only template and run php artisan owwa:sync-templates.',
+            );
+        }
+
+        $legacySheetIndices = [];
+        foreach ($spreadsheet->getWorksheetIterator() as $sheet) {
+            if ($sheet !== $masterSheet) {
+                $legacySheetIndices[] = $spreadsheet->getIndex($sheet);
+            }
+        }
+
+        rsort($legacySheetIndices);
+        foreach ($legacySheetIndices as $index) {
+            $spreadsheet->removeSheetByIndex($index);
+        }
+
+        $populatedSheetNames = [];
+
+        foreach ($tabs as $tab) {
+            $sheetName = (string) ($tab['sheetName'] ?? '');
+            if ($sheetName === '') {
+                continue;
+            }
+
+            $entries = (array) ($tab['entries'] ?? []);
+            if ($entries === []) {
+                continue;
+            }
+
+            $cloned = $this->cloneAnnexA4Worksheet($spreadsheet, $masterSheet);
+            $cloned->setTitle($this->sanitizeExcelSheetTitle($sheetName));
+            $spreadsheet->addSheet($cloned);
+
+            $this->populateAnnexA4Sheet($cloned, $tab);
+            $populatedSheetNames[] = $cloned->getTitle();
+        }
+
+        $indicesToRemove = [];
+        foreach ($spreadsheet->getWorksheetIterator() as $sheet) {
+            if (! in_array($sheet->getTitle(), $populatedSheetNames, true)) {
+                $indicesToRemove[] = $spreadsheet->getIndex($sheet);
+            }
+        }
+
+        rsort($indicesToRemove);
+        foreach ($indicesToRemove as $index) {
+            $spreadsheet->removeSheetByIndex($index);
+        }
+
+        if ($spreadsheet->getSheetCount() === 0) {
+            throw new \RuntimeException('Annex A.4 export produced no populated sheets.');
+        }
+
+        $spreadsheet->setActiveSheetIndex(0);
+
+        return $spreadsheet;
+    }
+
+    /**
+     * @param  array{
+     *     sheetName?: string,
+     *     header: array<string, string|null>,
+     *     entries: array<int, array<string, mixed>>
+     * }  $tab
+     */
+    protected function populateAnnexA4Sheet(Worksheet $sheet, array $tab): void
+    {
+        $entries = (array) ($tab['entries'] ?? []);
+        $this->clearAnnexA4SampleData($sheet, count($entries));
+        $this->applyAnnexA4Header($sheet, (array) ($tab['header'] ?? []));
+        $this->applyCellValues($sheet, $this->annexA4LedgerCellValues($entries), resolveMergeAnchors: false);
+        $this->finalizeAnnexA4Sheet($sheet, count($entries));
+    }
+
+    protected function cloneAnnexA4Worksheet(Spreadsheet $spreadsheet, Worksheet $masterSheet): Worksheet
+    {
+        try {
+            return clone $masterSheet;
+        } catch (\Throwable) {
+            $cloned = new Worksheet($spreadsheet, 'AnnexA4Clone');
+
+            $ledger = (array) OwwaCellMapping::form('ANNEX_A4')['ledger'];
+            $minSampleClearRows = (int) ($ledger['min_sample_clear_rows'] ?? 30);
+            $rowsToCopy = AnnexA4Layout::ledgerStartRow() + $minSampleClearRows - 1;
+
+            OwwaSpreadsheetLayoutHelper::copyWorksheetRows(
+                $masterSheet,
+                $cloned,
+                1,
+                1,
+                $rowsToCopy,
+                AnnexA4Layout::highestColumn(),
+            );
+
+            OwwaSpreadsheetLayoutHelper::duplicateHeaderDrawings(
+                $masterSheet,
+                $cloned,
+                0,
+                AnnexA4Layout::headerRowCount(),
+            );
+
+            return $cloned;
+        }
+    }
+
+    /**
+     * @param  array<int, array{
+     *     sheetName: string,
+     *     header: array<string, string|null>,
+     *     entries: array<int, array<string, mixed>>
+     * }>  $tabs
+     */
+    public function downloadAnnexA4Spreadsheet(array $tabs, string $outputFilename, ?string $templateFilename = null): StreamedResponse
+    {
+        $spreadsheet = $this->buildAnnexA4Spreadsheet($tabs, $templateFilename);
+
+        try {
+            $binary = $this->spreadsheetToXlsxBinary($spreadsheet);
+        } finally {
+            $spreadsheet->disconnectWorksheets();
+        }
+
+        return response()->streamDownload(
+            static function () use ($binary): void {
+                echo $binary;
+            },
+            $outputFilename,
+            [
+                'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            ]
+        );
+    }
+
+    /**
+     * @param  array<string, string|null>  $header
+     */
+    protected function applyAnnexA4Header(Worksheet $sheet, array $header): void
+    {
+        $headerMap = (array) (OwwaCellMapping::form('ANNEX_A4')['header'] ?? []);
+
+        foreach ($headerMap as $field => $spec) {
+            if (! array_key_exists($field, $header)) {
+                continue;
+            }
+
+            $cell = (string) ($spec['cell'] ?? '');
+            if ($cell === '') {
+                continue;
+            }
+
+            $label = (string) ($spec['label'] ?? '');
+            $raw = $header[$field] ?? '';
+
+            if ($field === 'property_type') {
+                OwwaSpreadsheetLayoutHelper::applyBoldLabelPlainValueCell(
+                    $sheet,
+                    $cell,
+                    $label,
+                    (string) $raw,
+                );
+
+                continue;
+            }
+
+            $sheet->setCellValue($cell, $label.($raw ?? ''));
+        }
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $entries
+     * @return array<string, string|int|float|null>
+     */
+    public function annexA4LedgerCellValues(array $entries): array
+    {
+        $ledger = (array) OwwaCellMapping::form('ANNEX_A4')['ledger'];
+        $startRow = (int) ($ledger['start_row'] ?? 12);
+        $columns = (array) ($ledger['columns'] ?? []);
+        $values = [];
+        $row = $startRow;
+
+        foreach ($entries as $entry) {
+            $values[OwwaCellMapping::columnCell($columns['date'] ?? 'A', $row)] = $entry['date'] ?? '';
+            $values[OwwaCellMapping::columnCell($columns['reference'] ?? 'B', $row)] = $entry['reference'] ?? '';
+            $values[OwwaCellMapping::columnCell($columns['property_number'] ?? 'C', $row)] = $entry['property_number'] ?? '';
+            $values[OwwaCellMapping::columnCell($columns['description'] ?? 'D', $row)] = $entry['description'] ?? '';
+            $values[OwwaCellMapping::columnCell($columns['useful_life'] ?? 'E', $row)] = $entry['estimated_useful_life'] ?? $entry['useful_life'] ?? '';
+            $values[OwwaCellMapping::columnCell($columns['issued_qty'] ?? 'F', $row)] = $entry['issued_qty'] ?? '';
+            $values[OwwaCellMapping::columnCell($columns['issued_office'] ?? 'G', $row)] = $entry['issued_office'] ?? '';
+            $values[OwwaCellMapping::columnCell($columns['returned_qty'] ?? 'H', $row)] = $entry['returned_qty'] ?? '';
+            $values[OwwaCellMapping::columnCell($columns['returned_office'] ?? 'I', $row)] = $entry['returned_office'] ?? '';
+            $values[OwwaCellMapping::columnCell($columns['reissued_qty'] ?? 'J', $row)] = $entry['reissued_qty'] ?? '';
+            $values[OwwaCellMapping::columnCell($columns['reissued_office'] ?? 'K', $row)] = $entry['reissued_office'] ?? '';
+            $values[OwwaCellMapping::columnCell($columns['disposed_qty'] ?? 'L', $row)] = $entry['disposed_qty'] ?? '';
+            $values[OwwaCellMapping::columnCell($columns['balance_qty'] ?? 'M', $row)] = $entry['balance_qty'] ?? '';
+            $values[OwwaCellMapping::columnCell($columns['amount'] ?? 'N', $row)] = $entry['amount'] ?? '';
+            $values[OwwaCellMapping::columnCell($columns['remarks'] ?? 'O', $row)] = $entry['remarks'] ?? '';
+            $row++;
+        }
+
+        return $values;
+    }
+
+    protected function clearAnnexA4SampleData(Worksheet $sheet, int $entryCount = 0): void
+    {
+        $ledger = (array) OwwaCellMapping::form('ANNEX_A4')['ledger'];
+        $startRow = (int) ($ledger['start_row'] ?? 12);
+        $blankRows = (int) ($ledger['blank_style_rows'] ?? OwwaExportStandards::blankRowsAfterTransactions());
+        $highestColumn = (string) ($ledger['highest_column'] ?? 'O');
+
+        $styleRow = (int) ($ledger['style_row'] ?? $startRow);
+        $standardRowHeight = OwwaSpreadsheetLayoutHelper::resolveLedgerRowHeight($sheet, $styleRow);
+
+        $ledgerEnd = $startRow + OwwaExportStandards::ledgerRowsForTransactionCount($entryCount, $blankRows) - 1;
+        $minSampleClearRows = (int) ($ledger['min_sample_clear_rows'] ?? 30);
+        $sampleClearEnd = $startRow + $minSampleClearRows - 1;
+        $clearToCap = (int) ($ledger['clear_to_row'] ?? 500);
+        $clearTo = $clearToCap > 0
+            ? min($clearToCap, max($ledgerEnd, $sampleClearEnd))
+            : max($ledgerEnd, $sampleClearEnd);
+
+        foreach (['entity_name', 'fund_cluster', 'property_type'] as $field) {
+            $cell = (string) (OwwaCellMapping::form('ANNEX_A4')['header'][$field]['cell'] ?? '');
+            if ($cell !== '') {
+                $sheet->setCellValue($cell, null);
+            }
+        }
+
+        for ($row = $startRow; $row <= $clearTo; $row++) {
+            $sheet->getRowDimension($row)->setRowHeight($standardRowHeight);
+
+            foreach (range('A', $highestColumn) as $column) {
+                $sheet->setCellValue($column.$row, null);
+            }
+        }
+    }
+
+    protected function isAnnexA4Template(string $templateFilename): bool
+    {
+        $normalized = str_replace('\\', '/', $templateFilename);
+
+        return str_contains($normalized, 'Annex-A.4')
+            || str_contains($normalized, 'Annex A.4')
+            || str_contains($normalized, 'Registry-of-Semi-Expendable-Property-Issued');
+    }
+
+    /**
      * @param  array<string, string|int|float|null>  $cellValues
      */
-    protected function applyCellValues(Worksheet $sheet, array $cellValues): void
+    protected function applyCellValues(Worksheet $sheet, array $cellValues, bool $resolveMergeAnchors = true): void
     {
+        if (! $resolveMergeAnchors) {
+            foreach ($cellValues as $cellRef => $value) {
+                $sheet->setCellValue($cellRef, $value === null ? '' : $value);
+            }
+
+            return;
+        }
+
         foreach ($cellValues as $cellRef => $value) {
             $this->setExportCellValue($sheet, $cellRef, $value);
         }
@@ -790,53 +1436,57 @@ class OwwaTemplateExportService
 
         return [
             'sheetName' => $sheetName,
-            'cellValues' => $this->cellValuesForAcquisitionAnnexA1($acquisition),
+            'blocks' => [$this->buildAnnexA1AcquisitionBlock($acquisition)],
+        ];
+    }
+
+    /**
+     * @return array{header: array<string, string|null>, transactions: array<int, array<string, mixed>>}
+     */
+    protected function buildAnnexA1AcquisitionBlock(Acquisition $acquisition): array
+    {
+        $item = $acquisition->item;
+        $office = $acquisition->office;
+        $propertyClass = \App\Support\ItemPropertyClass::resolveForExport($item?->property_class);
+        $quantity = (int) ($acquisition->quantity ?? 0);
+        $unitCost = $acquisition->unit_cost !== null ? (float) $acquisition->unit_cost : null;
+
+        $transaction = [
+            'date' => $acquisition->acquisition_date?->format('Y-m-d') ?? '',
+            'reference' => $acquisition->reference_code ?? '',
+            'receipt_qty' => $quantity > 0 ? $quantity : null,
+            'unit_cost' => $unitCost,
+            'balance' => $quantity > 0 ? $quantity : 0,
+            'item_code' => $item?->item_code,
+            'remarks' => $acquisition->remarks ?? '',
+        ];
+
+        return [
+            'header' => [
+                'entity_name' => $office?->name ?? '',
+                'fund_cluster' => $office?->fund_cluster ?? '',
+                'property_type' => \App\Support\ItemPropertyClass::propertyTypeLabel($propertyClass),
+                'property_number' => $item?->item_code ?? '',
+                'description' => $this->formatItemDescription($item),
+            ],
+            'transactions' => $quantity > 0 ? [$transaction] : [],
         ];
     }
 
     /**
      * @return array<string, string|int|float|null>
+     *
+     * @deprecated Use buildAnnexA1AcquisitionBlock() with blocks export API
      */
     protected function cellValuesForAcquisitionAnnexA1(Acquisition $acquisition): array
     {
-        $item = $acquisition->item;
-        $office = $acquisition->office;
-        $propertyClass = \App\Support\ItemPropertyClass::resolveForExport($item?->property_class);
-        $ledgerCols = (array) (OwwaCellMapping::form('ANNEX_A1')['ledger']['columns'] ?? []);
-        $ledgerStart = AnnexA1BlockLayout::ledgerStartRow(0);
-        $quantity = (int) ($acquisition->quantity ?? 0);
-        $unitCost = $acquisition->unit_cost !== null ? (float) $acquisition->unit_cost : null;
-
+        $block = $this->buildAnnexA1AcquisitionBlock($acquisition);
+        $blockStart = AnnexA1BlockLayout::FIRST_BLOCK_START_ROW;
+        $ledgerStart = AnnexA1BlockLayout::ledgerStartRowForBlockStart($blockStart);
         $values = [];
-        AnnexA1BlockLayout::applyHeader($values, [
-            'entity_name' => $office?->name ?? '',
-            'fund_cluster' => $office?->fund_cluster ?? '',
-            'property_type' => \App\Support\ItemPropertyClass::propertyTypeLabel($propertyClass),
-            'property_number' => $item?->item_code ?? '',
-            'description' => $this->formatItemDescription($item),
-        ], 0);
+        AnnexA1BlockLayout::applyHeader($values, $block['header'], $blockStart);
 
-        $values[OwwaCellMapping::columnCell($ledgerCols['date'] ?? 'A', $ledgerStart)] = $acquisition->acquisition_date?->format('Y-m-d') ?? '';
-        $values[OwwaCellMapping::columnCell($ledgerCols['reference'] ?? 'B', $ledgerStart)] = $acquisition->reference_code ?? '';
-
-        if ($quantity > 0) {
-            $values[OwwaCellMapping::columnCell($ledgerCols['receipt_qty'] ?? 'C', $ledgerStart)] = $quantity;
-            $values[OwwaCellMapping::columnCell($ledgerCols['receipt_qty_dup'] ?? 'F', $ledgerStart)] = $quantity;
-            $values[OwwaCellMapping::columnCell($ledgerCols['balance_qty'] ?? 'J', $ledgerStart)] = $quantity;
-
-            if ($unitCost !== null) {
-                $values[OwwaCellMapping::columnCell($ledgerCols['unit_cost'] ?? 'D', $ledgerStart)] = $unitCost;
-                $values[OwwaCellMapping::columnCell($ledgerCols['total_cost'] ?? 'E', $ledgerStart)] = $unitCost * $quantity;
-            }
-        }
-
-        if (filled($item?->item_code)) {
-            $values[OwwaCellMapping::columnCell($ledgerCols['item_no'] ?? 'G', $ledgerStart)] = $item->item_code;
-        }
-
-        $values[OwwaCellMapping::columnCell($ledgerCols['remarks'] ?? 'L', $ledgerStart)] = $acquisition->remarks ?? '';
-
-        return $values;
+        return array_merge($values, $this->annexA1LedgerCellValues($block['transactions'], $ledgerStart));
     }
 
     /**
@@ -1166,20 +1816,60 @@ class OwwaTemplateExportService
         return $sheet;
     }
 
-    protected function clearAnnexA1SampleData(Worksheet $sheet): void
+    protected function finalizeAnnexA1Sheet(Worksheet $sheet, int $lastUsedRow): void
     {
-        $clearTo = AnnexA1BlockLayout::clearToRow();
-        $clearFrom = AnnexA1BlockLayout::ledgerStartRow(0);
+        $ledger = (array) OwwaCellMapping::form('ANNEX_A1')['ledger'];
+        $clearFrom = $lastUsedRow + 1;
+        $clearTo = (int) ($ledger['clear_to_row'] ?? 500);
 
-        foreach (['entity_name', 'fund_cluster', 'property_type', 'property_number', 'description'] as $field) {
-            $sheet->setCellValue(AnnexA1BlockLayout::headerCell($field, 0), null);
+        if ($clearTo <= 0 || $clearFrom > $clearTo) {
+            return;
         }
+
+        $styleRow = (int) ($ledger['style_row'] ?? 15);
+        $standardRowHeight = OwwaSpreadsheetLayoutHelper::resolveLedgerRowHeight($sheet, $styleRow);
+
+        OwwaSpreadsheetLayoutHelper::clearRowRange($sheet, $clearFrom, $clearTo, 'L');
+
+        for ($row = $clearFrom; $row <= $clearTo; $row++) {
+            $sheet->getRowDimension($row)->setRowHeight($standardRowHeight);
+        }
+    }
+
+    protected function clearAnnexA1LeftoverTemplateRows(Worksheet $sheet, int $blockStartRow): void
+    {
+        $ledgerStart = AnnexA1BlockLayout::ledgerStartRowForBlockStart($blockStartRow);
+        $clearFrom = $ledgerStart + AnnexA1BlockLayout::minLedgerRows();
+        $clearTo = $ledgerStart + 10;
 
         for ($row = $clearFrom; $row <= $clearTo; $row++) {
             foreach (range('A', 'L') as $column) {
                 $sheet->setCellValue($column.$row, null);
             }
         }
+    }
+
+    protected function clearAnnexA1FirstBlockData(Worksheet $sheet): void
+    {
+        $blockStart = AnnexA1BlockLayout::FIRST_BLOCK_START_ROW;
+        $ledgerStart = AnnexA1BlockLayout::ledgerStartRowForBlockStart($blockStart);
+        $clearTo = $ledgerStart + AnnexA1BlockLayout::blankStyleRows() - 1;
+
+        foreach (['entity_name', 'fund_cluster', 'property_type', 'property_number', 'description'] as $field) {
+            $sheet->setCellValue(AnnexA1BlockLayout::headerCell($field, $blockStart), null);
+        }
+
+        for ($row = $ledgerStart; $row <= $clearTo; $row++) {
+            foreach (range('A', 'L') as $column) {
+                $sheet->setCellValue($column.$row, null);
+            }
+        }
+    }
+
+    /** @deprecated Use clearAnnexA1FirstBlockData() */
+    protected function clearAnnexA1SampleData(Worksheet $sheet): void
+    {
+        $this->clearAnnexA1FirstBlockData($sheet);
     }
 
     /**
@@ -1884,11 +2574,7 @@ class OwwaTemplateExportService
             return '';
         }
 
-        $parts = array_filter([
-            $item->name,
-            $item->description,
-            $item->serial_number ? 'S/N: '.$item->serial_number : null,
-        ]);
+        $parts = array_filter([$item->name, $item->description]);
 
         return implode(' — ', $parts);
     }

@@ -5,13 +5,11 @@ namespace App\Filament\Resources\Transfers\Tables;
 use App\Filament\Resources\Transfers\Actions\TransferViewActions;
 use App\Filament\Resources\Transfers\TransferResource;
 use App\Filament\Support\ConfiguresOwwaViewAction;
-use App\Filament\Support\OwwaFormModalDefaults;
 use App\Filament\Support\OwwaModalSchema;
+use App\Filament\Support\OwwaTableDefaults;
 use App\Models\Transfer;
 use App\Support\OwwaReferenceLabels;
 use App\Support\OwwaTransactionViewPresenter;
-use Filament\Actions\Action;
-use Filament\Actions\ActionGroup;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\RestoreBulkAction;
@@ -22,7 +20,7 @@ class TransfersTable
 {
     public static function configure(Table $table): Table
     {
-        return $table
+        $table = $table
             ->deselectAllRecordsWhenFiltered(false)
             ->columns([
                 TextColumn::make('reference_code')
@@ -81,28 +79,6 @@ class TransfersTable
                     ],
                     '3xl',
                 ),
-                ActionGroup::make([
-                    OwwaFormModalDefaults::editAction(OwwaFormModalDefaults::WIDTH_STANDARD),
-                    Action::make('archive')
-                        ->label('Archive')
-                        ->icon('heroicon-o-archive-box')
-                        ->color('warning')
-                        ->requiresConfirmation()
-                        ->modalHeading('Archive transfer')
-                        ->modalDescription('This transfer will be archived and hidden from the default list. You can restore it later using the filter.')
-                        ->action(fn (Transfer $record) => $record->delete())
-                        ->visible(fn (Transfer $record): bool => ! $record->trashed()),
-                    Action::make('restore')
-                        ->label('Restore')
-                        ->icon('heroicon-o-arrow-uturn-left')
-                        ->color('success')
-                        ->requiresConfirmation()
-                        ->action(fn (Transfer $record) => $record->restore())
-                        ->visible(fn (Transfer $record): bool => $record->trashed()),
-                ])
-                    ->label('Actions')
-                    ->icon('heroicon-m-ellipsis-vertical')
-                    ->color('gray'),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
@@ -115,5 +91,7 @@ class TransfersTable
             ])
             ->recordUrl(null)
             ->recordAction('view');
+
+        return OwwaTableDefaults::hideRedundantToolbarIcons($table);
     }
 }

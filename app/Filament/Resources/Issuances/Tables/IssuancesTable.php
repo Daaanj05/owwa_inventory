@@ -5,13 +5,11 @@ namespace App\Filament\Resources\Issuances\Tables;
 use App\Filament\Resources\Issuances\Actions\IssuanceViewActions;
 use App\Filament\Resources\Issuances\IssuanceResource;
 use App\Filament\Support\ConfiguresOwwaViewAction;
-use App\Filament\Support\OwwaFormModalDefaults;
 use App\Filament\Support\OwwaModalSchema;
+use App\Filament\Support\OwwaTableDefaults;
 use App\Models\Issuance;
 use App\Support\OwwaReferenceLabels;
 use App\Support\OwwaTransactionViewPresenter;
-use Filament\Actions\Action;
-use Filament\Actions\ActionGroup;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\RestoreBulkAction;
@@ -22,7 +20,7 @@ class IssuancesTable
 {
     public static function configure(Table $table): Table
     {
-        return $table
+        $table = $table
             ->deselectAllRecordsWhenFiltered(false)
             ->columns([
                 TextColumn::make('reference_code')
@@ -101,28 +99,6 @@ class IssuancesTable
                     ],
                     '4xl',
                 ),
-                ActionGroup::make([
-                    OwwaFormModalDefaults::editAction(OwwaFormModalDefaults::WIDTH_WIDE),
-                    Action::make('archive')
-                        ->label('Archive')
-                        ->icon('heroicon-o-archive-box')
-                        ->color('warning')
-                        ->requiresConfirmation()
-                        ->modalHeading('Archive issuance')
-                        ->modalDescription('This issuance will be archived and hidden from the default list. You can restore it later using the filter.')
-                        ->action(fn (Issuance $record) => $record->delete())
-                        ->visible(fn (Issuance $record): bool => ! $record->trashed()),
-                    Action::make('restore')
-                        ->label('Restore')
-                        ->icon('heroicon-o-arrow-uturn-left')
-                        ->color('success')
-                        ->requiresConfirmation()
-                        ->action(fn (Issuance $record) => $record->restore())
-                        ->visible(fn (Issuance $record): bool => $record->trashed()),
-                ])
-                    ->label('Actions')
-                    ->icon('heroicon-m-ellipsis-vertical')
-                    ->color('gray'),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
@@ -135,5 +111,7 @@ class IssuancesTable
             ])
             ->recordUrl(null)
             ->recordAction('view');
+
+        return OwwaTableDefaults::hideRedundantToolbarIcons($table);
     }
 }

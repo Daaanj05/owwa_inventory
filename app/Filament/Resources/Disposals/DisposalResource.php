@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Disposals;
 
 use App\Filament\Concerns\HasOwwaViewModalUrl;
+use App\Filament\Concerns\SyncsActiveItemCategory;
 use App\Filament\Resources\Disposals\Pages\ListDisposals;
 use App\Filament\Resources\Disposals\Pages\ViewDisposal;
 use App\Filament\Resources\Disposals\Schemas\DisposalForm;
@@ -40,10 +41,10 @@ class DisposalResource extends Resource
     {
         $query = parent::getEloquentQuery();
 
-        $categoryId = session('active_item_category_id');
-        if (filled($categoryId)) {
+        $categoryId = SyncsActiveItemCategory::resolveCategoryIdFromContext();
+        if ($categoryId > 0) {
             $query->whereHas('item', function (Builder $itemQuery) use ($categoryId): void {
-                $itemQuery->where('item_category_id', (int) $categoryId);
+                $itemQuery->where('item_category_id', $categoryId);
             });
         } else {
             // Don't show disposals until the user selects a category.

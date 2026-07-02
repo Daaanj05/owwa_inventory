@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Transfers;
 
 use App\Filament\Concerns\HasOwwaViewModalUrl;
+use App\Filament\Concerns\SyncsActiveItemCategory;
 use App\Filament\Resources\Transfers\Pages\ListTransfers;
 use App\Filament\Resources\Transfers\Pages\ViewTransfer;
 use App\Filament\Resources\Transfers\Schemas\TransferForm;
@@ -138,9 +139,9 @@ class TransferResource extends Resource
             return false;
         }
 
-        $categoryId = session('active_item_category_id');
-        if (filled($categoryId)) {
-            $slug = \App\Models\ItemCategory::query()->find((int) $categoryId)?->getTemplateSlug();
+        $categoryId = SyncsActiveItemCategory::resolveCategoryIdFromContext();
+        if ($categoryId > 0) {
+            $slug = \App\Models\ItemCategory::query()->find($categoryId)?->getTemplateSlug();
 
             return $slug !== 'consumables';
         }

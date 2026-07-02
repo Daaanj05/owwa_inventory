@@ -2,6 +2,7 @@
 
 namespace App\Filament\Widgets;
 
+use App\Filament\Concerns\SyncsActiveItemCategory;
 use App\Filament\Pages\RegionalSupplyCatalog;
 use App\Models\User;
 use App\Services\InventoryStockService;
@@ -36,7 +37,7 @@ class RegionalSupplyCatalogWidget extends Widget
             return collect();
         }
 
-        $categoryId = session('active_item_category_id');
+        $categoryId = SyncsActiveItemCategory::resolveCategoryIdFromContext();
 
         return app(InventoryStockService::class)
             ->getStockLevelsList(filled($categoryId) ? (int) $categoryId : null)
@@ -53,7 +54,7 @@ class RegionalSupplyCatalogWidget extends Widget
 
     public function getCatalogUrl(): string
     {
-        $categoryId = session('active_item_category_id');
+        $categoryId = SyncsActiveItemCategory::resolveCategoryIdFromContext();
 
         return RegionalSupplyCatalog::getUrl(array_filter([
             'category' => filled($categoryId) ? (int) $categoryId : null,

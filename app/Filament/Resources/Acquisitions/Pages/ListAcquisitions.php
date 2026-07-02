@@ -21,11 +21,15 @@ use Filament\View\PanelsRenderHook;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\HtmlString;
+use Livewire\Attributes\Url;
 
 class ListAcquisitions extends ListRecords
 {
     use HasSystemAdminWizardHeading;
     use SyncsActiveItemCategory;
+
+    #[Url]
+    public int|string|null $category = null;
 
     protected static string $resource = AcquisitionResource::class;
 
@@ -36,7 +40,7 @@ class ListAcquisitions extends ListRecords
 
     public function getHeading(): string|Htmlable
     {
-        $categoryName = ItemCategory::query()->whereKey((int) session('active_item_category_id'))->value('name');
+        $categoryName = ItemCategory::query()->whereKey($this->activeItemCategoryId())->value('name');
 
         if (! $categoryName) {
             return 'Acquisitions';
@@ -110,7 +114,7 @@ class ListAcquisitions extends ListRecords
 
     protected function getWizardHeaderBreadcrumb(string $categoryName, string $taskLabel): string
     {
-        $categoryId = (int) session('active_item_category_id', 0);
+        $categoryId = $this->activeItemCategoryId();
         $dashboardUrl = InventoryCategoryDashboard::getUrl(['category' => $categoryId]);
 
         return sprintf(
@@ -127,7 +131,7 @@ class ListAcquisitions extends ListRecords
             OwwaFormModalDefaults::createAction(OwwaFormModalDefaults::WIDTH_WIDE)
                 ->label('New acquisition')
                 ->mutateFormDataUsing(function (array $data): array {
-                    $categoryId = (int) session('active_item_category_id', 0);
+                    $categoryId = $this->activeItemCategoryId();
                     if ($categoryId > 0) {
                         $data['item_category_id'] = $categoryId;
                     }

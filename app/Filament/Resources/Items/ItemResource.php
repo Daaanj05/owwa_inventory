@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Items;
 
 use App\Filament\Concerns\HasOwwaViewModalUrl;
+use App\Filament\Concerns\SyncsActiveItemCategory;
 use App\Filament\Resources\Items\Pages\ListItems;
 use App\Filament\Resources\Items\Schemas\ItemForm;
 use App\Filament\Resources\Items\Schemas\ItemInfolist;
@@ -39,9 +40,9 @@ class ItemResource extends Resource
     {
         $query = parent::getEloquentQuery()->active();
 
-        $categoryId = session('active_item_category_id');
-        if (filled($categoryId)) {
-            $query->where('item_category_id', (int) $categoryId);
+        $categoryId = SyncsActiveItemCategory::resolveCategoryIdFromContext();
+        if ($categoryId > 0) {
+            $query->where('item_category_id', $categoryId);
         } else {
             $query->whereRaw('1 = 0');
         }

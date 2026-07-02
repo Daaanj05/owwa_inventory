@@ -2,12 +2,14 @@
 
 namespace App\Filament\Resources\Items\Schemas;
 
+use App\Filament\Concerns\SyncsActiveItemCategory;
 use App\Models\ItemCategory;
 use App\Services\ReferenceCodeService;
 use App\Support\ItemPropertyClass;
 use App\Support\SemiExpendableUsefulLife;
 use App\Support\SemiExpendableValueCategory;
 use Filament\Facades\Filament;
+use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
@@ -29,6 +31,10 @@ class ItemForm
                     ->columnSpanFull()
                     ->columns(2)
                     ->schema([
+                        Hidden::make('item_category_id')
+                            ->default(fn (): ?int => self::activeCategoryId())
+                            ->dehydrated(true)
+                            ->visible(fn (string $operation): bool => $operation === 'create' && self::isCategoryScoped()),
                         Select::make('item_category_id')
                             ->label('Category')
                             ->relationship('category', 'name')
@@ -38,7 +44,8 @@ class ItemForm
                             ->live()
                             ->default(fn (): ?int => self::activeCategoryId())
                             ->disabled(fn (): bool => self::isCategoryScoped())
-                            ->dehydrated(true),
+                            ->dehydrated(true)
+                            ->visible(fn (string $operation): bool => $operation !== 'create' || ! self::isCategoryScoped()),
                         TextInput::make('name')
                             ->required()
                             ->maxLength(255),
@@ -47,7 +54,7 @@ class ItemForm
                             ->default(false)
                             ->live()
                             ->dehydrated(false)
-                            ->visible(fn (string $operation): bool => $operation === 'create'
+                            ->visible(fn (string $operation): bool => $operation !== 'create'
                                 && (Filament::auth()->user()?->canOverrideGeneratedCodes() ?? false)),
                         TextInput::make('item_code')
                             ->label('Stock number / item code')
@@ -56,6 +63,8 @@ class ItemForm
                                 && ! ($get('override_item_code') ?? false)
                                 && config('inventory.auto_generate_item_codes', true))
                             ->dehydrated()
+                            ->visible(fn (string $operation): bool => $operation !== 'create'
+                                || ! config('inventory.auto_generate_item_codes', true))
                             ->helperText(fn (string $operation, Get $get): string => self::itemCodeHelperText($operation, $get)),
                         TextInput::make('unit')
                             ->label('Measurement unit')
@@ -67,7 +76,8 @@ class ItemForm
                             ->label('Value category (COA)')
                             ->disabled()
                             ->dehydrated(false)
-                            ->visible(fn (Get $get): bool => self::isSemiExpendableCategory($get('item_category_id')))
+                            ->visible(fn (string $operation, Get $get): bool => $operation !== 'create'
+                                && self::isSemiExpendableCategory($get('item_category_id')))
                             ->formatStateUsing(fn ($state, $record): string => $record
                                 ? \App\Support\SemiExpendableValueCategory::labelForValueType($record->value_type)
                                 : 'Set automatically from acquisition unit cost ('.SemiExpendableValueCategory::tierRuleSummary().')')
@@ -101,7 +111,7 @@ class ItemForm
                                     }
                                 }
                             })
-                            ->helperText('Select the OWWA property tab for Annex A.1 / A.4 exports (e.g. ICT, Office equipment).')
+                            ->helperText('Select the OWWA property tab for Annex A.1 / A.4 exports. Export property cards and registries from Stock Levels.')
                             ->visible(fn (Get $get): bool => self::isSemiExpendableCategory($get('item_category_id'))),
                         TextInput::make('estimated_useful_life')
                             ->label('Estimated useful life')
@@ -122,15 +132,12 @@ class ItemForm
                                     }
                                 };
                             }),
-                        TextInput::make('serial_number')
-                            ->label('Serial number')
-                            ->maxLength(255)
-                            ->visible(fn (Get $get): bool => self::isPpeCategory($get('item_category_id')))
-                            ->helperText('Enter the manufacturer serial or asset tag from the physical unit (not the RSMI report serial).')
-                            ->required(fn (): bool => config('inventory.require_serial_number_for_ppe', true)),
                         Textarea::make('description')
                             ->columnSpanFull()
-                            ->rows(3),
+                            ->rows(3)
+                            ->helperText(fn (Get $get): ?string => self::isPpeCategory($get('item_category_id'))
+                                ? 'Include brand, size, color, manufacturer serial or asset tag if any (maps to Description on PAR/PC export).'
+                                : null),
                     ]),
             ]);
     }
@@ -192,7 +199,7 @@ class ItemForm
     protected static function isCategoryScoped(): bool
     {
         return Filament::getCurrentPanel()?->getId() === 'admin'
-            && filled(session('active_item_category_id'));
+            && (filled(request()->query('category')) || filled(session('active_item_category_id')));
     }
 
     protected static function activeCategoryId(): ?int
@@ -201,6 +208,6 @@ class ItemForm
             return null;
         }
 
-        return (int) session('active_item_category_id');
+        return SyncsActiveItemCategory::resolveCategoryIdFromContext();
     }
 }
