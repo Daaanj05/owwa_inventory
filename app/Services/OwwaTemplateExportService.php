@@ -220,6 +220,7 @@ class OwwaTemplateExportService
                 $transactionCount,
                 OwwaExportStandards::resolveWrapTextColumns($ledger),
                 OwwaExportStandards::minWrapLinesForExpansion($ledger),
+                OwwaExportStandards::uniformDataRowHeight($ledger),
             );
         }
 
@@ -489,9 +490,7 @@ class OwwaTemplateExportService
                 );
             }
 
-            $headerValues = [];
-            AnnexA1BlockLayout::applyHeader($headerValues, (array) ($block['header'] ?? []), $blockStartRow);
-            $this->applyCellValues($sheet, $headerValues);
+            $this->applyAnnexA1BlockHeader($sheet, (array) ($block['header'] ?? []), $blockStartRow);
             $this->applyCellValues(
                 $sheet,
                 $this->annexA1LedgerCellValues($transactions, $ledgerStart),
@@ -574,6 +573,7 @@ class OwwaTemplateExportService
             $transactionCount,
             OwwaExportStandards::resolveWrapTextColumns($ledger),
             OwwaExportStandards::minWrapLinesForExpansion($ledger),
+            OwwaExportStandards::uniformDataRowHeight($ledger),
         );
     }
 
@@ -778,6 +778,37 @@ class OwwaTemplateExportService
                 'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
             ]
         );
+    }
+
+    /**
+     * @param  array<string, string|null>  $header
+     */
+    protected function applyAnnexA1BlockHeader(Worksheet $sheet, array $header, int $blockStartRow): void
+    {
+        $headerMap = (array) (OwwaCellMapping::form('ANNEX_A1')['header'] ?? []);
+
+        foreach ($headerMap as $field => $spec) {
+            if (! array_key_exists($field, $header)) {
+                continue;
+            }
+
+            $cell = AnnexA1BlockLayout::headerCell($field, $blockStartRow);
+            $label = (string) ($spec['label'] ?? '');
+            $raw = $header[$field] ?? '';
+
+            if ($field === 'property_type') {
+                OwwaSpreadsheetLayoutHelper::applyBoldLabelPlainValueCell(
+                    $sheet,
+                    $cell,
+                    $label,
+                    (string) $raw,
+                );
+
+                continue;
+            }
+
+            $sheet->setCellValue($cell, $label.($raw ?? ''));
+        }
     }
 
     /**

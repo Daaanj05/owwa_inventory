@@ -15,6 +15,7 @@ class OwwaAnnexA4HeaderFormattingTest extends TestCase
     {
         $spreadsheet = new Spreadsheet;
         $sheet = $spreadsheet->getActiveSheet();
+        $sheet->getStyle('A7')->getFont()->setName('Times New Roman')->setSize(11);
 
         OwwaSpreadsheetLayoutHelper::applyBoldLabelPlainValueCell(
             $sheet,
@@ -30,10 +31,15 @@ class OwwaAnnexA4HeaderFormattingTest extends TestCase
         $this->assertCount(2, $runs);
         $this->assertSame('Semi-Expendable Property: ', $runs[0]->getText());
         $this->assertTrue($runs[0]->getFont()->getBold());
+        $this->assertSame('Times New Roman', $runs[0]->getFont()->getName());
+        $this->assertEqualsWithDelta(11.0, $runs[0]->getFont()->getSize(), 0.01);
         $this->assertSame(Font::UNDERLINE_NONE, $runs[0]->getFont()->getUnderline());
         $this->assertSame('INFORMATION & COMMUNICATION TECHNOLOGY', $runs[1]->getText());
         $this->assertFalse($runs[1]->getFont()->getBold());
+        $this->assertSame('Times New Roman', $runs[1]->getFont()->getName());
+        $this->assertEqualsWithDelta(11.0, $runs[1]->getFont()->getSize(), 0.01);
         $this->assertSame(Font::UNDERLINE_NONE, $runs[1]->getFont()->getUnderline());
+        $this->assertSame('Times New Roman', $sheet->getStyle('A7')->getFont()->getName());
         $this->assertSame(Font::UNDERLINE_NONE, $sheet->getStyle('A7')->getFont()->getUnderline());
     }
 
@@ -72,6 +78,11 @@ class OwwaAnnexA4HeaderFormattingTest extends TestCase
 
         $sheet = $spreadsheet->getSheetByName('ICT');
         $this->assertNotNull($sheet);
-        $this->assertInstanceOf(RichText::class, $sheet->getCell('A7')->getValue());
+        $value = $sheet->getCell('A7')->getValue();
+        $this->assertInstanceOf(RichText::class, $value);
+
+        $runs = $value->getRichTextElements();
+        $this->assertSame('Times New Roman', $runs[0]->getFont()->getName());
+        $this->assertSame('Times New Roman', $runs[1]->getFont()->getName());
     }
 }

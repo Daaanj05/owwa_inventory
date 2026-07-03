@@ -519,6 +519,58 @@ class OwwaAnnexA4BulkExportTest extends TestCase
         $this->assertEqualsWithDelta($shortRowHeight, $longOfficeRowHeight, 0.5);
     }
 
+    public function test_annex_a4_uniform_data_row_height_matches_tallest_entry(): void
+    {
+        if (! extension_loaded('zip')) {
+            $this->markTestSkipped('The zip extension is required to read OWWA .xlsx templates.');
+        }
+
+        if (! is_readable(storage_path('app/templates/Semi-Expendable/Property-Form-Annex-A.4-Registry-of-Semi-Expendable-Property-Issued.xlsx'))) {
+            $this->markTestSkipped('Annex A.4 template is not present in storage/app/templates.');
+        }
+
+        $spreadsheet = app(OwwaTemplateExportService::class)->buildAnnexA4Spreadsheet([
+            [
+                'sheetName' => 'ICT',
+                'header' => [
+                    'entity_name' => 'RWO IV-A',
+                    'fund_cluster' => '01',
+                    'property_type' => 'INFORMATION & COMMUNICATION TECHNOLOGY',
+                ],
+                'entries' => [
+                    [
+                        'date' => '2026-07-01',
+                        'reference' => '2026-07-0001',
+                        'property_number' => 'SEM-001',
+                        'description' => 'Router',
+                        'estimated_useful_life' => '5 yrs',
+                        'issued_qty' => 1,
+                        'issued_office' => 'Supply Custodian',
+                    ],
+                    [
+                        'date' => '2026-07-02',
+                        'reference' => '2026-07-0002',
+                        'property_number' => 'SEM-002',
+                        'description' => str_repeat('Maintenance supplies kit section ', 4),
+                        'estimated_useful_life' => '5 yrs',
+                        'issued_qty' => 1,
+                        'issued_office' => 'Supply Custodian',
+                    ],
+                ],
+            ],
+        ]);
+
+        $sheet = $spreadsheet->getSheetByName('ICT');
+        $this->assertNotNull($sheet);
+
+        $firstDataRowHeight = $this->resolvedDataRowHeight($sheet, 12);
+        $secondDataRowHeight = $this->resolvedDataRowHeight($sheet, 13);
+        $blankRowHeight = $sheet->getRowDimension(14)->getRowHeight();
+
+        $this->assertEqualsWithDelta($firstDataRowHeight, $secondDataRowHeight, 0.5);
+        $this->assertGreaterThan($blankRowHeight, $firstDataRowHeight);
+    }
+
     /**
      * @return array<string, array{0: string, 1: string}>
      */
@@ -604,6 +656,8 @@ class OwwaAnnexA4BulkExportTest extends TestCase
         $runs = $value->getRichTextElements();
         $this->assertTrue($runs[0]->getFont()->getBold());
         $this->assertFalse($runs[1]->getFont()->getBold());
+        $this->assertSame('Times New Roman', $runs[0]->getFont()->getName());
+        $this->assertSame('Times New Roman', $runs[1]->getFont()->getName());
         $this->assertSame(Font::UNDERLINE_NONE, $runs[1]->getFont()->getUnderline());
     }
 

@@ -99,6 +99,14 @@ class OwwaExportStandards
         return max(2, (int) ($ledger['min_wrap_lines_for_expansion'] ?? 2));
     }
 
+    /**
+     * @param  array<string, mixed>  $ledger
+     */
+    public static function uniformDataRowHeight(array $ledger): bool
+    {
+        return (bool) ($ledger['uniform_data_row_height'] ?? false);
+    }
+
     public static function charsPerLineForColumnWidth(float $columnWidth): int
     {
         if ($columnWidth <= 0) {

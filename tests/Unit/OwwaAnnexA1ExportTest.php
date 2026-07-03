@@ -11,7 +11,9 @@ use App\Services\OwwaTemplateExportService;
 use App\Support\AnnexA1BlockLayout;
 use App\Support\ItemPropertyClass;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use PhpOffice\PhpSpreadsheet\RichText\RichText;
 use PhpOffice\PhpSpreadsheet\Style\Border;
+use PhpOffice\PhpSpreadsheet\Style\Font;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\Support\CreatesSemiExpendableAnnexA4Fixtures;
 use Tests\TestCase;
@@ -495,5 +497,122 @@ class OwwaAnnexA1ExportTest extends TestCase
             'Wrapped data row should be taller than the blank padding row beneath it',
         );
         $this->assertTrue($sheet->getStyle('I15')->getAlignment()->getWrapText());
+    }
+
+    public function test_data_row_expands_height_for_property_number_in_item_no_column(): void
+    {
+        if (! extension_loaded('zip')) {
+            $this->markTestSkipped('The zip extension is required to read OWWA .xlsx templates.');
+        }
+
+        $spreadsheet = app(OwwaTemplateExportService::class)->buildAnnexA1Spreadsheet(
+            [
+                [
+                    'sheetName' => 'F&F',
+                    'blocks' => [
+                        [
+                            'header' => [
+                                'entity_name' => 'OWWA Regional Office IV-A',
+                                'fund_cluster' => '01',
+                                'property_type' => 'FURNITURES & FIXTURES',
+                                'property_number' => 'SEM-FF-001-001',
+                                'description' => 'Office chair — Furnitures & fixtures',
+                            ],
+                            'transactions' => [
+                                [
+                                    'date' => '2026-07-02',
+                                    'reference' => '2026-07-9000',
+                                    'issue_qty' => 1,
+                                    'office_officer' => 'Supply Custodian',
+                                    'property_number' => 'SEM-FF-001-001',
+                                    'balance' => 0,
+                                ],
+                                [
+                                    'date' => '2026-07-01',
+                                    'reference' => 'ACQ-SEM-FF-001',
+                                    'receipt_qty' => 1,
+                                    'unit_cost' => 1000,
+                                    'balance' => 1,
+                                    'item_code' => 'SEM-FF-001',
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+            ],
+        );
+
+        $sheet = $spreadsheet->getSheetByName('F&F');
+        $this->assertNotNull($sheet);
+
+        $issuanceRowHeight = $sheet->getRowDimension(15)->getRowHeight();
+        $receiptRowHeight = $sheet->getRowDimension(16)->getRowHeight();
+        $blankRowHeight = $sheet->getRowDimension(17)->getRowHeight();
+
+        $this->assertEqualsWithDelta(
+            $issuanceRowHeight,
+            $receiptRowHeight,
+            0.5,
+            'All data rows in a property card should share the same height',
+        );
+        $this->assertTrue(
+            $issuanceRowHeight > $blankRowHeight,
+            'Issuance row with property number should expand for wrapped Item No. text',
+        );
+        $this->assertSame('SEM-FF-001-001', $sheet->getCell('G15')->getValue());
+        $this->assertTrue($sheet->getStyle('G15')->getAlignment()->getWrapText());
+    }
+
+    public function test_property_type_header_uses_bold_label_and_plain_value_with_times_new_roman(): void
+    {
+        if (! extension_loaded('zip')) {
+            $this->markTestSkipped('The zip extension is required to read OWWA .xlsx templates.');
+        }
+
+        $spreadsheet = app(OwwaTemplateExportService::class)->buildAnnexA1Spreadsheet(
+            [
+                [
+                    'sheetName' => 'OFFICE EQUIPMENT',
+                    'blocks' => [
+                        [
+                            'header' => [
+                                'entity_name' => 'OWWA Regional Office IV-A',
+                                'fund_cluster' => '01',
+                                'property_type' => 'OFFICE EQUIPMENT',
+                                'property_number' => 'SEM-003',
+                                'description' => 'Desk Organizer',
+                            ],
+                            'transactions' => [
+                                [
+                                    'date' => '2026-07-01',
+                                    'reference' => 'ACQ-SEM-003',
+                                    'receipt_qty' => 1,
+                                    'unit_cost' => 1000,
+                                    'balance' => 1,
+                                    'item_code' => 'SEM-003',
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+            ],
+        );
+
+        $sheet = $spreadsheet->getSheetByName('OFFICE EQUIPMENT');
+        $this->assertNotNull($sheet);
+
+        $propertyTypeCell = AnnexA1BlockLayout::headerCell('property_type', AnnexA1BlockLayout::FIRST_BLOCK_START_ROW);
+        $value = $sheet->getCell($propertyTypeCell)->getValue();
+
+        $this->assertInstanceOf(RichText::class, $value);
+
+        $runs = $value->getRichTextElements();
+        $this->assertSame('Semi-expendable Property : ', $runs[0]->getText());
+        $this->assertTrue($runs[0]->getFont()->getBold());
+        $this->assertSame('OFFICE EQUIPMENT', $runs[1]->getText());
+        $this->assertFalse($runs[1]->getFont()->getBold());
+        $this->assertSame('Times New Roman', $runs[0]->getFont()->getName());
+        $this->assertSame('Times New Roman', $runs[1]->getFont()->getName());
+        $this->assertSame(Font::UNDERLINE_NONE, $runs[1]->getFont()->getUnderline());
     }
 }

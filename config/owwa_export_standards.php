@@ -7,7 +7,7 @@ return [
         'font_size' => 10,
         'row_height' => 15,
         'vertical_alignment' => 'center',
-        'chars_per_line_width_factor' => 1.30,
+        'chars_per_line_width_factor' => 1.15,
         'chars_per_line_width_offset' => 0.5,
         'default_column_width' => 8.43,
         'max_wrap_lines' => 4,

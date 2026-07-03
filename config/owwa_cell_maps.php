@@ -302,6 +302,9 @@ return [
                 'K' => 'right',
                 'L' => 'left',
             ],
+            'wrap_text_columns' => ['G', 'I', 'L'],
+            'min_wrap_lines_for_expansion' => 2,
+            'uniform_data_row_height' => true,
         ],
     ],
 
@@ -358,6 +361,7 @@ return [
             ],
             'wrap_text_columns' => ['D', 'G', 'I', 'K', 'O'],
             'min_wrap_lines_for_expansion' => 3,
+            'uniform_data_row_height' => true,
             'min_sample_clear_rows' => 30,
         ],
     ],

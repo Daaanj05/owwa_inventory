@@ -29,6 +29,7 @@ class OwwaSpreadsheetLayoutHelper
         ?int $dataRowCount = null,
         array $wrapTextColumns = [],
         int $minWrapLinesForExpansion = 2,
+        bool $uniformDataRowHeight = false,
     ): void {
         if ($rowCount <= 0) {
             return;
@@ -76,21 +77,41 @@ class OwwaSpreadsheetLayoutHelper
             }
         }
 
-        for ($row = $ledgerStart; $row <= $lastDataRow; $row++) {
-            if ($wrapTextColumns === []) {
-                continue;
-            }
+        if ($wrapTextColumns !== []) {
+            if ($uniformDataRowHeight) {
+                $maxDataRowHeight = $standardRowHeight;
 
-            $estimatedHeight = self::estimateWrappedRowHeight(
-                $sheet,
-                $row,
-                $wrapTextColumns,
-                $standardRowHeight,
-                $minWrapLinesForExpansion,
-            );
+                for ($row = $ledgerStart; $row <= $lastDataRow; $row++) {
+                    $estimatedHeight = self::estimateWrappedRowHeight(
+                        $sheet,
+                        $row,
+                        $wrapTextColumns,
+                        $standardRowHeight,
+                        $minWrapLinesForExpansion,
+                    );
 
-            if ($estimatedHeight > $standardRowHeight) {
-                $sheet->getRowDimension($row)->setRowHeight($estimatedHeight);
+                    $maxDataRowHeight = max($maxDataRowHeight, $estimatedHeight);
+                }
+
+                if ($maxDataRowHeight > $standardRowHeight) {
+                    for ($row = $ledgerStart; $row <= $lastDataRow; $row++) {
+                        $sheet->getRowDimension($row)->setRowHeight($maxDataRowHeight);
+                    }
+                }
+            } else {
+                for ($row = $ledgerStart; $row <= $lastDataRow; $row++) {
+                    $estimatedHeight = self::estimateWrappedRowHeight(
+                        $sheet,
+                        $row,
+                        $wrapTextColumns,
+                        $standardRowHeight,
+                        $minWrapLinesForExpansion,
+                    );
+
+                    if ($estimatedHeight > $standardRowHeight) {
+                        $sheet->getRowDimension($row)->setRowHeight($estimatedHeight);
+                    }
+                }
             }
         }
 
@@ -118,11 +139,7 @@ class OwwaSpreadsheetLayoutHelper
 
             $columnWidth = self::effectiveColumnWidth($sheet, $column, $row);
             $charsPerLine = max(1, OwwaExportStandards::charsPerLineForColumnWidth($columnWidth));
-
-            if (mb_strlen($value) <= $charsPerLine) {
-                continue;
-            }
-            $lineCount = (int) ceil(mb_strlen($value) / $charsPerLine);
+            $lineCount = self::estimateWrappedLineCount($value, $charsPerLine);
 
             if ($lineCount <= 1) {
                 continue;
@@ -136,6 +153,42 @@ class OwwaSpreadsheetLayoutHelper
         }
 
         return max($baseHeight, $maxLines * $baseHeight);
+    }
+
+    public static function estimateWrappedLineCount(string $value, int $charsPerLine): int
+    {
+        if ($value === '' || $charsPerLine < 1) {
+            return 1;
+        }
+
+        $charDivisionEstimate = (int) ceil(mb_strlen($value) / $charsPerLine);
+
+        if (! str_contains($value, '-')) {
+            return max(1, $charDivisionEstimate);
+        }
+
+        $segments = explode('-', $value);
+        $tokens = [$segments[0]];
+
+        for ($index = 1; $index < count($segments); $index++) {
+            $tokens[] = '-'.$segments[$index];
+        }
+
+        $lines = 1;
+        $currentLength = mb_strlen($tokens[0]);
+
+        for ($index = 1; $index < count($tokens); $index++) {
+            $tokenLength = mb_strlen($tokens[$index]);
+
+            if ($currentLength + $tokenLength > $charsPerLine) {
+                $lines++;
+                $currentLength = $tokenLength;
+            } else {
+                $currentLength += $tokenLength;
+            }
+        }
+
+        return max(1, $charDivisionEstimate, $lines);
     }
 
     public static function effectiveColumnWidth(Worksheet $sheet, string $column, int $row): float
@@ -190,16 +243,27 @@ class OwwaSpreadsheetLayoutHelper
         string $label,
         string $value,
     ): void {
+        $cellFont = $sheet->getStyle($cell)->getFont();
+        $fontName = $cellFont->getName() ?: OwwaExportStandards::fontName();
+        $fontSize = $cellFont->getSize() ?: OwwaExportStandards::fontSize();
+
         $richText = new RichText;
         $labelRun = $richText->createTextRun($label);
+        $labelRun->getFont()->setName($fontName);
+        $labelRun->getFont()->setSize($fontSize);
         $labelRun->getFont()->setBold(true);
         $labelRun->getFont()->setUnderline(Font::UNDERLINE_NONE);
 
         $valueRun = $richText->createTextRun($value);
+        $valueRun->getFont()->setName($fontName);
+        $valueRun->getFont()->setSize($fontSize);
         $valueRun->getFont()->setBold(false);
         $valueRun->getFont()->setUnderline(Font::UNDERLINE_NONE);
 
         $sheet->getCell($cell)->setValue($richText);
+        $sheet->getStyle($cell)->getFont()->setName($fontName);
+        $sheet->getStyle($cell)->getFont()->setSize($fontSize);
+        $sheet->getStyle($cell)->getFont()->setBold(false);
         $sheet->getStyle($cell)->getFont()->setUnderline(Font::UNDERLINE_NONE);
     }
 

@@ -149,8 +149,8 @@ class OwwaWrappedRowHeightEstimationTest extends TestCase
 
     public function test_chars_per_line_uses_font_aware_capacity(): void
     {
-        $this->assertSame(10, OwwaExportStandards::charsPerLineForColumnWidth(8.0));
-        $this->assertSame(13, OwwaExportStandards::charsPerLineForColumnWidth(10.0));
+        $this->assertSame(9, OwwaExportStandards::charsPerLineForColumnWidth(8.0));
+        $this->assertSame(12, OwwaExportStandards::charsPerLineForColumnWidth(10.0));
     }
 
     public function test_annex_a4_min_wrap_lines_for_expansion_is_three(): void
@@ -170,6 +170,63 @@ class OwwaWrappedRowHeightEstimationTest extends TestCase
         $this->assertNotContains('B', $columns);
         $this->assertNotContains('C', $columns);
         $this->assertNotContains('E', $columns);
+    }
+
+    public function test_annex_a1_property_number_expands_in_template_column_g_width(): void
+    {
+        $sheet = $this->worksheetWithCell('G15', 'SEM-FF-001-001', 10.59765625);
+        $baseHeight = 15.75;
+
+        $height = OwwaSpreadsheetLayoutHelper::estimateWrappedRowHeight(
+            $sheet,
+            15,
+            ['G'],
+            $baseHeight,
+        );
+
+        $this->assertSame(31.5, $height);
+    }
+
+    public function test_hyphenated_property_number_estimates_two_lines_at_boundary_capacity(): void
+    {
+        $charsPerLine = OwwaExportStandards::charsPerLineForColumnWidth(10.59765625);
+
+        $this->assertSame(12, $charsPerLine);
+        $this->assertSame(
+            2,
+            OwwaSpreadsheetLayoutHelper::estimateWrappedLineCount('SEM-FF-001-001', $charsPerLine),
+        );
+    }
+
+    public function test_annex_a1_wrap_text_columns_override_excludes_reference_columns(): void
+    {
+        $ledger = config('owwa_cell_maps.ANNEX_A1.ledger');
+
+        $columns = OwwaExportStandards::resolveWrapTextColumns($ledger);
+
+        $this->assertSame(['G', 'I', 'L'], $columns);
+        $this->assertNotContains('B', $columns);
+    }
+
+    public function test_annex_a1_min_wrap_lines_for_expansion_is_two(): void
+    {
+        $ledger = config('owwa_cell_maps.ANNEX_A1.ledger');
+
+        $this->assertSame(2, OwwaExportStandards::minWrapLinesForExpansion($ledger));
+    }
+
+    public function test_annex_a1_uniform_data_row_height_is_enabled(): void
+    {
+        $ledger = config('owwa_cell_maps.ANNEX_A1.ledger');
+
+        $this->assertTrue(OwwaExportStandards::uniformDataRowHeight($ledger));
+    }
+
+    public function test_annex_a4_uniform_data_row_height_is_enabled(): void
+    {
+        $ledger = config('owwa_cell_maps.ANNEX_A4.ledger');
+
+        $this->assertTrue(OwwaExportStandards::uniformDataRowHeight($ledger));
     }
 
     protected function worksheetWithCell(string $coordinate, string $value, float $columnWidth): \PhpOffice\PhpSpreadsheet\Worksheet\Worksheet
