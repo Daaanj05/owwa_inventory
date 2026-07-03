@@ -145,8 +145,14 @@ class MyStockLevels extends Page
             $rows->count(),
             $perPage,
             $page,
-            ['path' => request()->url(), 'query' => request()->query()],
-        ))->onEachSide(0);
+            ['path' => static::getUrl()],
+        ))
+            ->appends(array_filter([
+                'sortBy' => $this->sortBy,
+                'sortDir' => $this->sortDir,
+                'search' => filled($this->search) ? $this->search : null,
+            ], fn (mixed $value): bool => filled($value)))
+            ->onEachSide(0);
     }
 
     public function getOfficeName(): string

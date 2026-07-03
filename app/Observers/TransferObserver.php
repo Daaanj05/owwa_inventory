@@ -5,6 +5,7 @@ namespace App\Observers;
 use App\Models\Transfer;
 use App\Services\PropertyReturnService;
 use App\Services\ReferenceCodeService;
+use App\Services\TransferInventoryUnitService;
 
 class TransferObserver
 {
@@ -21,5 +22,6 @@ class TransferObserver
     public function created(Transfer $transfer): void
     {
         app(PropertyReturnService::class)->processReturnTransfer($transfer);
+        app(TransferInventoryUnitService::class)->syncUnitsForTransfer($transfer);
     }
 }

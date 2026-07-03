@@ -21,7 +21,7 @@ class PhysicalCountSessionActions
             ->label('Scan with phone')
             ->icon('heroicon-o-camera')
             ->color('primary')
-            ->visible(fn (PhysicalCountSession $record): bool => $record->supportsQrScanning() && ! $record->isComplete())
+            ->visible(fn (PhysicalCountSession $record): bool => $record->supportsQrScanning() && ! $record->isComplete() && ! $record->isArchived())
             ->url(fn (PhysicalCountSession $record): string => PhysicalCountSessionResource::getUrl('scan', ['record' => $record]));
     }
 
@@ -31,12 +31,14 @@ class PhysicalCountSessionActions
             ->label('Load expected assets')
             ->icon('heroicon-o-arrow-down-tray')
             ->color('success')
-            ->visible(fn (PhysicalCountSession $record): bool => $record->supportsQrScanning() && ! $record->hasBookListLoaded())
+            ->visible(fn (PhysicalCountSession $record): bool => $record->supportsQrScanning() && ! $record->hasBookListLoaded() && ! $record->isArchived())
             ->requiresConfirmation()
             ->modalHeading('Load expected assets from custody records?')
-            ->modalDescription('Loads the book list from in-stock inventory units for this office. Unscanned units appear as shortages. Use this on desktop after mobile scanning.')
+            ->modalDescription('Loads all property tags accountable to the regional office — warehouse stock and items issued for use. Excludes assets at satellite offices. Unscanned units appear as shortages.')
             ->action(function (PhysicalCountSession $record, Action $action) use ($afterSuccess): void {
                 $result = app(PhysicalCountPreloadService::class)->preloadFromCustodyRecords($record);
+
+                $record->refresh()->load(['lines.item']);
 
                 Notification::make()
                     ->title('Expected assets loaded')
@@ -46,11 +48,7 @@ class PhysicalCountSessionActions
 
                 if ($afterSuccess !== null) {
                     $afterSuccess($record, $action);
-
-                    return;
                 }
-
-                $action->halt();
             });
     }
 
@@ -60,7 +58,7 @@ class PhysicalCountSessionActions
             ->label('Mark complete')
             ->icon('heroicon-o-check-circle')
             ->color('success')
-            ->visible(fn (PhysicalCountSession $record): bool => $record->supportsQrScanning() && ! $record->isComplete())
+            ->visible(fn (PhysicalCountSession $record): bool => $record->supportsQrScanning() && ! $record->isComplete() && ! $record->isArchived())
             ->requiresConfirmation()
             ->action(function (PhysicalCountSession $record, Action $action): void {
                 try {
@@ -77,12 +75,12 @@ class PhysicalCountSessionActions
                     return;
                 }
 
+                $record->refresh()->load(['lines.item']);
+
                 Notification::make()
                     ->title('Session marked complete')
                     ->success()
                     ->send();
-
-                $action->halt();
             });
     }
 
@@ -108,7 +106,8 @@ class PhysicalCountSessionActions
 
     public static function editAction(): EditAction
     {
-        return OwwaFormModalDefaults::editAction(OwwaFormModalDefaults::WIDTH_STANDARD);
+        return OwwaFormModalDefaults::editAction(OwwaFormModalDefaults::WIDTH_STANDARD)
+            ->visible(fn (PhysicalCountSession $record): bool => ! $record->isArchived());
     }
 
     /**

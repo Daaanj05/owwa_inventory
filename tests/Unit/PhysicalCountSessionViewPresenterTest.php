@@ -83,6 +83,48 @@ class PhysicalCountSessionViewPresenterTest extends TestCase
         $this->assertNull($steps[0]['url']);
     }
 
+    public function test_missing_for_complete_html_uses_line_breaks_and_title_case(): void
+    {
+        $session = new PhysicalCountSession([
+            'count_type' => PhysicalCountSession::TYPE_RPCPPE,
+            'book_list_loaded' => false,
+        ]);
+
+        $html = PhysicalCountSessionViewPresenter::missingForCompleteHtml($session);
+
+        $this->assertStringContainsString('<br>', (string) $html);
+        $this->assertStringContainsString('Fund Cluster', (string) $html);
+        $this->assertStringContainsString('Load Expected Assets (Book List)', (string) $html);
+        $this->assertStringNotContainsString(', fund cluster', (string) $html);
+    }
+
+    public function test_qr_workflow_steps_html_uses_numbered_title_case_labels(): void
+    {
+        $html = (string) PhysicalCountSessionViewPresenter::qrWorkflowStepsHtml();
+
+        $this->assertStringContainsString('After You Save This Session:', $html);
+        $this->assertStringContainsString('1. Load Expected Assets — pulls issued property numbers', $html);
+        $this->assertStringContainsString('3. Scan With Phone — each tag found increments on-hand count.', $html);
+    }
+
+    public function test_lines_grouped_by_item_aggregates_tag_lines(): void
+    {
+        [$session, $unit] = $this->createPpeSessionWithUnit();
+        $item = $unit->item;
+
+        app(PhysicalCountPreloadService::class)->preloadFromCustodyRecords($session);
+
+        $session = $session->fresh(['lines.item']);
+        $groups = PhysicalCountSessionViewPresenter::linesGroupedByItem($session);
+
+        $this->assertCount(1, $groups);
+        $this->assertSame($item->name, $groups[0]['item_name']);
+        $this->assertSame(1, $groups[0]['tag_count']);
+        $this->assertSame(1, $groups[0]['balance_per_card']);
+        $this->assertSame(0, $groups[0]['on_hand_count']);
+        $this->assertSame(-1, $groups[0]['variance']);
+    }
+
     /**
      * @return array{0: PhysicalCountSession, 1: \App\Models\InventoryUnit}
      */

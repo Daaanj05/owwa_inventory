@@ -4,6 +4,8 @@ namespace App\Support;
 
 use App\Models\PhysicalCountSession;
 use App\Services\PhysicalCountCompletionService;
+use Illuminate\Support\HtmlString;
+use Illuminate\Support\Str;
 
 class PhysicalCountSessionViewPresenter
 {
@@ -97,6 +99,121 @@ class PhysicalCountSessionViewPresenter
                 'url' => $exportUrl,
             ],
         ];
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    public static function missingForCompleteLines(PhysicalCountSession $session): array
+    {
+        $missing = $session->missingCompletionFields();
+        $summary = $session->countSummary();
+
+        $items = $missing;
+        if (! $session->hasBookListLoaded()) {
+            $items[] = 'load expected assets (book list)';
+        }
+        if ($summary['shortages'] > 0) {
+            $items[] = "{$summary['shortages']} shortage line(s)";
+        }
+
+        if ($items === []) {
+            return ['Ready to mark complete'];
+        }
+
+        return array_map(
+            fn (string $line): string => Str::title($line),
+            $items,
+        );
+    }
+
+    public static function missingForCompleteHtml(PhysicalCountSession $session): HtmlString
+    {
+        $lines = self::missingForCompleteLines($session);
+
+        return new HtmlString(implode('<br>', array_map(
+            fn (string $line): string => e($line),
+            $lines,
+        )));
+    }
+
+    public static function qrWorkflowStepsHtml(): HtmlString
+    {
+        $steps = [
+            ['Load Expected Assets', 'pulls issued property numbers for the selected office (book balance, on-hand starts at 0).'],
+            ['Print QR Labels', 'from issuances or bulk from this session.'],
+            ['Scan With Phone', 'each tag found increments on-hand count.'],
+            ['Review Shortages/Overages', 'on the session view, then export the OWWA form.'],
+        ];
+
+        $body = collect($steps)
+            ->values()
+            ->map(fn (array $step, int $index): string => e(($index + 1).'. '.$step[0].' — '.$step[1]))
+            ->implode('<br>');
+
+        return new HtmlString(
+            '<p><strong>After You Save This Session:</strong></p>'
+            .'<p>'.$body.'</p>'
+            .'<p>'.e('Count lines are added automatically; you do not need to enter items manually on this screen.').'</p>'
+        );
+    }
+
+    /**
+     * @return array<int, array{
+     *     item_id: int,
+     *     item_name: string,
+     *     tag_count: int,
+     *     balance_per_card: int,
+     *     on_hand_count: int,
+     *     variance: int,
+     *     property_numbers: array<int, string>
+     * }>
+     */
+    public static function linesGroupedByItem(PhysicalCountSession $session): array
+    {
+        $session->loadMissing(['lines.item']);
+
+        $groups = [];
+
+        foreach ($session->lines as $line) {
+            $itemId = (int) ($line->item_id ?? 0);
+            $key = $itemId > 0 ? (string) $itemId : 'line:'.$line->id;
+
+            if (! isset($groups[$key])) {
+                $groups[$key] = [
+                    'item_id' => $itemId,
+                    'item_name' => $line->item?->name ?? $line->article ?? 'Unknown item',
+                    'tag_count' => 0,
+                    'balance_per_card' => 0,
+                    'on_hand_count' => 0,
+                    'variance' => 0,
+                    'property_numbers' => [],
+                ];
+            }
+
+            $groups[$key]['tag_count']++;
+            $groups[$key]['balance_per_card'] += (int) $line->balance_per_card;
+            $groups[$key]['on_hand_count'] += (int) $line->on_hand_count;
+            $groups[$key]['variance'] += $line->shortageOverageQuantity();
+
+            if (filled($line->property_number)) {
+                $groups[$key]['property_numbers'][] = (string) $line->property_number;
+            }
+        }
+
+        usort($groups, function (array $a, array $b): int {
+            if ($a['variance'] < 0 && $b['variance'] >= 0) {
+                return -1;
+            }
+
+            if ($a['variance'] >= 0 && $b['variance'] < 0) {
+                return 1;
+            }
+
+            return strcasecmp($a['item_name'], $b['item_name']);
+        });
+
+        return array_values($groups);
     }
 
     /**

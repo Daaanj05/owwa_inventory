@@ -7,6 +7,10 @@ use App\Filament\Resources\PhysicalCountSessions\Schemas\PhysicalCountSessionMod
 use App\Filament\Support\ConfiguresOwwaViewAction;
 use App\Models\PhysicalCountSession;
 use App\Support\OwwaReferenceLabels;
+use Filament\Actions\Action;
+use Filament\Actions\ActionGroup;
+use Filament\Actions\BulkAction;
+use Filament\Actions\BulkActionGroup;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
@@ -68,6 +72,12 @@ class PhysicalCountSessionsTable
                 TextColumn::make('lines_count')
                     ->counts('lines')
                     ->label('Lines'),
+                TextColumn::make('archived_at')
+                    ->label('Archive')
+                    ->badge()
+                    ->state(fn (PhysicalCountSession $record): string => $record->isArchived() ? 'Archived' : 'Active')
+                    ->color(fn (PhysicalCountSession $record): string => $record->isArchived() ? 'gray' : 'success')
+                    ->visible(fn ($livewire): bool => ($livewire->activeTab ?? 'active') === 'archived'),
             ])
             ->filters([
                 SelectFilter::make('status')
@@ -85,6 +95,34 @@ class PhysicalCountSessionsTable
                     modalWidth: '5xl',
                     extraModalClass: 'owwa-physical-count-modal',
                 ),
+                ActionGroup::make([
+                    Action::make('archive')
+                        ->label('Archive')
+                        ->icon('heroicon-o-archive-box')
+                        ->color('gray')
+                        ->requiresConfirmation()
+                        ->modalHeading('Archive physical count session')
+                        ->modalDescription('This session will be hidden from the active list but kept for history. Use the Archived tab to view or restore it.')
+                        ->visible(fn (PhysicalCountSession $record): bool => ! $record->isArchived())
+                        ->action(fn (PhysicalCountSession $record) => $record->update(['archived_at' => now()])),
+                    Action::make('restore')
+                        ->label('Restore')
+                        ->icon('heroicon-o-arrow-uturn-left')
+                        ->visible(fn (PhysicalCountSession $record): bool => $record->isArchived())
+                        ->action(fn (PhysicalCountSession $record) => $record->update(['archived_at' => null])),
+                ])
+                    ->label('Actions')
+                    ->icon('heroicon-m-ellipsis-vertical')
+                    ->color('gray'),
+            ])
+            ->toolbarActions([
+                BulkActionGroup::make([
+                    BulkAction::make('archive')
+                        ->label('Archive selected')
+                        ->icon('heroicon-o-archive-box')
+                        ->requiresConfirmation()
+                        ->action(fn ($records) => $records->each->update(['archived_at' => now()])),
+                ]),
             ])
             ->recordUrl(null)
             ->recordAction('view');

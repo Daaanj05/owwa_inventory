@@ -98,7 +98,7 @@ class InventoryCategoryDashboard extends Page
         ];
     }
 
-    /** @return array{total: int, lowCount: int, okCount: int} */
+    /** @return array{total: int, totalStockQty: int, lowCount: int, okCount: int} */
     public function getStockSummary(): array
     {
         $rows = $this->getCategoryStockRows();
@@ -107,6 +107,7 @@ class InventoryCategoryDashboard extends Page
 
         return [
             'total' => $total,
+            'totalStockQty' => (int) $rows->sum('stock'),
             'lowCount' => $lowCount,
             'okCount' => $total - $lowCount,
         ];

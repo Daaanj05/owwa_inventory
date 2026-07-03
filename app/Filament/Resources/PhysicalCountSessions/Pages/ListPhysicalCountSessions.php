@@ -5,6 +5,7 @@ namespace App\Filament\Resources\PhysicalCountSessions\Pages;
 use App\Filament\Concerns\SyncsActiveItemCategory;
 use App\Filament\Resources\PhysicalCountSessions\Concerns\HasPhysicalCountWizardBreadcrumbs;
 use App\Filament\Resources\PhysicalCountSessions\PhysicalCountSessionResource;
+use App\Filament\Resources\PhysicalCountSessions\Schemas\PhysicalCountSessionForm;
 use App\Filament\Support\OwwaFormModalDefaults;
 use App\Models\ItemCategory;
 use App\Models\PhysicalCountSession;
@@ -15,7 +16,9 @@ use Filament\Actions\Action;
 use Filament\Notifications\Actions\Action as NotificationAction;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ListRecords;
+use Filament\Schemas\Components\Tabs\Tab;
 use Illuminate\Contracts\Support\Htmlable;
+use Illuminate\Database\Eloquent\Builder;
 use Livewire\Attributes\Url;
 
 class ListPhysicalCountSessions extends ListRecords
@@ -50,6 +53,18 @@ class ListPhysicalCountSessions extends ListRecords
         $this->syncActiveItemCategoryFromRequest();
     }
 
+    public function getTabs(): array
+    {
+        return [
+            'active' => Tab::make('Active')
+                ->modifyQueryUsing(fn (Builder $query): Builder => $query->whereNull('archived_at'))
+                ->excludeQueryWhenResolvingRecord(),
+            'archived' => Tab::make('Archived')
+                ->modifyQueryUsing(fn (Builder $query): Builder => $query->whereNotNull('archived_at'))
+                ->excludeQueryWhenResolvingRecord(),
+        ];
+    }
+
     protected function getHeaderActions(): array
     {
         return [
@@ -61,6 +76,7 @@ class ListPhysicalCountSessions extends ListRecords
                     'category' => $this->activeItemCategoryId(),
                 ])),
             OwwaFormModalDefaults::createAction(OwwaFormModalDefaults::WIDTH_STANDARD)
+                ->fillForm(fn (): array => PhysicalCountSessionForm::defaultCreateFormData($this->activeItemCategoryId()))
                 ->mutateFormDataUsing(function (array $data): array {
                     $categoryId = $this->activeItemCategoryId();
                     if ($categoryId > 0) {

@@ -4,10 +4,12 @@ namespace App\Services;
 
 use App\Models\Acquisition;
 use App\Models\Disposal;
+use App\Models\InventoryUnit;
 use App\Models\Issuance;
 use App\Models\Item;
 use App\Models\ItemCategory;
 use App\Models\Office;
+use App\Models\PhysicalCountLine;
 use App\Models\PhysicalCountSession;
 use App\Models\Transfer;
 use App\Support\AnnexA1BlockLayout;
@@ -774,11 +776,16 @@ class OwwaItemReportService
     public function downloadPhysicalCount(PhysicalCountSession $session): StreamedResponse
     {
         $session->loadMissing(['office', 'lines.item']);
-        $templatePath = match ($session->count_type) {
-            PhysicalCountSession::TYPE_RPCPPE => 'ppe/Recording (Stock Level)/Appendix 73 - RPCPPE.xls',
-            PhysicalCountSession::TYPE_RPCSP => 'Semi-Expendable/Recording (Stock Levels)/Inventory-Annex-A.8-RPCSP - REPORT.xlsx',
-            default => 'Consumable/Stock Levels & Recording/Appendix 66 - RPCI.xls',
-        };
+        $formCode = $this->physicalCountFormCode($session);
+        $templatePath = (string) (OwwaCellMapping::form($formCode)['template'] ?? '');
+
+        if ($templatePath === '') {
+            $templatePath = match ($session->count_type) {
+                PhysicalCountSession::TYPE_RPCPPE => 'ppe/Physical Count/Appendix 73 - RPCPPE.xls',
+                PhysicalCountSession::TYPE_RPCSP => 'Semi-Expendable/Physical Count/Inventory-Annex-A.8-RPCSP - REPORT.xlsx',
+                default => 'Consumable/Stock Levels & Recording/Appendix 66 - RPCI.xls',
+            };
+        }
 
         $cellValues = $this->cellValuesForPhysicalCount($session);
         $filename = OwwaExportFilename::physicalCount(
@@ -1059,88 +1066,179 @@ class OwwaItemReportService
      */
     protected function cellValuesForPhysicalCount(PhysicalCountSession $session): array
     {
-        $office = $session->office;
-        $entityName = $office?->name ?? '';
-        $values = match ($session->count_type) {
-            PhysicalCountSession::TYPE_RPCPPE => [
-                'A6' => 'Entity Name : '.$entityName,
-                'C4' => $session->inventory_type_label ?? '',
-                'C6' => $session->count_date?->format('Y-m-d') ?? '',
-                'C9' => 'Fund Cluster : '.($session->fund_cluster ?? $office?->fund_cluster ?? ''),
-                'C10' => 'For which '.$session->accountable_officer_name.' , '.$session->accountable_officer_designation.' , '.$office?->name.' , '.$session->date_of_assumption?->format('Y-m-d'),
-            ],
-            PhysicalCountSession::TYPE_RPCSP => [
-                'A6' => 'Entity Name : '.$entityName,
-                'B4' => $session->inventory_type_label ?? '',
-                'B6' => $session->count_date?->format('Y-m-d') ?? '',
-                'B8' => 'Fund Cluster : '.($session->fund_cluster ?? $office?->fund_cluster ?? ''),
-                'B10' => 'For which '.$session->accountable_officer_name.' , '.$session->accountable_officer_designation.' , '.$office?->name.' , '.$session->date_of_assumption?->format('Y-m-d'),
-            ],
-            default => [
-                'A6' => 'Entity Name : '.$entityName,
-                'B4' => $session->inventory_type_label ?? '',
-                'B6' => $session->count_date?->format('Y-m-d') ?? '',
-                'B8' => 'Fund Cluster : '.($session->fund_cluster ?? $office?->fund_cluster ?? ''),
-                'B10' => 'For which '.$session->accountable_officer_name.' , '.$session->accountable_officer_designation.' , '.$office?->name.' , '.$session->date_of_assumption?->format('Y-m-d'),
-            ],
-        };
+        $formCode = $this->physicalCountFormCode($session);
+        $map = OwwaCellMapping::form($formCode);
+        $values = [];
 
-        $startRow = match ($session->count_type) {
-            PhysicalCountSession::TYPE_RPCPPE => 15,
-            PhysicalCountSession::TYPE_RPCSP => 15,
-            default => 15,
-        };
+        OwwaCellMapping::applyHeader($values, (array) ($map['header'] ?? []), $this->physicalCountHeaderData($session));
 
+        $startRow = OwwaCellMapping::detailRowBase($formCode);
+        $columns = OwwaCellMapping::detailColumns($formCode);
+        $maxRows = (int) ($map['detail']['max_rows'] ?? 21);
         $row = $startRow;
+
         foreach ($session->lines as $line) {
-            if ($row > $startRow + 20) {
+            if ($row > $startRow + $maxRows - 1) {
                 break;
             }
-            $shortage = $line->shortageOverageQuantity();
-            if ($session->count_type === PhysicalCountSession::TYPE_RPCPPE) {
-                $values['C'.$row] = $line->article ?? $line->item?->name;
-                $values['D'.$row] = $line->description ?? $line->item?->description;
-                $values['E'.$row] = $line->property_number ?? $line->stock_number ?? $line->item?->item_code;
-                $values['F'.$row] = $line->unit_of_measure ?? $line->item?->unit;
-                $values['H'.$row] = $line->balance_per_card;
-                $values['I'.$row] = $line->on_hand_count;
-                $values['J'.$row] = $shortage;
-                $values['L'.$row] = $line->remarks;
-            } elseif ($session->count_type === PhysicalCountSession::TYPE_RPCSP) {
-                $values['B'.$row] = $line->article ?? $line->item?->name;
-                $values['C'.$row] = $line->description ?? $line->item?->description;
-                $values['D'.$row] = $line->property_number ?? $line->stock_number ?? $line->item?->item_code;
-                $values['E'.$row] = $line->unit_of_measure ?? $line->item?->unit;
-                $values['G'.$row] = $line->balance_per_card;
-                $values['H'.$row] = $line->on_hand_count;
-                $values['I'.$row] = $shortage;
-                $values['K'.$row] = $line->remarks;
-            } else {
-                $values['B'.$row] = $line->article ?? $line->item?->name;
-                $values['C'.$row] = $line->description ?? $line->item?->description;
-                $values['D'.$row] = $line->stock_number ?? $line->item?->item_code;
-                $values['E'.$row] = $line->unit_of_measure ?? $line->item?->unit;
-                $values['G'.$row] = $line->balance_per_card;
-                $values['H'.$row] = $line->on_hand_count;
-                $values['I'.$row] = $shortage;
-                $values['K'.$row] = $line->remarks;
+
+            $shortageQty = $line->shortageOverageQuantity();
+            $unitValue = $this->resolvePhysicalCountLineUnitValue($line, $session);
+            $shortageValue = $unitValue !== null ? round($shortageQty * $unitValue, 2) : null;
+
+            foreach ($this->physicalCountLineFieldValues($line, $session, $unitValue, $shortageQty, $shortageValue) as $field => $value) {
+                if (! isset($columns[$field])) {
+                    continue;
+                }
+
+                $values[OwwaCellMapping::columnCell($columns[$field], $row)] = $value;
             }
+
             $row++;
         }
 
-        $formCode = match ($session->count_type) {
-            PhysicalCountSession::TYPE_RPCPPE => 'RPCPPE',
-            PhysicalCountSession::TYPE_RPCSP => 'RPCSP',
-            default => 'RPCI',
-        };
-
-        OwwaCellMapping::applySignatures($values, $formCode, [
+        $this->applyPhysicalCountSignatures($values, $session, $formCode, [
             'certified_by' => $session->certified_by_printed_name ?? '',
             'approved_by' => $session->approved_by_printed_name ?? '',
             'verified_by' => $session->verified_by_printed_name ?? '',
         ]);
 
         return $values;
+    }
+
+    protected function physicalCountFormCode(PhysicalCountSession $session): string
+    {
+        return match ($session->count_type) {
+            PhysicalCountSession::TYPE_RPCPPE => 'RPCPPE',
+            PhysicalCountSession::TYPE_RPCSP => 'RPCSP',
+            default => 'RPCI',
+        };
+    }
+
+    /**
+     * @return array<string, string|null>
+     */
+    protected function physicalCountHeaderData(PhysicalCountSession $session): array
+    {
+        $office = $session->office;
+
+        return [
+            'inventory_type' => $session->inventory_type_label ?? '',
+            'count_date' => $session->count_date?->format('Y-m-d') ?? '',
+            'fund_cluster' => $session->fund_cluster ?? $office?->fund_cluster ?? '',
+            'accountable_officer' => implode(', ', array_filter([
+                $session->accountable_officer_name,
+                $session->accountable_officer_designation,
+                $office?->name,
+                $session->date_of_assumption?->format('Y-m-d'),
+            ])),
+        ];
+    }
+
+    /**
+     * @return array<string, string|int|float|null>
+     */
+    protected function physicalCountLineFieldValues(
+        PhysicalCountLine $line,
+        PhysicalCountSession $session,
+        ?float $unitValue,
+        int $shortageQty,
+        ?float $shortageValue,
+    ): array {
+        $article = $line->article ?? $line->item?->name;
+        $description = $line->description ?? $line->item?->description;
+        $unit = $line->unit_of_measure ?? $line->item?->unit;
+
+        $common = [
+            'article' => $article,
+            'description' => $description,
+            'unit_of_measure' => $unit,
+            'unit_value' => $unitValue,
+            'balance_per_card' => $line->balance_per_card,
+            'on_hand_count' => $line->on_hand_count,
+            'shortage_qty' => $shortageQty,
+            'shortage_value' => $shortageValue,
+            'remarks' => $line->remarks,
+        ];
+
+        return match ($session->count_type) {
+            PhysicalCountSession::TYPE_RPCPPE, PhysicalCountSession::TYPE_RPCSP => array_merge($common, [
+                'property_number' => $line->property_number ?? $line->stock_number ?? $line->item?->item_code,
+            ]),
+            default => array_merge($common, [
+                'stock_number' => $line->stock_number ?? $line->item?->item_code,
+            ]),
+        };
+    }
+
+    protected function resolvePhysicalCountLineUnitValue(PhysicalCountLine $line, PhysicalCountSession $session): ?float
+    {
+        $itemId = $line->item_id;
+        if ($itemId === null) {
+            return null;
+        }
+
+        $officeId = $session->office_id;
+
+        $acquisitionCost = Acquisition::query()
+            ->where('item_id', $itemId)
+            ->when($officeId !== null, fn ($query) => $query->where('office_id', $officeId))
+            ->whereNotNull('unit_cost')
+            ->orderByDesc('acquisition_date')
+            ->orderByDesc('id')
+            ->value('unit_cost');
+
+        if ($acquisitionCost !== null) {
+            return (float) $acquisitionCost;
+        }
+
+        if (filled($line->property_number)) {
+            $unitCost = InventoryUnit::query()
+                ->whereHas('acquisition', fn ($query) => $query->where('item_id', $itemId))
+                ->where('property_number', $line->property_number)
+                ->with('acquisition:id,unit_cost')
+                ->first()
+                ?->acquisition
+                ?->unit_cost;
+
+            if ($unitCost !== null) {
+                return (float) $unitCost;
+            }
+        }
+
+        $issuanceCost = Issuance::query()
+            ->where('item_id', $itemId)
+            ->when($officeId !== null, fn ($query) => $query->where('office_id', $officeId))
+            ->whereNotNull('unit_cost')
+            ->orderByDesc('issuance_date')
+            ->orderByDesc('id')
+            ->value('unit_cost');
+
+        return $issuanceCost !== null ? (float) $issuanceCost : null;
+    }
+
+    /**
+     * @param  array<string, string|int|float|null>  $values
+     * @param  array<string, string|int|float|null>  $pairs
+     */
+    protected function applyPhysicalCountSignatures(
+        array &$values,
+        PhysicalCountSession $session,
+        string $formCode,
+        array $pairs,
+    ): void {
+        $map = OwwaCellMapping::form($formCode);
+        $signatures = (array) ($map['signatures'] ?? []);
+
+        if ($formCode === 'RPCSP' && $this->resolvePhysicalCountSheet($session)['sheetName'] === 'RPCSP') {
+            $signatures = (array) ($map['signatures_master'] ?? $signatures);
+        }
+
+        foreach ($pairs as $field => $value) {
+            if (isset($signatures[$field])) {
+                $values[$signatures[$field]] = $value;
+            }
+        }
     }
 
     protected function itemDescription(?Item $item): string

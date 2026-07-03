@@ -2509,6 +2509,25 @@ button[type="submit"].fi-btn:hover {
     .owwa-kpi-grid { grid-template-columns: 1fr; }
 }
 
+.owwa-kpi-grid--4 {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.75rem;
+    width: 100%;
+}
+
+@media (max-width: 1024px) {
+    .owwa-kpi-grid--4 {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 640px) {
+    .owwa-kpi-grid--4 {
+        grid-template-columns: 1fr;
+    }
+}
+
 .owwa-kpi-card {
     background: #fff;
     border: 1px solid #e5e7eb;
@@ -3577,6 +3596,12 @@ button[type="submit"].fi-btn:hover {
 a.owwa-pagination-btn:hover {
     background: #f3f4f6;
 }
+button.owwa-pagination-btn {
+    font: inherit;
+}
+button.owwa-pagination-btn:hover {
+    background: #f3f4f6;
+}
 .owwa-pagination-btn.owwa-pagination-disabled {
     color: #9ca3af;
     background: #f9fafb;
@@ -3601,6 +3626,14 @@ a.owwa-pagination-btn:hover {
     transition: background 0.15s;
 }
 a.owwa-pagination-page:hover {
+    background: #f3f4f6;
+    border-color: #d1d5db;
+}
+button.owwa-pagination-page {
+    font: inherit;
+    cursor: pointer;
+}
+button.owwa-pagination-page:hover {
     background: #f3f4f6;
     border-color: #d1d5db;
 }
@@ -6121,6 +6154,23 @@ a.owwa-pagination-page:hover {
 
 .fi-modal-window.owwa-physical-count-modal .owwa-pc-modal-lines .fi-in-repeatable {
     overflow: visible;
+}
+
+.fi-modal-window.owwa-physical-count-modal .owwa-pc-lines-by-item-table-wrap {
+    max-height: 40vh;
+    overflow-y: auto;
+}
+
+.fi-modal-window.owwa-physical-count-modal .owwa-pc-lines-by-item-table-wrap .owwa-data-table {
+    font-size: 0.8125rem;
+}
+
+.fi-modal-window.owwa-physical-count-modal .owwa-pc-lines-property-hint {
+    display: block;
+    margin-top: 0.2rem;
+    font-size: 0.6875rem;
+    color: #6b7280;
+    line-height: 1.35;
 }
 
 /* Create/edit form modals — full-width sections (no half-modal dead space) */

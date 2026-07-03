@@ -55,4 +55,17 @@ class InventoryUnit extends Model
     {
         return $this->status === self::STATUS_IN_STOCK;
     }
+
+    /**
+     * Property tags accountable to an office for regional physical count (warehouse + issued in use).
+     *
+     * @return array<int, string>
+     */
+    public static function accountableStatuses(): array
+    {
+        return [
+            self::STATUS_IN_STOCK,
+            self::STATUS_ISSUED,
+        ];
+    }
 }

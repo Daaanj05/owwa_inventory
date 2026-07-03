@@ -51,6 +51,7 @@ class ScanPhysicalCountSession extends Page
         $this->record = $this->resolveRecord($record);
 
         abort_unless($this->getRecord()->supportsQrScanning(), 404);
+        abort_if($this->getRecord()->isArchived(), 404);
 
         $this->syncActiveCategoryFromSession($this->getRecord());
     }

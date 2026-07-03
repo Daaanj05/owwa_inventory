@@ -4,6 +4,7 @@ namespace App\Filament\Pages;
 
 use App\Filament\Concerns\SyncsActiveItemCategory;
 use App\Filament\Resources\Transfers\TransferResource;
+use App\Models\InventoryUnit;
 use App\Models\Item;
 use App\Models\ItemCategory;
 use App\Models\Office;
@@ -218,7 +219,7 @@ class StockLevels extends Page
         }
     }
 
-    /** @return array{total: int, lowCount: int, okCount: int} */
+    /** @return array{total: int, totalStockQty: int, lowCount: int, okCount: int} */
     public function getStockLevelsSummary(): array
     {
         $rows = $this->getStockLevelsFull();
@@ -227,6 +228,7 @@ class StockLevels extends Page
 
         return [
             'total' => $total,
+            'totalStockQty' => (int) $rows->sum('stock'),
             'lowCount' => $lowCount,
             'okCount' => $total - $lowCount,
         ];
@@ -253,7 +255,53 @@ class StockLevels extends Page
             )->values();
         }
 
+        if (in_array($this->categoryRecord?->getTemplateSlug(), ['ppe', 'semi_expendable'], true)) {
+            $taggedCounts = $this->taggedUnitCountsForRows($rows);
+            $rows = $rows->map(function (object $row) use ($taggedCounts): object {
+                $key = "{$row->item_id}_{$row->office_id}";
+                $row->accountable_tags = (int) ($taggedCounts[$key] ?? 0);
+                $row->tagged_units = $row->accountable_tags;
+                $row->tagged_drift = $row->accountable_tags < (int) $row->stock;
+
+                return $row;
+            });
+        }
+
         return $rows;
+    }
+
+    /**
+     * @param  \Illuminate\Support\Collection<int, object>  $rows
+     * @return array<string, int>
+     */
+    protected function taggedUnitCountsForRows(\Illuminate\Support\Collection $rows): array
+    {
+        if ($rows->isEmpty()) {
+            return [];
+        }
+
+        $itemIds = $rows->pluck('item_id')->unique()->values();
+        $officeIds = $rows->pluck('office_id')->unique()->values();
+
+        $counts = InventoryUnit::query()
+            ->selectRaw('item_id, office_id, count(*) as tagged_units')
+            ->whereIn('item_id', $itemIds)
+            ->whereIn('office_id', $officeIds)
+            ->whereIn('status', InventoryUnit::accountableStatuses())
+            ->groupBy('item_id', 'office_id')
+            ->get();
+
+        $result = [];
+        foreach ($counts as $count) {
+            $result["{$count->item_id}_{$count->office_id}"] = (int) $count->tagged_units;
+        }
+
+        return $result;
+    }
+
+    public function usesTaggedUnitsColumn(): bool
+    {
+        return in_array($this->categoryRecord?->getTemplateSlug(), ['ppe', 'semi_expendable'], true);
     }
 
     public function shouldShowSupplyCustodianScopeFilters(): bool
@@ -277,8 +325,28 @@ class StockLevels extends Page
             $rows->count(),
             $perPage,
             $page,
-            ['path' => request()->url(), 'query' => request()->query()],
-        ))->onEachSide(0);
+            ['path' => $this->stockLevelsPaginationPath()],
+        ))
+            ->appends($this->stockLevelsPaginationAppends())
+            ->onEachSide(0);
+    }
+
+    protected function stockLevelsPaginationPath(): string
+    {
+        return static::getUrl(['category' => $this->category]);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function stockLevelsPaginationAppends(): array
+    {
+        return array_filter([
+            'category' => $this->category,
+            'sortBy' => $this->sortBy,
+            'sortDir' => $this->sortDir,
+            'search' => filled($this->search) ? $this->search : null,
+        ], fn (mixed $value): bool => filled($value));
     }
 
     public function openStockLedger(int $itemId, int $officeId): void

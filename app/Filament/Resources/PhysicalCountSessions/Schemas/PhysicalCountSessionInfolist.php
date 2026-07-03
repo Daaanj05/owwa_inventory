@@ -2,12 +2,12 @@
 
 namespace App\Filament\Resources\PhysicalCountSessions\Schemas;
 
-use App\Models\PhysicalCountLine;
 use App\Models\PhysicalCountSession;
 use App\Support\OwwaReferenceLabels;
-use Filament\Infolists\Components\RepeatableEntry;
+use App\Support\PhysicalCountSessionViewPresenter;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\View as SchemaView;
 use Filament\Schemas\Schema;
 
 class PhysicalCountSessionInfolist
@@ -73,20 +73,8 @@ class PhysicalCountSessionInfolist
             ->schema([
                 TextEntry::make('missing_for_complete')
                     ->label('Missing for complete')
-                    ->state(function (PhysicalCountSession $record): string {
-                        $missing = $record->missingCompletionFields();
-                        $summary = $record->countSummary();
-
-                        $items = $missing;
-                        if (! $record->hasBookListLoaded()) {
-                            $items[] = 'load expected assets (book list)';
-                        }
-                        if ($summary['shortages'] > 0) {
-                            $items[] = "{$summary['shortages']} shortage line(s)";
-                        }
-
-                        return $items === [] ? 'Ready to mark complete' : implode(', ', $items);
-                    })
+                    ->state(fn (PhysicalCountSession $record): \Illuminate\Support\HtmlString => PhysicalCountSessionViewPresenter::missingForCompleteHtml($record))
+                    ->html()
                     ->color(function (PhysicalCountSession $record): string {
                         $missing = $record->missingCompletionFields();
                         $summary = $record->countSummary();
@@ -186,29 +174,11 @@ class PhysicalCountSessionInfolist
         return Section::make('Lines')
             ->extraAttributes(['class' => 'owwa-pc-modal-lines'])
             ->schema([
-                RepeatableEntry::make('lines')
-                    ->state(fn (PhysicalCountSession $record) => $record->lines
-                        ->sortBy(fn (PhysicalCountLine $line): int => match (true) {
-                            $line->shortageOverageQuantity() < 0 => 0,
-                            $line->shortageOverageQuantity() > 0 => 2,
-                            default => 1,
-                        }))
-                    ->schema([
-                        TextEntry::make('property_number')->label('Property no.'),
-                        TextEntry::make('item.name')->label('Item'),
-                        TextEntry::make('balance_per_card')->label('Per card'),
-                        TextEntry::make('on_hand_count')->label('On hand'),
-                        TextEntry::make('variance')
-                            ->label('Shortage / overage')
-                            ->state(fn (PhysicalCountLine $record): int => $record->shortageOverageQuantity())
-                            ->color(fn (PhysicalCountLine $record): string => match (true) {
-                                $record->shortageOverageQuantity() < 0 => 'danger',
-                                $record->shortageOverageQuantity() > 0 => 'warning',
-                                default => 'success',
-                            }),
-                        TextEntry::make('remarks')->label('Remarks')->columnSpanFull(),
+                SchemaView::make('filament.resources.physical-count-sessions.pages.partials.view-physical-count-lines-by-item')
+                    ->viewData(fn (PhysicalCountSession $record): array => [
+                        'rows' => PhysicalCountSessionViewPresenter::linesGroupedByItem($record),
                     ])
-                    ->columns(5),
+                    ->columnSpanFull(),
             ]);
     }
 }

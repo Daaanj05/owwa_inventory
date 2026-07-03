@@ -3,7 +3,6 @@
 namespace App\Services;
 
 use App\Models\InventoryUnit;
-use App\Models\Issuance;
 use App\Models\PhysicalCountLine;
 use App\Models\PhysicalCountSession;
 use Illuminate\Support\Facades\DB;
@@ -22,11 +21,7 @@ class PhysicalCountPreloadService
 
         $session->loadMissing(['office', 'itemCategory']);
 
-        $fromUnits = $this->preloadFromInventoryUnits($session);
-
-        $result = ($fromUnits['created'] > 0 || $fromUnits['updated'] > 0)
-            ? $fromUnits
-            : $this->preloadFromIssuances($session);
+        $result = $this->preloadFromInventoryUnits($session);
 
         $session->update(['book_list_loaded' => true]);
 
@@ -47,7 +42,7 @@ class PhysicalCountPreloadService
             $units = InventoryUnit::query()
                 ->with(['item.category'])
                 ->where('office_id', $session->office_id)
-                ->where('status', InventoryUnit::STATUS_IN_STOCK)
+                ->whereIn('status', InventoryUnit::accountableStatuses())
                 ->whereHas('item.category', function ($query): void {
                     $query->whereNull('archived_at');
                 })
@@ -103,90 +98,6 @@ class PhysicalCountPreloadService
                     ...$lineData,
                     'physical_count_session_id' => $session->id,
                     'property_number' => $propertyNumber,
-                    'on_hand_count' => 0,
-                ]);
-                $created++;
-            }
-        });
-
-        return compact('created', 'updated', 'skipped');
-    }
-
-    /**
-     * @return array{created: int, updated: int, skipped: int}
-     */
-    protected function preloadFromIssuances(PhysicalCountSession $session): array
-    {
-        $categorySlug = $session->templateSlug();
-        $created = 0;
-        $updated = 0;
-        $skipped = 0;
-
-        DB::transaction(function () use ($session, $categorySlug, &$created, &$updated, &$skipped): void {
-            $issuances = Issuance::query()
-                ->with(['item.category', 'office'])
-                ->where('office_id', $session->office_id)
-                ->whereNotNull('property_number')
-                ->where('property_number', '!=', '')
-                ->whereHas('item.category', function ($query): void {
-                    $query->whereNull('archived_at');
-                })
-                ->whereHas('item', function ($query) use ($session): void {
-                    $query->active();
-                    if ($session->item_category_id) {
-                        $query->where('item_category_id', $session->item_category_id);
-                    }
-                })
-                ->orderBy('property_number')
-                ->get()
-                ->filter(function (Issuance $issuance) use ($categorySlug): bool {
-                    return $issuance->item?->category?->getTemplateSlug() === $categorySlug;
-                });
-
-            foreach ($issuances as $issuance) {
-                $propertyNumber = trim((string) $issuance->property_number);
-                if ($propertyNumber === '') {
-                    $skipped++;
-
-                    continue;
-                }
-
-                $item = $issuance->item;
-                if ($item === null) {
-                    $skipped++;
-
-                    continue;
-                }
-
-                $balance = max(1, (int) $issuance->quantity);
-                $existing = PhysicalCountLine::query()
-                    ->where('physical_count_session_id', $session->id)
-                    ->where('property_number', $propertyNumber)
-                    ->first();
-
-                if ($existing !== null) {
-                    $existing->update([
-                        'item_id' => $item->id,
-                        'article' => $item->name,
-                        'description' => $item->description,
-                        'stock_number' => $item->item_code,
-                        'unit_of_measure' => $item->unit,
-                        'balance_per_card' => $balance,
-                    ]);
-                    $updated++;
-
-                    continue;
-                }
-
-                PhysicalCountLine::query()->create([
-                    'physical_count_session_id' => $session->id,
-                    'item_id' => $item->id,
-                    'article' => $item->name,
-                    'description' => $item->description,
-                    'stock_number' => $item->item_code,
-                    'property_number' => $propertyNumber,
-                    'unit_of_measure' => $item->unit,
-                    'balance_per_card' => $balance,
                     'on_hand_count' => 0,
                 ]);
                 $created++;

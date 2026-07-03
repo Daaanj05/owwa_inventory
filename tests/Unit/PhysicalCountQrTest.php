@@ -273,8 +273,8 @@ class PhysicalCountQrTest extends TestCase
         $method = new ReflectionMethod(OwwaItemReportService::class, 'cellValuesForPhysicalCount');
         $values = $method->invoke(app(OwwaItemReportService::class), $session->fresh(['office', 'lines']));
 
-        $this->assertStringContainsString('Regional Office', (string) ($values['A6'] ?? ''));
         $this->assertStringContainsString('Officer A', (string) ($values['B10'] ?? ''));
+        $this->assertSame('ICT', (string) ($values['B5'] ?? ''));
     }
 
     public function test_acquisition_unit_service_is_idempotent(): void

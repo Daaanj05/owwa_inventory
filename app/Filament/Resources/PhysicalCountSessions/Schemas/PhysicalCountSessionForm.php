@@ -3,7 +3,9 @@
 namespace App\Filament\Resources\PhysicalCountSessions\Schemas;
 
 use App\Filament\Concerns\SyncsActiveItemCategory;
+use App\Filament\Resources\PhysicalCountSessions\Pages\CreatePhysicalCountSession;
 use App\Filament\Resources\PhysicalCountSessions\Pages\EditPhysicalCountSession;
+use App\Filament\Resources\PhysicalCountSessions\Pages\ListPhysicalCountSessions;
 use App\Models\Item;
 use App\Models\ItemCategory;
 use App\Models\PhysicalCountSession;
@@ -11,6 +13,7 @@ use App\Services\InventoryStockService;
 use App\Support\CustodianOfficeScope;
 use App\Support\ItemPropertyClass;
 use App\Support\OfficeSignatoryDefaults;
+use App\Support\PhysicalCountSessionViewPresenter;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Repeater;
@@ -43,6 +46,9 @@ class PhysicalCountSessionForm
                             ])
                             ->required()
                             ->live()
+                            ->default(fn (Get $get): string => self::resolveCountTypeForCategoryId(
+                                $get('item_category_id') ?: SyncsActiveItemCategory::resolveCategoryIdFromContext(),
+                            ))
                             ->helperText(fn (Get $get): string => in_array($get('count_type'), [PhysicalCountSession::TYPE_RPCPPE, PhysicalCountSession::TYPE_RPCSP], true)
                                 ? 'QR scanning is available for PPE and semi-expendable. Save the session, then use Load expected assets and Scan with phone.'
                                 : 'Consumables use manual count lines below. QR scanning is not used for RPCI.'),
@@ -77,7 +83,14 @@ class PhysicalCountSessionForm
                             ->options(fn (): array => ItemCategory::query()->whereNull('archived_at')->orderBy('name')->pluck('name', 'id')->all())
                             ->default(fn (): mixed => SyncsActiveItemCategory::resolveCategoryIdFromContext())
                             ->searchable()
-                            ->live(),
+                            ->live()
+                            ->afterStateUpdated(function ($state, callable $set): void {
+                                if (blank($state)) {
+                                    return;
+                                }
+
+                                $set('count_type', self::resolveCountTypeForCategoryId((int) $state));
+                            }),
                         DatePicker::make('count_date')
                             ->label('As at date')
                             ->required()
@@ -113,9 +126,9 @@ class PhysicalCountSessionForm
                     ]),
                 Section::make('Signatories')
                     ->description(fn (Get $get): string => match ($get('count_type')) {
-                        PhysicalCountSession::TYPE_RPCPPE => 'Appendix 73 RPCPPE — Certified by (C35), Approved by (G35), Verified by (C37).',
-                        PhysicalCountSession::TYPE_RPCSP => 'Annex A.8 RPCSP — Certified by (B35), Approved by (F35), Verified by (B37).',
-                        default => 'Appendix 66 RPCI — Certified by (B35), Approved by (F35), Verified by (B37).',
+                        PhysicalCountSession::TYPE_RPCPPE => 'Appendix 73 RPCPPE — Certified by (D39), Approved by (G39), Verified by (K39).',
+                        PhysicalCountSession::TYPE_RPCSP => 'Annex A.8 RPCSP — Certified by (C39), Approved by (F39), Verified by (J39) on property-class sheets.',
+                        default => 'Appendix 66 RPCI — Certified by (C39), Approved by (G39), Verified by (K39).',
                     })
                     ->columnSpanFull()
                     ->columns(2)
@@ -130,7 +143,8 @@ class PhysicalCountSessionForm
                     ->visible(fn (Get $get): bool => in_array($get('count_type'), [PhysicalCountSession::TYPE_RPCPPE, PhysicalCountSession::TYPE_RPCSP], true))
                     ->schema([
                         Placeholder::make('qr_workflow_steps')
-                            ->content("After you save this session:\n\n1. Load expected assets — pulls issued property numbers for the selected office (book balance, on-hand starts at 0).\n2. Print QR labels — from issuances or bulk from this session.\n3. Scan with phone — each tag found increments on-hand count.\n4. Review shortages/overages on the session view, then export the OWWA form.\n\nCount lines are added automatically; you do not need to enter items manually on this screen.")
+                            ->hiddenLabel()
+                            ->content(fn (): \Illuminate\Support\HtmlString => PhysicalCountSessionViewPresenter::qrWorkflowStepsHtml())
                             ->columnSpanFull(),
                     ]),
                 Section::make('Count lines')
@@ -138,13 +152,7 @@ class PhysicalCountSessionForm
                         ? 'Shown on edit only for corrections. On create, use Load expected assets after saving.'
                         : null)
                     ->columnSpanFull()
-                    ->hidden(function (Get $get, $livewire): bool {
-                        if (! in_array($get('count_type'), [PhysicalCountSession::TYPE_RPCPPE, PhysicalCountSession::TYPE_RPCSP], true)) {
-                            return false;
-                        }
-
-                        return ! ($livewire instanceof EditPhysicalCountSession);
-                    })
+                    ->visible(fn (Get $get, $livewire): bool => self::shouldShowCountLines($get, $livewire))
                     ->schema([
                         Repeater::make('lines')
                             ->relationship('lines')
@@ -182,7 +190,7 @@ class PhysicalCountSessionForm
                                         if ($officeId) {
                                             $stock = app(InventoryStockService::class)->getStock((int) $item->id, (int) $officeId);
                                             $set('balance_per_card', max(0, $stock));
-                                            $set('on_hand_count', max(0, $stock));
+                                            $set('on_hand_count', 0);
                                         }
                                     }),
                                 TextInput::make('article')->label('Article'),
@@ -193,11 +201,13 @@ class PhysicalCountSessionForm
                                 TextInput::make('balance_per_card')
                                     ->label('Balance per card')
                                     ->numeric()
-                                    ->default(0),
+                                    ->default(0)
+                                    ->helperText('Book balance from stock card / system records.'),
                                 TextInput::make('on_hand_count')
                                     ->label('On hand per count')
                                     ->numeric()
-                                    ->default(0),
+                                    ->default(0)
+                                    ->helperText('Quantity you physically counted (scanner fills this for PPE and semi-expendable).'),
                                 Textarea::make('remarks')->rows(1),
                             ])
                             ->columns(3)
@@ -213,5 +223,60 @@ class PhysicalCountSessionForm
                             ->columnSpanFull(),
                     ]),
             ]);
+    }
+
+    public static function resolveCountTypeForCategoryId(int|string|null $categoryId): string
+    {
+        if (blank($categoryId)) {
+            return PhysicalCountSession::TYPE_RPCI;
+        }
+
+        $category = ItemCategory::query()->find((int) $categoryId);
+
+        return match ($category?->getTemplateSlug()) {
+            'ppe' => PhysicalCountSession::TYPE_RPCPPE,
+            'semi_expendable' => PhysicalCountSession::TYPE_RPCSP,
+            default => PhysicalCountSession::TYPE_RPCI,
+        };
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public static function defaultCreateFormData(?int $categoryId = null): array
+    {
+        $categoryId ??= SyncsActiveItemCategory::resolveCategoryIdFromContext();
+        $officeId = CustodianOfficeScope::inventoryOfficeId();
+
+        return OfficeSignatoryDefaults::mergeNonBlank(
+            OfficeSignatoryDefaults::forPhysicalCountSession($officeId),
+            [
+                'item_category_id' => $categoryId > 0 ? $categoryId : null,
+                'count_type' => self::resolveCountTypeForCategoryId($categoryId),
+                'count_date' => now()->toDateString(),
+                'office_id' => $officeId,
+            ],
+        );
+    }
+
+    public static function shouldShowCountLines(Get $get, mixed $livewire): bool
+    {
+        if (! in_array($get('count_type'), [PhysicalCountSession::TYPE_RPCPPE, PhysicalCountSession::TYPE_RPCSP], true)) {
+            return true;
+        }
+
+        if ($livewire instanceof EditPhysicalCountSession) {
+            return true;
+        }
+
+        if ($livewire instanceof CreatePhysicalCountSession) {
+            return false;
+        }
+
+        if ($livewire instanceof ListPhysicalCountSessions && filled($livewire->mountedActionRecord ?? null)) {
+            return true;
+        }
+
+        return false;
     }
 }

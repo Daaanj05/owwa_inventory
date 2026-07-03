@@ -5,8 +5,10 @@
     $summary = $this->getStockLevelsSummary();
     $rows = $this->getStockLevels();
     $total = $summary['total'];
+    $totalStockQty = $summary['totalStockQty'];
     $lowCount = $summary['lowCount'];
     $okCount = $summary['okCount'];
+    $usesTaggedUnits = $this->usesTaggedUnitsColumn();
     $sortBy = $this->sortBy;
     $sortDir = $this->sortDir;
     $isSemiExpendable = $this->categoryRecord?->getTemplateSlug() === 'semi_expendable';
@@ -16,7 +18,7 @@
 <x-filament-panels::page>
     <div class="owwa-inventory-layout">
         {{-- KPI cards row --}}
-        <div class="owwa-kpi-grid">
+        <div class="owwa-kpi-grid owwa-kpi-grid--4">
             <div class="owwa-kpi-card owwa-kpi-card-total">
                 <span class="owwa-kpi-tooltip">Number of listed items in this category.</span>
                 <div class="owwa-kpi-card-inner">
@@ -36,6 +38,19 @@
                 <div class="owwa-kpi-card-inner">
                     <span class="owwa-kpi-card-value">{{ number_format($lowCount) }}</span>
                     <span class="owwa-kpi-card-label">Low stock</span>
+                </div>
+            </div>
+            <div class="owwa-kpi-card owwa-kpi-card-total">
+                <span class="owwa-kpi-tooltip">
+                    @if ($usesTaggedUnits)
+                        Total quantity on hand across all listed items (sum of Stock column). Accountable tags include warehouse and issued-in-use property tags used for physical count.
+                    @else
+                        Total quantity on hand across all listed items (sum of Stock column).
+                    @endif
+                </span>
+                <div class="owwa-kpi-card-inner">
+                    <span class="owwa-kpi-card-value">{{ number_format($totalStockQty) }}</span>
+                    <span class="owwa-kpi-card-label">Total stock</span>
                 </div>
             </div>
         </div>
@@ -83,6 +98,9 @@
                                         $columns['value_type'] = 'Value category';
                                     }
                                     $columns['stock'] = 'Stock';
+                                    if ($usesTaggedUnits) {
+                                        $columns['tagged_units'] = 'Accountable tags';
+                                    }
                                     $columns['reorder_level'] = 'Reorder';
                                 @endphp
                                 @foreach($columns as $col => $label)
@@ -105,7 +123,7 @@
                         </thead>
                         <tbody>
                             @forelse($rows as $row)
-                                <tr class="{{ $row->is_low ? 'owwa-row-low' : '' }}">
+                                <tr class="{{ ($row->is_low || ($row->tagged_drift ?? false)) ? 'owwa-row-low' : '' }}">
                                     <td class="owwa-cell-primary">
                                         <button
                                             type="button"
@@ -129,6 +147,11 @@
                                         </td>
                                     @endif
                                     <td class="owwa-num {{ $row->is_low ? 'owwa-cell-danger' : 'owwa-cell-primary' }}">{{ number_format($row->stock) }}</td>
+                                    @if($usesTaggedUnits)
+                                        <td class="owwa-num {{ ($row->tagged_drift ?? false) ? 'owwa-cell-danger' : 'owwa-cell-primary' }}" title="Property tags accountable to this office (warehouse + issued in use). Stock column is warehouse quantity only.">
+                                            {{ number_format($row->accountable_tags ?? $row->tagged_units ?? 0) }}
+                                        </td>
+                                    @endif
                                     <td class="owwa-num owwa-cell-muted">{{ number_format($row->reorder_level) }}</td>
                                     <td class="owwa-status">
                                         @if($row->is_low)
@@ -156,7 +179,7 @@
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="{{ ($isSemiExpendable ? 7 : 5) + ($this->canCreateTransfer() ? 1 : 0) }}">
+                                    <td colspan="{{ ($isSemiExpendable ? 7 : 5) + ($usesTaggedUnits ? 1 : 0) + ($this->canCreateTransfer() ? 1 : 0) }}">
                                         <div class="owwa-empty">
                                             <svg class="owwa-empty-icon" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
                                                 <path stroke-linecap="round" stroke-linejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" />

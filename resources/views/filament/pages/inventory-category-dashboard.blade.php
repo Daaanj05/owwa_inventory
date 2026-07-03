@@ -5,7 +5,7 @@
 
 <x-filament-panels::page>
     <div class="owwa-inventory-layout">
-        <div class="owwa-kpi-grid">
+        <div class="owwa-kpi-grid owwa-kpi-grid--4">
             <div class="owwa-kpi-card owwa-kpi-card-total">
                 <span class="owwa-kpi-tooltip">Number of listed items in this category.</span>
                 <div class="owwa-kpi-card-inner">
@@ -25,6 +25,13 @@
                 <div class="owwa-kpi-card-inner">
                     <span class="owwa-kpi-card-value">{{ number_format($summary['lowCount']) }}</span>
                     <span class="owwa-kpi-card-label">Low stock</span>
+                </div>
+            </div>
+            <div class="owwa-kpi-card owwa-kpi-card-total">
+                <span class="owwa-kpi-tooltip">Total quantity on hand across all listed items (sum of Stock column).</span>
+                <div class="owwa-kpi-card-inner">
+                    <span class="owwa-kpi-card-value">{{ number_format($summary['totalStockQty']) }}</span>
+                    <span class="owwa-kpi-card-label">Total stock</span>
                 </div>
             </div>
         </div>

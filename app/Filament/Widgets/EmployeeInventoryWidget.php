@@ -7,9 +7,12 @@ use App\Models\User;
 use Filament\Facades\Filament;
 use Filament\Widgets\Widget;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Livewire\WithPagination;
 
 class EmployeeInventoryWidget extends Widget
 {
+    use WithPagination;
+
     protected static ?int $sort = 2;
 
     protected static bool $isLazy = false;

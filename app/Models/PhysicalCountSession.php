@@ -43,6 +43,7 @@ class PhysicalCountSession extends Model
         'verified_by_printed_name',
         'recorded_by',
         'completed_at',
+        'archived_at',
     ];
 
     protected function casts(): array
@@ -51,6 +52,7 @@ class PhysicalCountSession extends Model
             'count_date' => 'date',
             'date_of_assumption' => 'date',
             'completed_at' => 'datetime',
+            'archived_at' => 'datetime',
             'book_list_loaded' => 'boolean',
         ];
     }
@@ -189,6 +191,11 @@ class PhysicalCountSession extends Model
     public function isComplete(): bool
     {
         return $this->status === self::STATUS_COMPLETE;
+    }
+
+    public function isArchived(): bool
+    {
+        return $this->archived_at !== null;
     }
 
     /**

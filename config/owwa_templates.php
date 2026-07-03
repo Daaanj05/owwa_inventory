@@ -174,6 +174,7 @@ return [
                 'furnitures_fixtures' => 'FURNITURES & FIXTURES',
                 'sports_equipment' => 'SPORTS EQUIPMENT',
                 'medical_equipment' => 'MEDICAL EQUIPMENT',
+                'vehicle_equipment' => 'VEHICLE EQUIPMENT ',
             ],
         ],
         'default' => [
@@ -218,13 +219,13 @@ return [
         ],
         'ppe' => [
             'rpcppe' => [
-                'file' => 'ppe/Recording (Stock Level)/Appendix 73 - RPCPPE.xls',
+                'file' => 'ppe/Physical Count/Appendix 73 - RPCPPE.xls',
                 'label' => 'Appendix 73 - Report on Physical Count of PPE',
             ],
         ],
         'semi_expendable' => [
             'rpcsp' => [
-                'file' => 'Semi-Expendable/Recording (Stock Levels)/Inventory-Annex-A.8-RPCSP - REPORT.xlsx',
+                'file' => 'Semi-Expendable/Physical Count/Inventory-Annex-A.8-RPCSP - REPORT.xlsx',
                 'label' => 'Annex A.8 - Report on Physical Count of Semi-Expendable Property',
                 'sheet_name' => 'RPCSP',
             ],
