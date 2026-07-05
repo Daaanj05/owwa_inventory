@@ -1,6 +1,10 @@
 <?php
 
 return [
+    'currency' => [
+        'excel_format_code' => '"P"#,##0.00',
+    ],
+
     'ledger' => [
         'blank_rows_after_transactions' => 5,
         'font_name' => 'Times New Roman',

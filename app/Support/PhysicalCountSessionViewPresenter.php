@@ -107,14 +107,10 @@ class PhysicalCountSessionViewPresenter
     public static function missingForCompleteLines(PhysicalCountSession $session): array
     {
         $missing = $session->missingCompletionFields();
-        $summary = $session->countSummary();
 
         $items = $missing;
         if (! $session->hasBookListLoaded()) {
             $items[] = 'load expected assets (book list)';
-        }
-        if ($summary['shortages'] > 0) {
-            $items[] = "{$summary['shortages']} shortage line(s)";
         }
 
         if ($items === []) {
@@ -143,7 +139,7 @@ class PhysicalCountSessionViewPresenter
             ['Load Expected Assets', 'pulls issued property numbers for the selected office (book balance, on-hand starts at 0).'],
             ['Print QR Labels', 'from issuances or bulk from this session.'],
             ['Scan With Phone', 'each tag found increments on-hand count.'],
-            ['Review Shortages/Overages', 'on the session view, then export the OWWA form.'],
+            ['Review Shortages/Overages', 'recorded on the OWWA export after completion.'],
         ];
 
         $body = collect($steps)

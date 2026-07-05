@@ -8,9 +8,11 @@ use App\Models\InventoryUnit;
 use App\Models\Item;
 use App\Models\ItemCategory;
 use App\Models\Office;
+use App\Models\StockPositionRestockFlag;
 use App\Services\InventoryStockService;
 use App\Services\OwwaItemReportService;
 use App\Services\StockLedgerViewService;
+use App\Support\UnitCostKey;
 use BackedEnum;
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
@@ -20,6 +22,7 @@ use Filament\Support\Enums\Width;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\HtmlString;
 use Illuminate\Support\Str;
 use Livewire\Attributes\Url;
@@ -64,6 +67,9 @@ class StockLevels extends Page
     #[Url]
     public int|string|null $category = null;
 
+    #[Url]
+    public string $restockFilter = 'active';
+
     public ?ItemCategory $categoryRecord = null;
 
     public function mount(): void
@@ -82,6 +88,10 @@ class StockLevels extends Page
 
         $this->category = $this->categoryRecord->id;
         session()->put('active_item_category_id', $this->categoryRecord->id);
+
+        if (! in_array($this->restockFilter, ['active', 'inactive'], true)) {
+            $this->restockFilter = 'active';
+        }
     }
 
     public function getTitle(): string|Htmlable
@@ -209,6 +219,16 @@ class StockLevels extends Page
         $this->resetPage();
     }
 
+    public function setRestockFilter(string $filter): void
+    {
+        if (! in_array($filter, ['active', 'inactive'], true)) {
+            return;
+        }
+
+        $this->restockFilter = $filter;
+        $this->resetPage();
+    }
+
     public function sortByColumn(string $column): void
     {
         if ($this->sortBy === $column) {
@@ -255,10 +275,16 @@ class StockLevels extends Page
             )->values();
         }
 
+        $rows = $rows->filter(fn (object $row): bool => $this->matchesRestockFilter($row))->values();
+
         if (in_array($this->categoryRecord?->getTemplateSlug(), ['ppe', 'semi_expendable'], true)) {
             $taggedCounts = $this->taggedUnitCountsForRows($rows);
             $rows = $rows->map(function (object $row) use ($taggedCounts): object {
-                $key = "{$row->item_id}_{$row->office_id}";
+                $key = UnitCostKey::positionKey(
+                    (int) $row->item_id,
+                    (int) $row->office_id,
+                    isset($row->unit_cost) ? (float) $row->unit_cost : null,
+                );
                 $row->accountable_tags = (int) ($taggedCounts[$key] ?? 0);
                 $row->tagged_units = $row->accountable_tags;
                 $row->tagged_drift = $row->accountable_tags < (int) $row->stock;
@@ -284,16 +310,21 @@ class StockLevels extends Page
         $officeIds = $rows->pluck('office_id')->unique()->values();
 
         $counts = InventoryUnit::query()
-            ->selectRaw('item_id, office_id, count(*) as tagged_units')
+            ->selectRaw('item_id, office_id, COALESCE(unit_cost, 0) as unit_cost, count(*) as tagged_units')
             ->whereIn('item_id', $itemIds)
             ->whereIn('office_id', $officeIds)
             ->whereIn('status', InventoryUnit::accountableStatuses())
-            ->groupBy('item_id', 'office_id')
+            ->groupBy('item_id', 'office_id', DB::raw('COALESCE(unit_cost, 0)'))
             ->get();
 
         $result = [];
         foreach ($counts as $count) {
-            $result["{$count->item_id}_{$count->office_id}"] = (int) $count->tagged_units;
+            $key = UnitCostKey::positionKey(
+                (int) $count->item_id,
+                (int) $count->office_id,
+                (float) $count->unit_cost,
+            );
+            $result[$key] = (int) $count->tagged_units;
         }
 
         return $result;
@@ -346,16 +377,27 @@ class StockLevels extends Page
             'sortBy' => $this->sortBy,
             'sortDir' => $this->sortDir,
             'search' => filled($this->search) ? $this->search : null,
+            'restockFilter' => $this->restockFilter !== 'active' ? $this->restockFilter : null,
         ], fn (mixed $value): bool => filled($value));
     }
 
-    public function openStockLedger(int $itemId, int $officeId): void
+    protected function matchesRestockFilter(object $row): bool
     {
+        $isInactive = (bool) ($row->is_inactive_for_restock ?? false);
+
+        return $this->restockFilter === 'inactive' ? $isInactive : ! $isInactive;
+    }
+
+    public function openStockLedger(int $itemId, int $officeId, float|string|null $unitCost = null): void
+    {
+        $parsedCost = $unitCost !== null && $unitCost !== '' ? (float) $unitCost : null;
+
         try {
             app(StockLedgerViewService::class)->assertVisibleInStockList(
                 $itemId,
                 $officeId,
                 $this->getStockLevelsFull(),
+                $parsedCost,
             );
         } catch (AuthorizationException) {
             abort(403);
@@ -364,17 +406,55 @@ class StockLevels extends Page
         $this->mountAction('viewStockLedger', [
             'itemId' => $itemId,
             'officeId' => $officeId,
+            'unitCost' => $parsedCost,
         ]);
     }
 
-    public function getTransferPrefillUrl(int $itemId, int $officeId): string
+    public function toggleRestockInactive(int $itemId, int $officeId, float|string $unitCost): void
     {
-        return TransferResource::getUrl('index', [
+        $user = Filament::auth()->user();
+        if (! $user || ($user->office_id && (int) $user->office_id !== $officeId)) {
+            abort(403);
+        }
+
+        StockPositionRestockFlag::markInactive(
+            $itemId,
+            $officeId,
+            (float) $unitCost,
+            (int) $user->id,
+        );
+
+        \Filament\Notifications\Notification::make()
+            ->title('Marked inactive for restock')
+            ->body('This cost position remains in inventory but is excluded from procurement cover.')
+            ->success()
+            ->send();
+    }
+
+    public function toggleRestockActive(int $itemId, int $officeId, float|string $unitCost): void
+    {
+        $user = Filament::auth()->user();
+        if (! $user || ($user->office_id && (int) $user->office_id !== $officeId)) {
+            abort(403);
+        }
+
+        StockPositionRestockFlag::markActive($itemId, $officeId, (float) $unitCost);
+
+        \Filament\Notifications\Notification::make()
+            ->title('Marked active for restock')
+            ->success()
+            ->send();
+    }
+
+    public function getTransferPrefillUrl(int $itemId, int $officeId, float|string|null $unitCost = null): string
+    {
+        return TransferResource::getUrl('index', array_filter([
             'create' => 1,
             'item_id' => $itemId,
             'from_office' => $officeId,
             'category' => (int) $this->category,
-        ]);
+            'unit_cost' => $unitCost !== null && $unitCost !== '' ? (float) $unitCost : null,
+        ], fn (mixed $v): bool => $v !== null && $v !== ''));
     }
 
     public function canCreateTransfer(): bool
@@ -432,10 +512,13 @@ class StockLevels extends Page
         $arguments = $this->getMountedAction()?->getArguments() ?? [];
         $itemId = (int) ($arguments['itemId'] ?? 0);
         $officeId = (int) ($arguments['officeId'] ?? 0);
+        $unitCost = isset($arguments['unitCost']) && $arguments['unitCost'] !== null
+            ? (float) $arguments['unitCost']
+            : null;
 
         $item = Item::query()->with('category')->findOrFail($itemId);
         $office = Office::query()->findOrFail($officeId);
 
-        return app(StockLedgerViewService::class)->present($item, $office);
+        return app(StockLedgerViewService::class)->present($item, $office, $unitCost);
     }
 }

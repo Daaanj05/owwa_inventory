@@ -293,6 +293,7 @@ class OwwaSpreadsheetLayoutHelper
 
     /**
      * @param  array<string, string>  $columnAlignments
+     * @param  array<int, string>  $wrapTextColumns
      */
     public static function normalizeDetailRows(
         Worksheet $sheet,
@@ -301,6 +302,9 @@ class OwwaSpreadsheetLayoutHelper
         int $styleSourceRow,
         array $columnAlignments,
         string $highestColumn = 'O',
+        array $wrapTextColumns = [],
+        int $minWrapLinesForExpansion = 2,
+        bool $uniformDataRowHeight = false,
     ): void {
         if ($rowCount <= 0) {
             return;
@@ -309,9 +313,11 @@ class OwwaSpreadsheetLayoutHelper
         $lastRow = $detailStart + $rowCount - 1;
         $fontName = OwwaExportStandards::fontName();
         $fontSize = OwwaExportStandards::fontSize();
+        $standardRowHeight = self::resolveLedgerRowHeight($sheet, $styleSourceRow);
+        $columns = range('A', $highestColumn);
 
         for ($row = $detailStart; $row <= $lastRow; $row++) {
-            foreach (range('A', $highestColumn) as $column) {
+            foreach ($columns as $column) {
                 if (! array_key_exists($column, $columnAlignments)) {
                     continue;
                 }
@@ -324,15 +330,96 @@ class OwwaSpreadsheetLayoutHelper
                 $alignment = $sheet->getStyle($column.$row)->getAlignment();
                 $alignment->setHorizontal($columnAlignments[$column]);
                 $alignment->setVertical(Alignment::VERTICAL_CENTER);
+                $alignment->setWrapText(in_array($column, $wrapTextColumns, true));
 
                 $font = $sheet->getStyle($column.$row)->getFont();
                 $font->setName($fontName);
                 $font->setSize($fontSize);
                 $font->setBold(false);
+                $font->setStrikethrough(false);
+                $font->setUnderline(Font::UNDERLINE_NONE);
+            }
+        }
+
+        if ($wrapTextColumns !== []) {
+            if ($uniformDataRowHeight) {
+                $maxDataRowHeight = $standardRowHeight;
+
+                for ($row = $detailStart; $row <= $lastRow; $row++) {
+                    $estimatedHeight = self::estimateWrappedRowHeight(
+                        $sheet,
+                        $row,
+                        $wrapTextColumns,
+                        $standardRowHeight,
+                        $minWrapLinesForExpansion,
+                    );
+
+                    $maxDataRowHeight = max($maxDataRowHeight, $estimatedHeight);
+                }
+
+                if ($maxDataRowHeight > $standardRowHeight) {
+                    for ($row = $detailStart; $row <= $lastRow; $row++) {
+                        $sheet->getRowDimension($row)->setRowHeight($maxDataRowHeight);
+                    }
+                }
+            } else {
+                for ($row = $detailStart; $row <= $lastRow; $row++) {
+                    $estimatedHeight = self::estimateWrappedRowHeight(
+                        $sheet,
+                        $row,
+                        $wrapTextColumns,
+                        $standardRowHeight,
+                        $minWrapLinesForExpansion,
+                    );
+
+                    if ($estimatedHeight > $standardRowHeight) {
+                        $sheet->getRowDimension($row)->setRowHeight($estimatedHeight);
+                    }
+                }
             }
         }
 
         self::applyBlockEndBorder($sheet, $detailStart, $lastRow, $highestColumn);
+    }
+
+    /**
+     * @param  array<string, string>  $columnTypes
+     */
+    public static function applyMonetaryColumnFormats(
+        Worksheet $sheet,
+        int $fromRow,
+        int $toRow,
+        array $columnTypes,
+    ): void {
+        if ($fromRow > $toRow || $columnTypes === []) {
+            return;
+        }
+
+        $formatCode = OwwaExportStandards::currencyExcelFormatCode();
+        $monetaryColumns = [];
+
+        foreach ($columnTypes as $column => $type) {
+            if (in_array($type, ['unit_cost', 'amount'], true)) {
+                $monetaryColumns[] = $column;
+            }
+        }
+
+        if ($monetaryColumns === []) {
+            return;
+        }
+
+        foreach (range($fromRow, $toRow) as $row) {
+            foreach ($monetaryColumns as $column) {
+                $coordinate = $column.$row;
+                $value = $sheet->getCell($coordinate)->getValue();
+
+                if ($value === null || $value === '' || ! is_numeric($value)) {
+                    continue;
+                }
+
+                $sheet->getStyle($coordinate)->getNumberFormat()->setFormatCode($formatCode);
+            }
+        }
     }
 
     public static function applyBlockEndBorder(

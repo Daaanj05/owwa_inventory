@@ -56,11 +56,9 @@ class PhysicalCountSessionInfolist
                         PhysicalCountSession::STATUS_INCOMPLETE => 'warning',
                         default => 'gray',
                     }),
-                TextEntry::make('count_type')->label('Form'),
                 TextEntry::make('office.name')->label('Office'),
                 TextEntry::make('count_date')->label('As at')->date(),
                 TextEntry::make('completed_at')->label('Completed at')->dateTime()->placeholder('—'),
-                TextEntry::make('inventory_type_label')->label('Inventory type')->columnSpanFull(),
                 TextEntry::make('accountable_officer_name')->label('Accountable officer'),
                 TextEntry::make('accountable_officer_designation')->label('Designation'),
             ]);
@@ -77,9 +75,8 @@ class PhysicalCountSessionInfolist
                     ->html()
                     ->color(function (PhysicalCountSession $record): string {
                         $missing = $record->missingCompletionFields();
-                        $summary = $record->countSummary();
 
-                        return ($missing === [] && $summary['shortages'] === 0 && $record->hasBookListLoaded()) ? 'success' : 'warning';
+                        return ($missing === [] && $record->hasBookListLoaded()) ? 'success' : 'warning';
                     })
                     ->columnSpanFull(),
             ]);

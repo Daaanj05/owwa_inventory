@@ -46,16 +46,22 @@ class AcquisitionUnitService
                 return;
             }
 
+            $semiPropertyNumber = null;
+
             for ($i = $existing; $i < $quantity; $i++) {
-                $propertyNumber = $slug === 'semi_expendable'
-                    ? $this->semiBuilder->assignForAcquisition($acquisition)
-                    : $this->referenceCodes->forPropertyNumber($slug);
+                if ($slug === 'semi_expendable') {
+                    $semiPropertyNumber ??= $this->semiBuilder->resolveOrAssignForAcquisition($acquisition);
+                    $propertyNumber = $semiPropertyNumber;
+                } else {
+                    $propertyNumber = $this->referenceCodes->forPropertyNumber($slug);
+                }
 
                 $units[] = InventoryUnit::query()->create([
                     'property_number' => $propertyNumber,
                     'acquisition_id' => $acquisition->id,
                     'item_id' => $item->id,
                     'office_id' => $acquisition->office_id,
+                    'unit_cost' => $acquisition->unit_cost,
                     'status' => InventoryUnit::STATUS_IN_STOCK,
                     'article' => $item->name,
                     'description' => $item->description,

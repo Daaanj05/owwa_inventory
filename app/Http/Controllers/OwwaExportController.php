@@ -9,6 +9,7 @@ use App\Models\Disposal;
 use App\Models\Distribution;
 use App\Models\Issuance;
 use App\Models\Item;
+use App\Models\PhysicalCountSession;
 use App\Models\Requisition;
 use App\Models\Transfer;
 use App\Services\OwwaItemReportService;
@@ -125,6 +126,9 @@ class OwwaExportController extends Controller
             $item,
             (string) $formSlug,
             $officeId !== null && $officeId !== '' ? (int) $officeId : null,
+            $request->query('unit_cost') !== null && $request->query('unit_cost') !== ''
+                ? (float) $request->query('unit_cost')
+                : null,
         );
     }
 

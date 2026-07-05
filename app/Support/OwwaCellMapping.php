@@ -72,6 +72,33 @@ class OwwaCellMapping
     }
 
     /**
+     * @return array<string, array{start_row: int, line_row: int, columns: array<string, string>}>
+     */
+    public static function physicalCountSignatureBlock(string $formCode, bool $useMaster = false): array
+    {
+        $map = self::form($formCode);
+
+        if ($useMaster && isset($map['signature_block_master'])) {
+            return (array) $map['signature_block_master'];
+        }
+
+        return (array) ($map['signature_block'] ?? []);
+    }
+
+    public static function physicalCountSignatureCell(
+        string $formCode,
+        string $field,
+        int $rowOffset = 0,
+        bool $useMaster = false,
+    ): string {
+        $block = self::physicalCountSignatureBlock($formCode, $useMaster);
+        $lineRow = (int) ($block['line_row'] ?? 38) + $rowOffset;
+        $column = (string) (($block['columns'] ?? [])[$field] ?? 'C');
+
+        return self::columnCell($column, $lineRow);
+    }
+
+    /**
      * @return list<string>
      */
     public static function configuredFormCodes(): array

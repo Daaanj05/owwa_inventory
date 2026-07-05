@@ -297,12 +297,21 @@ class AcquisitionPaperworkForm
         return Repeater::make('lines')
             ->relationship()
             ->label('')
-            ->hintIcon(Heroicon::QuestionMarkCircle, 'Stock numbers come from the item catalog. Register the item under Items first if it is not listed.')
+            ->hintIcon(Heroicon::QuestionMarkCircle, 'Stock No. comes from the Items catalog (Appendix 58 §5; PR/PO/IAR: as provided by Supply/Property Division). Register the item under Items first. Semi-expendable Property No. is assigned on custody receipt or issuance — not on PR lines.')
             ->addable(fn (?AcquisitionPaperwork $record): bool => self::isPrEditable($record))
             ->deletable(fn (?AcquisitionPaperwork $record): bool => self::isPrEditable($record))
             ->schema([
                 Select::make('item_id')
                     ->label('Item (Stock No.)')
+                    ->helperText(function (Get $get): string {
+                        $base = 'Stock No. from Items catalog — not assigned on this PR line.';
+
+                        if (self::isSemiExpendableCategoryId((int) $get('../../item_category_id'))) {
+                            return $base.' Semi-expendable Property No. is assigned on custody receipt.';
+                        }
+
+                        return $base;
+                    })
                     ->options(function (Get $get) use ($scopeActive): array {
                         $query = Item::query();
                         $scopeActive($query);
@@ -459,5 +468,14 @@ class AcquisitionPaperworkForm
             TextInput::make('custodian_name')
                 ->label('Supply / property custodian'),
         ];
+    }
+
+    protected static function isSemiExpendableCategoryId(?int $categoryId): bool
+    {
+        if ($categoryId === null || $categoryId <= 0) {
+            return false;
+        }
+
+        return ItemCategory::query()->find($categoryId)?->getTemplateSlug() === 'semi_expendable';
     }
 }

@@ -5,6 +5,7 @@ namespace App\Filament\Resources\Transfers\Schemas;
 use App\Filament\Concerns\SyncsActiveItemCategory;
 use App\Models\ItemCategory;
 use App\Models\Office;
+use App\Services\InventoryStockService;
 use App\Services\TransferItemOptionsService;
 use App\Support\CustodianOfficeScope;
 use App\Support\OwwaReferenceLabels;
@@ -141,7 +142,42 @@ class TransferForm
                                 return $stock === 0
                                     ? 'No stock available — increase stock before transferring.'
                                     : null;
-                            }),
+                            })
+                            ->afterStateUpdated(fn (Set $set) => $set('unit_cost', null)),
+                        Select::make('unit_cost')
+                            ->label('Unit cost bucket')
+                            ->options(function (Get $get): array {
+                                $itemId = $get('item_id');
+                                $fromOfficeId = $get('from_office_id');
+                                if (blank($itemId) || blank($fromOfficeId)) {
+                                    return [];
+                                }
+
+                                $buckets = app(InventoryStockService::class)->getUnitCostBucketsWithStock(
+                                    (int) $itemId,
+                                    (int) $fromOfficeId,
+                                );
+
+                                $options = [];
+                                foreach ($buckets as $cost => $qty) {
+                                    $options[(string) $cost] = '₱'.number_format((float) $cost, 2)." ({$qty} on hand)";
+                                }
+
+                                return $options;
+                            })
+                            ->required(fn (Get $get): bool => count(app(InventoryStockService::class)->getUnitCostBucketsWithStock(
+                                (int) ($get('item_id') ?? 0),
+                                (int) ($get('from_office_id') ?? 0),
+                            )) > 1)
+                            ->visible(fn (Get $get): bool => filled($get('item_id'))
+                                && filled($get('from_office_id'))
+                                && count(app(InventoryStockService::class)->getUnitCostBucketsWithStock(
+                                    (int) ($get('item_id') ?? 0),
+                                    (int) ($get('from_office_id') ?? 0),
+                                )) > 1)
+                            ->native(false)
+                            ->live()
+                            ->dehydrateStateUsing(fn ($state) => $state !== null && $state !== '' ? (float) $state : null),
                         Placeholder::make('available_stock_preview')
                             ->label('Available at source office')
                             ->content(function (Get $get): string {

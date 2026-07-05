@@ -44,7 +44,7 @@ class StockLedgerModalTest extends TestCase
 
         Livewire::actingAs($custodian)
             ->test(StockLevels::class, ['category' => $category->id])
-            ->call('openStockLedger', $item->id, $office->id)
+            ->call('openStockLedger', $item->id, $office->id, 0.0)
             ->assertActionMounted('viewStockLedger');
     }
 
@@ -70,7 +70,7 @@ class StockLedgerModalTest extends TestCase
 
         Livewire::actingAs($custodian)
             ->test(StockLevels::class, ['category' => $category->id])
-            ->call('openStockLedger', $hiddenItem->id, $office->id)
+            ->call('openStockLedger', $hiddenItem->id, $office->id, 0.0)
             ->assertStatus(403);
     }
 }

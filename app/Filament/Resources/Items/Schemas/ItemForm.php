@@ -65,7 +65,9 @@ class ItemForm
                             ->dehydrated()
                             ->visible(fn (string $operation): bool => $operation !== 'create'
                                 || ! config('inventory.auto_generate_item_codes', true))
-                            ->helperText(fn (string $operation, Get $get): string => self::itemCodeHelperText($operation, $get)),
+                            ->helperText(fn (string $operation, Get $get): string => self::isSemiExpendableCategory($get('item_category_id'))
+                                ? 'Catalog identifier for PR/PO lines (Appendix 58 §5). Property No. appears on Stock levels after receipt.'
+                                : self::itemCodeHelperText($operation, $get)),
                         TextInput::make('unit')
                             ->label('Measurement unit')
                             ->required()

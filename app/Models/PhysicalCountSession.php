@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\LogsUserActivity;
+use App\Support\PhysicalCountPropertyClassResolver;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -206,6 +207,10 @@ class PhysicalCountSession extends Model
         $missing = [];
 
         foreach (['fund_cluster', 'accountable_officer_name', 'inventory_type_label', 'count_date'] as $field) {
+            if ($field === 'inventory_type_label' && $this->usesDerivedInventoryTypeLabel()) {
+                continue;
+            }
+
             if (blank($this->{$field})) {
                 $missing[] = str_replace('_', ' ', $field);
             }
@@ -218,6 +223,18 @@ class PhysicalCountSession extends Model
         }
 
         return $missing;
+    }
+
+    public function usesDerivedInventoryTypeLabel(): bool
+    {
+        if (! in_array($this->count_type, [self::TYPE_RPCSP, self::TYPE_RPCPPE], true)) {
+            return false;
+        }
+
+        $this->loadMissing('lines');
+
+        return $this->lines->isNotEmpty()
+            || PhysicalCountPropertyClassResolver::hasLineBasedClasses($this);
     }
 
     public function tallyLabel(): string

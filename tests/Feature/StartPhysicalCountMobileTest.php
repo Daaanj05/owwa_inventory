@@ -39,6 +39,7 @@ class StartPhysicalCountMobileTest extends TestCase
         $this->assertNotNull($session);
         $this->assertSame($office->id, $session->office_id);
         $this->assertSame(PhysicalCountSession::TYPE_RPCPPE, $session->count_type);
+        $this->assertNull($session->inventory_type_label);
     }
 
     public function test_custodian_always_uses_assigned_office_even_when_tampered(): void

@@ -158,7 +158,6 @@ class StartPhysicalCountMobile extends Page
             'office_id' => $this->officeId,
             'item_category_id' => $this->itemCategoryId,
             'count_date' => now()->toDateString(),
-            'inventory_type_label' => $category->name,
             ...$defaults,
         ]);
 

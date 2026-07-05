@@ -23,6 +23,7 @@ class InventoryUnit extends Model
         'acquisition_id',
         'item_id',
         'office_id',
+        'unit_cost',
         'status',
         'issuance_id',
         'article',
@@ -30,6 +31,13 @@ class InventoryUnit extends Model
         'stock_number',
         'unit_of_measure',
     ];
+
+    protected function casts(): array
+    {
+        return [
+            'unit_cost' => 'decimal:2',
+        ];
+    }
 
     public function acquisition(): BelongsTo
     {

@@ -118,7 +118,8 @@ class ProcurementDecisionSupportService
                 continue;
             }
 
-            $currentStock = $this->stockService->getStock($itemId, $officeId);
+            $currentStock = $this->stockService->getActiveRestockStock($itemId, $officeId);
+            $legacyOnHand = $this->stockService->getLegacyOnHandStock($itemId, $officeId);
             $monthsCover = $currentStock > 0 ? ($currentStock / $forecastMonthly) : 0.0;
             $suggested = $this->resolveSuggestedReorderQty(
                 currentStock: $currentStock,
@@ -150,6 +151,7 @@ class ProcurementDecisionSupportService
                 latestUnitCosts: $latestUnitCosts,
                 hasRecentUsage: true,
                 priority: $priority,
+                legacyOnHand: $legacyOnHand,
             ));
         }
 
@@ -372,7 +374,8 @@ class ProcurementDecisionSupportService
                     continue;
                 }
 
-                $currentStock = $this->stockService->getStock((int) $item->id, (int) $office->id);
+                $currentStock = $this->stockService->getActiveRestockStock((int) $item->id, (int) $office->id);
+                $legacyOnHand = $this->stockService->getLegacyOnHandStock((int) $item->id, (int) $office->id);
                 if ($currentStock >= (int) $item->reorder_level) {
                     continue;
                 }
@@ -395,6 +398,7 @@ class ProcurementDecisionSupportService
                     latestUnitCosts: $latestUnitCosts,
                     hasRecentUsage: false,
                     priority: 'High',
+                    legacyOnHand: $legacyOnHand,
                 ));
             }
         }
@@ -416,6 +420,7 @@ class ProcurementDecisionSupportService
         array $latestUnitCosts,
         bool $hasRecentUsage,
         string $priority,
+        int $legacyOnHand = 0,
     ): object {
         return (object) [
             'item_id' => (int) $item->id,
@@ -424,6 +429,8 @@ class ProcurementDecisionSupportService
             'office_name' => (string) $office->name,
             'item_category_id' => (int) $item->item_category_id,
             'current_stock' => $currentStock,
+            'legacy_on_hand' => $legacyOnHand,
+            'has_legacy_stock' => $legacyOnHand > 0,
             'reorder_level' => (int) $item->reorder_level,
             'forecast_monthly_usage' => round($forecastMonthly, 2),
             'months_cover' => $monthsCover !== null ? round($monthsCover, 2) : null,

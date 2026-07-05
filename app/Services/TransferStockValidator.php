@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Transfer;
 use App\Models\User;
+use App\Support\UnitCostKey;
 use Illuminate\Validation\ValidationException;
 
 class TransferStockValidator
@@ -43,6 +44,9 @@ class TransferStockValidator
         $toOfficeId = (int) ($data['to_office_id'] ?? 0);
         $itemId = (int) ($data['item_id'] ?? 0);
         $quantity = (int) ($data['quantity'] ?? 0);
+        $unitCost = isset($data['unit_cost']) && $data['unit_cost'] !== '' && $data['unit_cost'] !== null
+            ? (float) $data['unit_cost']
+            : null;
 
         if ($fromOfficeId <= 0) {
             throw ValidationException::withMessages([
@@ -74,17 +78,30 @@ class TransferStockValidator
             ]);
         }
 
+        $buckets = $this->stockService->getUnitCostBucketsWithStock($itemId, $fromOfficeId);
+        if (count($buckets) > 1 && $unitCost === null) {
+            throw ValidationException::withMessages([
+                'unit_cost' => 'Select the unit cost bucket to transfer from.',
+            ]);
+        }
+
         if ($quantity < 1) {
             throw ValidationException::withMessages([
                 'quantity' => 'Quantity must be at least 1.',
             ]);
         }
 
-        $available = $this->stockService->getStock($itemId, $fromOfficeId);
+        $available = $unitCost !== null
+            ? $this->stockService->getStockForUnitCost($itemId, $fromOfficeId, $unitCost)
+            : $this->stockService->getStock($itemId, $fromOfficeId);
 
         if ($existing !== null
             && (int) $existing->item_id === $itemId
-            && (int) $existing->from_office_id === $fromOfficeId) {
+            && (int) $existing->from_office_id === $fromOfficeId
+            && UnitCostKey::equals(
+                $existing->unit_cost !== null ? (float) $existing->unit_cost : null,
+                $unitCost,
+            )) {
             $available += (int) $existing->quantity;
         }
 

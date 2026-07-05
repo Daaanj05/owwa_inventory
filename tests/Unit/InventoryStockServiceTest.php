@@ -48,6 +48,25 @@ class InventoryStockServiceTest extends TestCase
         $this->assertSame(0, $this->service->lowStockCount());
     }
 
+    public function test_two_cost_buckets_produce_two_stock_level_rows(): void
+    {
+        $category = ItemCategory::factory()->create();
+        $item = Item::factory()->create([
+            'item_category_id' => $category->id,
+            'reorder_level' => 10,
+        ]);
+        $office = Office::factory()->create();
+
+        $this->createAcquisition($item->id, $office->id, 10, 100.00);
+        $this->createAcquisition($item->id, $office->id, 5, 150.00);
+
+        $list = $this->service->getStockLevelsList();
+        $this->assertCount(2, $list);
+        $this->assertSame(15, $this->service->getStock($item->id, $office->id));
+        $this->assertSame(10, $this->service->getStockForUnitCost($item->id, $office->id, 100.00));
+        $this->assertSame(5, $this->service->getStockForUnitCost($item->id, $office->id, 150.00));
+    }
+
     public function test_item_appears_in_stock_levels_after_acquisition(): void
     {
         $category = ItemCategory::factory()->create();
@@ -92,8 +111,8 @@ class InventoryStockServiceTest extends TestCase
         $fromOffice = Office::factory()->create(['code' => 'SRC']);
         $toOffice = Office::factory()->create(['code' => 'DST']);
 
-        $this->createAcquisition($item->id, $fromOffice->id, 20);
-        $this->createTransfer($item->id, $fromOffice->id, $toOffice->id, 8);
+        $this->createAcquisition($item->id, $fromOffice->id, 20, 100.00);
+        $this->createTransfer($item->id, $fromOffice->id, $toOffice->id, 8, 100.00);
 
         $list = $this->service->getStockLevelsList();
         $destination = $list->first(fn ($row) => $row->office_id === $toOffice->id);
@@ -152,33 +171,35 @@ class InventoryStockServiceTest extends TestCase
         $this->assertFalse($this->service->isLowStock($item, $office->id));
     }
 
-    protected function createAcquisition(int $itemId, int $officeId, int $quantity): void
+    protected function createAcquisition(int $itemId, int $officeId, int $quantity, ?float $unitCost = null): void
     {
         DB::table('acquisitions')->insert([
             'reference_code' => 'ACQ-TEST-'.$itemId.'-'.$officeId.'-'.uniqid(),
             'item_id' => $itemId,
             'office_id' => $officeId,
             'quantity' => $quantity,
+            'unit_cost' => $unitCost,
             'acquisition_date' => now()->toDateString(),
             'created_at' => now(),
             'updated_at' => now(),
         ]);
     }
 
-    protected function createIssuance(int $itemId, int $officeId, int $quantity): void
+    protected function createIssuance(int $itemId, int $officeId, int $quantity, ?float $unitCost = null): void
     {
         DB::table('issuances')->insert([
             'reference_code' => 'ISS-TEST-'.$itemId.'-'.$officeId.'-'.uniqid(),
             'item_id' => $itemId,
             'office_id' => $officeId,
             'quantity' => $quantity,
+            'unit_cost' => $unitCost,
             'issuance_date' => now()->toDateString(),
             'created_at' => now(),
             'updated_at' => now(),
         ]);
     }
 
-    protected function createTransfer(int $itemId, int $fromOfficeId, int $toOfficeId, int $quantity): void
+    protected function createTransfer(int $itemId, int $fromOfficeId, int $toOfficeId, int $quantity, ?float $unitCost = null): void
     {
         DB::table('transfers')->insert([
             'reference_code' => 'TRF-TEST-'.$itemId.'-'.uniqid(),
@@ -186,6 +207,7 @@ class InventoryStockServiceTest extends TestCase
             'from_office_id' => $fromOfficeId,
             'to_office_id' => $toOfficeId,
             'quantity' => $quantity,
+            'unit_cost' => $unitCost,
             'transfer_date' => now()->toDateString(),
             'created_at' => now(),
             'updated_at' => now(),

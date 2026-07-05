@@ -4,6 +4,7 @@ namespace App\Observers;
 
 use App\Models\Acquisition;
 use App\Models\Item;
+use App\Models\StockPositionRestockFlag;
 use App\Services\AcquisitionUnitService;
 use App\Services\ReferenceCodeService;
 use App\Support\PpeValueCategory;
@@ -52,9 +53,21 @@ class AcquisitionObserver
             return;
         }
 
-        $item->update([
-            'value_type' => SemiExpendableValueCategory::valueTypeForUnitCost((float) $acquisition->unit_cost),
-        ]);
+        $bucketCount = \App\Models\ItemStockBucket::query()
+            ->where('item_id', $item->id)
+            ->count();
+
+        if ($bucketCount <= 1) {
+            $item->update([
+                'value_type' => SemiExpendableValueCategory::valueTypeForUnitCost((float) $acquisition->unit_cost),
+            ]);
+        }
+
+        StockPositionRestockFlag::reactivateOnAcquisition(
+            (int) $item->id,
+            (int) $acquisition->office_id,
+            (float) $acquisition->unit_cost,
+        );
     }
 
     public function created(Acquisition $acquisition): void

@@ -3,26 +3,100 @@
 namespace App\Services;
 
 use App\Models\Item;
+use App\Models\ItemStockBucket;
+use App\Models\StockPositionRestockFlag;
+use App\Support\SemiExpendableValueCategory;
+use App\Support\UnitCostKey;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 class InventoryStockService
 {
     /**
-     * Get current stock quantity for an item at an office.
-     * Stock = sum(acquisitions) + sum(transfers in) - sum(issuances) - sum(transfers out) - sum(disposals)
+     * Get current stock quantity for an item at an office (sum across all unit-cost buckets).
      */
     public function getStock(int $itemId, int $officeId): int
     {
         $maps = $this->getMovementTotalsMaps();
-        $key = "{$itemId}_{$officeId}";
+        $prefix = "{$itemId}_{$officeId}_";
+        $total = 0;
+
+        foreach ($this->positionKeysFromMaps($maps) as $key) {
+            if (str_starts_with($key, $prefix)) {
+                $total += $this->calculateStockFromMaps($key, $maps);
+            }
+        }
+
+        return $total;
+    }
+
+    public function getStockForUnitCost(int $itemId, int $officeId, ?float $unitCost): int
+    {
+        $maps = $this->getMovementTotalsMaps();
+        $key = UnitCostKey::positionKey($itemId, $officeId, $unitCost);
 
         return $this->calculateStockFromMaps($key, $maps);
     }
 
     /**
-     * Get stock for all items at an office.
-     *
+     * Stock available for procurement cover (excludes inactive-for-restock positions).
+     */
+    public function getActiveRestockStock(int $itemId, int $officeId): int
+    {
+        $maps = $this->getMovementTotalsMaps();
+        $prefix = "{$itemId}_{$officeId}_";
+        $total = 0;
+
+        foreach ($this->positionKeysFromMaps($maps) as $key) {
+            if (! str_starts_with($key, $prefix)) {
+                continue;
+            }
+
+            $parsed = UnitCostKey::parsePositionKey($key);
+            if ($parsed === null) {
+                continue;
+            }
+
+            if (StockPositionRestockFlag::isInactiveForRestock($itemId, $officeId, $parsed['unit_cost'])) {
+                continue;
+            }
+
+            $total += $this->calculateStockFromMaps($key, $maps);
+        }
+
+        return $total;
+    }
+
+    /**
+     * Legacy on-hand stock (inactive-for-restock positions with qty > 0).
+     */
+    public function getLegacyOnHandStock(int $itemId, int $officeId): int
+    {
+        $maps = $this->getMovementTotalsMaps();
+        $prefix = "{$itemId}_{$officeId}_";
+        $total = 0;
+
+        foreach ($this->positionKeysFromMaps($maps) as $key) {
+            if (! str_starts_with($key, $prefix)) {
+                continue;
+            }
+
+            $parsed = UnitCostKey::parsePositionKey($key);
+            if ($parsed === null) {
+                continue;
+            }
+
+            if (! StockPositionRestockFlag::isInactiveForRestock($itemId, $officeId, $parsed['unit_cost'])) {
+                continue;
+            }
+
+            $total += $this->calculateStockFromMaps($key, $maps);
+        }
+
+        return $total;
+    }
+
+    /**
      * @return array<int, int> item_id => quantity
      */
     public function getStockByOffice(int $officeId): array
@@ -48,72 +122,75 @@ class InventoryStockService
     }
 
     /**
-     * Item×office pairs that have ever had inventory movement (acquisition, issuance, transfer, disposal).
-     *
      * @return array<string, true>
      */
     public function getActiveItemOfficePairKeys(): array
     {
         $keys = [];
 
-        $addPairs = function (Collection $rows) use (&$keys): void {
+        foreach (array_keys($this->getActiveStockPositionKeys()) as $positionKey) {
+            $parsed = UnitCostKey::parsePositionKey($positionKey);
+            if ($parsed === null) {
+                continue;
+            }
+            $keys["{$parsed['item_id']}_{$parsed['office_id']}"] = true;
+        }
+
+        return $keys;
+    }
+
+    /**
+     * Stock positions (item × office × unit cost) with inventory history.
+     *
+     * @return array<string, true>
+     */
+    public function getActiveStockPositionKeys(): array
+    {
+        $keys = [];
+
+        $addKeys = function (Collection $rows, string $officeColumn, ?string $costColumn = 'unit_cost') use (&$keys): void {
             foreach ($rows as $row) {
-                $keys["{$row->item_id}_{$row->office_id}"] = true;
+                $cost = $costColumn !== null ? ($row->{$costColumn} ?? null) : null;
+                $keys[UnitCostKey::positionKey(
+                    (int) $row->item_id,
+                    (int) $row->{$officeColumn},
+                    $cost !== null ? (float) $cost : null,
+                )] = true;
             }
         };
 
-        $addPairs(DB::table('acquisitions')->select('item_id', 'office_id')->distinct()->get());
-        $addPairs(DB::table('issuances')->select('item_id', 'office_id')->distinct()->get());
-        $addPairs(DB::table('disposals')->select('item_id', 'office_id')->distinct()->get());
-        $addPairs(DB::table('transfers')->select('item_id', 'from_office_id as office_id')->distinct()->get());
-        $addPairs(DB::table('transfers')->select('item_id', 'to_office_id as office_id')->distinct()->get());
+        $addKeys(DB::table('acquisitions')->select('item_id', 'office_id', 'unit_cost')->distinct()->get(), 'office_id');
+        $addKeys(DB::table('issuances')->select('item_id', 'office_id', 'unit_cost')->distinct()->get(), 'office_id');
+        $addKeys(DB::table('disposals')->select('item_id', 'office_id', 'acquisition_cost as unit_cost')->distinct()->get(), 'office_id');
+        $addKeys(
+            DB::table('transfers')->select('item_id', 'from_office_id as office_id', 'unit_cost')->distinct()->get(),
+            'office_id',
+        );
+        $addKeys(
+            DB::table('transfers')->select('item_id', 'to_office_id as office_id', 'unit_cost')->distinct()->get(),
+            'office_id',
+        );
 
         return $keys;
     }
 
     public function hasInventoryActivity(int $itemId, int $officeId): bool
     {
-        if (DB::table('acquisitions')->where('item_id', $itemId)->where('office_id', $officeId)->exists()) {
-            return true;
-        }
-
-        if (DB::table('issuances')->where('item_id', $itemId)->where('office_id', $officeId)->exists()) {
-            return true;
-        }
-
-        if (DB::table('disposals')->where('item_id', $itemId)->where('office_id', $officeId)->exists()) {
-            return true;
-        }
-
-        return DB::table('transfers')
-            ->where('item_id', $itemId)
-            ->where(fn ($q) => $q->where('from_office_id', $officeId)->orWhere('to_office_id', $officeId))
-            ->exists();
+        return isset($this->getActiveItemOfficePairKeys()["{$itemId}_{$officeId}"]);
     }
 
-    /**
-     * Count of (item, office) pairs where current stock is at or below reorder point.
-     * Only includes pairs with inventory activity (not catalog-only).
-     *
-     * @param  array<int>|null  $officeIds  When provided, only count low stock for these offices.
-     * @param  int|null  $fiscalYearId  Unused after fiscal year scoping removal; kept for call-site compatibility.
-     */
     public function lowStockCount(?array $officeIds = null, ?int $fiscalYearId = null): int
     {
         unset($fiscalYearId);
 
-        $maps = $this->getMovementTotalsMaps();
-        $activeKeys = $this->getActiveItemOfficePairKeys();
-
+        $activePairs = $this->getActiveItemOfficePairKeys();
         $itemIds = [];
-        $officeIdsFromKeys = [];
-        foreach (array_keys($activeKeys) as $key) {
+        foreach (array_keys($activePairs) as $key) {
             [$itemId, $officeId] = array_map('intval', explode('_', $key, 2));
             if ($officeIds !== null && $officeIds !== [] && ! in_array($officeId, $officeIds, true)) {
                 continue;
             }
             $itemIds[$itemId] = true;
-            $officeIdsFromKeys[$officeId] = true;
         }
 
         if ($itemIds === []) {
@@ -127,7 +204,7 @@ class InventoryStockService
             ->pluck('reorder_level', 'id');
 
         $count = 0;
-        foreach (array_keys($activeKeys) as $key) {
+        foreach (array_keys($activePairs) as $key) {
             [$itemId, $officeId] = array_map('intval', explode('_', $key, 2));
             if ($officeIds !== null && $officeIds !== [] && ! in_array($officeId, $officeIds, true)) {
                 continue;
@@ -136,8 +213,7 @@ class InventoryStockService
                 continue;
             }
 
-            $stock = $this->calculateStockFromMaps($key, $maps);
-            if ($stock < (int) $items[$itemId]) {
+            if ($this->getStock($itemId, $officeId) < (int) $items[$itemId]) {
                 $count++;
             }
         }
@@ -146,75 +222,167 @@ class InventoryStockService
     }
 
     /**
-     * Stock positions with inventory history at each office (excludes catalog-only item×office pairs).
-     *
-     * @return Collection<int, object{item_id: int, item_name: string, category_name: string, office_id: int, office_name: string, property_class: ?string, value_type: ?string, stock: int, reorder_level: int, is_low: bool}>
+     * @return Collection<int, object{
+     *     item_id: int,
+     *     item_name: string,
+     *     category_name: string,
+     *     office_id: int,
+     *     office_name: string,
+     *     unit_cost: float,
+     *     property_number: ?string,
+     *     property_class: ?string,
+     *     value_type: ?string,
+     *     stock: int,
+     *     reorder_level: int,
+     *     is_low: bool,
+     *     is_inactive_for_restock: bool,
+     *     position_key: string
+     * }>
      */
     public function getStockLevelsList(?int $categoryId = null): Collection
     {
-        $activeKeys = array_keys($this->getActiveItemOfficePairKeys());
-        if ($activeKeys === []) {
+        $positionKeys = array_keys($this->getActiveStockPositionKeys());
+        if ($positionKeys === []) {
             return collect();
         }
 
+        $parsedPositions = [];
         $itemIds = [];
         $officeIds = [];
-        foreach ($activeKeys as $key) {
-            [$itemId, $officeId] = array_map('intval', explode('_', $key, 2));
-            $itemIds[$itemId] = true;
-            $officeIds[$officeId] = true;
+
+        foreach ($positionKeys as $positionKey) {
+            $parsed = UnitCostKey::parsePositionKey($positionKey);
+            if ($parsed === null) {
+                continue;
+            }
+            $parsedPositions[] = array_merge($parsed, ['position_key' => $positionKey]);
+            $itemIds[$parsed['item_id']] = true;
+            $officeIds[$parsed['office_id']] = true;
         }
 
-        $query = DB::table('items')
+        $items = DB::table('items')
             ->join('item_categories', 'items.item_category_id', '=', 'item_categories.id')
-            ->join('offices', function ($join) use ($officeIds): void {
-                $join->whereIn('offices.id', array_keys($officeIds))
-                    ->whereNull('offices.archived_at');
-            })
             ->whereIn('items.id', array_keys($itemIds))
             ->whereNull('items.archived_at')
             ->when($categoryId !== null, fn ($q) => $q->where('items.item_category_id', $categoryId))
             ->select(
-                'items.id as item_id',
-                'items.name as item_name',
-                'item_categories.name as category_name',
-                'offices.id as office_id',
-                'offices.name as office_name',
+                'items.id',
+                'items.name',
                 'items.reorder_level',
-                'items.property_class as property_class',
-                'items.value_type as value_type',
+                'items.property_class',
+                'item_categories.name as category_name',
             )
-            ->orderBy('items.name')
-            ->orderBy('offices.name');
+            ->get()
+            ->keyBy('id');
+
+        $offices = DB::table('offices')
+            ->whereIn('id', array_keys($officeIds))
+            ->whereNull('archived_at')
+            ->pluck('name', 'id');
 
         $maps = $this->getMovementTotalsMaps();
+        $aggregateStockByPair = [];
+        $rows = collect();
 
-        return $query->get()
-            ->filter(function ($row) use ($activeKeys): bool {
-                $key = "{$row->item_id}_{$row->office_id}";
+        foreach ($parsedPositions as $position) {
+            $item = $items->get($position['item_id']);
+            if ($item === null) {
+                continue;
+            }
 
-                return in_array($key, $activeKeys, true);
+            $officeName = $offices[$position['office_id']] ?? null;
+            if ($officeName === null) {
+                continue;
+            }
+
+            $pairKey = "{$position['item_id']}_{$position['office_id']}";
+            $stock = $this->calculateStockFromMaps($position['position_key'], $maps);
+            $aggregateStockByPair[$pairKey] = ($aggregateStockByPair[$pairKey] ?? 0) + $stock;
+
+            $bucket = ItemStockBucket::findForItemCost($position['item_id'], $position['unit_cost']);
+            $flag = StockPositionRestockFlag::findForPosition(
+                $position['item_id'],
+                $position['office_id'],
+                $position['unit_cost'],
+            );
+
+            $rows->push((object) [
+                'item_id' => $position['item_id'],
+                'item_name' => $item->name,
+                'category_name' => $item->category_name,
+                'office_id' => $position['office_id'],
+                'office_name' => $officeName,
+                'unit_cost' => $position['unit_cost'],
+                'property_number' => $bucket?->property_number,
+                'property_class' => $item->property_class,
+                'value_type' => SemiExpendableValueCategory::valueTypeForUnitCost($position['unit_cost']),
+                'stock' => $stock,
+                'reorder_level' => (int) $item->reorder_level,
+                'is_low' => false,
+                'is_inactive_for_restock' => (bool) ($flag?->is_inactive_for_restock ?? false),
+                'position_key' => $position['position_key'],
+            ]);
+        }
+
+        return $rows
+            ->map(function (object $row) use ($aggregateStockByPair): object {
+                $pairKey = "{$row->item_id}_{$row->office_id}";
+                $aggregate = $aggregateStockByPair[$pairKey] ?? $row->stock;
+                $row->is_low = $row->reorder_level > 0 && $aggregate < $row->reorder_level;
+
+                return $row;
             })
-            ->map(function ($row) use ($maps) {
-                $key = "{$row->item_id}_{$row->office_id}";
-                $stock = $this->calculateStockFromMaps($key, $maps);
-                $reorderLevel = (int) $row->reorder_level;
-                $isLow = $reorderLevel > 0 && $stock < $reorderLevel;
-
-                return (object) [
-                    'item_id' => (int) $row->item_id,
-                    'item_name' => $row->item_name,
-                    'category_name' => $row->category_name,
-                    'office_id' => (int) $row->office_id,
-                    'office_name' => $row->office_name,
-                    'property_class' => $row->property_class,
-                    'value_type' => $row->value_type,
-                    'stock' => $stock,
-                    'reorder_level' => $reorderLevel,
-                    'is_low' => $isLow,
-                ];
-            })
+            ->sortBy(['item_name', 'office_name', 'unit_cost'])
             ->values();
+    }
+
+    /**
+     * Unit costs with stock > 0 at an office for an item.
+     *
+     * @return array<float, int> unit_cost => qty
+     */
+    public function getUnitCostBucketsWithStock(int $itemId, int $officeId): array
+    {
+        $maps = $this->getMovementTotalsMaps();
+        $prefix = "{$itemId}_{$officeId}_";
+        $buckets = [];
+
+        foreach ($this->positionKeysFromMaps($maps) as $key) {
+            if (! str_starts_with($key, $prefix)) {
+                continue;
+            }
+
+            $stock = $this->calculateStockFromMaps($key, $maps);
+            if ($stock <= 0) {
+                continue;
+            }
+
+            $parsed = UnitCostKey::parsePositionKey($key);
+            if ($parsed === null) {
+                continue;
+            }
+
+            $buckets[$parsed['unit_cost']] = $stock;
+        }
+
+        ksort($buckets);
+
+        return $buckets;
+    }
+
+    /**
+     * Oldest unit-cost bucket with stock (FIFO default for issuance).
+     */
+    public function resolveFifoUnitCost(int $itemId, int $officeId): ?float
+    {
+        $buckets = $this->getUnitCostBucketsWithStock($itemId, $officeId);
+        if ($buckets === []) {
+            return null;
+        }
+
+        $costs = array_keys($buckets);
+
+        return (float) $costs[0];
     }
 
     /**
@@ -229,37 +397,35 @@ class InventoryStockService
     protected function getMovementTotalsMaps(): array
     {
         return [
-            'acq' => DB::table('acquisitions')
-                ->select('item_id', 'office_id', DB::raw('SUM(quantity) as total'))
-                ->groupBy('item_id', 'office_id')
-                ->get()
-                ->mapWithKeys(fn ($r) => ["{$r->item_id}_{$r->office_id}" => (int) $r->total])
-                ->all(),
-            'inTransfers' => DB::table('transfers')
-                ->select('item_id', 'to_office_id as office_id', DB::raw('SUM(quantity) as total'))
-                ->groupBy('item_id', 'to_office_id')
-                ->get()
-                ->mapWithKeys(fn ($r) => ["{$r->item_id}_{$r->office_id}" => (int) $r->total])
-                ->all(),
-            'issuances' => DB::table('issuances')
-                ->select('item_id', 'office_id', DB::raw('SUM(quantity) as total'))
-                ->groupBy('item_id', 'office_id')
-                ->get()
-                ->mapWithKeys(fn ($r) => ["{$r->item_id}_{$r->office_id}" => (int) $r->total])
-                ->all(),
-            'outTransfers' => DB::table('transfers')
-                ->select('item_id', 'from_office_id as office_id', DB::raw('SUM(quantity) as total'))
-                ->groupBy('item_id', 'from_office_id')
-                ->get()
-                ->mapWithKeys(fn ($r) => ["{$r->item_id}_{$r->office_id}" => (int) $r->total])
-                ->all(),
-            'disposals' => DB::table('disposals')
-                ->select('item_id', 'office_id', DB::raw('SUM(quantity) as total'))
-                ->groupBy('item_id', 'office_id')
-                ->get()
-                ->mapWithKeys(fn ($r) => ["{$r->item_id}_{$r->office_id}" => (int) $r->total])
-                ->all(),
+            'acq' => $this->buildMovementMap('acquisitions', 'office_id', 'unit_cost'),
+            'inTransfers' => $this->buildMovementMap('transfers', 'to_office_id', 'unit_cost'),
+            'issuances' => $this->buildMovementMap('issuances', 'office_id', 'unit_cost'),
+            'outTransfers' => $this->buildMovementMap('transfers', 'from_office_id', 'unit_cost'),
+            'disposals' => $this->buildMovementMap('disposals', 'office_id', 'acquisition_cost'),
         ];
+    }
+
+    protected function buildMovementMap(string $table, string $officeColumn, string $costColumn): array
+    {
+        return DB::table($table)
+            ->select(
+                'item_id',
+                "{$officeColumn} as office_id",
+                DB::raw("COALESCE({$costColumn}, 0) as unit_cost"),
+                DB::raw('SUM(quantity) as total'),
+            )
+            ->groupBy('item_id', $officeColumn, DB::raw("COALESCE({$costColumn}, 0)"))
+            ->get()
+            ->mapWithKeys(function ($row): array {
+                $key = UnitCostKey::positionKey(
+                    (int) $row->item_id,
+                    (int) $row->office_id,
+                    (float) $row->unit_cost,
+                );
+
+                return [$key => (int) $row->total];
+            })
+            ->all();
     }
 
     /**
@@ -271,5 +437,21 @@ class InventoryStockService
             - ($maps['issuances'][$key] ?? 0) - ($maps['outTransfers'][$key] ?? 0) - ($maps['disposals'][$key] ?? 0);
 
         return max(0, $stock);
+    }
+
+    /**
+     * @param  array{acq: array<string, int>, inTransfers: array<string, int>, issuances: array<string, int>, outTransfers: array<string, int>, disposals: array<string, int>}  $maps
+     * @return array<int, string>
+     */
+    protected function positionKeysFromMaps(array $maps): array
+    {
+        $keys = [];
+        foreach ($maps as $map) {
+            foreach (array_keys($map) as $key) {
+                $keys[$key] = true;
+            }
+        }
+
+        return array_keys($keys);
     }
 }

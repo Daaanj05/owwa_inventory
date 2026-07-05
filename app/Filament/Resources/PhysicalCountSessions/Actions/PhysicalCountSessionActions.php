@@ -7,6 +7,7 @@ use App\Filament\Support\OwwaFormModalDefaults;
 use App\Models\PhysicalCountSession;
 use App\Services\PhysicalCountCompletionService;
 use App\Services\PhysicalCountPreloadService;
+use App\Support\PhysicalCountPropertyClassResolver;
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\EditAction;
@@ -107,7 +108,10 @@ class PhysicalCountSessionActions
     public static function editAction(): EditAction
     {
         return OwwaFormModalDefaults::editAction(OwwaFormModalDefaults::WIDTH_STANDARD)
-            ->visible(fn (PhysicalCountSession $record): bool => ! $record->isArchived());
+            ->visible(fn (PhysicalCountSession $record): bool => ! $record->isArchived())
+            ->after(function (PhysicalCountSession $record): void {
+                PhysicalCountPropertyClassResolver::syncSession($record);
+            });
     }
 
     /**

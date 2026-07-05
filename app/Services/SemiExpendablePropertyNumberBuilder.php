@@ -6,9 +6,12 @@ use App\Models\Acquisition;
 use App\Models\Department;
 use App\Models\Issuance;
 use App\Models\Item;
+use App\Models\ItemStockBucket;
 use App\Models\PropertyNumberBucket;
+use App\Models\StockPositionRestockFlag;
 use App\Support\ItemPropertyClass;
 use App\Support\SemiExpendableValueCategory;
+use App\Support\UnitCostKey;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -45,58 +48,71 @@ class SemiExpendablePropertyNumberBuilder
 
     public function assignForIssuance(Issuance $issuance): string
     {
+        return $this->resolveOrAssignForIssuance($issuance);
+    }
+
+    public function resolveOrAssignForIssuance(Issuance $issuance): string
+    {
         $item = $this->resolveItem($issuance);
         $unitCost = $this->resolveUnitCost($issuance, $item);
+
+        if ($item !== null) {
+            $existing = ItemStockBucket::findForItemCost((int) $item->id, $unitCost);
+            if ($existing !== null && filled($existing->property_number)) {
+                return (string) $existing->property_number;
+            }
+        }
 
         SemiExpendableValueCategory::assertWithinSemiCap($unitCost);
 
         $segments = $this->previewSegments($issuance, $item);
-        $bucketKey = $this->bucketKey($segments);
+        $number = $this->assignNumberFromSegments($segments);
 
-        return DB::transaction(function () use ($bucketKey, $segments): string {
-            $bucket = PropertyNumberBucket::query()
-                ->lockForUpdate()
-                ->firstOrCreate(
-                    ['bucket_key' => $bucketKey],
-                    ['next_sequence' => 1],
-                );
+        if ($item !== null) {
+            $this->persistBucketPropertyNumber($item, $unitCost, $number);
+        }
 
-            $sequence = (int) $bucket->next_sequence;
-            $number = $this->formatNumber($segments, $sequence);
-
-            $bucket->next_sequence = $sequence + 1;
-            $bucket->save();
-
-            return $number;
-        });
+        return $number;
     }
 
-    public function assignForAcquisition(Acquisition $acquisition): string
+    public function resolveOrAssignForAcquisition(Acquisition $acquisition): string
     {
         $item = $this->resolveAcquisitionItem($acquisition);
         $unitCost = $acquisition->unit_cost !== null ? (float) $acquisition->unit_cost : null;
 
+        if ($item !== null) {
+            $existing = ItemStockBucket::findForItemCost((int) $item->id, $unitCost);
+            if ($existing !== null && filled($existing->property_number)) {
+                StockPositionRestockFlag::reactivateOnAcquisition(
+                    (int) $item->id,
+                    (int) $acquisition->office_id,
+                    $unitCost,
+                );
+
+                return (string) $existing->property_number;
+            }
+        }
+
         SemiExpendableValueCategory::assertWithinSemiCap($unitCost);
 
         $segments = $this->previewSegmentsForAcquisition($acquisition, $item);
-        $bucketKey = $this->bucketKey($segments);
+        $number = $this->assignNumberFromSegments($segments);
 
-        return DB::transaction(function () use ($bucketKey, $segments): string {
-            $bucket = PropertyNumberBucket::query()
-                ->lockForUpdate()
-                ->firstOrCreate(
-                    ['bucket_key' => $bucketKey],
-                    ['next_sequence' => 1],
-                );
+        if ($item !== null) {
+            $this->persistBucketPropertyNumber($item, $unitCost, $number);
+            StockPositionRestockFlag::reactivateOnAcquisition(
+                (int) $item->id,
+                (int) $acquisition->office_id,
+                $unitCost,
+            );
+        }
 
-            $sequence = (int) $bucket->next_sequence;
-            $number = $this->formatNumber($segments, $sequence);
+        return $number;
+    }
 
-            $bucket->next_sequence = $sequence + 1;
-            $bucket->save();
-
-            return $number;
-        });
+    public function assignForAcquisition(Acquisition $acquisition): string
+    {
+        return $this->resolveOrAssignForAcquisition($acquisition);
     }
 
     /**
@@ -115,6 +131,14 @@ class SemiExpendablePropertyNumberBuilder
             'uacs_prefix' => ItemPropertyClass::uacsPrefix($item?->property_class),
             'custodian_code' => $this->resolveOfficeCustodianCode($acquisition),
         ];
+    }
+
+    protected function persistBucketPropertyNumber(Item $item, ?float $unitCost, string $number): void
+    {
+        $bucket = ItemStockBucket::firstOrCreateForItemCost((int) $item->id, $unitCost);
+        if (blank($bucket->property_number)) {
+            $bucket->update(['property_number' => $number]);
+        }
     }
 
     protected function resolveAcquisitionItem(Acquisition $acquisition): ?Item
@@ -152,21 +176,31 @@ class SemiExpendablePropertyNumberBuilder
             return (float) $issuance->unit_cost;
         }
 
-        if ($item === null) {
+        if ($item === null || $issuance->office_id === null) {
             return null;
         }
 
-        $unitCost = Acquisition::query()
-            ->where('item_id', $item->id)
-            ->when($issuance->office_id, fn ($q) => $q->where('office_id', $issuance->office_id))
-            ->orderByDesc('acquisition_date')
-            ->value('unit_cost');
-
-        return $unitCost !== null ? (float) $unitCost : null;
+        return app(InventoryStockService::class)->resolveFifoUnitCost(
+            (int) $item->id,
+            (int) $issuance->office_id,
+        );
     }
 
     protected function resolveAcquisitionYear(Issuance $issuance, ?Item $item): int
     {
+        if ($item !== null && $issuance->unit_cost !== null) {
+            $date = Acquisition::query()
+                ->where('item_id', $item->id)
+                ->when($issuance->office_id, fn ($q) => $q->where('office_id', $issuance->office_id))
+                ->where('unit_cost', UnitCostKey::normalize((float) $issuance->unit_cost))
+                ->orderByDesc('acquisition_date')
+                ->value('acquisition_date');
+
+            if ($date !== null) {
+                return (int) date('Y', strtotime((string) $date));
+            }
+        }
+
         if ($item !== null) {
             $date = Acquisition::query()
                 ->where('item_id', $item->id)
@@ -195,6 +229,31 @@ class SemiExpendablePropertyNumberBuilder
         $code = trim((string) ($department?->code ?? ''));
 
         return $code !== '' ? $code : '00';
+    }
+
+    /**
+     * @param  array<string, string>  $segments
+     */
+    protected function assignNumberFromSegments(array $segments): string
+    {
+        $bucketKey = $this->bucketKey($segments);
+
+        return DB::transaction(function () use ($bucketKey, $segments): string {
+            $bucket = PropertyNumberBucket::query()
+                ->lockForUpdate()
+                ->firstOrCreate(
+                    ['bucket_key' => $bucketKey],
+                    ['next_sequence' => 1],
+                );
+
+            $sequence = (int) $bucket->next_sequence;
+            $number = $this->formatNumber($segments, $sequence);
+
+            $bucket->next_sequence = $sequence + 1;
+            $bucket->save();
+
+            return $number;
+        });
     }
 
     /**

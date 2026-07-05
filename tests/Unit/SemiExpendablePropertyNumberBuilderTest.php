@@ -2,14 +2,12 @@
 
 namespace Tests\Unit;
 
-use App\Models\Acquisition;
 use App\Models\Department;
 use App\Models\Issuance;
 use App\Models\Item;
 use App\Models\ItemCategory;
 use App\Models\Office;
 use App\Models\PropertyNumberBucket;
-use App\Models\User;
 use App\Services\SemiExpendablePropertyNumberBuilder;
 use App\Support\ItemPropertyClass;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -33,18 +31,6 @@ class SemiExpendablePropertyNumberBuilderTest extends TestCase
             'property_class' => ItemPropertyClass::Ict,
             'value_type' => 'low',
         ]);
-        $custodian = User::factory()->create();
-
-        Acquisition::query()->create([
-            'reference_code' => 'ACQ-100',
-            'item_id' => $item->id,
-            'office_id' => $office->id,
-            'quantity' => 1,
-            'unit_cost' => 4500,
-            'acquisition_date' => '2024-06-01',
-            'recorded_by' => $custodian->id,
-        ]);
-
         $issuance = new Issuance([
             'item_id' => $item->id,
             'office_id' => $office->id,

@@ -3,6 +3,7 @@
     $rows = $this->getStockRows();
     $sortBy = $this->sortBy;
     $sortDir = $this->sortDir;
+    $restockFilter = $this->restockFilter;
     $officeName = $this->getOfficeName();
 @endphp
 
@@ -33,30 +34,53 @@
             </div>
         </div>
 
-        {{-- Search bar --}}
-        <div class="owwa-search-wrap">
-            <input
-                type="text"
-                wire:model.live.debounce.300ms="search"
-                placeholder="Search items or category…"
-                class="owwa-search-bar"
-            />
+        {{-- Search + restock filter --}}
+        <div class="owwa-toolbar owwa-stock-levels-toolbar">
+            <div class="owwa-toolbar-left owwa-stock-levels-toolbar-left">
+                <input
+                    type="text"
+                    wire:model.live.debounce.300ms="search"
+                    placeholder="Search items or category…"
+                    class="owwa-search-bar"
+                />
+                <div class="owwa-pa-view-tabs owwa-stock-restock-tabs" role="tablist" aria-label="Restock status filter">
+                    <button
+                        type="button"
+                        role="tab"
+                        wire:click="setRestockFilter('active')"
+                        class="owwa-pa-view-tab {{ $restockFilter === 'active' ? 'is-active' : '' }}"
+                        aria-selected="{{ $restockFilter === 'active' ? 'true' : 'false' }}"
+                    >
+                        Active only
+                    </button>
+                    <button
+                        type="button"
+                        role="tab"
+                        wire:click="setRestockFilter('inactive')"
+                        class="owwa-pa-view-tab {{ $restockFilter === 'inactive' ? 'is-active' : '' }}"
+                        aria-selected="{{ $restockFilter === 'inactive' ? 'true' : 'false' }}"
+                    >
+                        Inactive only
+                    </button>
+                </div>
+            </div>
         </div>
 
         {{-- Data panel --}}
         <div class="owwa-data-panel">
             <div class="owwa-data-panel-body">
-                <div class="owwa-table-wrap">
-                    <table class="owwa-data-table">
+                <div class="owwa-table-wrap owwa-table-wrap--scroll owwa-stock-levels-table-wrap">
+                    <table class="owwa-data-table owwa-stock-levels-table">
                         <thead>
                             <tr>
                                 @php
                                     $columns = [
                                         'item_name' => 'Item',
                                         'category_name' => 'Category',
-                                        'stock' => 'Stock',
-                                        'reorder_level' => 'Reorder',
                                     ];
+                                    $columns['restock_status'] = 'Restock';
+                                    $columns['stock'] = 'Stock';
+                                    $columns['reorder_level'] = 'Reorder';
                                 @endphp
                                 @foreach($columns as $col => $label)
                                     <th
@@ -75,9 +99,16 @@
                         </thead>
                         <tbody>
                             @forelse($rows as $row)
-                                <tr class="{{ $row->is_low ? 'owwa-row-low' : '' }}">
+                                <tr class="{{ ($row->is_inactive_for_restock ?? false) ? 'opacity-75' : '' }} {{ $row->is_low ? 'owwa-row-low' : '' }}">
                                     <td class="owwa-cell-primary">{{ $row->item_name }}</td>
                                     <td class="owwa-cell-muted">{{ $row->category_name }}</td>
+                                    <td class="owwa-cell-muted">
+                                        @if($row->is_inactive_for_restock ?? false)
+                                            <span class="owwa-status-badge owwa-status-low" title="Legacy cost — not restocked">Inactive</span>
+                                        @else
+                                            <span class="owwa-status-badge owwa-status-ok">Active</span>
+                                        @endif
+                                    </td>
                                     <td class="owwa-num {{ $row->is_low ? 'owwa-cell-danger' : 'owwa-cell-primary' }}">{{ number_format($row->stock) }}</td>
                                     <td class="owwa-num owwa-cell-muted">{{ number_format($row->reorder_level) }}</td>
                                     <td class="owwa-status">
@@ -90,7 +121,7 @@
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="5">
+                                    <td colspan="6">
                                         <div class="owwa-empty">
                                             <svg class="owwa-empty-icon" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
                                                 <path stroke-linecap="round" stroke-linejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" />

@@ -213,13 +213,13 @@ return [
     'physical_count' => [
         'consumables' => [
             'rpci' => [
-                'file' => 'Consumable/Stock Levels & Recording/Appendix 66 - RPCI.xls',
+                'file' => 'Consumable/Stock Levels & Recording/Appendix 66 - RPCI.xlsx',
                 'label' => 'Appendix 66 - Report on Physical Count of Inventories',
             ],
         ],
         'ppe' => [
             'rpcppe' => [
-                'file' => 'ppe/Physical Count/Appendix 73 - RPCPPE.xls',
+                'file' => 'ppe/Physical Count/Appendix 73 - RPCPPE.xlsx',
                 'label' => 'Appendix 73 - Report on Physical Count of PPE',
             ],
         ],

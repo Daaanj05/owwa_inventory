@@ -14,7 +14,7 @@ class Transfer extends Model
 
     protected $fillable = [
         'reference_code', 'item_id', 'from_office_id', 'to_office_id',
-        'quantity', 'transfer_date', 'transfer_type', 'transfer_type_other',
+        'quantity', 'unit_cost', 'transfer_date', 'transfer_type', 'transfer_type_other',
         'reason_for_transfer', 'from_accountable_officer', 'to_accountable_officer',
         'remarks', 'property_number', 'condition',
         'approved_by_printed_name', 'released_by_printed_name', 'received_by_printed_name',
@@ -26,6 +26,7 @@ class Transfer extends Model
     {
         return [
             'transfer_date' => 'date',
+            'unit_cost' => 'decimal:2',
         ];
     }
 

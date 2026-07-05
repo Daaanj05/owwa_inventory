@@ -60,7 +60,7 @@ class IssuanceObserver
         if (config('inventory.auto_generate_property_numbers', true) && blank($issuance->property_number)) {
             if ($slug === 'semi_expendable') {
                 $issuance->property_number = app(SemiExpendablePropertyNumberBuilder::class)
-                    ->assignForIssuance($issuance);
+                    ->resolveOrAssignForIssuance($issuance);
             } elseif ($slug === 'ppe') {
                 $issuance->property_number = app(ReferenceCodeService::class)->forPropertyNumber($slug);
             }

@@ -2,9 +2,11 @@
 
 namespace App\Services;
 
+use App\Models\InventoryUnit;
 use App\Models\Issuance;
 use App\Models\Item;
 use App\Models\Office;
+use App\Support\UnitCostKey;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Collection;
 
@@ -25,37 +27,51 @@ class StockLedgerViewService
      *     rows: array<int, array<string, mixed>>
      * }
      */
-    public function present(Item $item, Office $office): array
+    public function present(Item $item, Office $office, ?float $unitCost = null): array
     {
         $item->loadMissing('category');
         $slug = $item->category?->getTemplateSlug() ?? 'consumables';
         $config = $this->categoryConfig($slug);
 
-        $history = $this->itemReport->buildTransactionHistory($item, $office->id, newestFirst: true);
+        $history = $this->itemReport->buildTransactionHistory($item, $office->id, newestFirst: true, unitCost: $unitCost);
         $rows = array_map(
             fn (array $txn): array => $this->mapRow($txn, $item, $slug),
             $history,
         );
 
+        $exportUrl = route('owwa.export.item', $item).'?form='.urlencode($config['exportForm']).'&office_id='.$office->id;
+        if ($unitCost !== null) {
+            $exportUrl .= '&unit_cost='.urlencode(UnitCostKey::normalize($unitCost));
+        }
+
         return [
             'title' => $config['title'],
             'exportForm' => $config['exportForm'],
             'exportLabel' => $config['exportLabel'],
-            'exportUrl' => route('owwa.export.item', $item).'?form='.urlencode($config['exportForm']).'&office_id='.$office->id,
-            'header' => $this->buildHeader($item, $office, $slug),
+            'exportUrl' => $exportUrl,
+            'header' => $this->buildHeader($item, $office, $slug, $unitCost),
             'columns' => $config['columns'],
             'rows' => $rows,
+            'unit_cost' => $unitCost,
         ];
     }
 
     /**
      * @param  Collection<int, object>  $visibleRows
      */
-    public function assertVisibleInStockList(int $itemId, int $officeId, Collection $visibleRows): void
-    {
+    public function assertVisibleInStockList(
+        int $itemId,
+        int $officeId,
+        Collection $visibleRows,
+        ?float $unitCost = null,
+    ): void {
         $visible = $visibleRows->contains(
             fn (object $row): bool => (int) ($row->item_id ?? 0) === $itemId
-                && (int) ($row->office_id ?? 0) === $officeId,
+                && (int) ($row->office_id ?? 0) === $officeId
+                && ($unitCost === null || UnitCostKey::equals(
+                    isset($row->unit_cost) ? (float) $row->unit_cost : null,
+                    $unitCost,
+                )),
         );
 
         if (! $visible) {
@@ -118,7 +134,7 @@ class StockLedgerViewService
     /**
      * @return array<string, string|null>
      */
-    protected function buildHeader(Item $item, Office $office, string $slug): array
+    protected function buildHeader(Item $item, Office $office, string $slug, ?float $unitCost = null): array
     {
         $base = [
             'entity_name' => $office->name,
@@ -133,19 +149,40 @@ class StockLedgerViewService
                 'stock_no' => $item->item_code,
                 'reorder_level' => (string) ($item->reorder_level ?? 0),
                 'unit' => $item->unit,
+                'unit_cost' => $unitCost !== null ? '₱'.number_format($unitCost, 2) : null,
             ];
         }
 
-        $propertyNumber = Issuance::query()
+        return [
+            ...$base,
+            'property_number' => $this->resolveAccountablePropertyNumber($item, $slug, $unitCost) ?? '—',
+            'unit_cost' => $unitCost !== null ? '₱'.number_format($unitCost, 2) : null,
+        ];
+    }
+
+    protected function resolveAccountablePropertyNumber(Item $item, string $slug, ?float $unitCost = null): ?string
+    {
+        if ($slug === 'semi_expendable') {
+            return $item->resolvedSemiExpendablePropertyNumber($unitCost);
+        }
+
+        $fromUnit = InventoryUnit::query()
+            ->where('item_id', $item->id)
+            ->whereNotNull('property_number')
+            ->orderByDesc('id')
+            ->value('property_number');
+
+        if (filled($fromUnit)) {
+            return (string) $fromUnit;
+        }
+
+        $fromIssuance = Issuance::query()
             ->where('item_id', $item->id)
             ->whereNotNull('property_number')
             ->orderByDesc('issuance_date')
             ->value('property_number');
 
-        return [
-            ...$base,
-            'property_number' => $propertyNumber ?? $item->item_code,
-        ];
+        return filled($fromIssuance) ? (string) $fromIssuance : null;
     }
 
     /**

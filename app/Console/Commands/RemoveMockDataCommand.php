@@ -7,15 +7,21 @@ use App\Models\Issuance;
 use App\Models\Item;
 use Illuminate\Console\Command;
 
+/**
+ * @deprecated Use `php artisan demo:reset-inventory --force` for a full clean export-testing fixture.
+ */
 class RemoveMockDataCommand extends Command
 {
     protected $signature = 'owwa:remove-mock-data
                             {--dry-run : List what would be removed without deleting}';
 
-    protected $description = 'Remove demo/mock inventory data from the database (from InventoryScenarioSeeder or similar).';
+    protected $description = 'Remove demo/mock inventory data (deprecated — prefer demo:reset-inventory)';
 
     public function handle(): int
     {
+        $this->warn('Deprecated: use `php artisan demo:reset-inventory --force` for a full clean export-testing fixture.');
+        $this->newLine();
+
         $dryRun = $this->option('dry-run');
 
         if ($dryRun) {

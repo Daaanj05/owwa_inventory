@@ -42,6 +42,9 @@ class MyStockLevels extends Page
     #[Url]
     public string $search = '';
 
+    #[Url]
+    public string $restockFilter = 'active';
+
     public static function canAccess(): bool
     {
         $user = Filament::auth()->user();
@@ -75,8 +78,25 @@ class MyStockLevels extends Page
         return ['owwa-inv-category-page', 'owwa-employee-stock-levels'];
     }
 
+    public function mount(): void
+    {
+        if (! in_array($this->restockFilter, ['active', 'inactive'], true)) {
+            $this->restockFilter = 'active';
+        }
+    }
+
     public function updatedSearch(): void
     {
+        $this->resetPage();
+    }
+
+    public function setRestockFilter(string $filter): void
+    {
+        if (! in_array($filter, ['active', 'inactive'], true)) {
+            return;
+        }
+
+        $this->restockFilter = $filter;
         $this->resetPage();
     }
 
@@ -129,6 +149,8 @@ class MyStockLevels extends Page
             )->values();
         }
 
+        $rows = $rows->filter(fn (object $row): bool => $this->matchesRestockFilter($row))->values();
+
         $dir = $this->sortDir === 'asc';
 
         return $rows->sortBy($this->sortBy, SORT_REGULAR, ! $dir)->values();
@@ -151,8 +173,16 @@ class MyStockLevels extends Page
                 'sortBy' => $this->sortBy,
                 'sortDir' => $this->sortDir,
                 'search' => filled($this->search) ? $this->search : null,
+                'restockFilter' => $this->restockFilter !== 'active' ? $this->restockFilter : null,
             ], fn (mixed $value): bool => filled($value)))
             ->onEachSide(0);
+    }
+
+    protected function matchesRestockFilter(object $row): bool
+    {
+        $isInactive = (bool) ($row->is_inactive_for_restock ?? false);
+
+        return $this->restockFilter === 'inactive' ? $isInactive : ! $isInactive;
     }
 
     public function getOfficeName(): string

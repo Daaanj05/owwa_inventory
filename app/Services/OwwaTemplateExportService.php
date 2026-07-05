@@ -16,11 +16,14 @@ use App\Support\OwwaExportFilename;
 use App\Support\OwwaExportStandards;
 use App\Support\OwwaSpreadsheetLayoutHelper;
 use App\Support\OwwaTemplateLoader;
+use App\Support\PesoAmountInWords;
 use App\Support\PhpExtensionGuard;
+use App\Support\ProcurementHeaderLayout;
+use App\Support\ProcurementSpreadsheetBuilder;
 use App\Support\PropertyCardLayout;
 use App\Support\PtrSignatureLayout;
+use App\Support\RsmiSignatureLayout;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
@@ -47,9 +50,16 @@ class OwwaTemplateExportService
         array $cellValues,
         string $outputFilename,
         int $sheetIndex = 0,
-        ?string $sheetName = null
+        ?string $sheetName = null,
+        ?array $physicalCountExport = null,
     ): StreamedResponse {
-        $binary = $this->renderTemplateToXlsxBinary($templateFilename, $cellValues, $sheetIndex, $sheetName);
+        $binary = $this->renderTemplateToXlsxBinary(
+            $templateFilename,
+            $cellValues,
+            $sheetIndex,
+            $sheetName,
+            $physicalCountExport,
+        );
 
         return response()->streamDownload(
             static function () use ($binary): void {
@@ -85,9 +95,15 @@ class OwwaTemplateExportService
      * Used for merging multiple exports without re-reading .xlsx (avoids ext-zip / ZipArchive on generated files).
      *
      * @param  array<string, string|int|float|null>  $cellValues
+     * @param  array{formCode?: string, signatures?: array<string, string|int|float|null>, useMasterSignatures?: bool}|null  $physicalCountExport
      */
-    public function renderFilledSpreadsheet(string $templateFilename, array $cellValues, int $sheetIndex = 0, ?string $sheetName = null): Spreadsheet
-    {
+    public function renderFilledSpreadsheet(
+        string $templateFilename,
+        array $cellValues,
+        int $sheetIndex = 0,
+        ?string $sheetName = null,
+        ?array $physicalCountExport = null,
+    ): Spreadsheet {
         $absolutePath = $this->tryResolveTemplateAbsolutePath($templateFilename);
 
         if ($absolutePath !== null) {
@@ -131,8 +147,27 @@ class OwwaTemplateExportService
             $sheet->setTitle('Export');
         }
 
+        $formKey = $this->resolveFormKeyFromTemplate($templateFilename);
+        $isPhysicalCountExport = $this->isPhysicalCountFormKey($formKey) && $physicalCountExport !== null;
+
+        if ($isPhysicalCountExport) {
+            $this->preparePhysicalCountRowExpansion($sheet, (string) $formKey, $cellValues);
+        }
+
         foreach ($cellValues as $cellRef => $value) {
             $this->setExportCellValue($sheet, $cellRef, $value);
+        }
+
+        if ($isPhysicalCountExport) {
+            $this->finalizePhysicalCountSheet(
+                $sheet,
+                (string) ($physicalCountExport['formCode'] ?? $formKey),
+                $cellValues,
+                (array) ($physicalCountExport['signatures'] ?? []),
+                (bool) ($physicalCountExport['useMasterSignatures'] ?? false),
+            );
+
+            return $spreadsheet;
         }
 
         $this->finalizeExportStyling($sheet, $templateFilename, $cellValues);
@@ -173,6 +208,142 @@ class OwwaTemplateExportService
             if ($detailCount > 0) {
                 $this->finalizeDetailSection($formKey, $sheet, $detailCount);
             }
+
+            if ($formKey === 'RSMI') {
+                $this->ensureRsmiSignatureLines($sheet);
+                $this->applyRsmiRecapMonetaryFormats($sheet, $detailCount);
+            }
+
+            return;
+        }
+
+        if ($formKey === 'PR') {
+            $this->finalizePrOfficeSectionHeader($sheet);
+            $detailCount = $this->countDetailRowsFromCellValues('PR', $cellValues);
+            if ($detailCount > 0) {
+                $this->finalizeDetailSection('PR', $sheet, $detailCount);
+            }
+
+            return;
+        }
+
+        if ($formKey === 'PO') {
+            $detailCount = $this->countDetailRowsFromCellValues('PO', $cellValues);
+            if ($detailCount > 0) {
+                $this->finalizeDetailSection('PO', $sheet, $detailCount);
+            }
+
+            return;
+        }
+
+        if ($formKey === 'IAR') {
+            $detailCount = $this->countDetailRowsFromCellValues('IAR', $cellValues);
+            if ($detailCount > 0) {
+                $this->finalizeDetailSection('IAR', $sheet, $detailCount);
+            }
+
+            return;
+        }
+    }
+
+    protected function finalizePrOfficeSectionHeader(Worksheet $sheet): void
+    {
+        $headerMap = (array) OwwaCellMapping::form('PR')['header'];
+        $officeSection = (array) ($headerMap['office_section'] ?? []);
+        ProcurementHeaderLayout::finalizeOfficeSectionRows($sheet, $officeSection);
+    }
+
+    /**
+     * @param  array<string, string|int|float|null>  $cellValues
+     */
+    public function applyFilledProcurementSheet(Worksheet $sheet, string $templateFilename, array $cellValues): void
+    {
+        foreach ($cellValues as $cellRef => $value) {
+            $this->setExportCellValue($sheet, $cellRef, $value);
+        }
+
+        $this->finalizeExportStyling($sheet, $templateFilename, $cellValues);
+    }
+
+    public function clearProcurementFooterValues(Worksheet $sheet, string $formCode): void
+    {
+        $detail = (array) OwwaCellMapping::form($formCode)['detail'];
+        $footerStart = (int) ($detail['footer_start_row'] ?? 0);
+
+        if ($footerStart <= 0) {
+            return;
+        }
+
+        $highestColumn = match ($formCode) {
+            'IAR' => 'E',
+            default => 'F',
+        };
+
+        $footerEnd = min($sheet->getHighestRow(), $footerStart + 20);
+
+        for ($row = $footerStart; $row <= $footerEnd; $row++) {
+            foreach (range('A', $highestColumn) as $column) {
+                $sheet->setCellValue($column.$row, null);
+            }
+        }
+    }
+
+    public function buildProcurementSpreadsheet(
+        AcquisitionPaperwork $paperwork,
+        string $formSlug,
+        string $templateFilename,
+    ): Spreadsheet {
+        return app(ProcurementSpreadsheetBuilder::class)->build($paperwork, $formSlug, $templateFilename);
+    }
+
+    public function requireTemplateAbsolutePath(string $templateFilename): string
+    {
+        return $this->requireTemplatePath($templateFilename);
+    }
+
+    /**
+     * @return array<string, string|int|float|null>
+     */
+    public function buildProcurementSheetCellValues(
+        AcquisitionPaperwork $paperwork,
+        string $formSlug,
+        iterable $lines,
+        bool $includeFooter,
+        int $pageIndex,
+        int $pageCount,
+    ): array {
+        return match ($formSlug) {
+            'po' => $this->cellValuesForProcurementPo($paperwork, $lines, $includeFooter, $pageIndex, $pageCount),
+            'iar' => $this->cellValuesForProcurementIar($paperwork, $lines, $includeFooter, $pageIndex, $pageCount),
+            default => $this->cellValuesForProcurementPr($paperwork, $lines, $includeFooter, $pageIndex, $pageCount),
+        };
+    }
+
+    public function procurementSheetTitle(string $formCode, int $pageIndex, int $pageCount): string
+    {
+        $suffix = (string) (OwwaCellMapping::form($formCode)['detail']['continuation_sheet_suffix'] ?? ' Cont.');
+
+        if ($pageCount <= 1) {
+            return $this->sanitizeExcelSheetTitle($formCode);
+        }
+
+        if ($pageIndex === 0) {
+            return $this->sanitizeExcelSheetTitle($formCode);
+        }
+
+        return $this->sanitizeExcelSheetTitle($formCode.$suffix.$pageIndex);
+    }
+
+    protected function ensureRsmiSignatureLines(Worksheet $sheet): void
+    {
+        $placeholder = RsmiSignatureLayout::SIGNATURE_LINE_PLACEHOLDER;
+
+        foreach (RsmiSignatureLayout::signatureLineCells() as $cellRef) {
+            $value = $sheet->getCell($cellRef)->getValue();
+
+            if (! filled($value)) {
+                $this->setExportCellValue($sheet, $cellRef, $placeholder);
+            }
         }
     }
 
@@ -185,11 +356,124 @@ class OwwaTemplateExportService
             str_contains($normalized, 'Appendix 58') || str_contains($normalized, ' - SC.') => 'SC',
             str_contains($normalized, 'Annex-A.4') || str_contains($normalized, 'Annex A.4') => 'ANNEX_A4',
             str_contains($normalized, 'Appendix 64') || str_contains($normalized, ' - RSMI.') => 'RSMI',
+            str_contains($normalized, 'Appendix 60') || str_contains($normalized, ' - PR.') => 'PR',
+            str_contains($normalized, 'Appendix 61') || str_contains($normalized, ' - PO.') => 'PO',
+            str_contains($normalized, 'Appendix 62') || str_contains($normalized, ' - IAR.') => 'IAR',
             str_contains($normalized, 'Appendix 63') || str_contains($normalized, ' - RIS.') => 'RIS',
             str_contains($normalized, 'Appendix 71') || str_contains($normalized, ' - PAR.') => 'PAR',
             str_contains($normalized, 'Appendix 59') || str_contains($normalized, ' - ICS.') => 'ICS',
+            str_contains($normalized, 'Appendix 66') || str_contains($normalized, ' - RPCI.') => 'RPCI',
+            str_contains($normalized, 'Appendix 73') && str_contains($normalized, 'Physical Count') => 'RPCPPE',
+            str_contains($normalized, 'Annex-A.8') || str_contains($normalized, 'RPCSP') => 'RPCSP',
             default => null,
         };
+    }
+
+    protected function isPhysicalCountFormKey(?string $formKey): bool
+    {
+        return in_array($formKey, ['RPCI', 'RPCPPE', 'RPCSP'], true);
+    }
+
+    /**
+     * @param  array<string, string|int|float|null>  $cellValues
+     */
+    protected function countPhysicalCountDetailRows(string $formKey, array $cellValues): int
+    {
+        $startRow = OwwaCellMapping::detailRowBase($formKey);
+        $columns = OwwaCellMapping::detailColumns($formKey);
+        $count = 0;
+        $row = $startRow;
+
+        while ($count < 500) {
+            $hasData = false;
+
+            foreach ($columns as $column) {
+                if (filled($cellValues[OwwaCellMapping::columnCell($column, $row)] ?? null)) {
+                    $hasData = true;
+                    break;
+                }
+            }
+
+            if (! $hasData) {
+                break;
+            }
+
+            $count++;
+            $row++;
+        }
+
+        return $count;
+    }
+
+    /**
+     * @param  array<string, string|int|float|null>  $cellValues
+     */
+    protected function preparePhysicalCountRowExpansion(Worksheet $sheet, string $formKey, array $cellValues): int
+    {
+        $detail = (array) OwwaCellMapping::form($formKey)['detail'];
+        $detailCount = $this->countPhysicalCountDetailRows($formKey, $cellValues);
+        $templateDetailRows = (int) ($detail['template_detail_rows'] ?? $detail['max_rows'] ?? 21);
+        $extra = max(0, $detailCount - $templateDetailRows);
+
+        if ($extra > 0) {
+            $signatureBlockStart = (int) ($detail['signature_block_start_row'] ?? 36);
+            $styleRow = (int) ($detail['style_row'] ?? $detail['start_row'] ?? 15);
+            $highestColumn = (string) ($detail['highest_column'] ?? 'K');
+
+            OwwaSpreadsheetLayoutHelper::insertStyledLedgerRows(
+                $sheet,
+                $signatureBlockStart,
+                $extra,
+                $styleRow,
+                $highestColumn,
+            );
+        }
+
+        return $extra;
+    }
+
+    /**
+     * @param  array<string, string|int|float|null>  $cellValues
+     * @param  array<string, string|int|float|null>  $signaturePairs
+     */
+    public function finalizePhysicalCountSheet(
+        Worksheet $sheet,
+        string $formKey,
+        array $cellValues,
+        array $signaturePairs,
+        bool $useMasterSignatures = false,
+    ): void {
+        $detail = (array) OwwaCellMapping::form($formKey)['detail'];
+        $detailCount = $this->countPhysicalCountDetailRows($formKey, $cellValues);
+        $templateDetailRows = (int) ($detail['template_detail_rows'] ?? $detail['max_rows'] ?? 21);
+        $extra = max(0, $detailCount - $templateDetailRows);
+        $detailStart = (int) ($detail['start_row'] ?? 15);
+        $styleRow = (int) ($detail['style_row'] ?? $detailStart);
+        $highestColumn = (string) ($detail['highest_column'] ?? 'K');
+        $alignments = OwwaSpreadsheetLayoutHelper::alignmentMapFromConfig(
+            array_fill_keys(range('A', $highestColumn), 'left'),
+        );
+
+        if ($detailCount > 0) {
+            OwwaSpreadsheetLayoutHelper::normalizeDetailRows(
+                $sheet,
+                $detailStart,
+                $detailCount,
+                $styleRow,
+                $alignments,
+                $highestColumn,
+            );
+        }
+
+        foreach ($signaturePairs as $field => $value) {
+            $cell = OwwaCellMapping::physicalCountSignatureCell(
+                $formKey,
+                (string) $field,
+                $extra,
+                $useMasterSignatures,
+            );
+            $this->setExportCellValue($sheet, $cell, $value);
+        }
     }
 
     protected function finalizeLedgerSection(string $formKey, Worksheet $sheet, int $transactionCount): void
@@ -250,6 +534,38 @@ class OwwaTemplateExportService
             $styleRow,
             $alignments,
             $highestColumn,
+            OwwaExportStandards::resolveWrapTextColumns($detail),
+            OwwaExportStandards::minWrapLinesForExpansion($detail),
+            OwwaExportStandards::uniformDataRowHeight($detail),
+        );
+
+        if ($columnTypes !== []) {
+            OwwaSpreadsheetLayoutHelper::applyMonetaryColumnFormats(
+                $sheet,
+                $startRow,
+                $startRow + $detailRowCount - 1,
+                $columnTypes,
+            );
+        }
+    }
+
+    protected function applyRsmiRecapMonetaryFormats(Worksheet $sheet, int $detailRowCount): void
+    {
+        if ($detailRowCount <= 0) {
+            return;
+        }
+
+        $detail = (array) OwwaCellMapping::form('RSMI')['detail'];
+        $recapStart = (int) ($detail['recap_start_row'] ?? 36);
+
+        OwwaSpreadsheetLayoutHelper::applyMonetaryColumnFormats(
+            $sheet,
+            $recapStart,
+            $recapStart + $detailRowCount - 1,
+            [
+                'F' => 'unit_cost',
+                'G' => 'amount',
+            ],
         );
     }
 
@@ -371,9 +687,20 @@ class OwwaTemplateExportService
      *
      * @param  array<string, string|int|float|null>  $cellValues
      */
-    public function renderTemplateToXlsxBinary(string $templateFilename, array $cellValues, int $sheetIndex = 0, ?string $sheetName = null): string
-    {
-        $spreadsheet = $this->renderFilledSpreadsheet($templateFilename, $cellValues, $sheetIndex, $sheetName);
+    public function renderTemplateToXlsxBinary(
+        string $templateFilename,
+        array $cellValues,
+        int $sheetIndex = 0,
+        ?string $sheetName = null,
+        ?array $physicalCountExport = null,
+    ): string {
+        $spreadsheet = $this->renderFilledSpreadsheet(
+            $templateFilename,
+            $cellValues,
+            $sheetIndex,
+            $sheetName,
+            $physicalCountExport,
+        );
 
         try {
             return $this->spreadsheetToXlsxBinary($spreadsheet);
@@ -602,6 +929,99 @@ class OwwaTemplateExportService
     public function downloadAnnexA1Spreadsheet(array $tabs, string $outputFilename, ?string $templateFilename = null): StreamedResponse
     {
         $spreadsheet = $this->buildAnnexA1Spreadsheet($tabs, $templateFilename);
+
+        try {
+            $binary = $this->spreadsheetToXlsxBinary($spreadsheet);
+        } finally {
+            $spreadsheet->disconnectWorksheets();
+        }
+
+        return response()->streamDownload(
+            static function () use ($binary): void {
+                echo $binary;
+            },
+            $outputFilename,
+            [
+                'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            ]
+        );
+    }
+
+    /**
+     * @param  array<int, array{sheetName: string, cellValues: array<string, string|int|float|null>}>  $tabs
+     */
+    public function buildRpcspPhysicalCountSpreadsheet(array $tabs, ?string $templateFilename = null): Spreadsheet
+    {
+        $templateFilename ??= (string) OwwaCellMapping::form('RPCSP')['template'];
+        PhpExtensionGuard::ensureZipArchive();
+
+        $absolutePath = $this->tryResolveTemplateAbsolutePath($templateFilename);
+        if ($absolutePath === null) {
+            throw new \RuntimeException('RPCSP template not found: '.$templateFilename);
+        }
+
+        $spreadsheet = OwwaTemplateLoader::load($absolutePath);
+        $fallbackSheet = $spreadsheet->getSheetByName('OFFICE EQUIPMENT')
+            ?? $spreadsheet->getSheetByName('ICT')
+            ?? $spreadsheet->getSheet(0);
+        $originalSheetCount = $spreadsheet->getSheetCount();
+        $originalIndices = range(0, $originalSheetCount - 1);
+
+        if ($tabs === []) {
+            $fallbackSheet->setTitle($this->sanitizeExcelSheetTitle('Export'));
+
+            return $spreadsheet;
+        }
+
+        $clonedTabs = [];
+
+        foreach ($tabs as $tab) {
+            $sourceSheet = $spreadsheet->getSheetByName($tab['sheetName']) ?? $fallbackSheet;
+            $clonedTabs[] = [
+                'sheet' => clone $sourceSheet,
+                'tab' => $tab,
+            ];
+        }
+
+        foreach (array_reverse($originalIndices) as $index) {
+            $spreadsheet->removeSheetByIndex($index);
+        }
+
+        foreach ($clonedTabs as $entry) {
+            $sheet = $entry['sheet'];
+            $tab = $entry['tab'];
+            $sheet->setTitle($this->sanitizeExcelSheetTitle($tab['sheetName']));
+            $spreadsheet->addSheet($sheet);
+
+            $cellValues = (array) ($tab['cellValues'] ?? []);
+            $signaturePairs = (array) ($tab['signaturePairs'] ?? []);
+            $useMasterSignatures = ($tab['sheetName'] ?? '') === 'RPCSP';
+
+            $this->preparePhysicalCountRowExpansion($sheet, 'RPCSP', $cellValues);
+            $this->applyCellValues($sheet, $cellValues);
+            $this->finalizePhysicalCountSheet(
+                $sheet,
+                'RPCSP',
+                $cellValues,
+                $signaturePairs,
+                $useMasterSignatures,
+            );
+        }
+
+        $spreadsheet->setActiveSheetIndex(0);
+
+        return $spreadsheet;
+    }
+
+    /**
+     * @param  array<int, array{sheetName: string, cellValues: array<string, string|int|float|null>}>  $tabs
+     */
+    public function downloadRpcspPhysicalCountSpreadsheet(
+        array $tabs,
+        string $outputFilename,
+        ?string $templateFilename = null,
+    ): StreamedResponse {
+        $spreadsheet = $this->buildRpcspPhysicalCountSpreadsheet($tabs, $templateFilename);
 
         try {
             $binary = $this->spreadsheetToXlsxBinary($spreadsheet);
@@ -1151,9 +1571,6 @@ class OwwaTemplateExportService
      */
     protected function cellValuesForIssuanceRsmiBulk(Collection $issuances): array
     {
-        $user = Auth::user();
-        $fillAccountingFields = ! ($user?->isSupplyCustodian() ?? false);
-
         $issuances = $issuances->sortBy('issuance_date')->values();
         $first = $issuances->first();
         $first->loadMissing(['requisition', 'department', 'item', 'office']);
@@ -1198,13 +1615,12 @@ class OwwaTemplateExportService
             $issuance->loadMissing(['requisition', 'department', 'item']);
             $item = $issuance->item;
             $lineOffice = $issuance->office;
-            $unitCost = $issuance->unit_cost !== null ? (float) $issuance->unit_cost : null;
-            $amount = $issuance->amount !== null ? (float) $issuance->amount : null;
+            $unitCost = $this->resolveIssuanceUnitCost($issuance);
+            $quantity = (int) $issuance->quantity;
+            $lineAmount = $this->resolveIssuanceLineAmount($issuance, $unitCost);
             $responsibilityCenter = $issuance->department?->code ?? $lineOffice?->code ?? $lineOffice?->name ?? '';
             $risNumber = $issuance->requisition?->reference_code ?? '';
             $stockNo = $item?->item_code ?? '';
-            $quantity = (int) $issuance->quantity;
-            $lineAmount = $amount ?? ($unitCost !== null ? $unitCost * $quantity : null);
 
             $values[OwwaCellMapping::columnCell($detailColumns['ris_no'] ?? 'A', $row)] = $risNumber;
             $values[OwwaCellMapping::columnCell($detailColumns['responsibility_center'] ?? 'B', $row)] = $responsibilityCenter;
@@ -1212,24 +1628,52 @@ class OwwaTemplateExportService
             $values[OwwaCellMapping::columnCell($detailColumns['item'] ?? 'D', $row)] = $item?->name ?? '';
             $values[OwwaCellMapping::columnCell($detailColumns['unit'] ?? 'E', $row)] = $item?->unit ?? '';
             $values[OwwaCellMapping::columnCell($detailColumns['quantity'] ?? 'F', $row)] = (string) $quantity;
-            $values[OwwaCellMapping::columnCell($detailColumns['unit_cost'] ?? 'G', $row)] = $fillAccountingFields ? ($unitCost !== null ? $unitCost : '') : '';
-            $values[OwwaCellMapping::columnCell($detailColumns['amount'] ?? 'H', $row)] = $fillAccountingFields ? ($lineAmount !== null ? $lineAmount : '') : '';
+            $values[OwwaCellMapping::columnCell($detailColumns['unit_cost'] ?? 'G', $row)] = $unitCost !== null ? $unitCost : '';
+            $values[OwwaCellMapping::columnCell($detailColumns['amount'] ?? 'H', $row)] = $lineAmount !== null ? $lineAmount : '';
 
             $recapRow = $row + $detailToRecapOffset;
             if ($recapRow <= $recapEndRow) {
                 $values[OwwaCellMapping::columnCell('B', $recapRow)] = $stockNo;
                 $values[OwwaCellMapping::columnCell('C', $recapRow)] = (string) $quantity;
-                $values[OwwaCellMapping::columnCell('F', $recapRow)] = $fillAccountingFields ? ($unitCost !== null ? $unitCost : '') : '';
-                $values[OwwaCellMapping::columnCell('G', $recapRow)] = $fillAccountingFields ? ($lineAmount !== null ? $lineAmount : '') : '';
+                $values[OwwaCellMapping::columnCell('F', $recapRow)] = $unitCost !== null ? $unitCost : '';
+                $values[OwwaCellMapping::columnCell('G', $recapRow)] = $lineAmount !== null ? $lineAmount : '';
             }
 
             $row++;
         }
 
-        $values['A52'] = $first->custodian_printed_name ?? '';
-        $values['H52'] = $reportDate;
+        return RsmiSignatureLayout::applyIssuanceSignatureBlock($values, $first, $reportDate);
+    }
 
-        return $values;
+    protected function resolveIssuanceUnitCost(Issuance $issuance): ?float
+    {
+        if ($issuance->unit_cost !== null) {
+            return (float) $issuance->unit_cost;
+        }
+
+        if (! $issuance->item_id) {
+            return null;
+        }
+
+        $unitCost = Acquisition::query()
+            ->where('item_id', $issuance->item_id)
+            ->orderByDesc('acquisition_date')
+            ->value('unit_cost');
+
+        return $unitCost !== null ? (float) $unitCost : null;
+    }
+
+    protected function resolveIssuanceLineAmount(Issuance $issuance, ?float $unitCost): ?float
+    {
+        if ($issuance->amount !== null) {
+            return (float) $issuance->amount;
+        }
+
+        if ($unitCost === null || $issuance->quantity === null) {
+            return null;
+        }
+
+        return $unitCost * (float) $issuance->quantity;
     }
 
     public function resolveOwwaFormCode(?string $templatePath): string
@@ -1497,7 +1941,7 @@ class OwwaTemplateExportService
                 'entity_name' => $office?->name ?? '',
                 'fund_cluster' => $office?->fund_cluster ?? '',
                 'property_type' => \App\Support\ItemPropertyClass::propertyTypeLabel($propertyClass),
-                'property_number' => $item?->item_code ?? '',
+                'property_number' => $item?->resolvedSemiExpendablePropertyNumber() ?? $item?->item_code ?? '',
                 'description' => $this->formatItemDescription($item),
             ],
             'transactions' => $quantity > 0 ? [$transaction] : [],
@@ -1600,9 +2044,9 @@ class OwwaTemplateExportService
         $values[OwwaCellMapping::columnCell($cols['unit'] ?? 'E', $detailStart)] = $item?->unit ?? '';
         $values[OwwaCellMapping::columnCell($cols['quantity'] ?? 'F', $detailStart)] = (string) $transfer->quantity;
 
-        $values['A52'] = $transfer->released_by_printed_name ?? $transfer->recordedBy?->name ?? '';
+        $reportDate = $transfer->transfer_date?->format('Y-m-d') ?? now()->format('Y-m-d');
 
-        return $values;
+        return RsmiSignatureLayout::applyTransferSignatureBlock($values, $transfer, $reportDate);
     }
 
     /**
@@ -2355,11 +2799,6 @@ class OwwaTemplateExportService
         $paperwork->loadMissing(['office', 'department', 'itemCategory', 'lines.item']);
         $templateFilename = $this->getTemplatePathForCategory('acquisition_paperwork', $paperwork->itemCategory, $formSlug);
         $this->requireTemplatePath($templateFilename);
-        $cellValues = match ($formSlug) {
-            'po' => $this->cellValuesForAcquisitionPaperworkPo($paperwork),
-            'iar' => $this->cellValuesForAcquisitionPaperworkIar($paperwork),
-            default => $this->cellValuesForAcquisitionPaperworkPr($paperwork),
-        };
         $formCode = strtoupper($formSlug === 'iar' ? 'IAR' : $formSlug);
         $docNumber = match ($formSlug) {
             'po' => $paperwork->po_number,
@@ -2368,7 +2807,19 @@ class OwwaTemplateExportService
         };
         $filename = $this->buildOwwaExportFilename($formCode, $docNumber ?? (string) $paperwork->getKey());
 
-        return $this->downloadFromTemplate($templateFilename, $cellValues, $filename);
+        $spreadsheet = $this->buildProcurementSpreadsheet($paperwork, $formSlug, $templateFilename);
+        $binary = $this->spreadsheetToXlsxBinary($spreadsheet);
+        $spreadsheet->disconnectWorksheets();
+
+        return response()->streamDownload(
+            static function () use ($binary): void {
+                echo $binary;
+            },
+            $filename,
+            [
+                'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            ]
+        );
     }
 
     /**
@@ -2398,40 +2849,54 @@ class OwwaTemplateExportService
     /**
      * @return array<string, string|int|float|null>
      */
-    public function cellValuesForProcurementPr(AcquisitionPaperwork $case): array
-    {
+    public function cellValuesForProcurementPr(
+        AcquisitionPaperwork $case,
+        ?iterable $lines = null,
+        bool $includeFooter = true,
+        int $continuationPageIndex = 0,
+        int $continuationPageCount = 1,
+    ): array {
         $case->loadMissing(['office', 'requestingOffice', 'department', 'lines.item']);
         $office = $case->office;
         $prMap = OwwaCellMapping::form('PR');
+        $headerMap = (array) ($prMap['header'] ?? []);
         $values = [];
+        $prNumber = $this->ensureControlNumberFormat(
+            $case->pr_number,
+            $case->pr_date?->format('Y-m-d'),
+            'yearly'
+        ).$this->procurementContinuationSuffix($continuationPageIndex, $continuationPageCount);
 
-        OwwaCellMapping::applyHeader($values, (array) ($prMap['header'] ?? []), [
+        OwwaCellMapping::applyHeader($values, $headerMap, [
             'entity_name' => $office?->name ?? '',
             'fund_cluster' => $office?->fund_cluster ?? '',
-            'office_section' => $this->requestingOfficeSectionName($case),
-            'pr_no' => $this->ensureControlNumberFormat(
-                $case->pr_number,
-                $case->pr_date?->format('Y-m-d'),
-                'yearly'
-            ),
+            'pr_no' => $prNumber,
             'date' => $case->pr_date?->format('Y-m-d') ?? '',
             'responsibility_center_code' => $this->requestingOfficeResponsibilityCenterCode($case),
-            'purpose' => $case->purpose ?? '',
+            'purpose' => $includeFooter ? ($case->purpose ?? '') : '',
         ]);
 
-        $this->applyProcurementDetailRows($values, 'PR', $case->lines, [
+        ProcurementHeaderLayout::applyOfficeSectionHeader(
+            $values,
+            $headerMap,
+            $this->requestingOfficeSectionName($case),
+        );
+
+        $this->applyProcurementDetailRows($values, 'PR', $lines ?? $case->lines, [
             'stock_no' => fn ($line) => $line->stockNumber(),
             'unit' => fn ($line) => $line->unit ?? $line->item?->unit ?? '',
             'description' => fn ($line) => $line->description ?? $line->item?->name ?? '',
             'quantity' => fn ($line) => (string) $line->quantity,
-            'unit_cost' => fn ($line) => $line->unit_cost !== null ? (string) $line->unit_cost : '',
-            'total_cost' => fn ($line) => $line->amount !== null ? (string) $line->amount : '',
+            'unit_cost' => fn ($line) => $line->unit_cost !== null ? (float) $line->unit_cost : '',
+            'total_cost' => fn ($line) => $line->amount !== null ? (float) $line->amount : '',
         ]);
 
-        OwwaCellMapping::applySignatures($values, 'PR', [
-            'requested_by' => $case->requested_by_name ?? '',
-            'approved_by' => $case->approved_by_name ?? '',
-        ]);
+        if ($includeFooter) {
+            OwwaCellMapping::applySignatures($values, 'PR', [
+                'requested_by' => $case->requested_by_name ?? '',
+                'approved_by' => $case->approved_by_name ?? '',
+            ]);
+        }
 
         return $values;
     }
@@ -2439,8 +2904,13 @@ class OwwaTemplateExportService
     /**
      * @return array<string, string|int|float|null>
      */
-    public function cellValuesForProcurementPo(AcquisitionPaperwork $case): array
-    {
+    public function cellValuesForProcurementPo(
+        AcquisitionPaperwork $case,
+        ?iterable $lines = null,
+        bool $includeFooter = true,
+        int $continuationPageIndex = 0,
+        int $continuationPageCount = 1,
+    ): array {
         $case->loadMissing(['office', 'lines.item']);
         $office = $case->office;
         $poData = (array) ($case->po_data ?? []);
@@ -2453,7 +2923,7 @@ class OwwaTemplateExportService
                 $case->po_number,
                 $case->po_date?->format('Y-m-d'),
                 'yearly'
-            ),
+            ).$this->procurementContinuationSuffix($continuationPageIndex, $continuationPageCount),
             'date' => $case->po_date?->format('Y-m-d') ?? '',
             'address' => $poData['address'] ?? '',
             'tin' => $poData['tin'] ?? '',
@@ -2465,14 +2935,19 @@ class OwwaTemplateExportService
             'fund_cluster' => $office?->fund_cluster ?? '',
         ]);
 
-        $this->applyProcurementDetailRows($values, 'PO', $case->lines, [
+        $this->applyProcurementDetailRows($values, 'PO', $lines ?? $case->lines, [
             'stock_no' => fn ($line) => $line->stockNumber(),
             'unit' => fn ($line) => $line->unit ?? $line->item?->unit ?? '',
             'description' => fn ($line) => $line->description ?? $line->item?->name ?? '',
             'quantity' => fn ($line) => (string) $line->quantity,
-            'unit_cost' => fn ($line) => $line->unit_cost !== null ? (string) $line->unit_cost : '',
-            'amount' => fn ($line) => $line->amount !== null ? (string) $line->amount : '',
+            'unit_cost' => fn ($line) => $line->unit_cost !== null ? (float) $line->unit_cost : '',
+            'amount' => fn ($line) => $line->amount !== null ? (float) $line->amount : '',
         ]);
+
+        if ($includeFooter) {
+            $totalAmount = (float) $case->lines->sum('amount');
+            $values['A32'] = PesoAmountInWords::format($totalAmount);
+        }
 
         return $values;
     }
@@ -2480,8 +2955,13 @@ class OwwaTemplateExportService
     /**
      * @return array<string, string|int|float|null>
      */
-    public function cellValuesForProcurementIar(AcquisitionPaperwork $case): array
-    {
+    public function cellValuesForProcurementIar(
+        AcquisitionPaperwork $case,
+        ?iterable $lines = null,
+        bool $includeFooter = true,
+        int $continuationPageIndex = 0,
+        int $continuationPageCount = 1,
+    ): array {
         $case->loadMissing(['office', 'requestingOffice', 'department', 'lines.item']);
         $office = $case->office;
         $iarData = (array) ($case->iar_data ?? []);
@@ -2497,30 +2977,41 @@ class OwwaTemplateExportService
                 $case->iar_number,
                 $case->iar_date?->format('Y-m-d'),
                 'yearly'
-            ),
+            ).$this->procurementContinuationSuffix($continuationPageIndex, $continuationPageCount),
             'po_no_date' => $poNoDate,
             'date' => $case->iar_date?->format('Y-m-d') ?? '',
             'requisitioning_office' => $this->requestingOfficeSectionName($case),
             'invoice_no' => $iarData['invoice_no'] ?? '',
             'responsibility_center_code' => $this->requestingOfficeResponsibilityCenterCode($case),
             'invoice_date' => $iarData['invoice_date'] ?? '',
-            'date_inspected' => $iarData['date_inspected'] ?? '',
-            'date_received' => $iarData['date_received'] ?? '',
+            'date_inspected' => $includeFooter ? ($iarData['date_inspected'] ?? '') : '',
+            'date_received' => $includeFooter ? ($iarData['date_received'] ?? '') : '',
         ]);
 
-        $this->applyProcurementDetailRows($values, 'IAR', $case->lines, [
+        $this->applyProcurementDetailRows($values, 'IAR', $lines ?? $case->lines, [
             'stock_no' => fn ($line) => $line->stockNumber(),
             'description' => fn ($line) => $line->description ?? $line->item?->name ?? '',
             'unit' => fn ($line) => $line->unit ?? $line->item?->unit ?? '',
             'quantity' => fn ($line) => (string) $line->quantity,
         ]);
 
-        OwwaCellMapping::applySignatures($values, 'IAR', [
-            'inspection_officer' => $case->inspection_officer_name ?? '',
-            'supply_custodian' => $case->custodian_name ?? '',
-        ]);
+        if ($includeFooter) {
+            OwwaCellMapping::applySignatures($values, 'IAR', [
+                'inspection_officer' => $case->inspection_officer_name ?? '',
+                'supply_custodian' => $case->custodian_name ?? '',
+            ]);
+        }
 
         return $values;
+    }
+
+    protected function procurementContinuationSuffix(int $pageIndex, int $pageCount): string
+    {
+        if ($pageCount <= 1 || $pageIndex === 0) {
+            return '';
+        }
+
+        return ' (Cont. '.($pageIndex + 1).')';
     }
 
     protected function requestingOfficeSectionName(AcquisitionPaperwork $case): string
@@ -2555,6 +3046,14 @@ class OwwaTemplateExportService
         $maxRows = (int) ($detail['max_rows'] ?? 20);
         $columns = (array) ($detail['columns'] ?? []);
         $rowIndex = 0;
+        $lineCount = is_countable($lines) ? count($lines) : iterator_count($lines);
+
+        if ($lineCount > $maxRows) {
+            throw new \RuntimeException(
+                "Procurement {$formCode} export has {$lineCount} lines but the template supports {$maxRows} per sheet. "
+                .'Use the multi-sheet procurement export builder.'
+            );
+        }
 
         foreach ($lines as $line) {
             if ($rowIndex >= $maxRows) {

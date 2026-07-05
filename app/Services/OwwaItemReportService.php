@@ -17,7 +17,8 @@ use App\Support\AnnexA4Layout;
 use App\Support\ItemPropertyClass;
 use App\Support\OwwaCellMapping;
 use App\Support\OwwaExportFilename;
-use App\Support\PropertyCardLayout;
+use App\Support\PhysicalCountPropertyClassResolver;
+use App\Support\UnitCostKey;
 use Illuminate\Support\Collection;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
@@ -38,13 +39,18 @@ class OwwaItemReportService
      *
      * @return array<int, array<string, mixed>>
      */
-    public function buildTransactionHistory(Item $item, ?int $officeId = null, bool $newestFirst = false): array
-    {
+    public function buildTransactionHistory(
+        Item $item,
+        ?int $officeId = null,
+        bool $newestFirst = false,
+        ?float $unitCost = null,
+    ): array {
         $histories = $this->buildTransactionHistoriesForItems(
             [$item->id],
             $officeId,
             $newestFirst,
             collect([$item->id => $item]),
+            $unitCost,
         );
 
         return $histories[$item->id] ?? [];
@@ -60,6 +66,7 @@ class OwwaItemReportService
         int|array|null $officeIds = null,
         bool $newestFirst = false,
         ?Collection $itemsById = null,
+        ?float $unitCost = null,
     ): array {
         $itemIds = array_values(array_unique(array_filter($itemIds, fn (int $id): bool => $id > 0)));
 
@@ -84,7 +91,14 @@ class OwwaItemReportService
             ->when($normalizedOfficeIds !== [], fn ($q) => $q->whereIn('office_id', $normalizedOfficeIds))
             ->orderBy('acquisition_date')
             ->get()
-            ->each(function (Acquisition $acquisition) use (&$rowsByItem, $itemsById): void {
+            ->each(function (Acquisition $acquisition) use (&$rowsByItem, $itemsById, $unitCost): void {
+                if ($unitCost !== null && ! UnitCostKey::equals(
+                    $acquisition->unit_cost !== null ? (float) $acquisition->unit_cost : null,
+                    $unitCost,
+                )) {
+                    return;
+                }
+
                 $item = $itemsById->get($acquisition->item_id);
 
                 $rowsByItem[$acquisition->item_id][] = [
@@ -110,7 +124,14 @@ class OwwaItemReportService
             ->when($normalizedOfficeIds !== [], fn ($q) => $q->whereIn('office_id', $normalizedOfficeIds))
             ->orderBy('issuance_date')
             ->get()
-            ->each(function (Issuance $issuance) use (&$rowsByItem): void {
+            ->each(function (Issuance $issuance) use (&$rowsByItem, $unitCost): void {
+                if ($unitCost !== null && ! UnitCostKey::equals(
+                    $issuance->unit_cost !== null ? (float) $issuance->unit_cost : null,
+                    $unitCost,
+                )) {
+                    return;
+                }
+
                 $rowsByItem[$issuance->item_id][] = [
                     'office_id' => $issuance->office_id,
                     'sort_date' => $issuance->issuance_date,
@@ -123,6 +144,7 @@ class OwwaItemReportService
                     'office_officer' => $issuance->issuedTo?->name ?? $issuance->office?->name,
                     'remarks' => $issuance->remarks,
                     'property_number' => $issuance->property_number,
+                    'unit_cost' => $issuance->unit_cost,
                 ];
             });
 
@@ -132,7 +154,14 @@ class OwwaItemReportService
             ->when($normalizedOfficeIds !== [], fn ($q) => $q->whereIn('to_office_id', $normalizedOfficeIds))
             ->orderBy('transfer_date')
             ->get()
-            ->each(function (Transfer $transfer) use (&$rowsByItem): void {
+            ->each(function (Transfer $transfer) use (&$rowsByItem, $unitCost): void {
+                if ($unitCost !== null && ! UnitCostKey::equals(
+                    $transfer->unit_cost !== null ? (float) $transfer->unit_cost : null,
+                    $unitCost,
+                )) {
+                    return;
+                }
+
                 $rowsByItem[$transfer->item_id][] = [
                     'office_id' => $transfer->to_office_id,
                     'sort_date' => $transfer->transfer_date,
@@ -145,6 +174,7 @@ class OwwaItemReportService
                     'office_officer' => $transfer->to_accountable_officer ?? $transfer->toOffice?->name,
                     'remarks' => $transfer->remarks,
                     'property_number' => $transfer->property_number,
+                    'unit_cost' => $transfer->unit_cost,
                 ];
             });
 
@@ -154,7 +184,14 @@ class OwwaItemReportService
             ->when($normalizedOfficeIds !== [], fn ($q) => $q->whereIn('from_office_id', $normalizedOfficeIds))
             ->orderBy('transfer_date')
             ->get()
-            ->each(function (Transfer $transfer) use (&$rowsByItem): void {
+            ->each(function (Transfer $transfer) use (&$rowsByItem, $unitCost): void {
+                if ($unitCost !== null && ! UnitCostKey::equals(
+                    $transfer->unit_cost !== null ? (float) $transfer->unit_cost : null,
+                    $unitCost,
+                )) {
+                    return;
+                }
+
                 $rowsByItem[$transfer->item_id][] = [
                     'office_id' => $transfer->from_office_id,
                     'sort_date' => $transfer->transfer_date,
@@ -167,6 +204,7 @@ class OwwaItemReportService
                     'office_officer' => $transfer->from_accountable_officer ?? $transfer->fromOffice?->name,
                     'remarks' => $transfer->remarks,
                     'property_number' => $transfer->property_number,
+                    'unit_cost' => $transfer->unit_cost,
                 ];
             });
 
@@ -176,7 +214,14 @@ class OwwaItemReportService
             ->when($normalizedOfficeIds !== [], fn ($q) => $q->whereIn('office_id', $normalizedOfficeIds))
             ->orderBy('disposal_date')
             ->get()
-            ->each(function (Disposal $disposal) use (&$rowsByItem): void {
+            ->each(function (Disposal $disposal) use (&$rowsByItem, $unitCost): void {
+                if ($unitCost !== null && ! UnitCostKey::equals(
+                    $disposal->acquisition_cost !== null ? (float) $disposal->acquisition_cost : null,
+                    $unitCost,
+                )) {
+                    return;
+                }
+
                 $rowsByItem[$disposal->item_id][] = [
                     'office_id' => $disposal->office_id,
                     'sort_date' => $disposal->disposal_date,
@@ -189,6 +234,7 @@ class OwwaItemReportService
                     'office_officer' => $disposal->office?->name,
                     'remarks' => $disposal->reason,
                     'property_number' => $disposal->property_number,
+                    'unit_cost' => $disposal->acquisition_cost,
                 ];
             });
 
@@ -321,7 +367,7 @@ class OwwaItemReportService
         return $rowsByItem;
     }
 
-    public function downloadItemReport(Item $item, string $formSlug, ?int $officeId = null): StreamedResponse
+    public function downloadItemReport(Item $item, string $formSlug, ?int $officeId = null, ?float $unitCost = null): StreamedResponse
     {
         $item->loadMissing('category');
         $office = $officeId ? Office::query()->find($officeId) : null;
@@ -336,7 +382,7 @@ class OwwaItemReportService
                 [
                     [
                         'sheetName' => $sheetName,
-                        'blocks' => [$this->buildAnnexA1Block($item, $office, $officeId)],
+                        'blocks' => [$this->buildAnnexA1Block($item, $office, $officeId, null, null, $unitCost)],
                     ],
                 ],
                 $filename,
@@ -366,8 +412,8 @@ class OwwaItemReportService
         }
 
         $cellValues = match ($formSlug) {
-            'sc' => $this->cellValuesForSc($item, $office, $officeId),
-            'pc' => $this->cellValuesForPropertyCard($item, $office, $officeId),
+            'sc' => $this->cellValuesForSc($item, $office, $officeId, $unitCost),
+            'pc' => $this->cellValuesForPropertyCard($item, $office, $officeId, $unitCost),
             default => [],
         };
 
@@ -776,14 +822,18 @@ class OwwaItemReportService
     public function downloadPhysicalCount(PhysicalCountSession $session): StreamedResponse
     {
         $session->loadMissing(['office', 'lines.item']);
+
+        if ($session->count_type === PhysicalCountSession::TYPE_RPCSP) {
+            return $this->downloadRpcspPhysicalCount($session);
+        }
+
         $formCode = $this->physicalCountFormCode($session);
         $templatePath = (string) (OwwaCellMapping::form($formCode)['template'] ?? '');
 
         if ($templatePath === '') {
             $templatePath = match ($session->count_type) {
-                PhysicalCountSession::TYPE_RPCPPE => 'ppe/Physical Count/Appendix 73 - RPCPPE.xls',
-                PhysicalCountSession::TYPE_RPCSP => 'Semi-Expendable/Physical Count/Inventory-Annex-A.8-RPCSP - REPORT.xlsx',
-                default => 'Consumable/Stock Levels & Recording/Appendix 66 - RPCI.xls',
+                PhysicalCountSession::TYPE_RPCPPE => 'ppe/Physical Count/Appendix 73 - RPCPPE.xlsx',
+                default => 'Consumable/Stock Levels & Recording/Appendix 66 - RPCI.xlsx',
             };
         }
 
@@ -800,7 +850,79 @@ class OwwaItemReportService
             $filename,
             $sheet['sheetIndex'],
             $sheet['sheetName'],
+            [
+                'formCode' => $formCode,
+                'signatures' => $this->physicalCountSignaturePairs($session),
+                'useMasterSignatures' => false,
+            ],
         );
+    }
+
+    public function downloadRpcspPhysicalCount(PhysicalCountSession $session): StreamedResponse
+    {
+        $formCode = $this->physicalCountFormCode($session);
+        $templatePath = (string) (OwwaCellMapping::form($formCode)['template'] ?? '');
+        $templatePath = $templatePath !== ''
+            ? $templatePath
+            : 'Semi-Expendable/Physical Count/Inventory-Annex-A.8-RPCSP - REPORT.xlsx';
+
+        $tabs = $this->buildRpcspPhysicalCountTabs($session);
+        $filename = OwwaExportFilename::physicalCount(
+            (string) $session->count_type,
+            (string) $session->reference_code,
+        );
+
+        return $this->templateExport->downloadRpcspPhysicalCountSpreadsheet($tabs, $filename, $templatePath);
+    }
+
+    /**
+     * @return array<int, array{sheetName: string, cellValues: array<string, string|int|float|null>, signaturePairs: array<string, string|int|float|null>}>
+     */
+    public function buildRpcspPhysicalCountTabs(PhysicalCountSession $session): array
+    {
+        $session->loadMissing(['office', 'lines.item']);
+
+        /** @var array<string, Collection<int, PhysicalCountLine>> $grouped */
+        $grouped = [];
+
+        foreach ($session->lines as $line) {
+            $propertyClass = ItemPropertyClass::resolveForExport($line->item?->property_class);
+            $grouped[$propertyClass] ??= collect();
+            $grouped[$propertyClass]->push($line);
+        }
+
+        if ($grouped === []) {
+            $fallbackClass = ItemPropertyClass::resolveForExport(
+                PhysicalCountPropertyClassResolver::primaryClass($session) ?? $session->property_class,
+            );
+            $sheetName = ItemPropertyClass::sheetNameForForm('rpcsp', $fallbackClass) ?? 'OFFICE EQUIPMENT';
+
+            return [[
+                'sheetName' => $sheetName,
+                'cellValues' => $this->cellValuesForPhysicalCount($session, $fallbackClass, collect(), $sheetName),
+                'signaturePairs' => $this->physicalCountSignaturePairs($session),
+            ]];
+        }
+
+        $tabs = [];
+
+        foreach ($grouped as $propertyClass => $lines) {
+            $sheetName = ItemPropertyClass::sheetNameForForm('rpcsp', (string) $propertyClass) ?? 'OFFICE EQUIPMENT';
+            $tabs[] = [
+                'sheetName' => $sheetName,
+                'cellValues' => $this->cellValuesForPhysicalCount(
+                    $session,
+                    (string) $propertyClass,
+                    $lines,
+                    $sheetName,
+                ),
+                'signaturePairs' => $this->physicalCountSignaturePairs($session),
+            ];
+        }
+
+        usort($tabs, fn (array $a, array $b): int => strcmp($a['sheetName'], $b['sheetName']));
+
+        return $tabs;
     }
 
     /**
@@ -823,19 +945,13 @@ class OwwaItemReportService
 
     protected function resolvePhysicalCountPropertyClass(PhysicalCountSession $session): ?string
     {
-        if (filled($session->property_class)) {
-            return $session->property_class;
+        $fromLines = PhysicalCountPropertyClassResolver::primaryClass($session);
+        if ($fromLines !== null) {
+            return $fromLines;
         }
 
-        $session->loadMissing('lines.item');
-        $classes = $session->lines
-            ->pluck('item.property_class')
-            ->filter()
-            ->unique()
-            ->values();
-
-        if ($classes->count() === 1) {
-            return (string) $classes->first();
+        if (filled($session->property_class)) {
+            return $session->property_class;
         }
 
         if (filled($session->inventory_type_label)) {
@@ -864,7 +980,7 @@ class OwwaItemReportService
     /**
      * @return array<string, string|int|float|null>
      */
-    protected function cellValuesForSc(Item $item, ?Office $office, ?int $officeId): array
+    protected function cellValuesForSc(Item $item, ?Office $office, ?int $officeId, ?float $unitCost = null): array
     {
         $values = [
             'A6' => 'Entity Name: '.($office?->name ?? ''),
@@ -878,7 +994,7 @@ class OwwaItemReportService
 
         $startRow = 13;
         $row = $startRow;
-        foreach ($this->buildTransactionHistory($item, $officeId, newestFirst: true) as $txn) {
+        foreach ($this->buildTransactionHistory($item, $officeId, newestFirst: true, unitCost: $unitCost) as $txn) {
             if ($row > $startRow + 49) {
                 break;
             }
@@ -904,8 +1020,13 @@ class OwwaItemReportService
         ?int $officeId,
         ?array $transactions = null,
         ?string $latestPropertyNumber = null,
+        ?float $unitCost = null,
     ): array {
         $propertyClass = ItemPropertyClass::resolveForExport($item->property_class);
+
+        if ($latestPropertyNumber === null) {
+            $latestPropertyNumber = $item->resolvedSemiExpendablePropertyNumber($unitCost);
+        }
 
         if ($latestPropertyNumber === null) {
             $latestPropertyNumber = Issuance::query()
@@ -923,7 +1044,7 @@ class OwwaItemReportService
                 'property_number' => $latestPropertyNumber ?? $item->item_code ?? '',
                 'description' => $this->itemDescription($item),
             ],
-            'transactions' => $transactions ?? $this->buildTransactionHistory($item, $officeId, newestFirst: true),
+            'transactions' => $transactions ?? $this->buildTransactionHistory($item, $officeId, newestFirst: true, unitCost: $unitCost),
         ];
     }
 
@@ -1017,11 +1138,11 @@ class OwwaItemReportService
     /**
      * @return array<string, string|int|float|null>
      */
-    public function cellValuesForPropertyCard(Item $item, ?Office $office, ?int $officeId): array
+    public function cellValuesForPropertyCard(Item $item, ?Office $office, ?int $officeId, ?float $unitCost = null): array
     {
         $transactions = array_map(
             fn (array $txn): array => PropertyCardLayout::normalizeTransactionRow($txn),
-            $this->buildTransactionHistory($item, $officeId, newestFirst: true),
+            $this->buildTransactionHistory($item, $officeId, newestFirst: true, unitCost: $unitCost),
         );
 
         return PropertyCardLayout::buildFromItem($item, $office, $officeId, $transactions);
@@ -1062,26 +1183,31 @@ class OwwaItemReportService
     }
 
     /**
+     * @param  Collection<int, PhysicalCountLine>|null  $lines
      * @return array<string, string|int|float|null>
      */
-    protected function cellValuesForPhysicalCount(PhysicalCountSession $session): array
-    {
+    protected function cellValuesForPhysicalCount(
+        PhysicalCountSession $session,
+        ?string $propertyClass = null,
+        ?Collection $lines = null,
+        ?string $sheetName = null,
+    ): array {
         $formCode = $this->physicalCountFormCode($session);
         $map = OwwaCellMapping::form($formCode);
         $values = [];
+        $lineCollection = $lines ?? $session->lines;
 
-        OwwaCellMapping::applyHeader($values, (array) ($map['header'] ?? []), $this->physicalCountHeaderData($session));
+        OwwaCellMapping::applyHeader(
+            $values,
+            (array) ($map['header'] ?? []),
+            $this->physicalCountHeaderData($session, $propertyClass),
+        );
 
         $startRow = OwwaCellMapping::detailRowBase($formCode);
         $columns = OwwaCellMapping::detailColumns($formCode);
-        $maxRows = (int) ($map['detail']['max_rows'] ?? 21);
         $row = $startRow;
 
-        foreach ($session->lines as $line) {
-            if ($row > $startRow + $maxRows - 1) {
-                break;
-            }
-
+        foreach ($lineCollection as $line) {
             $shortageQty = $line->shortageOverageQuantity();
             $unitValue = $this->resolvePhysicalCountLineUnitValue($line, $session);
             $shortageValue = $unitValue !== null ? round($shortageQty * $unitValue, 2) : null;
@@ -1097,13 +1223,45 @@ class OwwaItemReportService
             $row++;
         }
 
-        $this->applyPhysicalCountSignatures($values, $session, $formCode, [
+        return $values;
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public function physicalCountSignaturePairs(PhysicalCountSession $session): array
+    {
+        return [
             'certified_by' => $session->certified_by_printed_name ?? '',
             'approved_by' => $session->approved_by_printed_name ?? '',
             'verified_by' => $session->verified_by_printed_name ?? '',
-        ]);
+        ];
+    }
 
-        return $values;
+    /**
+     * @return array<string, string>
+     */
+    public function physicalCountSignatureCells(
+        PhysicalCountSession $session,
+        ?string $sheetName = null,
+        int $rowOffset = 0,
+    ): array {
+        $formCode = $this->physicalCountFormCode($session);
+        $useMaster = $formCode === 'RPCSP'
+            && ($sheetName ?? $this->resolvePhysicalCountSheet($session)['sheetName']) === 'RPCSP';
+        $pairs = $this->physicalCountSignaturePairs($session);
+        $cells = [];
+
+        foreach ($pairs as $field => $value) {
+            $cells[OwwaCellMapping::physicalCountSignatureCell(
+                $formCode,
+                $field,
+                $rowOffset,
+                $useMaster,
+            )] = $value;
+        }
+
+        return $cells;
     }
 
     protected function physicalCountFormCode(PhysicalCountSession $session): string
@@ -1118,12 +1276,18 @@ class OwwaItemReportService
     /**
      * @return array<string, string|null>
      */
-    protected function physicalCountHeaderData(PhysicalCountSession $session): array
+    protected function physicalCountHeaderData(PhysicalCountSession $session, ?string $propertyClass = null): array
     {
         $office = $session->office;
 
+        $inventoryType = match (true) {
+            $propertyClass !== null => ItemPropertyClass::propertyTypeLabel($propertyClass),
+            filled($session->inventory_type_label) => (string) $session->inventory_type_label,
+            default => PhysicalCountPropertyClassResolver::inventoryTypeLabel($session),
+        };
+
         return [
-            'inventory_type' => $session->inventory_type_label ?? '',
+            'inventory_type' => $inventoryType,
             'count_date' => $session->count_date?->format('Y-m-d') ?? '',
             'fund_cluster' => $session->fund_cluster ?? $office?->fund_cluster ?? '',
             'accountable_officer' => implode(', ', array_filter([
@@ -1226,18 +1390,17 @@ class OwwaItemReportService
         PhysicalCountSession $session,
         string $formCode,
         array $pairs,
+        ?string $sheetName = null,
     ): void {
-        $map = OwwaCellMapping::form($formCode);
-        $signatures = (array) ($map['signatures'] ?? []);
+        $useMaster = false;
 
-        if ($formCode === 'RPCSP' && $this->resolvePhysicalCountSheet($session)['sheetName'] === 'RPCSP') {
-            $signatures = (array) ($map['signatures_master'] ?? $signatures);
+        if ($formCode === 'RPCSP') {
+            $resolvedSheetName = $sheetName ?? $this->resolvePhysicalCountSheet($session)['sheetName'];
+            $useMaster = $resolvedSheetName === 'RPCSP';
         }
 
         foreach ($pairs as $field => $value) {
-            if (isset($signatures[$field])) {
-                $values[$signatures[$field]] = $value;
-            }
+            $values[OwwaCellMapping::physicalCountSignatureCell($formCode, (string) $field, 0, $useMaster)] = $value;
         }
     }
 

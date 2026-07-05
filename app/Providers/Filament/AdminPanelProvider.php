@@ -74,8 +74,7 @@ class AdminPanelProvider extends PanelProvider
             ])
             ->defaultThemeMode(ThemeMode::Light)
             ->darkMode(false)
-            ->breadcrumbs(false)
-            ->unsavedChangesAlerts();
+            ->breadcrumbs(false);
 
         if (Schema::hasTable('notifications')) {
             $panel = $panel

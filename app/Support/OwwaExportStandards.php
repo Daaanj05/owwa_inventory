@@ -107,6 +107,11 @@ class OwwaExportStandards
         return (bool) ($ledger['uniform_data_row_height'] ?? false);
     }
 
+    public static function currencyExcelFormatCode(): string
+    {
+        return (string) config('owwa_export_standards.currency.excel_format_code', '"P"#,##0.00');
+    }
+
     public static function charsPerLineForColumnWidth(float $columnWidth): int
     {
         if ($columnWidth <= 0) {

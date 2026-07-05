@@ -85,7 +85,17 @@ return [
                 'G' => 'unit_cost',
                 'H' => 'amount',
             ],
+            'wrap_text_columns' => ['A', 'B', 'D'],
+            'min_wrap_lines_for_expansion' => 2,
+            'uniform_data_row_height' => true,
         ],
+        'signatures' => [
+            'custodian' => 'A52',
+            'accounting_staff' => 'F52',
+            'posted_date' => 'H52',
+        ],
+        'signature_line_row' => 52,
+        'signature_line_columns' => ['A', 'F', 'H'],
     ],
 
     'PAR' => [
@@ -555,7 +565,7 @@ return [
     ],
 
     'RPCI' => [
-        'template' => 'Consumable/Stock Levels & Recording/Appendix 66 - RPCI.xls',
+        'template' => 'Consumable/Stock Levels & Recording/Appendix 66 - RPCI.xlsx',
         'header' => [
             'inventory_type' => ['cell' => 'B4', 'label' => ''],
             'count_date' => ['cell' => 'B6', 'label' => ''],
@@ -565,6 +575,10 @@ return [
         'detail' => [
             'start_row' => 15,
             'max_rows' => 21,
+            'style_row' => 15,
+            'highest_column' => 'K',
+            'signature_block_start_row' => 37,
+            'template_detail_rows' => 21,
             'columns' => [
                 'article' => 'B',
                 'description' => 'C',
@@ -578,6 +592,15 @@ return [
                 'remarks' => 'K',
             ],
         ],
+        'signature_block' => [
+            'start_row' => 37,
+            'line_row' => 39,
+            'columns' => [
+                'certified_by' => 'C',
+                'approved_by' => 'G',
+                'verified_by' => 'K',
+            ],
+        ],
         'signatures' => [
             'certified_by' => 'C39',
             'approved_by' => 'G39',
@@ -586,7 +609,7 @@ return [
     ],
 
     'RPCPPE' => [
-        'template' => 'ppe/Physical Count/Appendix 73 - RPCPPE.xls',
+        'template' => 'ppe/Physical Count/Appendix 73 - RPCPPE.xlsx',
         'header' => [
             'inventory_type' => ['cell' => 'C4', 'label' => ''],
             'count_date' => ['cell' => 'C6', 'label' => ''],
@@ -596,6 +619,10 @@ return [
         'detail' => [
             'start_row' => 15,
             'max_rows' => 21,
+            'style_row' => 15,
+            'highest_column' => 'L',
+            'signature_block_start_row' => 36,
+            'template_detail_rows' => 21,
             'columns' => [
                 'article' => 'C',
                 'description' => 'D',
@@ -609,10 +636,19 @@ return [
                 'remarks' => 'L',
             ],
         ],
+        'signature_block' => [
+            'start_row' => 36,
+            'line_row' => 38,
+            'columns' => [
+                'certified_by' => 'D',
+                'approved_by' => 'G',
+                'verified_by' => 'K',
+            ],
+        ],
         'signatures' => [
-            'certified_by' => 'D39',
-            'approved_by' => 'G39',
-            'verified_by' => 'K39',
+            'certified_by' => 'D38',
+            'approved_by' => 'G38',
+            'verified_by' => 'K38',
         ],
     ],
 
@@ -627,6 +663,10 @@ return [
         'detail' => [
             'start_row' => 15,
             'max_rows' => 21,
+            'style_row' => 15,
+            'highest_column' => 'K',
+            'signature_block_start_row' => 36,
+            'template_detail_rows' => 21,
             'columns' => [
                 'article' => 'B',
                 'description' => 'C',
@@ -640,10 +680,28 @@ return [
                 'remarks' => 'K',
             ],
         ],
+        'signature_block' => [
+            'start_row' => 36,
+            'line_row' => 38,
+            'columns' => [
+                'certified_by' => 'C',
+                'approved_by' => 'F',
+                'verified_by' => 'J',
+            ],
+        ],
+        'signature_block_master' => [
+            'start_row' => 50,
+            'line_row' => 52,
+            'columns' => [
+                'certified_by' => 'C',
+                'approved_by' => 'F',
+                'verified_by' => 'J',
+            ],
+        ],
         'signatures' => [
-            'certified_by' => 'C39',
-            'approved_by' => 'F39',
-            'verified_by' => 'J39',
+            'certified_by' => 'C38',
+            'approved_by' => 'F38',
+            'verified_by' => 'J38',
         ],
         'signatures_master' => [
             'certified_by' => 'C52',
@@ -657,7 +715,14 @@ return [
         'header' => [
             'entity_name' => ['cell' => 'A6', 'label' => 'Entity Name: '],
             'fund_cluster' => ['cell' => 'D6', 'label' => 'Fund Cluster: '],
-            'office_section' => ['cell' => 'A7', 'label' => 'Office/Section : '],
+            'office_section' => [
+                'cell' => 'A7',
+                'label' => 'Office/Section : ',
+                'continuation_cell' => 'A8',
+                'max_first_line_chars' => 14,
+                'wrap_rows' => [7, 8],
+                'wrap_column' => 'A',
+            ],
             'pr_no' => ['cell' => 'C7', 'label' => 'PR No.: '],
             'date' => ['cell' => 'E7', 'label' => 'Date: '],
             'responsibility_center_code' => ['cell' => 'C8', 'label' => 'Responsibility Center Code : '],
@@ -666,6 +731,10 @@ return [
         'detail' => [
             'start_row' => 11,
             'max_rows' => 22,
+            'footer_start_row' => 33,
+            'continuation_sheet_suffix' => ' Cont.',
+            'style_row' => 11,
+            'highest_column' => 'F',
             'columns' => [
                 'stock_no' => 'A',
                 'unit' => 'B',
@@ -674,6 +743,17 @@ return [
                 'unit_cost' => 'E',
                 'total_cost' => 'F',
             ],
+            'column_types' => [
+                'A' => 'text',
+                'B' => 'text',
+                'C' => 'text',
+                'D' => 'qty',
+                'E' => 'unit_cost',
+                'F' => 'amount',
+            ],
+            'wrap_text_columns' => ['A', 'B', 'C', 'D', 'E', 'F'],
+            'min_wrap_lines_for_expansion' => 2,
+            'uniform_data_row_height' => true,
         ],
         'signatures' => [
             'requested_by' => 'B39',
@@ -695,10 +775,15 @@ return [
             'date_of_delivery' => ['cell' => 'A14', 'label' => 'Date of Delivery : '],
             'payment_term' => ['cell' => 'D14', 'label' => 'Payment Term : '],
             'fund_cluster' => ['cell' => 'A45', 'label' => 'Fund Cluster : '],
+            'total_amount_in_words' => ['cell' => 'A32', 'label' => ''],
         ],
         'detail' => [
             'start_row' => 16,
             'max_rows' => 16,
+            'footer_start_row' => 32,
+            'continuation_sheet_suffix' => ' Cont.',
+            'style_row' => 16,
+            'highest_column' => 'F',
             'columns' => [
                 'stock_no' => 'A',
                 'unit' => 'B',
@@ -707,6 +792,17 @@ return [
                 'unit_cost' => 'E',
                 'amount' => 'F',
             ],
+            'column_types' => [
+                'A' => 'text',
+                'B' => 'text',
+                'C' => 'text',
+                'D' => 'qty',
+                'E' => 'unit_cost',
+                'F' => 'amount',
+            ],
+            'wrap_text_columns' => ['A', 'B', 'C', 'D', 'E', 'F'],
+            'min_wrap_lines_for_expansion' => 2,
+            'uniform_data_row_height' => true,
         ],
         'signatures' => [
             'supplier_signatory' => 'A39',
@@ -733,12 +829,25 @@ return [
         'detail' => [
             'start_row' => 14,
             'max_rows' => 13,
+            'footer_start_row' => 27,
+            'continuation_sheet_suffix' => ' Cont.',
+            'style_row' => 14,
+            'highest_column' => 'E',
             'columns' => [
                 'stock_no' => 'A',
                 'description' => 'B',
                 'unit' => 'D',
                 'quantity' => 'E',
             ],
+            'column_types' => [
+                'A' => 'text',
+                'B' => 'text',
+                'D' => 'text',
+                'E' => 'qty',
+            ],
+            'wrap_text_columns' => ['A', 'B', 'D', 'E'],
+            'min_wrap_lines_for_expansion' => 2,
+            'uniform_data_row_height' => true,
         ],
         'signatures' => [
             'inspection_officer' => 'A35',

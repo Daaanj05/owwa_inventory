@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\InventoryUnit;
 use App\Models\Transfer;
+use App\Support\UnitCostKey;
 use Illuminate\Support\Facades\DB;
 
 class TransferInventoryUnitService
@@ -60,14 +61,18 @@ class TransferInventoryUnitService
             return;
         }
 
-        $units = InventoryUnit::query()
+        $query = InventoryUnit::query()
             ->where('item_id', $transfer->item_id)
             ->where('office_id', $transfer->from_office_id)
             ->where('status', InventoryUnit::STATUS_IN_STOCK)
-            ->orderBy('id')
-            ->limit($quantity)
-            ->lockForUpdate()
-            ->get();
+            ->orderBy('id');
+
+        if ($transfer->unit_cost !== null) {
+            $normalized = UnitCostKey::normalize((float) $transfer->unit_cost);
+            $query->where('unit_cost', $normalized);
+        }
+
+        $units = $query->limit($quantity)->lockForUpdate()->get();
 
         foreach ($units as $unit) {
             $unit->update([

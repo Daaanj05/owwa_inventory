@@ -20,6 +20,7 @@ use App\Services\PhysicalCountCompletionService;
 use App\Services\PhysicalCountPreloadService;
 use App\Services\PhysicalCountScanService;
 use App\Support\InventoryUnitQrPayload;
+use App\Support\ItemPropertyClass;
 use App\Support\PhysicalCountScanOutcome;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use ReflectionMethod;
@@ -200,7 +201,7 @@ class PhysicalCountQrTest extends TestCase
         $this->assertTrue($evaluation['needs_book_list']);
     }
 
-    public function test_completion_service_blocks_complete_with_shortages(): void
+    public function test_completion_service_allows_complete_with_shortages_when_headers_and_book_list_ok(): void
     {
         [$session] = $this->createPpeSessionWithUnit();
         app(PhysicalCountPreloadService::class)->preloadFromCustodyRecords($session);
@@ -216,8 +217,28 @@ class PhysicalCountQrTest extends TestCase
 
         $evaluation = app(PhysicalCountCompletionService::class)->evaluate($session->fresh());
 
-        $this->assertFalse($evaluation['can_complete']);
+        $this->assertTrue($evaluation['can_complete']);
         $this->assertTrue($evaluation['has_shortages']);
+    }
+
+    public function test_mark_complete_succeeds_with_shortage_lines(): void
+    {
+        [$session] = $this->createPpeSessionWithUnit();
+        app(PhysicalCountPreloadService::class)->preloadFromCustodyRecords($session);
+
+        $session->update([
+            'fund_cluster' => '01',
+            'accountable_officer_name' => 'Officer',
+            'inventory_type_label' => 'ICT',
+            'certified_by_printed_name' => 'A',
+            'approved_by_printed_name' => 'B',
+            'verified_by_printed_name' => 'C',
+        ]);
+
+        $completed = app(PhysicalCountCompletionService::class)->markComplete($session->fresh());
+
+        $this->assertTrue($completed->isComplete());
+        $this->assertGreaterThan(0, $completed->countSummary()['shortages']);
     }
 
     public function test_completion_service_marks_complete_when_tally_and_header_ok(): void
@@ -257,24 +278,46 @@ class PhysicalCountQrTest extends TestCase
         $this->assertStringStartsWith('data:image/png;base64,', $dataUri);
     }
 
-    public function test_rpcsp_export_includes_accountable_officer_and_entity_name(): void
+    public function test_rpcsp_export_uses_property_type_label_from_item_class(): void
     {
         $office = Office::factory()->create(['name' => 'Regional Office', 'fund_cluster' => '01']);
+        $category = ItemCategory::factory()->create(['name' => 'Semi-Expendable']);
+        $item = Item::factory()->ict()->create(['item_category_id' => $category->id]);
+
         $session = PhysicalCountSession::query()->create([
             'count_type' => PhysicalCountSession::TYPE_RPCSP,
             'office_id' => $office->id,
+            'item_category_id' => $category->id,
             'count_date' => now(),
-            'inventory_type_label' => 'ICT',
+            'inventory_type_label' => 'Semi-Expendable',
             'accountable_officer_name' => 'Officer A',
             'accountable_officer_designation' => 'Supply Officer',
             'date_of_assumption' => now(),
         ]);
 
+        PhysicalCountLine::query()->create([
+            'physical_count_session_id' => $session->id,
+            'item_id' => $item->id,
+            'balance_per_card' => 1,
+            'on_hand_count' => 1,
+        ]);
+
+        $session = $session->fresh(['office', 'lines.item']);
+
         $method = new ReflectionMethod(OwwaItemReportService::class, 'cellValuesForPhysicalCount');
-        $values = $method->invoke(app(OwwaItemReportService::class), $session->fresh(['office', 'lines']));
+        $values = $method->invoke(
+            app(OwwaItemReportService::class),
+            $session,
+            ItemPropertyClass::Ict,
+            $session->lines,
+            'ICT',
+        );
 
         $this->assertStringContainsString('Officer A', (string) ($values['B10'] ?? ''));
-        $this->assertSame('ICT', (string) ($values['B5'] ?? ''));
+        $this->assertSame(
+            'INFORMATION & COMMUNICATION TECHNOLOGY',
+            (string) ($values['B5'] ?? ''),
+        );
     }
 
     public function test_acquisition_unit_service_is_idempotent(): void

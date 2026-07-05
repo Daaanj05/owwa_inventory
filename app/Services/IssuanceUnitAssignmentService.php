@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\InventoryUnit;
 use App\Models\Issuance;
 use App\Models\Item;
+use App\Support\UnitCostKey;
 use Illuminate\Support\Facades\DB;
 
 class IssuanceUnitAssignmentService
@@ -24,12 +25,18 @@ class IssuanceUnitAssignmentService
             return;
         }
 
-        $unit = InventoryUnit::query()
+        $query = InventoryUnit::query()
             ->where('item_id', $issuance->item_id)
             ->where('office_id', $issuance->office_id)
             ->where('status', InventoryUnit::STATUS_IN_STOCK)
-            ->orderBy('id')
-            ->first();
+            ->orderBy('id');
+
+        if ($issuance->unit_cost !== null) {
+            $normalized = UnitCostKey::normalize((float) $issuance->unit_cost);
+            $query->where('unit_cost', $normalized);
+        }
+
+        $unit = $query->first();
 
         if ($unit === null) {
             return;

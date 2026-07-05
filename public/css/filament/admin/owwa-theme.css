@@ -2650,6 +2650,52 @@ button[type="submit"].fi-btn:hover {
     white-space: nowrap;
 }
 
+.owwa-stock-levels-toolbar-left {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem;
+    min-width: 0;
+}
+
+.owwa-stock-restock-tabs {
+    margin-top: 0;
+    flex-shrink: 0;
+}
+
+.owwa-inv-category-page .owwa-data-panel-body {
+    overflow: hidden;
+}
+
+.owwa-stock-levels-table-wrap {
+    max-width: 100%;
+}
+
+.owwa-stock-levels-table {
+    width: max-content;
+    max-width: none;
+    table-layout: auto;
+}
+
+.owwa-stock-levels-table th,
+.owwa-stock-levels-table td {
+    white-space: nowrap;
+}
+
+.owwa-stock-levels-table td.owwa-cell-primary,
+.owwa-stock-levels-table th:first-child {
+    min-width: 9rem;
+    max-width: 16rem;
+}
+
+.owwa-stock-levels-table td.owwa-cell-primary button {
+    display: block;
+    max-width: 16rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 /* Stock levels: scoped selects — solid fill + border (Filament can reset native selects) */
 .owwa-stock-scope-select {
     box-sizing: border-box;

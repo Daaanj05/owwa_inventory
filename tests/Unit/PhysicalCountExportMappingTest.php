@@ -32,8 +32,12 @@ class PhysicalCountExportMappingTest extends TestCase
             (string) OwwaCellMapping::form('RPCSP')['template'],
         );
         $this->assertSame(
-            'ppe/Physical Count/Appendix 73 - RPCPPE.xls',
+            'ppe/Physical Count/Appendix 73 - RPCPPE.xlsx',
             config('owwa_templates.physical_count.ppe.rpcppe.file'),
+        );
+        $this->assertSame(
+            'Consumable/Stock Levels & Recording/Appendix 66 - RPCI.xlsx',
+            config('owwa_templates.physical_count.consumables.rpci.file'),
         );
         $this->assertSame(
             'Semi-Expendable/Physical Count/Inventory-Annex-A.8-RPCSP - REPORT.xlsx',
@@ -128,6 +132,57 @@ class PhysicalCountExportMappingTest extends TestCase
         $this->assertSame('VEHICLE EQUIPMENT ', $sheet['sheetName']);
     }
 
+    public function test_rpcsp_export_builds_one_tab_per_property_class(): void
+    {
+        if (! extension_loaded('zip')) {
+            $this->markTestSkipped('The zip extension is required to read OWWA .xlsx templates.');
+        }
+
+        $office = Office::factory()->create(['fund_cluster' => '01']);
+        $category = ItemCategory::factory()->create(['name' => 'Semi-Expendable']);
+        $ictItem = Item::factory()->ict()->create(['item_category_id' => $category->id]);
+        $sportsItem = Item::factory()->sportsEquipment()->create(['item_category_id' => $category->id]);
+
+        $session = PhysicalCountSession::query()->create([
+            'count_type' => PhysicalCountSession::TYPE_RPCSP,
+            'office_id' => $office->id,
+            'item_category_id' => $category->id,
+            'count_date' => now(),
+            'reference_code' => '2026-RPC-0099',
+        ]);
+
+        PhysicalCountLine::query()->create([
+            'physical_count_session_id' => $session->id,
+            'item_id' => $ictItem->id,
+            'property_number' => 'SE-ICT-001',
+            'balance_per_card' => 1,
+            'on_hand_count' => 1,
+        ]);
+
+        PhysicalCountLine::query()->create([
+            'physical_count_session_id' => $session->id,
+            'item_id' => $sportsItem->id,
+            'property_number' => 'SE-SPT-001',
+            'balance_per_card' => 1,
+            'on_hand_count' => 0,
+        ]);
+
+        $tabs = app(OwwaItemReportService::class)->buildRpcspPhysicalCountTabs($session->fresh(['office', 'lines.item']));
+
+        $this->assertCount(2, $tabs);
+
+        $b5BySheet = collect($tabs)->mapWithKeys(
+            fn (array $tab): array => [$tab['sheetName'] => $tab['cellValues']['B5'] ?? null],
+        );
+
+        $this->assertSame('INFORMATION & COMMUNICATION TECHNOLOGY', $b5BySheet->get('ICT'));
+        $this->assertSame('SPORTS EQUIPMENT', $b5BySheet->get('SPORTS EQUIPMENT'));
+
+        $spreadsheet = app(\App\Services\OwwaTemplateExportService::class)->buildRpcspPhysicalCountSpreadsheet($tabs);
+        $this->assertNotNull($spreadsheet->getSheetByName('ICT'));
+        $this->assertNotNull($spreadsheet->getSheetByName('SPORTS EQUIPMENT'));
+    }
+
     public function test_physical_count_signatory_cells_use_configured_map(): void
     {
         $office = new Office(['name' => 'Regional Office', 'fund_cluster' => '01']);
@@ -145,12 +200,74 @@ class PhysicalCountExportMappingTest extends TestCase
         $session->setRelation('office', $office);
         $session->setRelation('lines', Collection::make());
 
-        $values = $this->invokeCellValuesForPhysicalCount($session);
-        $signatures = OwwaCellMapping::form('RPCI')['signatures'];
+        $service = app(OwwaItemReportService::class);
+        $cells = $service->physicalCountSignatureCells($session);
+        $block = OwwaCellMapping::physicalCountSignatureBlock('RPCI');
 
-        $this->assertSame('Certifier', $values[$signatures['certified_by']]);
-        $this->assertSame('Approver', $values[$signatures['approved_by']]);
-        $this->assertSame('Verifier', $values[$signatures['verified_by']]);
+        $this->assertSame('Certifier', $cells[OwwaCellMapping::columnCell($block['columns']['certified_by'], $block['line_row'])]);
+        $this->assertSame('Approver', $cells[OwwaCellMapping::columnCell($block['columns']['approved_by'], $block['line_row'])]);
+        $this->assertSame('Verifier', $cells[OwwaCellMapping::columnCell($block['columns']['verified_by'], $block['line_row'])]);
+    }
+
+    public function test_rpcsp_signatures_map_to_signature_line_row(): void
+    {
+        $block = OwwaCellMapping::physicalCountSignatureBlock('RPCSP');
+
+        $this->assertSame(38, $block['line_row']);
+        $this->assertSame('C38', OwwaCellMapping::form('RPCSP')['signatures']['certified_by']);
+        $this->assertSame('F38', OwwaCellMapping::form('RPCSP')['signatures']['approved_by']);
+        $this->assertSame('J38', OwwaCellMapping::form('RPCSP')['signatures']['verified_by']);
+    }
+
+    public function test_physical_count_signature_row_offsets_after_row_expansion(): void
+    {
+        $extra = 4;
+
+        $this->assertSame(
+            'C42',
+            OwwaCellMapping::physicalCountSignatureCell('RPCSP', 'certified_by', $extra),
+        );
+        $this->assertSame(
+            'D42',
+            OwwaCellMapping::physicalCountSignatureCell('RPCPPE', 'certified_by', $extra),
+        );
+    }
+
+    public function test_rpci_export_includes_all_detail_lines_without_truncation(): void
+    {
+        [$office, $category, $item, $user] = $this->createConsumableFixtures();
+
+        $session = PhysicalCountSession::query()->create([
+            'reference_code' => '2026-RPC-0025',
+            'count_type' => PhysicalCountSession::TYPE_RPCI,
+            'office_id' => $office->id,
+            'item_category_id' => $category->id,
+            'count_date' => now(),
+        ]);
+
+        $lines = Collection::make();
+
+        for ($index = 1; $index <= 25; $index++) {
+            $lines->push(PhysicalCountLine::query()->create([
+                'physical_count_session_id' => $session->id,
+                'item_id' => $item->id,
+                'stock_number' => 'STK-'.$index,
+                'balance_per_card' => 1,
+                'on_hand_count' => 1,
+            ]));
+        }
+
+        $session->setRelation('office', $office);
+        $session->setRelation('lines', $lines);
+
+        $values = $this->invokeCellValuesForPhysicalCount($session);
+        $cols = OwwaCellMapping::detailColumns('RPCI');
+        $startRow = OwwaCellMapping::detailRowBase('RPCI');
+
+        $this->assertSame(
+            'STK-25',
+            $values[OwwaCellMapping::columnCell($cols['stock_number'], $startRow + 24)],
+        );
     }
 
     /**

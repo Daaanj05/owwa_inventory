@@ -71,9 +71,11 @@ class PhysicalCountStockReconciliationTest extends TestCase
         app(PhysicalCountPreloadService::class)->preloadFromCustodyRecords($session);
 
         $report = app(PhysicalCountStockReconciliationService::class)->reconcile($office->id, $category->id);
+        $lines = $session->fresh()->lines;
 
-        $this->assertSame(2, $session->fresh()->lines()->count());
-        $this->assertSame($report['accountable_unit_count'], $session->fresh()->lines()->count());
+        $this->assertSame(1, $lines->count());
+        $this->assertSame(2, (int) $lines->first()->balance_per_card);
+        $this->assertSame($report['accountable_unit_count'], $lines->sum('balance_per_card'));
     }
 
     public function test_reconcile_reports_drift_when_extra_in_stock_units_exist(): void
@@ -169,7 +171,10 @@ class PhysicalCountStockReconciliationTest extends TestCase
 
         app(PhysicalCountPreloadService::class)->preloadFromCustodyRecords($session);
 
-        $this->assertSame(2, $session->fresh()->lines()->count());
+        $lines = $session->fresh()->lines;
+
+        $this->assertSame(1, $lines->count());
+        $this->assertSame(2, (int) $lines->first()->balance_per_card);
     }
 
     public function test_preload_excludes_units_at_satellite_office(): void

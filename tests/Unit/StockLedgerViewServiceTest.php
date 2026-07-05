@@ -2,10 +2,14 @@
 
 namespace Tests\Unit;
 
+use App\Models\Acquisition;
 use App\Models\Item;
 use App\Models\ItemCategory;
 use App\Models\Office;
+use App\Models\User;
+use App\Services\AcquisitionUnitService;
 use App\Services\StockLedgerViewService;
+use App\Support\ItemPropertyClass;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -56,6 +60,52 @@ class StockLedgerViewServiceTest extends TestCase
 
         $this->assertSame('Semi-Expendable Property Card (Annex A.1)', $present['title']);
         $this->assertSame('annex_a1', $present['exportForm']);
+    }
+
+    public function test_semi_ledger_header_uses_property_number_from_acquisition_without_issuance(): void
+    {
+        $office = Office::factory()->create(['code' => 'OWWA-IVA']);
+        $category = ItemCategory::factory()->create(['name' => 'Semi-Expendable']);
+        $item = Item::factory()->create([
+            'item_category_id' => $category->id,
+            'item_code' => 'SE-2026-0099',
+            'property_class' => ItemPropertyClass::OfficeEquipment,
+        ]);
+        $user = User::factory()->create();
+
+        $acquisition = Acquisition::query()->create([
+            'reference_code' => 'ACQ-LEDGER-SEMI',
+            'item_id' => $item->id,
+            'office_id' => $office->id,
+            'quantity' => 2,
+            'unit_cost' => 4500,
+            'acquisition_date' => now(),
+            'recorded_by' => $user->id,
+        ]);
+
+        app(AcquisitionUnitService::class)->generateUnitsForAcquisition($acquisition->fresh(['item.category', 'office']));
+
+        $bucket = \App\Models\ItemStockBucket::findForItemCost((int) $item->id, 4500.0);
+        $this->assertNotNull($bucket?->property_number);
+
+        $present = app(StockLedgerViewService::class)->present($item, $office, 4500.0);
+
+        $this->assertSame($bucket->property_number, $present['header']['property_number']);
+        $this->assertNotSame($item->item_code, $present['header']['property_number']);
+    }
+
+    public function test_semi_ledger_header_shows_dash_when_property_number_not_assigned(): void
+    {
+        $category = ItemCategory::factory()->create(['name' => 'Semi-Expendable']);
+        $item = Item::factory()->create([
+            'item_category_id' => $category->id,
+            'item_code' => 'SE-2026-0100',
+        ]);
+        $office = Office::factory()->create();
+
+        $present = app(StockLedgerViewService::class)->present($item, $office);
+
+        $this->assertSame('—', $present['header']['property_number']);
     }
 
     public function test_rows_include_running_balance_after_receipt_and_issue(): void

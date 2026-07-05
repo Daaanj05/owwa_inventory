@@ -9,6 +9,7 @@ use App\Models\Item;
 use App\Models\ItemCategory;
 use App\Models\Requisition;
 use App\Models\User;
+use App\Services\InventoryStockService;
 use App\Services\SemiExpendablePropertyNumberBuilder;
 use App\Support\IssuanceSignatoryLabels;
 use App\Support\OwwaReferenceLabels;
@@ -121,8 +122,19 @@ class IssuanceForm
 
                                 $unitCost = Acquisition::query()
                                     ->where('item_id', $state)
+                                    ->when(filled($get('office_id')), fn ($q) => $q->where('office_id', (int) $get('office_id')))
                                     ->orderByDesc('acquisition_date')
                                     ->value('unit_cost');
+
+                                if (filled($get('office_id'))) {
+                                    $fifo = app(InventoryStockService::class)->resolveFifoUnitCost(
+                                        (int) $state,
+                                        (int) $get('office_id'),
+                                    );
+                                    if ($fifo !== null) {
+                                        $unitCost = $fifo;
+                                    }
+                                }
 
                                 $set('unit_cost', $unitCost !== null ? (float) $unitCost : null);
                                 $set('estimated_useful_life', SemiExpendableUsefulLife::resolveForItem($item));
@@ -205,7 +217,19 @@ class IssuanceForm
                             ->required()
                             ->searchable()
                             ->preload()
-                            ->default($isUnitConsolidator ? $user->office_id : null),
+                            ->default($isUnitConsolidator ? $user->office_id : null)
+                            ->live()
+                            ->afterStateUpdated(function ($state, Set $set, Get $get): void {
+                                $itemId = $get('item_id');
+                                if (blank($itemId) || blank($state)) {
+                                    return;
+                                }
+
+                                $fifo = app(InventoryStockService::class)->resolveFifoUnitCost((int) $itemId, (int) $state);
+                                if ($fifo !== null) {
+                                    $set('unit_cost', $fifo);
+                                }
+                            }),
                         Select::make('department_id')
                             ->label('Department')
                             ->relationship(

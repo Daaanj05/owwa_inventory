@@ -3,8 +3,10 @@
 namespace App\Services;
 
 use App\Models\InventoryUnit;
+use App\Models\Issuance;
 use App\Models\PhysicalCountLine;
 use App\Models\PhysicalCountSession;
+use App\Support\PhysicalCountPropertyClassResolver;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 
@@ -23,9 +25,107 @@ class PhysicalCountPreloadService
 
         $result = $this->preloadFromInventoryUnits($session);
 
+        if ($result['created'] === 0 && $result['updated'] === 0) {
+            $result = $this->preloadFromIssuances($session);
+        }
+
         $session->update(['book_list_loaded' => true]);
 
+        $this->syncPropertyClassFields($session->fresh());
+
         return $result;
+    }
+
+    /**
+     * @return array{created: int, updated: int, skipped: int}
+     */
+    public function preloadFromIssuances(PhysicalCountSession $session): array
+    {
+        $categorySlug = $session->templateSlug();
+        $created = 0;
+        $updated = 0;
+        $skipped = 0;
+
+        DB::transaction(function () use ($session, $categorySlug, &$created, &$updated, &$skipped): void {
+            $issuances = Issuance::query()
+                ->with(['item.category'])
+                ->where('office_id', $session->office_id)
+                ->whereNotNull('property_number')
+                ->whereHas('item.category', function ($query): void {
+                    $query->whereNull('archived_at');
+                })
+                ->whereHas('item', function ($query) use ($session): void {
+                    $query->active();
+                    if ($session->item_category_id) {
+                        $query->where('item_category_id', $session->item_category_id);
+                    }
+                })
+                ->orderBy('property_number')
+                ->get()
+                ->filter(function (Issuance $issuance) use ($categorySlug): bool {
+                    return $issuance->item?->category?->getTemplateSlug() === $categorySlug;
+                });
+
+            if ($session->count_type === PhysicalCountSession::TYPE_RPCSP) {
+                /** @var array<string, array{issuance: Issuance, count: int}> $grouped */
+                $grouped = [];
+
+                foreach ($issuances as $issuance) {
+                    $propertyNumber = trim((string) $issuance->property_number);
+                    if ($propertyNumber === '' || $issuance->item === null) {
+                        $skipped++;
+
+                        continue;
+                    }
+
+                    if (! isset($grouped[$propertyNumber])) {
+                        $grouped[$propertyNumber] = ['issuance' => $issuance, 'count' => 0];
+                    }
+
+                    $grouped[$propertyNumber]['count'] += max(1, (int) $issuance->quantity);
+                }
+
+                foreach ($grouped as $propertyNumber => $entry) {
+                    $result = $this->upsertPhysicalCountLine(
+                        $session,
+                        $propertyNumber,
+                        $this->lineDataFromIssuance($entry['issuance']),
+                        $entry['count'],
+                    );
+
+                    $this->tallyUpsertResult($result, $created, $updated);
+                }
+
+                return;
+            }
+
+            foreach ($issuances as $issuance) {
+                $propertyNumber = trim((string) $issuance->property_number);
+                if ($propertyNumber === '') {
+                    $skipped++;
+
+                    continue;
+                }
+
+                $item = $issuance->item;
+                if ($item === null) {
+                    $skipped++;
+
+                    continue;
+                }
+
+                $result = $this->upsertPhysicalCountLine(
+                    $session,
+                    $propertyNumber,
+                    $this->lineDataFromIssuance($issuance),
+                    max(1, (int) $issuance->quantity),
+                );
+
+                $this->tallyUpsertResult($result, $created, $updated);
+            }
+        });
+
+        return compact('created', 'updated', 'skipped');
     }
 
     /**
@@ -58,6 +158,39 @@ class PhysicalCountPreloadService
                     return $unit->item?->category?->getTemplateSlug() === $categorySlug;
                 });
 
+            if ($session->count_type === PhysicalCountSession::TYPE_RPCSP) {
+                /** @var array<string, array{unit: InventoryUnit, count: int}> $grouped */
+                $grouped = [];
+
+                foreach ($units as $unit) {
+                    $propertyNumber = trim((string) $unit->property_number);
+                    if ($propertyNumber === '' || $unit->item === null) {
+                        $skipped++;
+
+                        continue;
+                    }
+
+                    if (! isset($grouped[$propertyNumber])) {
+                        $grouped[$propertyNumber] = ['unit' => $unit, 'count' => 0];
+                    }
+
+                    $grouped[$propertyNumber]['count']++;
+                }
+
+                foreach ($grouped as $propertyNumber => $entry) {
+                    $result = $this->upsertPhysicalCountLine(
+                        $session,
+                        $propertyNumber,
+                        $this->lineDataFromUnit($entry['unit']),
+                        $entry['count'],
+                    );
+
+                    $this->tallyUpsertResult($result, $created, $updated);
+                }
+
+                return;
+            }
+
             foreach ($units as $unit) {
                 $propertyNumber = trim((string) $unit->property_number);
                 if ($propertyNumber === '') {
@@ -73,37 +206,98 @@ class PhysicalCountPreloadService
                     continue;
                 }
 
-                $existing = PhysicalCountLine::query()
-                    ->where('physical_count_session_id', $session->id)
-                    ->where('property_number', $propertyNumber)
-                    ->first();
+                $result = $this->upsertPhysicalCountLine(
+                    $session,
+                    $propertyNumber,
+                    $this->lineDataFromUnit($unit),
+                    1,
+                );
 
-                $lineData = [
-                    'item_id' => $item->id,
-                    'article' => $unit->article ?? $item->name,
-                    'description' => $unit->description ?? $item->description,
-                    'stock_number' => $unit->stock_number ?? $item->item_code,
-                    'unit_of_measure' => $unit->unit_of_measure ?? $item->unit,
-                    'balance_per_card' => 1,
-                ];
-
-                if ($existing !== null) {
-                    $existing->update($lineData);
-                    $updated++;
-
-                    continue;
-                }
-
-                PhysicalCountLine::query()->create([
-                    ...$lineData,
-                    'physical_count_session_id' => $session->id,
-                    'property_number' => $propertyNumber,
-                    'on_hand_count' => 0,
-                ]);
-                $created++;
+                $this->tallyUpsertResult($result, $created, $updated);
             }
         });
 
         return compact('created', 'updated', 'skipped');
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function lineDataFromUnit(InventoryUnit $unit): array
+    {
+        $item = $unit->item;
+
+        return [
+            'item_id' => $item?->id ?? $unit->item_id,
+            'article' => $unit->article ?? $item?->name,
+            'description' => $unit->description ?? $item?->description,
+            'stock_number' => $unit->stock_number ?? $item?->item_code,
+            'unit_of_measure' => $unit->unit_of_measure ?? $item?->unit,
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function lineDataFromIssuance(Issuance $issuance): array
+    {
+        $item = $issuance->item;
+
+        return [
+            'item_id' => $item?->id ?? $issuance->item_id,
+            'article' => $item?->name,
+            'description' => $item?->description,
+            'stock_number' => $item?->item_code,
+            'unit_of_measure' => $item?->unit,
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $lineData
+     * @return 'created'|'updated'
+     */
+    protected function upsertPhysicalCountLine(
+        PhysicalCountSession $session,
+        string $propertyNumber,
+        array $lineData,
+        int $balanceIncrement,
+    ): string {
+        $existing = PhysicalCountLine::query()
+            ->where('physical_count_session_id', $session->id)
+            ->where('property_number', $propertyNumber)
+            ->first();
+
+        if ($existing !== null) {
+            $existing->update([
+                ...$lineData,
+                'balance_per_card' => (int) $existing->balance_per_card + $balanceIncrement,
+            ]);
+
+            return 'updated';
+        }
+
+        PhysicalCountLine::query()->create([
+            ...$lineData,
+            'physical_count_session_id' => $session->id,
+            'property_number' => $propertyNumber,
+            'balance_per_card' => $balanceIncrement,
+            'on_hand_count' => 0,
+        ]);
+
+        return 'created';
+    }
+
+    protected function tallyUpsertResult(string $result, int &$created, int &$updated): void
+    {
+        if ($result === 'created') {
+            $created++;
+        } else {
+            $updated++;
+        }
+    }
+
+    protected function syncPropertyClassFields(PhysicalCountSession $session): void
+    {
+        PhysicalCountPropertyClassResolver::syncSession($session);
     }
 }

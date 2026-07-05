@@ -168,6 +168,126 @@ class OwwaTemplateExportMappingTest extends TestCase
         $this->assertSame('', $values['A12']);
     }
 
+    public function test_rsmi_export_includes_unit_cost_and_amount_for_supply_custodian(): void
+    {
+        $custodian = User::factory()->make([
+            'role' => User::ROLE_SUPPLY_CUSTODIAN,
+        ]);
+        $this->actingAs($custodian);
+
+        $office = new Office(['name' => 'Regional Office', 'fund_cluster' => '01', 'code' => 'OPS']);
+        $item = new Item(['item_code' => 'CON-001', 'name' => 'Paper', 'unit' => 'ream']);
+
+        $issuance = new Issuance([
+            'reference_code' => '2026-01-0012',
+            'quantity' => 2,
+            'unit_cost' => 8.50,
+            'amount' => 17.00,
+            'issuance_date' => now(),
+        ]);
+        $issuance->setRelation('requisition', null);
+        $issuance->setRelation('office', $office);
+        $issuance->setRelation('department', null);
+        $issuance->setRelation('item', $item);
+
+        $values = app(OwwaTemplateExportService::class)->cellValuesForIssuance(
+            $issuance,
+            'Consumable/Issuances/Appendix 64 - RSMI.xls'
+        );
+
+        $this->assertSame(8.50, $values['G12']);
+        $this->assertSame(17.00, $values['H12']);
+    }
+
+    public function test_rsmi_export_preserves_custodian_signature_line_when_name_blank(): void
+    {
+        $office = new Office(['name' => 'Regional Office', 'fund_cluster' => '01']);
+        $item = new Item(['item_code' => 'CON-001', 'name' => 'Paper', 'unit' => 'ream']);
+
+        $issuance = new Issuance([
+            'reference_code' => '2026-01-0012',
+            'quantity' => 2,
+            'issuance_date' => now(),
+            'custodian_printed_name' => null,
+        ]);
+        $issuance->setRelation('requisition', null);
+        $issuance->setRelation('office', $office);
+        $issuance->setRelation('department', null);
+        $issuance->setRelation('item', $item);
+        $issuance->setRelation('issuedBy', null);
+
+        $values = app(OwwaTemplateExportService::class)->cellValuesForIssuance(
+            $issuance,
+            'Consumable/Issuances/Appendix 64 - RSMI.xls'
+        );
+
+        $this->assertArrayNotHasKey('A52', $values);
+        $this->assertArrayHasKey('H52', $values);
+    }
+
+    public function test_rsmi_export_leaves_custodian_signature_line_blank_for_template_placeholder(): void
+    {
+        $office = new Office(['name' => 'Regional Office', 'fund_cluster' => '01']);
+        $item = new Item(['item_code' => 'CON-001', 'name' => 'Paper', 'unit' => 'ream']);
+
+        $issuance = new Issuance([
+            'reference_code' => '2026-01-0012',
+            'quantity' => 2,
+            'issuance_date' => now(),
+            'custodian_printed_name' => 'Supply Custodian',
+        ]);
+        $issuance->setRelation('requisition', null);
+        $issuance->setRelation('office', $office);
+        $issuance->setRelation('department', null);
+        $issuance->setRelation('item', $item);
+
+        $values = app(OwwaTemplateExportService::class)->cellValuesForIssuance(
+            $issuance,
+            'Consumable/Issuances/Appendix 64 - RSMI.xls'
+        );
+
+        $this->assertArrayNotHasKey('A52', $values);
+        $this->assertArrayNotHasKey('F52', $values);
+    }
+
+    public function test_rsmi_export_expands_row_height_for_long_item_text(): void
+    {
+        $template = 'Consumable/Issuances/Appendix 64 - RSMI.xls';
+
+        if (! is_readable(storage_path('app/templates/'.$template))) {
+            $this->markTestSkipped('RSMI template is not installed.');
+        }
+
+        $service = app(OwwaTemplateExportService::class);
+
+        $office = new Office(['name' => 'Regional Office', 'fund_cluster' => '01', 'code' => 'OPS']);
+        $longItemName = str_repeat('Long consumable item description segment — ', 6);
+        $item = new Item(['item_code' => 'CON-001', 'name' => $longItemName, 'unit' => 'ream']);
+
+        $issuance = new Issuance([
+            'reference_code' => '2026-01-0012',
+            'quantity' => 2,
+            'unit_cost' => 15.5,
+            'issuance_date' => now(),
+        ]);
+        $requisition = new Requisition(['reference_code' => '2026-01-0005']);
+        $issuance->setRelation('requisition', $requisition);
+        $issuance->setRelation('office', $office);
+        $issuance->setRelation('department', null);
+        $issuance->setRelation('item', $item);
+
+        $cellValues = $service->cellValuesForIssuance($issuance, $template);
+        $spreadsheet = $service->renderFilledSpreadsheet($template, $cellValues);
+        $sheet = $spreadsheet->getActiveSheet();
+        $detailStart = OwwaCellMapping::detailRowBase('RSMI');
+        $styleRow = (int) (OwwaCellMapping::form('RSMI')['detail']['style_row'] ?? $detailStart);
+        $styleHeight = $sheet->getRowDimension($styleRow)->getRowHeight();
+        $dataHeight = $sheet->getRowDimension($detailStart)->getRowHeight();
+
+        $this->assertTrue($sheet->getStyle('D'.$detailStart)->getAlignment()->getWrapText());
+        $this->assertGreaterThanOrEqual($styleHeight > 0 ? $styleHeight : 15, $dataHeight);
+    }
+
     public function test_ppe_description_export_uses_name_and_description_only(): void
     {
         $item = new Item([

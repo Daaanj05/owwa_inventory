@@ -19,7 +19,7 @@ class PhysicalCountCompletionService
         $needsBookList = $session->supportsQrScanning() && ! $session->hasBookListLoaded();
 
         return [
-            'can_complete' => $missingFields === [] && ! $hasShortages && ! $needsBookList,
+            'can_complete' => $missingFields === [] && ! $needsBookList,
             'missing_fields' => $missingFields,
             'has_shortages' => $hasShortages,
             'needs_book_list' => $needsBookList,
@@ -50,10 +50,6 @@ class PhysicalCountCompletionService
 
             if ($evaluation['missing_fields'] !== []) {
                 $messages[] = 'Missing: '.implode(', ', $evaluation['missing_fields']).'.';
-            }
-
-            if ($evaluation['has_shortages']) {
-                $messages[] = 'Resolve shortage lines before marking complete.';
             }
 
             if ($evaluation['needs_book_list'] ?? false) {

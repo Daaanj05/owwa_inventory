@@ -11,10 +11,11 @@ use App\Models\ItemCategory;
 use App\Models\PhysicalCountSession;
 use App\Services\InventoryStockService;
 use App\Support\CustodianOfficeScope;
-use App\Support\ItemPropertyClass;
 use App\Support\OfficeSignatoryDefaults;
 use App\Support\PhysicalCountSessionViewPresenter;
+use Filament\Facades\Filament;
 use Filament\Forms\Components\DatePicker;
+use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
@@ -37,21 +38,12 @@ class PhysicalCountSessionForm
                     ->columnSpanFull()
                     ->columns(2)
                     ->schema([
-                        Select::make('count_type')
-                            ->label('Report form')
-                            ->options([
-                                PhysicalCountSession::TYPE_RPCI => 'Appendix 66 - RPCI (Inventories)',
-                                PhysicalCountSession::TYPE_RPCPPE => 'Appendix 73 - RPCPPE (PPE)',
-                                PhysicalCountSession::TYPE_RPCSP => 'Annex A.8 - RPCSP (Semi-expendable)',
-                            ])
-                            ->required()
-                            ->live()
+                        Hidden::make('count_type')
                             ->default(fn (Get $get): string => self::resolveCountTypeForCategoryId(
                                 $get('item_category_id') ?: SyncsActiveItemCategory::resolveCategoryIdFromContext(),
                             ))
-                            ->helperText(fn (Get $get): string => in_array($get('count_type'), [PhysicalCountSession::TYPE_RPCPPE, PhysicalCountSession::TYPE_RPCSP], true)
-                                ? 'QR scanning is available for PPE and semi-expendable. Save the session, then use Load expected assets and Scan with phone.'
-                                : 'Consumables use manual count lines below. QR scanning is not used for RPCI.'),
+                            ->dehydrated()
+                            ->live(),
                         Select::make('office_id')
                             ->label('Office')
                             ->relationship(
@@ -84,6 +76,7 @@ class PhysicalCountSessionForm
                             ->default(fn (): mixed => SyncsActiveItemCategory::resolveCategoryIdFromContext())
                             ->searchable()
                             ->live()
+                            ->visible(fn (): bool => ! self::isCategoryScoped())
                             ->afterStateUpdated(function ($state, callable $set): void {
                                 if (blank($state)) {
                                     return;
@@ -97,24 +90,10 @@ class PhysicalCountSessionForm
                             ->default(now()),
                         TextInput::make('inventory_type_label')
                             ->label('Type of inventory / property')
-                            ->placeholder(fn (Get $get): string => match ($get('count_type')) {
-                                PhysicalCountSession::TYPE_RPCPPE => 'e.g. ICT, Office Equipment, Medical Equipment',
-                                PhysicalCountSession::TYPE_RPCSP => 'e.g. ICT, Office Equipment, Medical Equipment',
-                                default => 'e.g. Office Supplies Inventory, Medical/Dental/Laboratory Supplies Inventory',
-                            })
-                            ->helperText(fn (Get $get): string => match ($get('count_type')) {
-                                PhysicalCountSession::TYPE_RPCPPE => 'Printed on Appendix 73 as “Type of Property, Plant and Equipment”.',
-                                PhysicalCountSession::TYPE_RPCSP => 'Printed on Annex A.8 as “Type of Property, Plant and Equipment”. Prefer selecting Property class below for the correct Excel tab.',
-                                default => 'Printed on Appendix 66 as “Type of Inventory Item” (e.g. Office Supplies Inventory, Accountable Forms Inventory).',
-                            })
+                            ->placeholder('e.g. Office Supplies Inventory, Medical/Dental/Laboratory Supplies Inventory')
+                            ->helperText('Printed on Appendix 66 as “Type of Inventory Item” (e.g. Office Supplies Inventory, Accountable Forms Inventory).')
+                            ->visible(fn (Get $get): bool => $get('count_type') === PhysicalCountSession::TYPE_RPCI)
                             ->columnSpanFull(),
-                        Select::make('property_class')
-                            ->label('Property class (semi-expendable tab)')
-                            ->options(ItemPropertyClass::options())
-                            ->searchable()
-                            ->placeholder('Infer from count lines or type label')
-                            ->helperText('Select when exporting Annex A.8 RPCSP so the correct property-class sheet tab is used.')
-                            ->visible(fn (Get $get): bool => $get('count_type') === PhysicalCountSession::TYPE_RPCSP),
                         TextInput::make('fund_cluster')
                             ->label('Fund cluster'),
                         TextInput::make('accountable_officer_name')
@@ -278,5 +257,11 @@ class PhysicalCountSessionForm
         }
 
         return false;
+    }
+
+    protected static function isCategoryScoped(): bool
+    {
+        return Filament::getCurrentPanel()?->getId() === 'admin'
+            && (filled(request()->query('category')) || filled(session('active_item_category_id')));
     }
 }

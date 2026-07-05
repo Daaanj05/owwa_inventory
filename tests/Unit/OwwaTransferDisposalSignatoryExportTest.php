@@ -212,7 +212,7 @@ class OwwaTransferDisposalSignatoryExportTest extends TestCase
         $this->assertSame('CON-010', $values[OwwaCellMapping::columnCell($cols['stock_no'], $detailStart)]);
         $this->assertSame('3', $values[OwwaCellMapping::columnCell($cols['quantity'], $detailStart)]);
         $this->assertStringContainsString('Transfer to To Office', (string) $values[OwwaCellMapping::columnCell($cols['item'], $detailStart)]);
-        $this->assertSame('Supply Custodian', $values['A52']);
+        $this->assertArrayNotHasKey('A52', $values);
     }
 
     public function test_physical_count_signatory_cells_use_configured_map(): void

@@ -9,6 +9,10 @@ use App\Models\Office;
 use Carbon\Carbon;
 use Illuminate\Database\Seeder;
 
+/**
+ * @deprecated Use `php artisan demo:reset-inventory --force` for export-testing demo data.
+ *             This seeder only adds consumption chart issuances and is excluded from the unified export fixture flow.
+ */
 class ConsumptionDemoSeeder extends Seeder
 {
     /**

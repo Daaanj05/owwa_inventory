@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\PhysicalCountSessions;
 
 use App\Filament\Concerns\HasOwwaViewModalUrl;
+use App\Filament\Concerns\SyncsActiveItemCategory;
 use App\Filament\Resources\PhysicalCountSessions\Pages\CreatePhysicalCountSession;
 use App\Filament\Resources\PhysicalCountSessions\Pages\EditPhysicalCountSession;
 use App\Filament\Resources\PhysicalCountSessions\Pages\ListPhysicalCountSessions;
@@ -42,7 +43,16 @@ class PhysicalCountSessionResource extends Resource
 
     public static function getEloquentQuery(): Builder
     {
-        return CustodianOfficeScope::applyOfficeColumn(parent::getEloquentQuery());
+        $query = CustodianOfficeScope::applyOfficeColumn(parent::getEloquentQuery());
+
+        $categoryId = SyncsActiveItemCategory::resolveCategoryIdFromContext();
+        if ($categoryId > 0) {
+            $query->where('item_category_id', $categoryId);
+        } else {
+            $query->whereRaw('1 = 0');
+        }
+
+        return $query;
     }
 
     public static function form(Schema $schema): Schema
