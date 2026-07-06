@@ -13,7 +13,9 @@ use App\Filament\Widgets\ConsumptionSharePieWidget;
 use App\Filament\Widgets\ConsumptionTrendsWidget;
 use App\Filament\Widgets\EmployeeStatsWidget;
 use App\Filament\Widgets\LowStockWidget;
+use App\Filament\Widgets\RecentAcquisitionsWidget;
 use App\Filament\Widgets\SystemAdminStatsWidget;
+use App\Filament\Widgets\TopAcquiredProductsWidget;
 use App\Filament\Widgets\UnitConsolidatorStatsWidget;
 use App\Filament\Widgets\WelcomeWidget;
 use App\Http\Middleware\AdminExecutionTimeLimit;
@@ -109,6 +111,8 @@ class AdminPanelProvider extends PanelProvider
                 LowStockWidget::class,
                 ConsumptionTrendsWidget::class,
                 ConsumptionSharePieWidget::class,
+                RecentAcquisitionsWidget::class,
+                TopAcquiredProductsWidget::class,
             ])
             ->middleware([
                 AdminExecutionTimeLimit::class,

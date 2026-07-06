@@ -54,17 +54,17 @@ class ConsumptionAnalyticsTest extends TestCase
         });
 
         $service = app(ConsumptionAnalyticsService::class);
-        $totals = $service->getConsumptionTotalsByDepartment($from, $to);
+        $totals = $service->getConsumptionTotalsByOffice($from, $to);
 
         $this->assertSame(15, $totals['total']);
-        $this->assertContains('Regional Admin', $totals['labels']);
-        $this->assertContains('Satellite Admin', $totals['labels']);
+        $this->assertContains('Regional Office', $totals['labels']);
+        $this->assertContains('Satellite Office', $totals['labels']);
     }
 
     public function test_consumption_can_filter_to_satellite_office_only(): void
     {
-        $regional = Office::factory()->create(['is_satellite' => false]);
-        $satellite = Office::factory()->create(['is_satellite' => true]);
+        $regional = Office::factory()->create(['name' => 'Regional Office', 'is_satellite' => false]);
+        $satellite = Office::factory()->create(['name' => 'Satellite Office', 'is_satellite' => true]);
         $regionalDept = Department::query()->create([
             'office_id' => $regional->id,
             'name' => 'Regional Dept',
@@ -100,48 +100,145 @@ class ConsumptionAnalyticsTest extends TestCase
         });
 
         $service = app(ConsumptionAnalyticsService::class);
-        $totals = $service->getConsumptionTotalsByDepartment($from, $to, officeIds: [$satellite->id]);
+        $totals = $service->getConsumptionTotalsByOffice($from, $to, officeIds: [$satellite->id]);
 
         $this->assertSame(7, $totals['total']);
-        $this->assertSame(['Satellite Dept'], $totals['labels']);
+        $this->assertSame(['Satellite Office'], $totals['labels']);
     }
 
-    public function test_consumption_excludes_issuances_without_department(): void
+    public function test_consumption_summary_returns_top_office(): void
     {
-        $office = Office::factory()->create();
-        $department = Department::query()->create([
-            'office_id' => $office->id,
-            'name' => 'With Dept',
-            'code' => 'WD',
+        $officeA = Office::factory()->create(['name' => 'Regional Office']);
+        $officeB = Office::factory()->create(['name' => 'Satellite Office']);
+        $deptA = Department::query()->create([
+            'office_id' => $officeA->id,
+            'name' => 'Admin',
+            'code' => 'AD',
+        ]);
+        $deptB = Department::query()->create([
+            'office_id' => $officeB->id,
+            'name' => 'Finance',
+            'code' => 'FN',
         ]);
         $item = Item::factory()->create();
 
         $from = Carbon::parse('2026-03-01');
         $to = Carbon::parse('2026-03-31');
 
-        Issuance::withoutEvents(function () use ($item, $office, $department, $from): void {
+        Issuance::withoutEvents(function () use ($item, $officeA, $officeB, $deptA, $deptB, $from): void {
             Issuance::query()->create([
-                'reference_code' => 'ISS-NODEPT',
+                'reference_code' => 'ISS-A',
                 'item_id' => $item->id,
-                'office_id' => $office->id,
-                'department_id' => null,
-                'quantity' => 100,
+                'office_id' => $officeA->id,
+                'department_id' => $deptA->id,
+                'quantity' => 30,
                 'issuance_date' => $from->copy()->addDay(),
             ]);
             Issuance::query()->create([
-                'reference_code' => 'ISS-DEPT',
+                'reference_code' => 'ISS-B',
                 'item_id' => $item->id,
-                'office_id' => $office->id,
-                'department_id' => $department->id,
-                'quantity' => 3,
+                'office_id' => $officeB->id,
+                'department_id' => $deptB->id,
+                'quantity' => 50,
                 'issuance_date' => $from->copy()->addDays(2),
             ]);
         });
 
         $service = app(ConsumptionAnalyticsService::class);
-        $totals = $service->getConsumptionTotalsByDepartment($from, $to);
+        $summary = $service->getConsumptionSummaryByOffice($from, $to);
 
-        $this->assertSame(3, $totals['total']);
-        $this->assertSame(['With Dept'], $totals['labels']);
+        $this->assertSame(80, $summary['total']);
+        $this->assertSame('Satellite Office', $summary['top_office_name']);
+        $this->assertSame(50, $summary['top_office_quantity']);
+    }
+
+    public function test_multiple_departments_in_same_office_aggregate_into_one_office_slice(): void
+    {
+        $office = Office::factory()->create(['name' => 'Regional Office']);
+        $deptA = Department::query()->create([
+            'office_id' => $office->id,
+            'name' => 'Admin Division',
+            'code' => 'AD',
+        ]);
+        $deptB = Department::query()->create([
+            'office_id' => $office->id,
+            'name' => 'Finance Division',
+            'code' => 'FD',
+        ]);
+        $item = Item::factory()->create();
+
+        $from = Carbon::parse('2026-04-01');
+        $to = Carbon::parse('2026-04-30');
+
+        Issuance::withoutEvents(function () use ($item, $office, $deptA, $deptB, $from): void {
+            Issuance::query()->create([
+                'reference_code' => 'ISS-AD',
+                'item_id' => $item->id,
+                'office_id' => $office->id,
+                'department_id' => $deptA->id,
+                'quantity' => 12,
+                'issuance_date' => $from->copy()->addDay(),
+            ]);
+            Issuance::query()->create([
+                'reference_code' => 'ISS-FD',
+                'item_id' => $item->id,
+                'office_id' => $office->id,
+                'department_id' => $deptB->id,
+                'quantity' => 8,
+                'issuance_date' => $from->copy()->addDays(2),
+            ]);
+        });
+
+        $service = app(ConsumptionAnalyticsService::class);
+        $totals = $service->getConsumptionTotalsByOffice($from, $to);
+
+        $this->assertSame(20, $totals['total']);
+        $this->assertSame(['Regional Office'], $totals['labels']);
+        $this->assertSame([20], $totals['values']);
+    }
+
+    public function test_department_filter_narrows_office_totals(): void
+    {
+        $office = Office::factory()->create(['name' => 'Regional Office']);
+        $deptA = Department::query()->create([
+            'office_id' => $office->id,
+            'name' => 'Admin Division',
+            'code' => 'AD',
+        ]);
+        $deptB = Department::query()->create([
+            'office_id' => $office->id,
+            'name' => 'Finance Division',
+            'code' => 'FD',
+        ]);
+        $item = Item::factory()->create();
+
+        $from = Carbon::parse('2026-05-01');
+        $to = Carbon::parse('2026-05-31');
+
+        Issuance::withoutEvents(function () use ($item, $office, $deptA, $deptB, $from): void {
+            Issuance::query()->create([
+                'reference_code' => 'ISS-AD-2',
+                'item_id' => $item->id,
+                'office_id' => $office->id,
+                'department_id' => $deptA->id,
+                'quantity' => 15,
+                'issuance_date' => $from->copy()->addDay(),
+            ]);
+            Issuance::query()->create([
+                'reference_code' => 'ISS-FD-2',
+                'item_id' => $item->id,
+                'office_id' => $office->id,
+                'department_id' => $deptB->id,
+                'quantity' => 25,
+                'issuance_date' => $from->copy()->addDays(2),
+            ]);
+        });
+
+        $service = app(ConsumptionAnalyticsService::class);
+        $totals = $service->getConsumptionTotalsByOffice($from, $to, departmentIds: [$deptA->id]);
+
+        $this->assertSame(15, $totals['total']);
+        $this->assertSame(['Regional Office'], $totals['labels']);
+        $this->assertSame([15], $totals['values']);
     }
 }

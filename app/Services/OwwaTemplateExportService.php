@@ -6,6 +6,7 @@ use App\Models\Acquisition;
 use App\Models\AcquisitionPaperwork;
 use App\Models\Disposal;
 use App\Models\Issuance;
+use App\Models\PhysicalCountSession;
 use App\Models\Requisition;
 use App\Models\Transfer;
 use App\Support\AnnexA1BlockLayout;
@@ -18,6 +19,8 @@ use App\Support\OwwaSpreadsheetLayoutHelper;
 use App\Support\OwwaTemplateLoader;
 use App\Support\PesoAmountInWords;
 use App\Support\PhpExtensionGuard;
+use App\Support\PhysicalCountPageLayout;
+use App\Support\PhysicalCountSpreadsheetBuilder;
 use App\Support\ProcurementHeaderLayout;
 use App\Support\ProcurementSpreadsheetBuilder;
 use App\Support\PropertyCardLayout;
@@ -334,6 +337,256 @@ class OwwaTemplateExportService
         return $this->sanitizeExcelSheetTitle($formCode.$suffix.$pageIndex);
     }
 
+    public function physicalCountSheetTitle(
+        string $formCode,
+        int $pageIndex,
+        int $pageCount,
+        ?string $baseSheetName = null,
+    ): string {
+        $suffix = (string) (OwwaCellMapping::form($formCode)['detail']['continuation_sheet_suffix'] ?? ' Cont.');
+        $baseTitle = $baseSheetName ?? $formCode;
+
+        if ($pageCount <= 1) {
+            return $this->sanitizeExcelSheetTitle($baseTitle);
+        }
+
+        if ($pageIndex === 0) {
+            return $this->sanitizeExcelSheetTitle($baseTitle);
+        }
+
+        return $this->sanitizeExcelSheetTitle($baseTitle.$suffix.$pageIndex);
+    }
+
+    public function clearPhysicalCountSignatureValues(
+        Worksheet $sheet,
+        string $formCode,
+        bool $useMasterSignatures = false,
+    ): void {
+        $block = OwwaCellMapping::physicalCountSignatureBlock($formCode, $useMasterSignatures);
+        $lineRow = (int) ($block['line_row'] ?? 38);
+        $columns = (array) ($block['columns'] ?? []);
+
+        foreach ($columns as $column) {
+            $sheet->setCellValue(OwwaCellMapping::columnCell($column, $lineRow), null);
+        }
+    }
+
+    /**
+     * @param  array<string, string|int|float|null>  $cellValues
+     * @param  array<string, string|int|float|null>  $signaturePairs
+     */
+    public function applyFilledPhysicalCountSheet(
+        Worksheet $sheet,
+        string $formCode,
+        array $cellValues,
+        array $signaturePairs,
+        bool $useMasterSignatures = false,
+        bool $isLastPage = true,
+    ): void {
+        foreach ($cellValues as $cellRef => $value) {
+            $this->setExportCellValue($sheet, $cellRef, $value);
+        }
+
+        $this->finalizePhysicalCountSheet(
+            $sheet,
+            $formCode,
+            $cellValues,
+            $isLastPage ? $signaturePairs : [],
+            $useMasterSignatures,
+        );
+
+        if (! $isLastPage) {
+            $this->clearPhysicalCountSignatureValues($sheet, $formCode, $useMasterSignatures);
+        }
+    }
+
+    public function sanitizePhysicalCountSheetTitle(string $title): string
+    {
+        return $this->sanitizeExcelSheetTitle($title);
+    }
+
+    public function populateContinuousPhysicalCountSheet(
+        Worksheet $sheet,
+        PhysicalCountSession $session,
+        string $formCode,
+        Collection $lines,
+        ?string $propertyClass = null,
+        ?string $sheetName = null,
+        bool $useMasterSignatures = false,
+    ): void {
+        $reportService = app(OwwaItemReportService::class);
+        $signaturePairs = $reportService->physicalCountSignaturePairs($session);
+        $blockStartRow = PhysicalCountPageLayout::blockStartRowForPage($formCode, 0);
+
+        $this->clearPhysicalCountBlockDetail($sheet, $formCode, $blockStartRow);
+
+        $cellValues = $reportService->physicalCountCellValues(
+            $session,
+            $lines,
+            $propertyClass,
+            $sheetName,
+            $blockStartRow,
+        );
+
+        $this->preparePhysicalCountRowExpansion($sheet, $formCode, $cellValues);
+
+        foreach ($cellValues as $cellRef => $value) {
+            $this->setExportCellValue($sheet, $cellRef, $value);
+        }
+
+        $this->finalizePhysicalCountSheet(
+            $sheet,
+            $formCode,
+            $cellValues,
+            $signaturePairs,
+            $useMasterSignatures,
+        );
+    }
+
+    /**
+     * @param  array<int, Collection<int, mixed>>  $chunks
+     */
+    public function populatePhysicalCountSheet(
+        Worksheet $sheet,
+        Worksheet $masterSheet,
+        PhysicalCountSession $session,
+        string $formCode,
+        array $chunks,
+        ?string $propertyClass = null,
+        ?string $sheetName = null,
+        bool $useMasterSignatures = false,
+    ): void {
+        $reportService = app(OwwaItemReportService::class);
+        $signaturePairs = $reportService->physicalCountSignaturePairs($session);
+        $blockRowCount = PhysicalCountPageLayout::blockRowCount($formCode);
+        $highestColumn = PhysicalCountPageLayout::highestColumn($formCode);
+        $firstBlockStart = PhysicalCountPageLayout::blockStartRowForPage($formCode, 0);
+        $headerRows = OwwaCellMapping::detailRowBase($formCode) - $firstBlockStart;
+
+        foreach (array_values($chunks) as $pageIndex => $chunk) {
+            $blockStartRow = PhysicalCountPageLayout::blockStartRowForPage($formCode, $pageIndex);
+
+            if ($pageIndex > 0) {
+                OwwaSpreadsheetLayoutHelper::copyWorksheetRows(
+                    $masterSheet,
+                    $sheet,
+                    $firstBlockStart,
+                    $blockStartRow,
+                    $blockRowCount,
+                    $highestColumn,
+                );
+
+                if ($headerRows > 0) {
+                    OwwaSpreadsheetLayoutHelper::duplicateHeaderDrawings(
+                        $masterSheet,
+                        $sheet,
+                        PhysicalCountPageLayout::rowOffsetForBlock($formCode, $blockStartRow),
+                        $headerRows,
+                    );
+                }
+            }
+
+            $this->clearPhysicalCountBlockDetail($sheet, $formCode, $blockStartRow);
+
+            $cellValues = $reportService->physicalCountCellValues(
+                $session,
+                $chunk,
+                $propertyClass,
+                $sheetName,
+                $blockStartRow,
+            );
+
+            foreach ($cellValues as $cellRef => $value) {
+                $this->setExportCellValue($sheet, $cellRef, $value);
+            }
+
+            $this->finalizePhysicalCountBlock(
+                $sheet,
+                $formCode,
+                $cellValues,
+                $blockStartRow,
+            );
+
+            foreach ($signaturePairs as $field => $value) {
+                $cell = PhysicalCountPageLayout::signatureCellForBlock(
+                    $formCode,
+                    (string) $field,
+                    $blockStartRow,
+                    $useMasterSignatures,
+                );
+                $this->setExportCellValue($sheet, $cell, $value);
+            }
+
+            if ($pageIndex < count($chunks) - 1) {
+                $nextBlockStart = PhysicalCountPageLayout::blockStartRowForPage($formCode, $pageIndex + 1);
+                $sheet->setBreak('A'.$nextBlockStart, Worksheet::BREAK_ROW);
+            }
+        }
+
+        OwwaSpreadsheetLayoutHelper::applyPhysicalCountStackedPrintLayout(
+            $sheet,
+            $formCode,
+            count($chunks),
+        );
+    }
+
+    public function buildPhysicalCountSpreadsheet(
+        PhysicalCountSession $session,
+        string $formCode,
+        string $templateFilename,
+        ?int $sheetIndex = 0,
+        ?string $sheetName = null,
+        ?Collection $lines = null,
+        ?string $propertyClass = null,
+    ): Spreadsheet {
+        return app(PhysicalCountSpreadsheetBuilder::class)->build(
+            $session,
+            $formCode,
+            $templateFilename,
+            $sheetIndex,
+            $sheetName,
+            $lines,
+            $propertyClass,
+        );
+    }
+
+    public function downloadPhysicalCountSpreadsheet(
+        PhysicalCountSession $session,
+        string $formCode,
+        string $templateFilename,
+        string $outputFilename,
+        ?int $sheetIndex = 0,
+        ?string $sheetName = null,
+        ?Collection $lines = null,
+        ?string $propertyClass = null,
+    ): StreamedResponse {
+        $spreadsheet = $this->buildPhysicalCountSpreadsheet(
+            $session,
+            $formCode,
+            $templateFilename,
+            $sheetIndex,
+            $sheetName,
+            $lines,
+            $propertyClass,
+        );
+
+        try {
+            $binary = $this->spreadsheetToXlsxBinary($spreadsheet);
+        } finally {
+            $spreadsheet->disconnectWorksheets();
+        }
+
+        return response()->streamDownload(
+            static function () use ($binary): void {
+                echo $binary;
+            },
+            $outputFilename,
+            [
+                'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            ]
+        );
+    }
+
     protected function ensureRsmiSignatureLines(Worksheet $sheet): void
     {
         $placeholder = RsmiSignatureLayout::SIGNATURE_LINE_PLACEHOLDER;
@@ -377,12 +630,15 @@ class OwwaTemplateExportService
     /**
      * @param  array<string, string|int|float|null>  $cellValues
      */
-    protected function countPhysicalCountDetailRows(string $formKey, array $cellValues): int
-    {
-        $startRow = OwwaCellMapping::detailRowBase($formKey);
+    protected function countPhysicalCountDetailRows(
+        string $formKey,
+        array $cellValues,
+        ?int $detailStart = null,
+    ): int {
+        $detailStart ??= OwwaCellMapping::detailRowBase($formKey);
         $columns = OwwaCellMapping::detailColumns($formKey);
         $count = 0;
-        $row = $startRow;
+        $row = $detailStart;
 
         while ($count < 500) {
             $hasData = false;
@@ -436,6 +692,103 @@ class OwwaTemplateExportService
      * @param  array<string, string|int|float|null>  $cellValues
      * @param  array<string, string|int|float|null>  $signaturePairs
      */
+    public function finalizePhysicalCountBlock(
+        Worksheet $sheet,
+        string $formKey,
+        array $cellValues,
+        int $blockStartRow,
+    ): void {
+        $detail = (array) OwwaCellMapping::form($formKey)['detail'];
+        $detailStart = PhysicalCountPageLayout::detailStartRowForBlock($formKey, $blockStartRow);
+        $detailCount = $this->countPhysicalCountDetailRows($formKey, $cellValues, $detailStart);
+        $templateDetailRows = (int) ($detail['template_detail_rows'] ?? $detail['max_rows'] ?? 21);
+        $styleRow = $detailStart;
+        $highestColumn = (string) ($detail['highest_column'] ?? 'K');
+        $columnTypes = (array) ($detail['column_types'] ?? []);
+        $alignments = $columnTypes !== []
+            ? OwwaExportStandards::resolveColumnAlignments($columnTypes)
+            : OwwaSpreadsheetLayoutHelper::alignmentMapFromConfig(
+                array_fill_keys(range('A', $highestColumn), 'left'),
+            );
+        $detailEndRow = $detailStart + $templateDetailRows - 1;
+        $blockHeightBudget = OwwaSpreadsheetLayoutHelper::sumRowHeightsInRange(
+            $sheet,
+            $detailStart,
+            $detailEndRow,
+            OwwaSpreadsheetLayoutHelper::resolveLedgerRowHeight($sheet, $styleRow),
+        );
+
+        OwwaSpreadsheetLayoutHelper::normalizeDetailRows(
+            $sheet,
+            $detailStart,
+            $templateDetailRows,
+            $styleRow,
+            $alignments,
+            $highestColumn,
+            OwwaExportStandards::resolveWrapTextColumns($detail),
+            OwwaExportStandards::minWrapLinesForExpansion($detail),
+            false,
+            false,
+        );
+
+        if ($detailCount < $templateDetailRows) {
+            $columns = OwwaCellMapping::detailColumns($formKey);
+
+            for ($row = $detailStart + $detailCount; $row < $detailStart + $templateDetailRows; $row++) {
+                foreach ($columns as $column) {
+                    $sheet->setCellValue(OwwaCellMapping::columnCell($column, $row), null);
+                }
+            }
+        }
+
+        if ($columnTypes !== [] && $detailCount > 0) {
+            OwwaSpreadsheetLayoutHelper::applyMonetaryColumnFormats(
+                $sheet,
+                $detailStart,
+                $detailStart + $detailCount - 1,
+                $columnTypes,
+            );
+        }
+
+        $blockEndRow = (int) ($detail['detail_block_end_row'] ?? ((int) ($detail['signature_block_start_row'] ?? 36) - 1));
+
+        OwwaSpreadsheetLayoutHelper::fitWrappedDetailRowsWithinBlock(
+            $sheet,
+            $detailStart,
+            $templateDetailRows,
+            $blockEndRow,
+            $styleRow,
+            $detailCount,
+            OwwaExportStandards::expandableWrapColumns($detail),
+            OwwaExportStandards::resolveWrapTextColumns($detail),
+            OwwaExportStandards::maxColumnWidth($detail),
+            OwwaExportStandards::columnWidthStep($detail),
+            OwwaExportStandards::minWrapLinesForExpansion($detail),
+            OwwaExportStandards::maxDetailRowHeight($detail),
+            $blockHeightBudget,
+        );
+    }
+
+    protected function clearPhysicalCountBlockDetail(
+        Worksheet $sheet,
+        string $formKey,
+        int $blockStartRow,
+    ): void {
+        $detailStart = PhysicalCountPageLayout::detailStartRowForBlock($formKey, $blockStartRow);
+        $templateDetailRows = (int) (OwwaCellMapping::form($formKey)['detail']['template_detail_rows'] ?? 21);
+        $columns = OwwaCellMapping::detailColumns($formKey);
+
+        for ($row = $detailStart; $row < $detailStart + $templateDetailRows; $row++) {
+            foreach ($columns as $column) {
+                $this->setExportCellValue($sheet, OwwaCellMapping::columnCell($column, $row), null);
+            }
+        }
+    }
+
+    /**
+     * @param  array<string, string|int|float|null>  $cellValues
+     * @param  array<string, string|int|float|null>  $signaturePairs
+     */
     public function finalizePhysicalCountSheet(
         Worksheet $sheet,
         string $formKey,
@@ -443,37 +796,105 @@ class OwwaTemplateExportService
         array $signaturePairs,
         bool $useMasterSignatures = false,
     ): void {
-        $detail = (array) OwwaCellMapping::form($formKey)['detail'];
-        $detailCount = $this->countPhysicalCountDetailRows($formKey, $cellValues);
-        $templateDetailRows = (int) ($detail['template_detail_rows'] ?? $detail['max_rows'] ?? 21);
-        $extra = max(0, $detailCount - $templateDetailRows);
-        $detailStart = (int) ($detail['start_row'] ?? 15);
-        $styleRow = (int) ($detail['style_row'] ?? $detailStart);
-        $highestColumn = (string) ($detail['highest_column'] ?? 'K');
-        $alignments = OwwaSpreadsheetLayoutHelper::alignmentMapFromConfig(
-            array_fill_keys(range('A', $highestColumn), 'left'),
-        );
+        $blockStartRow = PhysicalCountPageLayout::blockStartRowForPage($formKey, 0);
+        $detailStart = PhysicalCountPageLayout::detailStartRowForBlock($formKey, $blockStartRow);
+        $detailCount = $this->countPhysicalCountDetailRows($formKey, $cellValues, $detailStart);
 
-        if ($detailCount > 0) {
-            OwwaSpreadsheetLayoutHelper::normalizeDetailRows(
+        if (PhysicalCountPageLayout::isContinuousLayout($formKey)) {
+            $this->finalizeContinuousPhysicalCountBlock(
                 $sheet,
-                $detailStart,
+                $formKey,
+                $cellValues,
+                $blockStartRow,
                 $detailCount,
-                $styleRow,
-                $alignments,
-                $highestColumn,
             );
+        } else {
+            $this->finalizePhysicalCountBlock($sheet, $formKey, $cellValues, $blockStartRow);
         }
 
         foreach ($signaturePairs as $field => $value) {
-            $cell = OwwaCellMapping::physicalCountSignatureCell(
+            $cell = PhysicalCountPageLayout::signatureCellForBlock(
                 $formKey,
                 (string) $field,
-                $extra,
+                $blockStartRow,
                 $useMasterSignatures,
+                $detailCount,
             );
             $this->setExportCellValue($sheet, $cell, $value);
         }
+
+        if (PhysicalCountPageLayout::isContinuousLayout($formKey)) {
+            OwwaSpreadsheetLayoutHelper::applyContinuousPrintLayout($sheet, $formKey, $detailCount);
+        }
+    }
+
+    /**
+     * @param  array<string, string|int|float|null>  $cellValues
+     */
+    protected function finalizeContinuousPhysicalCountBlock(
+        Worksheet $sheet,
+        string $formKey,
+        array $cellValues,
+        int $blockStartRow,
+        int $detailCount,
+    ): void {
+        $detail = (array) OwwaCellMapping::form($formKey)['detail'];
+        $detailStart = PhysicalCountPageLayout::detailStartRowForBlock($formKey, $blockStartRow);
+        $templateDetailRows = (int) ($detail['template_detail_rows'] ?? $detail['max_rows'] ?? 21);
+        $styleRow = (int) ($detail['style_row'] ?? $detailStart);
+        $highestColumn = (string) ($detail['highest_column'] ?? 'K');
+        $columnTypes = (array) ($detail['column_types'] ?? []);
+        $alignments = $columnTypes !== []
+            ? OwwaExportStandards::resolveColumnAlignments($columnTypes)
+            : OwwaSpreadsheetLayoutHelper::alignmentMapFromConfig(
+                array_fill_keys(range('A', $highestColumn), 'left'),
+            );
+        $rowsToNormalize = max($detailCount, $templateDetailRows);
+
+        OwwaSpreadsheetLayoutHelper::normalizeDetailRows(
+            $sheet,
+            $detailStart,
+            $rowsToNormalize,
+            $styleRow,
+            $alignments,
+            $highestColumn,
+            OwwaExportStandards::resolveWrapTextColumns($detail),
+            OwwaExportStandards::minWrapLinesForExpansion($detail),
+            false,
+            false,
+        );
+
+        if ($detailCount < $templateDetailRows) {
+            $columns = OwwaCellMapping::detailColumns($formKey);
+
+            for ($row = $detailStart + $detailCount; $row < $detailStart + $templateDetailRows; $row++) {
+                foreach ($columns as $column) {
+                    $this->setExportCellValue($sheet, OwwaCellMapping::columnCell($column, $row), null);
+                }
+            }
+        }
+
+        if ($columnTypes !== [] && $detailCount > 0) {
+            OwwaSpreadsheetLayoutHelper::applyMonetaryColumnFormats(
+                $sheet,
+                $detailStart,
+                $detailStart + $detailCount - 1,
+                $columnTypes,
+            );
+        }
+
+        OwwaSpreadsheetLayoutHelper::fitWrappedDetailRowsContinuous(
+            $sheet,
+            $detailStart,
+            $styleRow,
+            $detailCount,
+            OwwaExportStandards::expandableWrapColumns($detail),
+            OwwaExportStandards::resolveWrapTextColumns($detail),
+            OwwaExportStandards::maxColumnWidth($detail),
+            OwwaExportStandards::columnWidthStep($detail),
+            OwwaExportStandards::minWrapLinesForExpansion($detail),
+            OwwaExportStandards::maxDetailRowHeight($detail),
+        );
     }
 
     protected function finalizeLedgerSection(string $formKey, Worksheet $sheet, int $transactionCount): void
@@ -950,8 +1371,11 @@ class OwwaTemplateExportService
     /**
      * @param  array<int, array{sheetName: string, cellValues: array<string, string|int|float|null>}>  $tabs
      */
-    public function buildRpcspPhysicalCountSpreadsheet(array $tabs, ?string $templateFilename = null): Spreadsheet
-    {
+    public function buildRpcspPhysicalCountSpreadsheet(
+        array $tabs,
+        ?string $templateFilename = null,
+        ?PhysicalCountSession $session = null,
+    ): Spreadsheet {
         $templateFilename ??= (string) OwwaCellMapping::form('RPCSP')['template'];
         PhpExtensionGuard::ensureZipArchive();
 
@@ -976,9 +1400,10 @@ class OwwaTemplateExportService
         $clonedTabs = [];
 
         foreach ($tabs as $tab) {
-            $sourceSheet = $spreadsheet->getSheetByName($tab['sheetName']) ?? $fallbackSheet;
+            $sourceSheet = $this->resolveRpcspSourceSheet($spreadsheet, (string) $tab['sheetName']) ?? $fallbackSheet;
             $clonedTabs[] = [
                 'sheet' => clone $sourceSheet,
+                'sourceSheet' => $sourceSheet,
                 'tab' => $tab,
             ];
         }
@@ -989,21 +1414,27 @@ class OwwaTemplateExportService
 
         foreach ($clonedTabs as $entry) {
             $sheet = $entry['sheet'];
+            $sourceSheet = $entry['sourceSheet'];
             $tab = $entry['tab'];
             $sheet->setTitle($this->sanitizeExcelSheetTitle($tab['sheetName']));
             $spreadsheet->addSheet($sheet);
 
-            $cellValues = (array) ($tab['cellValues'] ?? []);
-            $signaturePairs = (array) ($tab['signaturePairs'] ?? []);
+            if ($session === null) {
+                continue;
+            }
+
+            $lines = $tab['lines'] ?? collect();
+            $propertyClass = $tab['propertyClass'] ?? null;
             $useMasterSignatures = ($tab['sheetName'] ?? '') === 'RPCSP';
 
-            $this->preparePhysicalCountRowExpansion($sheet, 'RPCSP', $cellValues);
-            $this->applyCellValues($sheet, $cellValues);
-            $this->finalizePhysicalCountSheet(
+            app(PhysicalCountSpreadsheetBuilder::class)->populateStackedBlocksOnSheet(
                 $sheet,
+                $sourceSheet,
+                $session,
                 'RPCSP',
-                $cellValues,
-                $signaturePairs,
+                $lines instanceof Collection ? $lines : collect($lines),
+                is_string($propertyClass) ? $propertyClass : null,
+                (string) ($tab['sheetName'] ?? null),
                 $useMasterSignatures,
             );
         }
@@ -1013,6 +1444,21 @@ class OwwaTemplateExportService
         return $spreadsheet;
     }
 
+    protected function resolveRpcspSourceSheet(Spreadsheet $spreadsheet, string $sheetName): ?Worksheet
+    {
+        $sheet = $spreadsheet->getSheetByName($sheetName);
+
+        if ($sheet !== null) {
+            return $sheet;
+        }
+
+        if (preg_match('/^(.+?) Cont\.\d+$/', $sheetName, $matches) === 1) {
+            return $spreadsheet->getSheetByName($matches[1]);
+        }
+
+        return null;
+    }
+
     /**
      * @param  array<int, array{sheetName: string, cellValues: array<string, string|int|float|null>}>  $tabs
      */
@@ -1020,8 +1466,9 @@ class OwwaTemplateExportService
         array $tabs,
         string $outputFilename,
         ?string $templateFilename = null,
+        ?PhysicalCountSession $session = null,
     ): StreamedResponse {
-        $spreadsheet = $this->buildRpcspPhysicalCountSpreadsheet($tabs, $templateFilename);
+        $spreadsheet = $this->buildRpcspPhysicalCountSpreadsheet($tabs, $templateFilename, $session);
 
         try {
             $binary = $this->spreadsheetToXlsxBinary($spreadsheet);

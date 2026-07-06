@@ -969,6 +969,90 @@ button[type="submit"].fi-btn:hover {
     gap: 1.25rem !important;
 }
 
+/* Main admin dashboard — tighter widget rhythm */
+.fi-page.owwa-dashboard-page .fi-page-content .fi-sc-has-gap {
+    gap: 0.75rem !important;
+}
+
+.fi-page.owwa-dashboard-page .fi-wi-widget {
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+}
+
+/* Dashboard chart pair — equal width columns, matching card height */
+.fi-page.owwa-dashboard-page .fi-page-content .fi-sc-has-gap {
+    align-items: stretch !important;
+}
+
+.fi-page.owwa-dashboard-page .owwa-dashboard-chart {
+    height: 100%;
+    min-width: 0;
+}
+
+.fi-page.owwa-dashboard-page .owwa-dashboard-chart.fi-wi-chart .fi-section {
+    height: 100%;
+    min-height: 19rem;
+    display: flex !important;
+    flex-direction: column !important;
+    box-sizing: border-box;
+}
+
+.fi-page.owwa-dashboard-page .owwa-dashboard-chart .fi-section-content-ctn {
+    flex: 1 1 auto;
+    display: flex !important;
+    flex-direction: column !important;
+}
+
+.fi-page.owwa-dashboard-page .owwa-dashboard-chart .fi-section-content {
+    flex: 1 1 auto;
+    display: flex !important;
+    flex-direction: column !important;
+}
+
+.fi-page.owwa-dashboard-page .owwa-dashboard-chart:not(.owwa-chart-pie) .fi-wi-chart-canvas-ctn {
+    flex: 1 1 auto !important;
+    min-height: 210px !important;
+    max-height: none !important;
+    height: 100% !important;
+}
+
+.fi-page.owwa-dashboard-page .owwa-chart-pie.owwa-dashboard-chart .fi-section-content-ctn > div {
+    flex: 1 1 auto;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: center;
+    align-items: center;
+    min-height: 0;
+}
+
+.fi-page.owwa-dashboard-page .owwa-chart-pie.owwa-dashboard-chart .fi-wi-chart-canvas-ctn {
+    flex: 0 0 auto !important;
+    width: 100% !important;
+    max-width: min(100%, 22rem) !important;
+    height: 14rem !important;
+    min-height: 14rem !important;
+    max-height: 14rem !important;
+    padding: 0.15rem 0.35rem 0.25rem !important;
+}
+
+.fi-page.owwa-dashboard-page .owwa-chart-pie.owwa-dashboard-chart canvas {
+    max-height: 14rem !important;
+}
+
+.fi-page.owwa-dashboard-page .owwa-dashboard-chart.owwa-chart-compact .fi-section-header {
+    padding-top: 0.55rem !important;
+    padding-bottom: 0.25rem !important;
+    margin-bottom: 0.35rem !important;
+}
+
+.fi-page.owwa-dashboard-page .owwa-dashboard-chart.owwa-chart-compact .fi-section-header-heading {
+    padding-top: 0.15rem !important;
+}
+
+.fi-page.owwa-dashboard-page .owwa-dashboard-chart.owwa-chart-compact.fi-wi-chart .fi-section {
+    padding-top: 0.8rem !important;
+}
+
 /* Stats Section wrapper — default behavior (don’t break non-dashboard widgets) */
 .fi-wi-stats-overview .fi-section {
     background: transparent !important;
@@ -1872,13 +1956,14 @@ button[type="submit"].fi-btn:hover {
    STATS OVERVIEW — KPI cards (4-in-a-row)
 ═══════════════════════════════════════════════════════════ */
 
-/* Outer container for the KPI group (does NOT affect chart widgets) */
+/* Outer container for the KPI group — transparent so only individual stat cards show */
 .fi-wi-stats-overview .fi-section {
-    background: #ffffff !important;
-    border: 1px solid #e2e8f0 !important;
-    box-shadow: 0 1px 4px rgba(0,0,0,0.05) !important;
-    border-radius: 0.875rem !important;
-    overflow: hidden !important;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    overflow: visible !important;
+    padding: 0 !important;
 }
 
 .fi-wi-stats-overview .fi-section-content-ctn {
@@ -1886,9 +1971,9 @@ button[type="submit"].fi-btn:hover {
 }
 
 .fi-wi-stats-overview .fi-section-content {
-    padding: 0.3rem 0.5rem !important;
-    gap: 0.5rem !important;
-    justify-content: center !important;
+    padding: 0 !important;
+    gap: 0.75rem !important;
+    justify-content: stretch !important;
 }
 
 /* Stat card — default visible cards (baseline) */
@@ -2049,6 +2134,15 @@ button[type="submit"].fi-btn:hover {
     margin-bottom: 0.75rem !important;
     padding-top: 0.40rem !important;
     padding-bottom: 0.40rem !important;
+    border-bottom: none !important;
+}
+
+.fi-wi-chart .fi-section-header-ctn {
+    border-bottom: none !important;
+}
+
+.fi-wi-chart .fi-section-content-ctn {
+    border-top: none !important;
 }
 
 .fi-wi-chart .fi-section-header-heading {
@@ -2116,6 +2210,70 @@ button[type="submit"].fi-btn:hover {
     align-items: center !important;
     justify-content: center !important;
     padding: 1rem !important;
+}
+
+/* Compact dashboard chart widgets */
+.owwa-chart-compact.fi-wi-chart .fi-section {
+    padding: 0.65rem 0.75rem 0.5rem !important;
+}
+
+.owwa-chart-compact.fi-wi-chart .fi-section-header {
+    margin-bottom: 0.2rem !important;
+    padding-top: 0.15rem !important;
+    padding-bottom: 0.15rem !important;
+}
+
+.owwa-chart-compact .owwa-kpi-row {
+    gap: 0.35rem !important;
+    margin-bottom: 0.35rem !important;
+}
+
+.owwa-chart-compact .owwa-kpi {
+    padding: 0.45rem 0.6rem !important;
+    cursor: default;
+    transition: none;
+}
+
+.owwa-chart-compact .owwa-kpi:hover {
+    box-shadow: none;
+    border-color: #edf2f7;
+}
+
+.owwa-chart-compact .owwa-kpi-accent:hover {
+    border-color: #dce8f7;
+}
+
+.owwa-chart-compact .owwa-kpi-value {
+    font-size: 1.1rem !important;
+}
+
+.owwa-chart-compact .owwa-kpi-value-text {
+    font-size: 0.9375rem !important;
+    font-weight: 700;
+    line-height: 1.25;
+    letter-spacing: -0.01em;
+}
+
+.owwa-chart-compact .fi-wi-chart-canvas-ctn {
+    padding: 0.15rem 0.35rem 0.1rem !important;
+}
+
+.owwa-chart-compact.owwa-chart-pie .fi-wi-chart-canvas-ctn {
+    padding: 0.25rem !important;
+}
+
+/* Dashboard acquisition tables — tighter label-to-table spacing */
+.owwa-dashboard-data-panel .owwa-data-panel-header {
+    padding: 0.55rem 0.85rem 0.3rem;
+}
+
+.owwa-dashboard-data-panel .owwa-data-panel-body {
+    padding: 0 0.85rem 0.55rem;
+}
+
+.owwa-dashboard-data-panel .owwa-data-panel-title {
+    font-size: 0.8125rem;
+    line-height: 1.2;
 }
 
 /* ═══════════════════════════════════════════════════════════

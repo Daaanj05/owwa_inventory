@@ -305,6 +305,7 @@ class OwwaSpreadsheetLayoutHelper
         array $wrapTextColumns = [],
         int $minWrapLinesForExpansion = 2,
         bool $uniformDataRowHeight = false,
+        bool $expandWrapRowHeights = true,
     ): void {
         if ($rowCount <= 0) {
             return;
@@ -341,7 +342,7 @@ class OwwaSpreadsheetLayoutHelper
             }
         }
 
-        if ($wrapTextColumns !== []) {
+        if ($wrapTextColumns !== [] && $expandWrapRowHeights) {
             if ($uniformDataRowHeight) {
                 $maxDataRowHeight = $standardRowHeight;
 
@@ -380,6 +381,249 @@ class OwwaSpreadsheetLayoutHelper
         }
 
         self::applyBlockEndBorder($sheet, $detailStart, $lastRow, $highestColumn);
+    }
+
+    public static function expandDetailRowsToFillBlock(
+        Worksheet $sheet,
+        int $detailStart,
+        int $templateDetailRows,
+        int $blockEndRow,
+        int $styleSourceRow,
+    ): void {
+        if ($templateDetailRows <= 0 || $blockEndRow < $detailStart) {
+            return;
+        }
+
+        $detailEndRow = $detailStart + $templateDetailRows - 1;
+        $standardRowHeight = self::resolveLedgerRowHeight($sheet, $styleSourceRow);
+        $blockHeight = 0.0;
+
+        for ($row = $detailStart; $row <= $blockEndRow; $row++) {
+            $height = $sheet->getRowDimension($row)->getRowHeight();
+
+            if ($height <= 0) {
+                $height = $standardRowHeight;
+            }
+
+            $blockHeight += $height;
+        }
+
+        $uniformHeight = max(
+            $standardRowHeight,
+            OwwaExportStandards::ledgerRowHeight(),
+            $blockHeight / $templateDetailRows,
+        );
+
+        for ($row = $detailStart; $row <= $detailEndRow; $row++) {
+            $sheet->getRowDimension($row)->setRowHeight($uniformHeight);
+        }
+    }
+
+    /**
+     * @param  array<int, string>  $expandableColumns
+     * @param  array<int, string>  $wrapColumns
+     */
+    public static function fitWrappedDetailRowsWithinBlock(
+        Worksheet $sheet,
+        int $detailStart,
+        int $templateDetailRows,
+        int $blockEndRow,
+        int $styleSourceRow,
+        int $detailCount,
+        array $expandableColumns,
+        array $wrapColumns,
+        float $maxColumnWidth,
+        float $columnWidthStep,
+        int $minWrapLinesForExpansion = 2,
+        ?float $maxDetailRowHeight = null,
+        ?float $blockHeightBudget = null,
+    ): void {
+        if ($templateDetailRows <= 0 || $detailCount <= 0 || $blockEndRow < $detailStart) {
+            return;
+        }
+
+        $standardRowHeight = self::resolveLedgerRowHeight($sheet, $styleSourceRow);
+        $detailEndRow = $detailStart + $templateDetailRows - 1;
+        $templateHeights = [];
+
+        for ($row = $detailStart; $row <= $detailEndRow; $row++) {
+            $height = $sheet->getRowDimension($row)->getRowHeight();
+            $templateHeights[$row] = $height > 0 ? $height : $standardRowHeight;
+        }
+
+        $resolvedBudget = $blockHeightBudget ?? self::sumRowHeightsInRange(
+            $sheet,
+            $detailStart,
+            $detailEndRow,
+            $standardRowHeight,
+        );
+        $maxRowHeight = $maxDetailRowHeight ?? ($resolvedBudget / $templateDetailRows);
+        $lastDataRow = $detailStart + $detailCount - 1;
+
+        foreach ($expandableColumns as $column) {
+            $currentWidth = self::resolveColumnWidth($sheet, $column);
+
+            while ($currentWidth < $maxColumnWidth) {
+                $needsMoreWidth = false;
+
+                for ($row = $detailStart; $row <= $lastDataRow; $row++) {
+                    $estimatedHeight = self::estimateWrappedRowHeight(
+                        $sheet,
+                        $row,
+                        $wrapColumns,
+                        $templateHeights[$row],
+                        $minWrapLinesForExpansion,
+                    );
+
+                    if ($estimatedHeight > $maxRowHeight) {
+                        $needsMoreWidth = true;
+                        break;
+                    }
+                }
+
+                if (! $needsMoreWidth) {
+                    break;
+                }
+
+                $currentWidth = min($maxColumnWidth, $currentWidth + $columnWidthStep);
+                $sheet->getColumnDimension($column)->setWidth($currentWidth);
+            }
+        }
+
+        for ($row = $detailStart; $row <= $lastDataRow; $row++) {
+            $templateHeight = $templateHeights[$row];
+            $estimatedHeight = self::estimateWrappedRowHeight(
+                $sheet,
+                $row,
+                $wrapColumns,
+                $templateHeight,
+                $minWrapLinesForExpansion,
+            );
+
+            if ($estimatedHeight <= $templateHeight) {
+                continue;
+            }
+
+            $sheet->getRowDimension($row)->setRowHeight(min($estimatedHeight, $maxRowHeight));
+        }
+
+        $actualTotal = 0.0;
+
+        for ($row = $detailStart; $row <= $detailEndRow; $row++) {
+            $height = $sheet->getRowDimension($row)->getRowHeight();
+            $actualTotal += $height > 0 ? $height : $templateHeights[$row];
+        }
+
+        if ($actualTotal <= $resolvedBudget + 0.5) {
+            return;
+        }
+
+        $scale = $resolvedBudget / $actualTotal;
+
+        for ($row = $detailStart; $row <= $detailEndRow; $row++) {
+            $currentHeight = $sheet->getRowDimension($row)->getRowHeight();
+            $currentHeight = $currentHeight > 0 ? $currentHeight : $templateHeights[$row];
+            $scaledHeight = max($templateHeights[$row], $currentHeight * $scale);
+            $sheet->getRowDimension($row)->setRowHeight($scaledHeight);
+        }
+    }
+
+    /**
+     * @param  array<int, string>  $expandableColumns
+     * @param  array<int, string>  $wrapColumns
+     */
+    public static function fitWrappedDetailRowsContinuous(
+        Worksheet $sheet,
+        int $detailStart,
+        int $styleSourceRow,
+        int $detailCount,
+        array $expandableColumns,
+        array $wrapColumns,
+        float $maxColumnWidth,
+        float $columnWidthStep,
+        int $minWrapLinesForExpansion = 2,
+        ?float $maxDetailRowHeight = null,
+    ): void {
+        if ($detailCount <= 0) {
+            return;
+        }
+
+        $standardRowHeight = self::resolveLedgerRowHeight($sheet, $styleSourceRow);
+        $lastDataRow = $detailStart + $detailCount - 1;
+        $uncappedMaxRowHeight = $maxDetailRowHeight ?? ($standardRowHeight * OwwaExportStandards::maxWrapLines());
+
+        foreach ($expandableColumns as $column) {
+            $currentWidth = self::resolveColumnWidth($sheet, $column);
+
+            while ($currentWidth < $maxColumnWidth) {
+                $needsMoreWidth = false;
+
+                for ($row = $detailStart; $row <= $lastDataRow; $row++) {
+                    $estimatedHeight = self::estimateWrappedRowHeight(
+                        $sheet,
+                        $row,
+                        $wrapColumns,
+                        $standardRowHeight,
+                        $minWrapLinesForExpansion,
+                    );
+
+                    if ($estimatedHeight > $uncappedMaxRowHeight) {
+                        $needsMoreWidth = true;
+                        break;
+                    }
+                }
+
+                if (! $needsMoreWidth) {
+                    break;
+                }
+
+                $currentWidth = min($maxColumnWidth, $currentWidth + $columnWidthStep);
+                $sheet->getColumnDimension($column)->setWidth($currentWidth);
+            }
+        }
+
+        for ($row = $detailStart; $row <= $lastDataRow; $row++) {
+            $estimatedHeight = self::estimateWrappedRowHeight(
+                $sheet,
+                $row,
+                $wrapColumns,
+                $standardRowHeight,
+                $minWrapLinesForExpansion,
+            );
+
+            if ($estimatedHeight <= $standardRowHeight) {
+                continue;
+            }
+
+            $sheet->getRowDimension($row)->setRowHeight(min($estimatedHeight, $uncappedMaxRowHeight));
+        }
+    }
+
+    public static function sumRowHeightsInRange(
+        Worksheet $sheet,
+        int $fromRow,
+        int $toRow,
+        float $fallbackHeight,
+    ): float {
+        $total = 0.0;
+
+        for ($row = $fromRow; $row <= $toRow; $row++) {
+            $height = $sheet->getRowDimension($row)->getRowHeight();
+            $total += $height > 0 ? $height : $fallbackHeight;
+        }
+
+        return $total;
+    }
+
+    public static function resolveColumnWidth(Worksheet $sheet, string $column): float
+    {
+        $width = $sheet->getColumnDimension($column)->getWidth();
+
+        if ($width > 0) {
+            return $width;
+        }
+
+        return OwwaExportStandards::defaultColumnWidth($column);
     }
 
     /**
@@ -601,23 +845,195 @@ class OwwaSpreadsheetLayoutHelper
         $rowOffset = $targetStartRow - $sourceStartRow;
 
         foreach ($source->getMergeCells() as $mergeRange) {
-            [$start, $end] = explode(':', $mergeRange);
-            $startColumn = preg_replace('/\d+/', '', $start) ?? 'A';
-            $startRow = (int) preg_replace('/\D+/', '', $start);
-            $endColumn = preg_replace('/\d+/', '', $end) ?? $startColumn;
-            $endRow = (int) preg_replace('/\D+/', '', $end);
+            $bounds = self::parseMergeRangeBounds((string) $mergeRange);
 
-            if ($startRow < $sourceStartRow || $startRow > $sourceEndRow) {
+            if ($bounds === null) {
                 continue;
             }
 
-            $newStartRow = $startRow + $rowOffset;
-            $newEndRow = $endRow + $rowOffset;
-            $newRange = $startColumn.$newStartRow.':'.$endColumn.$newEndRow;
-
-            if (! in_array($newRange, $target->getMergeCells(), true)) {
-                $target->mergeCells($newRange);
+            if ($bounds['endRow'] < $sourceStartRow || $bounds['startRow'] > $sourceEndRow) {
+                continue;
             }
+
+            $clippedStartRow = max($bounds['startRow'], $sourceStartRow);
+            $clippedEndRow = min($bounds['endRow'], $sourceEndRow);
+
+            if ($clippedStartRow > $clippedEndRow) {
+                continue;
+            }
+
+            $newStartRow = $clippedStartRow + $rowOffset;
+            $newEndRow = $clippedEndRow + $rowOffset;
+            $newRange = $bounds['startColumn'].$newStartRow.':'.$bounds['endColumn'].$newEndRow;
+
+            self::applyMergeRangeIfSafe($target, $newRange);
+        }
+    }
+
+    public static function applyMergeRangeIfSafe(Worksheet $sheet, string $mergeRange): void
+    {
+        $normalizedRange = self::normalizeMergeRange($mergeRange);
+        $existingMerges = $sheet->getMergeCells();
+
+        if (isset($existingMerges[$normalizedRange])) {
+            return;
+        }
+
+        foreach (array_keys($existingMerges) as $existingRange) {
+            if (! self::mergeRangesOverlap($normalizedRange, (string) $existingRange)) {
+                continue;
+            }
+
+            if (strcasecmp($normalizedRange, (string) $existingRange) === 0) {
+                return;
+            }
+
+            $sheet->unmergeCells((string) $existingRange);
+        }
+
+        $sheet->mergeCells($normalizedRange);
+    }
+
+    public static function mergeRangesOverlap(string $firstRange, string $secondRange): bool
+    {
+        $first = self::parseMergeRangeBounds($firstRange);
+        $second = self::parseMergeRangeBounds($secondRange);
+
+        if ($first === null || $second === null) {
+            return false;
+        }
+
+        $rowsOverlap = $first['startRow'] <= $second['endRow'] && $second['startRow'] <= $first['endRow'];
+        $columnsOverlap = $first['startColumnIndex'] <= $second['endColumnIndex']
+            && $second['startColumnIndex'] <= $first['endColumnIndex'];
+
+        return $rowsOverlap && $columnsOverlap;
+    }
+
+    /**
+     * @return array{
+     *     startColumn: string,
+     *     endColumn: string,
+     *     startRow: int,
+     *     endRow: int,
+     *     startColumnIndex: int,
+     *     endColumnIndex: int
+     * }|null
+     */
+    public static function parseMergeRangeBounds(string $mergeRange): ?array
+    {
+        $normalizedRange = self::normalizeMergeRange($mergeRange);
+        [$start, $end] = array_pad(explode(':', $normalizedRange, 2), 2, null);
+
+        if ($start === null || $end === null) {
+            return null;
+        }
+
+        if (! preg_match('/^([A-Z]+)(\d+)$/i', $start, $startMatches)
+            || ! preg_match('/^([A-Z]+)(\d+)$/i', $end, $endMatches)) {
+            return null;
+        }
+
+        $startColumn = strtoupper($startMatches[1]);
+        $endColumn = strtoupper($endMatches[1]);
+        $startRow = (int) $startMatches[2];
+        $endRow = (int) $endMatches[2];
+        $startColumnIndex = Coordinate::columnIndexFromString($startColumn);
+        $endColumnIndex = Coordinate::columnIndexFromString($endColumn);
+
+        if ($startColumnIndex > $endColumnIndex) {
+            [$startColumnIndex, $endColumnIndex] = [$endColumnIndex, $startColumnIndex];
+            [$startColumn, $endColumn] = [$endColumn, $startColumn];
+        }
+
+        if ($startRow > $endRow) {
+            [$startRow, $endRow] = [$endRow, $startRow];
+        }
+
+        return [
+            'startColumn' => $startColumn,
+            'endColumn' => $endColumn,
+            'startRow' => $startRow,
+            'endRow' => $endRow,
+            'startColumnIndex' => $startColumnIndex,
+            'endColumnIndex' => $endColumnIndex,
+        ];
+    }
+
+    public static function normalizeMergeRange(string $mergeRange): string
+    {
+        $mergeRange = trim(str_replace('$', '', $mergeRange));
+
+        if (! str_contains($mergeRange, ':')) {
+            return strtoupper($mergeRange).':'.strtoupper($mergeRange);
+        }
+
+        [$start, $end] = explode(':', $mergeRange, 2);
+
+        return strtoupper($start).':'.strtoupper($end);
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    public static function overlappingMergePairs(Worksheet $sheet): array
+    {
+        $ranges = array_map(
+            static fn (string $range): string => self::normalizeMergeRange($range),
+            array_keys($sheet->getMergeCells()),
+        );
+        $overlaps = [];
+
+        for ($firstIndex = 0; $firstIndex < count($ranges); $firstIndex++) {
+            for ($secondIndex = $firstIndex + 1; $secondIndex < count($ranges); $secondIndex++) {
+                if (! self::mergeRangesOverlap($ranges[$firstIndex], $ranges[$secondIndex])) {
+                    continue;
+                }
+
+                $overlaps[] = $ranges[$firstIndex].' overlaps '.$ranges[$secondIndex];
+            }
+        }
+
+        return $overlaps;
+    }
+
+    public static function applyContinuousPrintLayout(
+        Worksheet $sheet,
+        string $formCode,
+        int $detailCount,
+    ): void {
+        $highestColumn = PhysicalCountPageLayout::highestColumn($formCode);
+        $lastRow = PhysicalCountPageLayout::lastPrintRow($formCode, $detailCount);
+        $pageSetup = $sheet->getPageSetup();
+
+        $pageSetup->setPrintArea('A1:'.$highestColumn.$lastRow);
+        $pageSetup->setFitToPage(true);
+        $pageSetup->setFitToHeight(0);
+        $pageSetup->setScale(100);
+    }
+
+    public static function applyPhysicalCountStackedPrintLayout(
+        Worksheet $sheet,
+        string $formCode,
+        int $pageCount,
+    ): void {
+        if ($pageCount <= 0) {
+            return;
+        }
+
+        $firstBlockStart = PhysicalCountPageLayout::blockStartRowForPage($formCode, 0);
+        $lastBlockEndRow = PhysicalCountPageLayout::blockEndRowForPage($formCode, $pageCount - 1);
+        $highestColumn = PhysicalCountPageLayout::highestColumn($formCode);
+        $pageSetup = $sheet->getPageSetup();
+
+        $pageSetup->setPrintArea(
+            'A'.$firstBlockStart.':'.$highestColumn.$lastBlockEndRow,
+        );
+
+        if ($pageCount > 1) {
+            $pageSetup->setFitToPage(true);
+            $pageSetup->setFitToHeight(0);
+            $pageSetup->setScale(100);
         }
     }
 

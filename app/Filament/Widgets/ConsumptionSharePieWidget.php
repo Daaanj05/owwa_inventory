@@ -19,19 +19,24 @@ class ConsumptionSharePieWidget extends ChartWidget
 
     protected static ?int $sort = 3;
 
-    protected static bool $isLazy = true;
+    protected static bool $isLazy = false;
 
     protected string $view = 'filament.widgets.consumption-share-pie-widget';
 
-    protected int|string|array $columnSpan = 1;
+    protected int|string|array $columnSpan = [
+        'default' => 2,
+        'md' => 1,
+    ];
 
     protected ?string $heading = 'Consumption share';
 
-    protected ?string $description = 'Share of total issued units per department. Includes all offices (regional and satellite) when All offices is selected.';
+    protected ?string $description = 'Share of total issued units per office. Includes all offices (regional and satellite) when All offices is selected.';
 
     protected bool $hasDeferredFilters = true;
 
-    protected ?string $maxHeight = '320px';
+    protected ?string $pollingInterval = null;
+
+    protected ?string $maxHeight = '224px';
 
     public static function canView(): bool
     {
@@ -133,7 +138,7 @@ class ConsumptionSharePieWidget extends ChartWidget
             }
         }
 
-        $result = app(ConsumptionAnalyticsService::class)->getConsumptionTotalsByDepartment(
+        $result = app(ConsumptionAnalyticsService::class)->getConsumptionTotalsByOffice(
             $from,
             $to,
             $departmentIds,
@@ -179,21 +184,24 @@ class ConsumptionSharePieWidget extends ChartWidget
     protected function getOptions(): ?array
     {
         return [
-            'cutout' => '62%',
+            'maintainAspectRatio' => false,
+            'animation' => false,
+            'resizeDelay' => 200,
+            'cutout' => '58%',
             'plugins' => [
                 'legend' => [
                     'display' => true,
                     'position' => 'bottom',
                     'align' => 'center',
                     'labels' => [
-                        'boxWidth' => 8,
-                        'boxHeight' => 8,
+                        'boxWidth' => 10,
+                        'boxHeight' => 10,
                         'borderRadius' => 4,
-                        'padding' => 16,
+                        'padding' => 10,
                         'usePointStyle' => true,
                         'pointStyle' => 'circle',
                         'color' => '#475569',
-                        'font' => ['size' => 11, 'weight' => '500'],
+                        'font' => ['size' => 12, 'weight' => '500'],
                     ],
                 ],
                 'tooltip' => [

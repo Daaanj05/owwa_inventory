@@ -15,4 +15,12 @@ class Dashboard extends BaseDashboard
     {
         return null;
     }
+
+    /**
+     * @return array<int, string>
+     */
+    public function getPageClasses(): array
+    {
+        return ['owwa-dashboard-page'];
+    }
 }

@@ -3,6 +3,7 @@
 namespace App\Filament\Widgets;
 
 use App\Models\Issuance;
+use App\Models\Item;
 use App\Models\Requisition;
 use App\Models\User;
 use App\Services\InventoryStockService;
@@ -15,7 +16,7 @@ class LowStockWidget extends StatsOverviewWidget
 {
     protected static ?int $sort = 1;
 
-    protected static bool $isLazy = true;
+    protected static bool $isLazy = false;
 
     protected int|array|null $columns = 2;
 
@@ -24,6 +25,20 @@ class LowStockWidget extends StatsOverviewWidget
         $user = Filament::auth()->user();
 
         return $user && ! $user->isSystemAdmin() && ! $user->isEmployee();
+    }
+
+    /**
+     * @return int|array<string, ?int>|null
+     */
+    protected function getColumns(): int|array|null
+    {
+        $user = Filament::auth()->user();
+
+        if ($user?->isSupplyCustodian()) {
+            return 4;
+        }
+
+        return $this->columns;
     }
 
     protected function getStats(): array
@@ -40,6 +55,10 @@ class LowStockWidget extends StatsOverviewWidget
         $stockService = app(InventoryStockService::class);
         $lowStockCount = $stockService->lowStockCount($officeIds);
 
+        if ($user->isSupplyCustodian()) {
+            return $this->buildSupplyCustodianStats($stockService, $lowStockCount, $scopeLabel);
+        }
+
         return [
             Stat::make('Low stock', $lowStockCount)
                 ->description(($lowStockCount > 0 ? 'Below reorder point' : 'All stocks healthy').$scopeLabel)
@@ -47,17 +66,39 @@ class LowStockWidget extends StatsOverviewWidget
                 ->color($lowStockCount > 0 ? 'warning' : 'success')
                 ->extraAttributes(['class' => 'owwa-kpi-square'], true),
 
-            $this->buildSecondStat($user, $scopeLabel, $officeIds),
+            $this->buildIssuedThisMonthStat($scopeLabel, $officeIds),
         ];
     }
 
-    protected function buildSecondStat(?User $user, string $scopeLabel, ?array $officeIds): Stat
+    /**
+     * @return array<Stat>
+     */
+    protected function buildSupplyCustodianStats(InventoryStockService $stockService, int $lowStockCount, string $scopeLabel): array
     {
-        if ($user?->isSupplyCustodian()) {
-            return $this->buildPendingRequisitionsStat();
-        }
+        $itemsInTotal = Item::query()->active()->count();
+        $stocksInHand = (int) $stockService->getStockLevelsList()->sum('stock');
 
-        return $this->buildIssuedThisMonthStat($scopeLabel, $officeIds);
+        return [
+            Stat::make('Items in total', number_format($itemsInTotal))
+                ->description('Registered items in catalog')
+                ->descriptionIcon('heroicon-o-cube')
+                ->color('primary')
+                ->extraAttributes(['class' => 'owwa-kpi-square'], true),
+
+            Stat::make('Stocks in hand', number_format($stocksInHand))
+                ->description('Total quantity on hand')
+                ->descriptionIcon('heroicon-o-archive-box')
+                ->color('info')
+                ->extraAttributes(['class' => 'owwa-kpi-square'], true),
+
+            Stat::make('Low stock', $lowStockCount)
+                ->description(($lowStockCount > 0 ? 'Below reorder point' : 'All stocks healthy').$scopeLabel)
+                ->descriptionIcon($lowStockCount > 0 ? 'heroicon-o-exclamation-triangle' : 'heroicon-o-check-circle')
+                ->color($lowStockCount > 0 ? 'warning' : 'success')
+                ->extraAttributes(['class' => 'owwa-kpi-square'], true),
+
+            $this->buildPendingRequisitionsStat(),
+        ];
     }
 
     protected function buildPendingRequisitionsStat(): Stat

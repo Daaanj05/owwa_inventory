@@ -17,6 +17,7 @@ use App\Support\AnnexA4Layout;
 use App\Support\ItemPropertyClass;
 use App\Support\OwwaCellMapping;
 use App\Support\OwwaExportFilename;
+use App\Support\PhysicalCountPageLayout;
 use App\Support\PhysicalCountPropertyClassResolver;
 use App\Support\UnitCostKey;
 use Illuminate\Support\Collection;
@@ -837,24 +838,19 @@ class OwwaItemReportService
             };
         }
 
-        $cellValues = $this->cellValuesForPhysicalCount($session);
         $filename = OwwaExportFilename::physicalCount(
             (string) $session->count_type,
             (string) $session->reference_code,
         );
         $sheet = $this->resolvePhysicalCountSheet($session);
 
-        return $this->templateExport->downloadFromTemplate(
+        return $this->templateExport->downloadPhysicalCountSpreadsheet(
+            $session,
+            $formCode,
             $templatePath,
-            $cellValues,
             $filename,
             $sheet['sheetIndex'],
             $sheet['sheetName'],
-            [
-                'formCode' => $formCode,
-                'signatures' => $this->physicalCountSignaturePairs($session),
-                'useMasterSignatures' => false,
-            ],
         );
     }
 
@@ -872,7 +868,7 @@ class OwwaItemReportService
             (string) $session->reference_code,
         );
 
-        return $this->templateExport->downloadRpcspPhysicalCountSpreadsheet($tabs, $filename, $templatePath);
+        return $this->templateExport->downloadRpcspPhysicalCountSpreadsheet($tabs, $filename, $templatePath, $session);
     }
 
     /**
@@ -899,24 +895,20 @@ class OwwaItemReportService
 
             return [[
                 'sheetName' => $sheetName,
-                'cellValues' => $this->cellValuesForPhysicalCount($session, $fallbackClass, collect(), $sheetName),
-                'signaturePairs' => $this->physicalCountSignaturePairs($session),
+                'propertyClass' => $fallbackClass,
+                'lines' => collect(),
             ]];
         }
 
         $tabs = [];
 
         foreach ($grouped as $propertyClass => $lines) {
-            $sheetName = ItemPropertyClass::sheetNameForForm('rpcsp', (string) $propertyClass) ?? 'OFFICE EQUIPMENT';
+            $baseSheetName = ItemPropertyClass::sheetNameForForm('rpcsp', (string) $propertyClass) ?? 'OFFICE EQUIPMENT';
+
             $tabs[] = [
-                'sheetName' => $sheetName,
-                'cellValues' => $this->cellValuesForPhysicalCount(
-                    $session,
-                    (string) $propertyClass,
-                    $lines,
-                    $sheetName,
-                ),
-                'signaturePairs' => $this->physicalCountSignaturePairs($session),
+                'sheetName' => $baseSheetName,
+                'propertyClass' => (string) $propertyClass,
+                'lines' => $lines,
             ];
         }
 
@@ -1183,6 +1175,20 @@ class OwwaItemReportService
     }
 
     /**
+     * @param  Collection<int, PhysicalCountLine>  $lines
+     * @return array<string, string|int|float|null>
+     */
+    public function physicalCountCellValues(
+        PhysicalCountSession $session,
+        Collection $lines,
+        ?string $propertyClass = null,
+        ?string $sheetName = null,
+        int $blockStartRow = 1,
+    ): array {
+        return $this->cellValuesForPhysicalCount($session, $propertyClass, $lines, $sheetName, $blockStartRow);
+    }
+
+    /**
      * @param  Collection<int, PhysicalCountLine>|null  $lines
      * @return array<string, string|int|float|null>
      */
@@ -1191,19 +1197,30 @@ class OwwaItemReportService
         ?string $propertyClass = null,
         ?Collection $lines = null,
         ?string $sheetName = null,
+        int $blockStartRow = 1,
     ): array {
         $formCode = $this->physicalCountFormCode($session);
         $map = OwwaCellMapping::form($formCode);
         $values = [];
         $lineCollection = $lines ?? $session->lines;
+        $headerData = $this->physicalCountHeaderData($session, $propertyClass);
 
-        OwwaCellMapping::applyHeader(
-            $values,
-            (array) ($map['header'] ?? []),
-            $this->physicalCountHeaderData($session, $propertyClass),
-        );
+        foreach ((array) ($map['header'] ?? []) as $field => $spec) {
+            if (! array_key_exists($field, $headerData)) {
+                continue;
+            }
 
-        $startRow = OwwaCellMapping::detailRowBase($formCode);
+            $cell = PhysicalCountPageLayout::headerCell($formCode, (string) $field, $blockStartRow);
+            if ($cell === '') {
+                continue;
+            }
+
+            $label = (string) ($spec['label'] ?? '');
+            $raw = $headerData[$field];
+            $values[$cell] = $label.($raw ?? '');
+        }
+
+        $startRow = PhysicalCountPageLayout::detailStartRowForBlock($formCode, $blockStartRow);
         $columns = OwwaCellMapping::detailColumns($formCode);
         $row = $startRow;
 

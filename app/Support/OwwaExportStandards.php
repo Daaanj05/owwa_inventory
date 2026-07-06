@@ -107,6 +107,43 @@ class OwwaExportStandards
         return (bool) ($ledger['uniform_data_row_height'] ?? false);
     }
 
+    /**
+     * @param  array<string, mixed>  $detail
+     * @return array<int, string>
+     */
+    public static function expandableWrapColumns(array $detail): array
+    {
+        $columns = $detail['expandable_wrap_columns'] ?? $detail['wrap_text_columns'] ?? [];
+
+        return array_values(array_filter((array) $columns, is_string(...)));
+    }
+
+    /**
+     * @param  array<string, mixed>  $detail
+     */
+    public static function maxColumnWidth(array $detail): float
+    {
+        return (float) ($detail['max_column_width'] ?? 45);
+    }
+
+    /**
+     * @param  array<string, mixed>  $detail
+     */
+    public static function columnWidthStep(array $detail): float
+    {
+        return max(0.5, (float) ($detail['column_width_step'] ?? 2));
+    }
+
+    /**
+     * @param  array<string, mixed>  $detail
+     */
+    public static function maxDetailRowHeight(array $detail): ?float
+    {
+        $value = $detail['max_detail_row_height'] ?? null;
+
+        return $value === null ? null : (float) $value;
+    }
+
     public static function currencyExcelFormatCode(): string
     {
         return (string) config('owwa_export_standards.currency.excel_format_code', '"P"#,##0.00');

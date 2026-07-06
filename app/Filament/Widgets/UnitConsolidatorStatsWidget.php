@@ -17,7 +17,9 @@ class UnitConsolidatorStatsWidget extends StatsOverviewWidget
 
     protected static ?int $sort = 0;
 
-    protected static bool $isLazy = true;
+    protected static bool $isLazy = false;
+
+    protected int|array|null $columns = 3;
 
     public static function canView(): bool
     {
@@ -44,18 +46,6 @@ class UnitConsolidatorStatsWidget extends StatsOverviewWidget
             ->whereBetween('created_at', [$yearStart, $yearEnd])
             ->count();
 
-        $myPendingToSc = Requisition::query()
-            ->where('status', Requisition::STATUS_PENDING)
-            ->where('requested_by', $user->id)
-            ->whereBetween('created_at', [$yearStart, $yearEnd])
-            ->count();
-
-        $acceptedBySc = Requisition::query()
-            ->where('status', Requisition::STATUS_ACCEPTED)
-            ->where('requested_by', $user->id)
-            ->whereBetween('created_at', [$yearStart, $yearEnd])
-            ->count();
-
         $nearingEul = app(\App\Services\OfficePropertyRegisterService::class)->countNearingExpiryForUser($user);
 
         $distributed = Distribution::query()
@@ -68,16 +58,6 @@ class UnitConsolidatorStatsWidget extends StatsOverviewWidget
                 ->description($pendingEmployeeRequests > 0 ? 'Employee requests awaiting action' : 'No pending requests')
                 ->descriptionIcon($pendingEmployeeRequests > 0 ? 'heroicon-o-clock' : 'heroicon-o-check-circle')
                 ->color($pendingEmployeeRequests > 0 ? 'warning' : 'success'),
-
-            Stat::make('Sent to Supply Custodian', $myPendingToSc)
-                ->description($myPendingToSc > 0 ? 'Pending approval from SC' : 'All requisitions actioned')
-                ->descriptionIcon('heroicon-o-paper-airplane')
-                ->color($myPendingToSc > 0 ? 'warning' : 'gray'),
-
-            Stat::make('Accepted by SC', $acceptedBySc)
-                ->description('Accepted requisitions this year')
-                ->descriptionIcon('heroicon-o-check-badge')
-                ->color('success'),
 
             Stat::make('Property nearing EUL', $nearingEul)
                 ->description($nearingEul > 0 ? 'Semi-expendable useful life review' : 'No semi property nearing expiry')

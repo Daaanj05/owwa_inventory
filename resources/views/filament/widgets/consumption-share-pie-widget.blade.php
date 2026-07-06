@@ -10,7 +10,7 @@
     $type = $this->getType();
 @endphp
 
-<x-filament-widgets::widget class="fi-wi-chart owwa-chart-pie">
+<x-filament-widgets::widget class="fi-wi-chart owwa-chart-pie owwa-chart-compact owwa-dashboard-chart">
     <x-filament::section
         :collapsible="$isCollapsible"
     >

@@ -22,17 +22,21 @@ class ConsumptionTrendsWidget extends ChartWidget
 
     protected static ?int $sort = 2;
 
-    protected static bool $isLazy = true;
+    protected static bool $isLazy = false;
 
-    // Dashboard default grid is 2 columns, so span 1 to allow side-by-side with
-    // ConsumptionSharePieWidget (columnSpan = 1).
-    protected int|string|array $columnSpan = 1;
+    // Dashboard 2-column grid: each chart takes half width on md+.
+    protected int|string|array $columnSpan = [
+        'default' => 2,
+        'md' => 1,
+    ];
 
     protected ?string $heading = 'Consumption trend';
 
-    protected ?string $description = 'Monthly issuance trend per department in the selected period.';
+    protected ?string $description = 'Monthly issuance trend per office in the selected period.';
 
     protected bool $hasDeferredFilters = true;
+
+    protected ?string $pollingInterval = null;
 
     public static function canView(): bool
     {
@@ -45,20 +49,20 @@ class ConsumptionTrendsWidget extends ChartWidget
     {
         $user = Filament::auth()->user();
         if ($user && ! $user->isSupplyCustodian()) {
-            return 'Monthly issuance trend for your office/department. Based on issuance records (items issued out); only issuances with a department set are included.';
+            return 'Monthly issuance trend for your office. Based on issuance records (items issued out); only issuances with an office set are included.';
         }
 
-        return 'Monthly issuance trend per department. Includes all offices (regional and satellite) when All offices is selected.';
+        return 'Monthly issuance trend per office. Includes all offices (regional and satellite) when All offices is selected.';
     }
 
-    public function getShowDepartmentStats(): bool
+    public function getShowOfficeStats(): bool
     {
         $user = Filament::auth()->user();
 
         return $user?->isSupplyCustodian() ?? true;
     }
 
-    protected ?string $maxHeight = '320px';
+    protected ?string $maxHeight = '210px';
 
     /**
      * Chart.js palette — OWWA brand blues/reds + neutral mid-tones for readability.
@@ -159,7 +163,7 @@ class ConsumptionTrendsWidget extends ChartWidget
         $showMovingAverage = (bool) ($f['show_moving_average'] ?? false);
 
         $service = app(ConsumptionAnalyticsService::class);
-        $result = $service->getConsumptionByDepartmentAndPeriod($from, $to, $departmentIds, $officeIds, $includeYearLabels);
+        $result = $service->getConsumptionByOfficeAndPeriod($from, $to, $departmentIds, $officeIds, $includeYearLabels);
 
         $labels = $result['labels'];
         $series = $result['series'];
@@ -175,10 +179,10 @@ class ConsumptionTrendsWidget extends ChartWidget
         $colors = self::$chartColors;
         $index = 0;
 
-        foreach ($series as $deptName => $values) {
+        foreach ($series as $officeName => $values) {
             $color = $colors[$index % count($colors)];
             $datasets[] = [
-                'label' => $deptName,
+                'label' => $officeName,
                 'data' => $values,
                 'borderColor' => $color,
                 'backgroundColor' => $color.'18',
@@ -196,10 +200,10 @@ class ConsumptionTrendsWidget extends ChartWidget
 
         if ($showMovingAverage) {
             $maSeries = $service->applyMovingAverageToSeries($series, 3);
-            foreach ($maSeries as $deptName => $maValues) {
+            foreach ($maSeries as $officeName => $maValues) {
                 $color = $colors[$index % count($colors)];
                 $datasets[] = [
-                    'label' => $deptName.' (MA)',
+                    'label' => $officeName.' (MA)',
                     'data' => $maValues,
                     'borderColor' => $color,
                     'backgroundColor' => 'transparent',
@@ -228,6 +232,7 @@ class ConsumptionTrendsWidget extends ChartWidget
         $longView = $scope === AnalyticsDateRangeService::SCOPE_LONG_VIEW;
 
         return [
+            'maintainAspectRatio' => false,
             'scales' => [
                 'y' => [
                     'beginAtZero' => true,
@@ -294,7 +299,7 @@ class ConsumptionTrendsWidget extends ChartWidget
     /**
      * Summary stats for the current filters (for the stats row in the view).
      *
-     * @return array{total: int, top_department_name: string|null, top_department_quantity: int, periods_count: int, avg_per_period: float}
+     * @return array{total: int, top_office_name: string|null, top_office_quantity: int, periods_count: int, avg_per_period: float}
      */
     public function getConsumptionSummary(): array
     {
@@ -315,6 +320,6 @@ class ConsumptionTrendsWidget extends ChartWidget
             }
         }
 
-        return app(ConsumptionAnalyticsService::class)->getConsumptionSummary($from, $to, $departmentIds, $officeIds, $includeYearLabels);
+        return app(ConsumptionAnalyticsService::class)->getConsumptionSummaryByOffice($from, $to, $departmentIds, $officeIds, $includeYearLabels);
     }
 }

@@ -11,7 +11,7 @@
     $hasData     = $summary['total'] > 0;
 @endphp
 
-<x-filament-widgets::widget class="fi-wi-chart">
+<x-filament-widgets::widget class="fi-wi-chart owwa-chart-compact owwa-dashboard-chart">
     <x-filament::section>
         <x-slot name="heading">
             @if (filled($description))
@@ -70,15 +70,15 @@
                 </span>
                 <span class="owwa-kpi-meta">In selected period</span>
             </div>
-            @if($this->getShowDepartmentStats())
+            @if($this->getShowOfficeStats())
             <div class="owwa-kpi">
-                <span class="owwa-kpi-label">Top Department</span>
+                <span class="owwa-kpi-label">Top Office</span>
                 <span class="owwa-kpi-value owwa-kpi-value-text">
-                    {{ $hasData ? ($summary['top_department_name'] ?? '—') : '—' }}
+                    {{ $hasData ? ($summary['top_office_name'] ?? '—') : '—' }}
                 </span>
                 <span class="owwa-kpi-meta">
-                    {{ $summary['top_department_quantity'] > 0
-                        ? number_format($summary['top_department_quantity']) . ' units consumed'
+                    {{ $summary['top_office_quantity'] > 0
+                        ? number_format($summary['top_office_quantity']) . ' units consumed'
                         : 'No issuances recorded' }}
                 </span>
             </div>
@@ -108,11 +108,11 @@
                 </svg>
                 <h3 class="owwa-empty-state-title">No consumption data yet</h3>
                 <p class="owwa-empty-state-text">
-                    Consumption is based on <strong>issuance records</strong> (items issued out to departments). No issuances for your scope in the selected period, or issuances may not have a department set.
-                    @if($this->getShowDepartmentStats())
-                    Adjust the date range or add issuances under <strong>Inventory → Issuances</strong> (ensure Office and Department are set).
+                    Consumption is based on <strong>issuance records</strong> (items issued out to offices). No issuances for your scope in the selected period, or issuances may not have an office set.
+                    @if($this->getShowOfficeStats())
+                    Adjust the date range or add issuances under <strong>Inventory → Issuances</strong> (ensure Office is set).
                     @else
-                    Adjust the date range or add issuances via <strong>Inventory → Issuances</strong> and set the department so they appear here.
+                    Adjust the date range or add issuances via <strong>Inventory → Issuances</strong> and set the office so they appear here.
                     @endif
                 </p>
             </div>

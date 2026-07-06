@@ -10,8 +10,13 @@ use App\Models\PhysicalCountLine;
 use App\Models\PhysicalCountSession;
 use App\Models\User;
 use App\Services\OwwaItemReportService;
+use App\Services\OwwaTemplateExportService;
 use App\Support\ItemPropertyClass;
 use App\Support\OwwaCellMapping;
+use App\Support\OwwaExportStandards;
+use App\Support\OwwaSpreadsheetLayoutHelper;
+use App\Support\OwwaTemplateLoader;
+use App\Support\PhysicalCountPageLayout;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Collection;
 use ReflectionMethod;
@@ -172,15 +177,23 @@ class PhysicalCountExportMappingTest extends TestCase
         $this->assertCount(2, $tabs);
 
         $b5BySheet = collect($tabs)->mapWithKeys(
-            fn (array $tab): array => [$tab['sheetName'] => $tab['cellValues']['B5'] ?? null],
+            fn (array $tab): array => [$tab['sheetName'] => $tab['propertyClass'] ?? null],
         );
 
-        $this->assertSame('INFORMATION & COMMUNICATION TECHNOLOGY', $b5BySheet->get('ICT'));
-        $this->assertSame('SPORTS EQUIPMENT', $b5BySheet->get('SPORTS EQUIPMENT'));
+        $this->assertSame(ItemPropertyClass::Ict, $b5BySheet->get('ICT'));
+        $this->assertSame(ItemPropertyClass::SportsEquipment, $b5BySheet->get('SPORTS EQUIPMENT'));
 
-        $spreadsheet = app(\App\Services\OwwaTemplateExportService::class)->buildRpcspPhysicalCountSpreadsheet($tabs);
+        $spreadsheet = app(OwwaTemplateExportService::class)->buildRpcspPhysicalCountSpreadsheet(
+            $tabs,
+            null,
+            $session->fresh(['office', 'lines.item']),
+        );
         $this->assertNotNull($spreadsheet->getSheetByName('ICT'));
         $this->assertNotNull($spreadsheet->getSheetByName('SPORTS EQUIPMENT'));
+        $this->assertStringContainsString(
+            'INFORMATION',
+            (string) $spreadsheet->getSheetByName('ICT')?->getCell('B5')->getValue(),
+        );
     }
 
     public function test_physical_count_signatory_cells_use_configured_map(): void
@@ -219,18 +232,383 @@ class PhysicalCountExportMappingTest extends TestCase
         $this->assertSame('J38', OwwaCellMapping::form('RPCSP')['signatures']['verified_by']);
     }
 
-    public function test_physical_count_signature_row_offsets_after_row_expansion(): void
+    public function test_physical_count_signature_cells_use_fixed_template_rows(): void
     {
-        $extra = 4;
+        $this->assertSame(
+            'C39',
+            OwwaCellMapping::physicalCountSignatureCell('RPCI', 'certified_by', 0),
+        );
+        $this->assertSame(
+            'C38',
+            OwwaCellMapping::physicalCountSignatureCell('RPCSP', 'certified_by', 0),
+        );
+        $this->assertSame(
+            'D38',
+            OwwaCellMapping::physicalCountSignatureCell('RPCPPE', 'certified_by', 0),
+        );
+    }
+
+    public function test_rpci_continuous_export_extends_detail_rows_on_single_sheet(): void
+    {
+        if (! extension_loaded('zip')) {
+            $this->markTestSkipped('The zip extension is required to read OWWA .xlsx templates.');
+        }
+
+        [$office, $category, $item] = $this->createConsumableFixtures();
+
+        $session = PhysicalCountSession::query()->create([
+            'reference_code' => '2026-RPC-0025',
+            'count_type' => PhysicalCountSession::TYPE_RPCI,
+            'office_id' => $office->id,
+            'item_category_id' => $category->id,
+            'count_date' => now(),
+            'certified_by_printed_name' => 'Certifier',
+            'approved_by_printed_name' => 'Approver',
+            'verified_by_printed_name' => 'Verifier',
+        ]);
+
+        $lines = Collection::make();
+
+        for ($index = 1; $index <= 25; $index++) {
+            $lines->push(PhysicalCountLine::query()->create([
+                'physical_count_session_id' => $session->id,
+                'item_id' => $item->id,
+                'stock_number' => 'STK-'.$index,
+                'balance_per_card' => 1,
+                'on_hand_count' => 1,
+            ]));
+        }
+
+        $session->setRelation('office', $office);
+        $session->setRelation('lines', $lines);
+
+        $templatePath = (string) OwwaCellMapping::form('RPCI')['template'];
+        $spreadsheet = app(OwwaTemplateExportService::class)->buildPhysicalCountSpreadsheet(
+            $session,
+            'RPCI',
+            $templatePath,
+        );
+
+        $sheet = $spreadsheet->getSheetByName('RPCI');
+        $this->assertNotNull($sheet);
+        $this->assertNull($spreadsheet->getSheetByName('RPCI Cont.1'));
+
+        $cols = OwwaCellMapping::detailColumns('RPCI');
+        $detailStart = OwwaCellMapping::detailRowBase('RPCI');
 
         $this->assertSame(
-            'C42',
-            OwwaCellMapping::physicalCountSignatureCell('RPCSP', 'certified_by', $extra),
+            'STK-21',
+            $sheet->getCell(OwwaCellMapping::columnCell($cols['stock_number'], $detailStart + 20))->getValue(),
         );
         $this->assertSame(
-            'D42',
-            OwwaCellMapping::physicalCountSignatureCell('RPCPPE', 'certified_by', $extra),
+            'STK-25',
+            $sheet->getCell(OwwaCellMapping::columnCell($cols['stock_number'], $detailStart + 24))->getValue(),
         );
+        $this->assertSame('Certifier', $sheet->getCell('C43')->getValue());
+        $this->assertNull($sheet->getCell('C79')->getValue());
+
+        $printArea = strtoupper((string) $sheet->getPageSetup()->getPrintArea());
+        $this->assertStringContainsString('K44', $printArea);
+        $this->assertArrayNotHasKey('A41', $sheet->getBreaks());
+    }
+
+    public function test_rpci_export_inserts_rows_before_signatures_when_over_21_lines(): void
+    {
+        if (! extension_loaded('zip')) {
+            $this->markTestSkipped('The zip extension is required to read OWWA .xlsx templates.');
+        }
+
+        [$office, $category, $item] = $this->createConsumableFixtures();
+
+        $session = PhysicalCountSession::query()->create([
+            'reference_code' => '2026-RPC-INSERT',
+            'count_type' => PhysicalCountSession::TYPE_RPCI,
+            'office_id' => $office->id,
+            'item_category_id' => $category->id,
+            'count_date' => now(),
+        ]);
+
+        $lines = Collection::make();
+
+        for ($index = 1; $index <= 22; $index++) {
+            $lines->push(PhysicalCountLine::query()->create([
+                'physical_count_session_id' => $session->id,
+                'item_id' => $item->id,
+                'stock_number' => 'STK-'.$index,
+                'balance_per_card' => 1,
+                'on_hand_count' => 1,
+            ]));
+        }
+
+        $session->setRelation('office', $office);
+        $session->setRelation('lines', $lines);
+
+        $templatePath = (string) OwwaCellMapping::form('RPCI')['template'];
+        $spreadsheet = app(OwwaTemplateExportService::class)->buildPhysicalCountSpreadsheet(
+            $session,
+            'RPCI',
+            $templatePath,
+        );
+
+        $sheet = $spreadsheet->getSheetByName('RPCI');
+        $detailStart = OwwaCellMapping::detailRowBase('RPCI');
+
+        $this->assertSame(
+            'STK-22',
+            $sheet->getCell(OwwaCellMapping::columnCell(OwwaCellMapping::detailColumns('RPCI')['stock_number'], $detailStart + 21))->getValue(),
+        );
+        $this->assertSame(40, PhysicalCountPageLayout::signatureLineRow('RPCI', 22));
+    }
+
+    public function test_rpci_continuous_export_has_non_overlapping_merges(): void
+    {
+        if (! extension_loaded('zip')) {
+            $this->markTestSkipped('The zip extension is required to read OWWA .xlsx templates.');
+        }
+
+        [$office, $category, $item] = $this->createConsumableFixtures();
+
+        $session = PhysicalCountSession::query()->create([
+            'reference_code' => '2026-RPC-MERGE',
+            'count_type' => PhysicalCountSession::TYPE_RPCI,
+            'office_id' => $office->id,
+            'item_category_id' => $category->id,
+            'count_date' => now(),
+            'certified_by_printed_name' => 'Certifier',
+            'approved_by_printed_name' => 'Approver',
+            'verified_by_printed_name' => 'Verifier',
+        ]);
+
+        $lines = Collection::make();
+
+        for ($index = 1; $index <= 25; $index++) {
+            $lines->push(PhysicalCountLine::query()->create([
+                'physical_count_session_id' => $session->id,
+                'item_id' => $item->id,
+                'stock_number' => 'STK-'.$index,
+                'balance_per_card' => 1,
+                'on_hand_count' => 1,
+            ]));
+        }
+
+        $session->setRelation('office', $office);
+        $session->setRelation('lines', $lines);
+
+        $templatePath = (string) OwwaCellMapping::form('RPCI')['template'];
+        $exportService = app(OwwaTemplateExportService::class);
+        $spreadsheet = $exportService->buildPhysicalCountSpreadsheet(
+            $session,
+            'RPCI',
+            $templatePath,
+        );
+
+        $sheet = $spreadsheet->getSheetByName('RPCI');
+        $this->assertNotNull($sheet);
+        $this->assertSame([], OwwaSpreadsheetLayoutHelper::overlappingMergePairs($sheet));
+        $this->assertGreaterThan(0, count($sheet->getMergeCells()));
+
+        $binary = $exportService->spreadsheetToXlsxBinary($spreadsheet);
+        $tempPath = tempnam(sys_get_temp_dir(), 'rpci-merge-test-').'.xlsx';
+        file_put_contents($tempPath, $binary);
+
+        try {
+            $reloaded = OwwaTemplateLoader::load($tempPath);
+            $reloadedSheet = $reloaded->getSheetByName('RPCI');
+            $this->assertNotNull($reloadedSheet);
+            $this->assertSame([], OwwaSpreadsheetLayoutHelper::overlappingMergePairs($reloadedSheet));
+            $this->assertGreaterThan(0, count($reloadedSheet->getMergeCells()));
+            $reloaded->disconnectWorksheets();
+        } finally {
+            if (is_file($tempPath)) {
+                unlink($tempPath);
+            }
+
+            $spreadsheet->disconnectWorksheets();
+        }
+    }
+
+    public function test_rpci_export_preserves_template_row_heights(): void
+    {
+        if (! extension_loaded('zip')) {
+            $this->markTestSkipped('The zip extension is required to read OWWA .xlsx templates.');
+        }
+
+        [$office, $category, $item] = $this->createConsumableFixtures();
+
+        $session = PhysicalCountSession::query()->create([
+            'reference_code' => '2026-RPC-0008',
+            'count_type' => PhysicalCountSession::TYPE_RPCI,
+            'office_id' => $office->id,
+            'item_category_id' => $category->id,
+            'count_date' => now(),
+        ]);
+
+        $lines = Collection::make();
+
+        for ($index = 1; $index <= 8; $index++) {
+            $lines->push(PhysicalCountLine::query()->create([
+                'physical_count_session_id' => $session->id,
+                'item_id' => $item->id,
+                'stock_number' => 'STK-'.$index,
+                'balance_per_card' => 1,
+                'on_hand_count' => 1,
+            ]));
+        }
+
+        $session->setRelation('office', $office);
+        $session->setRelation('lines', $lines);
+
+        $templatePath = (string) OwwaCellMapping::form('RPCI')['template'];
+        $templateSpreadsheet = OwwaTemplateLoader::load(
+            app(OwwaTemplateExportService::class)->requireTemplateAbsolutePath($templatePath),
+        );
+        $templateSheet = $templateSpreadsheet->getSheet(0);
+        $startRow = OwwaCellMapping::detailRowBase('RPCI');
+        $templateHeight = $templateSheet->getRowDimension($startRow)->getRowHeight();
+        if ($templateHeight <= 0) {
+            $templateHeight = 15.0;
+        }
+
+        $spreadsheet = app(OwwaTemplateExportService::class)->buildPhysicalCountSpreadsheet(
+            $session,
+            'RPCI',
+            $templatePath,
+        );
+
+        $sheet = $spreadsheet->getSheetByName('RPCI');
+        $exportedHeight = $sheet->getRowDimension($startRow)->getRowHeight();
+        if ($exportedHeight <= 0) {
+            $exportedHeight = 15.0;
+        }
+
+        $this->assertLessThanOrEqual($templateHeight + 0.5, $exportedHeight);
+        $this->assertGreaterThan(0, $exportedHeight);
+    }
+
+    public function test_rpci_export_widens_columns_or_caps_row_height_for_long_description(): void
+    {
+        if (! extension_loaded('zip')) {
+            $this->markTestSkipped('The zip extension is required to read OWWA .xlsx templates.');
+        }
+
+        [$office, $category, $item] = $this->createConsumableFixtures();
+
+        $session = PhysicalCountSession::query()->create([
+            'reference_code' => '2026-RPC-LONG',
+            'count_type' => PhysicalCountSession::TYPE_RPCI,
+            'office_id' => $office->id,
+            'item_category_id' => $category->id,
+            'count_date' => now(),
+        ]);
+
+        $longDescription = str_repeat('Consumable supply item with extended description text. ', 12);
+
+        $line = PhysicalCountLine::query()->create([
+            'physical_count_session_id' => $session->id,
+            'item_id' => $item->id,
+            'stock_number' => 'STK-LONG',
+            'description' => $longDescription,
+            'balance_per_card' => 1,
+            'on_hand_count' => 1,
+        ]);
+
+        $session->setRelation('office', $office);
+        $session->setRelation('lines', Collection::make([$line->load('item')]));
+
+        $templatePath = (string) OwwaCellMapping::form('RPCI')['template'];
+        $templateSpreadsheet = OwwaTemplateLoader::load(
+            app(OwwaTemplateExportService::class)->requireTemplateAbsolutePath($templatePath),
+        );
+        $templateSheet = $templateSpreadsheet->getSheet(0);
+        $startRow = OwwaCellMapping::detailRowBase('RPCI');
+        $templateHeight = $templateSheet->getRowDimension($startRow)->getRowHeight();
+        if ($templateHeight <= 0) {
+            $templateHeight = 15.0;
+        }
+        $templateColumnCWidth = $templateSheet->getColumnDimension('C')->getWidth();
+        if ($templateColumnCWidth <= 0) {
+            $templateColumnCWidth = OwwaExportStandards::defaultColumnWidth('C');
+        }
+
+        $spreadsheet = app(OwwaTemplateExportService::class)->buildPhysicalCountSpreadsheet(
+            $session,
+            'RPCI',
+            $templatePath,
+        );
+
+        $sheet = $spreadsheet->getSheetByName('RPCI');
+        $exportedHeight = $sheet->getRowDimension($startRow)->getRowHeight();
+        if ($exportedHeight <= 0) {
+            $exportedHeight = $templateHeight;
+        }
+        $exportedColumnCWidth = $sheet->getColumnDimension('C')->getWidth();
+        if ($exportedColumnCWidth <= 0) {
+            $exportedColumnCWidth = OwwaExportStandards::defaultColumnWidth('C');
+        }
+
+        $this->assertTrue(
+            $exportedColumnCWidth > $templateColumnCWidth || $exportedHeight > $templateHeight,
+            'Expected column C to widen or row height to grow for long description.',
+        );
+        $this->assertGreaterThan($templateHeight, $exportedHeight);
+    }
+
+    public function test_rpci_export_expands_row_heights_for_long_descriptions_in_continuous_mode(): void
+    {
+        if (! extension_loaded('zip')) {
+            $this->markTestSkipped('The zip extension is required to read OWWA .xlsx templates.');
+        }
+
+        [$office, $category, $item] = $this->createConsumableFixtures();
+
+        $session = PhysicalCountSession::query()->create([
+            'reference_code' => '2026-RPC-BUDGET',
+            'count_type' => PhysicalCountSession::TYPE_RPCI,
+            'office_id' => $office->id,
+            'item_category_id' => $category->id,
+            'count_date' => now(),
+        ]);
+
+        $lines = Collection::make();
+
+        for ($index = 1; $index <= 5; $index++) {
+            $lines->push(PhysicalCountLine::query()->create([
+                'physical_count_session_id' => $session->id,
+                'item_id' => $item->id,
+                'stock_number' => 'STK-'.$index,
+                'description' => str_repeat('Long wrapped description segment. ', 8),
+                'balance_per_card' => 1,
+                'on_hand_count' => 1,
+            ]));
+        }
+
+        $session->setRelation('office', $office);
+        $session->setRelation('lines', $lines);
+
+        $templatePath = (string) OwwaCellMapping::form('RPCI')['template'];
+        $templateSpreadsheet = OwwaTemplateLoader::load(
+            app(OwwaTemplateExportService::class)->requireTemplateAbsolutePath($templatePath),
+        );
+        $templateSheet = $templateSpreadsheet->getSheet(0);
+        $detailStart = OwwaCellMapping::detailRowBase('RPCI');
+        $fallbackHeight = $templateSheet->getRowDimension($detailStart)->getRowHeight();
+        if ($fallbackHeight <= 0) {
+            $fallbackHeight = 15.0;
+        }
+
+        $spreadsheet = app(OwwaTemplateExportService::class)->buildPhysicalCountSpreadsheet(
+            $session,
+            'RPCI',
+            $templatePath,
+        );
+
+        $sheet = $spreadsheet->getSheetByName('RPCI');
+        $exportedHeight = $sheet->getRowDimension($detailStart)->getRowHeight();
+        if ($exportedHeight <= 0) {
+            $exportedHeight = $fallbackHeight;
+        }
+
+        $this->assertGreaterThan($fallbackHeight, $exportedHeight);
     }
 
     public function test_rpci_export_includes_all_detail_lines_without_truncation(): void
@@ -282,6 +660,7 @@ class PhysicalCountExportMappingTest extends TestCase
             'item_category_id' => $category->id,
             'item_code' => 'CON-010',
             'unit' => 'box',
+            'description' => null,
         ]);
 
         return [$office, $category, $item, $user];
