@@ -14,14 +14,14 @@
         {{-- KPI cards --}}
         <div class="owwa-kpi-grid">
             <div class="owwa-kpi-card owwa-kpi-card-total">
-                <span class="owwa-kpi-tooltip">Distinct items distributed to you{{ $category === 'all' ? '' : ' in this category' }}.</span>
+                <span class="owwa-kpi-tooltip">Distinct items distributed to you in this category.</span>
                 <div class="owwa-kpi-card-inner">
                     <span class="owwa-kpi-card-value">{{ number_format($summary['totalItems']) }}</span>
                     <span class="owwa-kpi-card-label">Distinct items</span>
                 </div>
             </div>
             <div class="owwa-kpi-card owwa-kpi-card-ok">
-                <span class="owwa-kpi-tooltip">Total quantity distributed to you{{ $category === 'all' ? ' (all time)' : ' in this category (all time)' }}.</span>
+                <span class="owwa-kpi-tooltip">Total quantity distributed to you in this category (all time).</span>
                 <div class="owwa-kpi-card-inner">
                     <span class="owwa-kpi-card-value">{{ number_format($summary['totalQuantity']) }}</span>
                     <span class="owwa-kpi-card-label">Total received</span>
@@ -29,27 +29,20 @@
             </div>
         </div>
 
-        {{-- Search + category tabs --}}
-        <div class="owwa-search-wrap">
+        {{-- Category dropdown + search --}}
+        <div class="owwa-search-wrap" style="display:flex;gap:0.75rem;flex-wrap:wrap;align-items:center;">
+            <select wire:model.live="category" class="owwa-search-bar" style="max-width:14rem;" aria-label="Item category">
+                @foreach ($categoryOptions as $value => $label)
+                    <option value="{{ $value }}">{{ $label }}</option>
+                @endforeach
+            </select>
             <input
                 type="text"
                 wire:model.live.debounce.300ms="search"
                 placeholder="Search items or category…"
                 class="owwa-search-bar"
+                style="flex:1;min-width:12rem;"
             />
-            <div class="owwa-pa-view-tabs owwa-stock-restock-tabs" role="tablist" aria-label="Item category filter">
-                @foreach ($categoryOptions as $value => $label)
-                    <button
-                        type="button"
-                        role="tab"
-                        wire:click="setCategory(@js($value))"
-                        class="owwa-pa-view-tab {{ $category === $value ? 'is-active' : '' }}"
-                        aria-selected="{{ $category === $value ? 'true' : 'false' }}"
-                    >
-                        {{ $label }}
-                    </button>
-                @endforeach
-            </div>
         </div>
 
         {{-- Data panel --}}

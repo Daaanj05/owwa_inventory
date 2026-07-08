@@ -28,7 +28,7 @@ class EmployeeInventoryWidget extends Widget
 
     public string $invSearch = '';
 
-    public string $invCategory = EmployeeDistributionInventoryService::CATEGORY_ALL;
+    public string $invCategory = EmployeeDistributionInventoryService::CATEGORY_CONSUMABLES;
 
     public static function canView(): bool
     {
@@ -53,13 +53,12 @@ class EmployeeInventoryWidget extends Widget
         }
     }
 
-    public function setInvCategory(string $category): void
+    public function updatedInvCategory(): void
     {
-        if (! EmployeeDistributionInventoryService::isValidCategory($category)) {
-            return;
+        if (! EmployeeDistributionInventoryService::isValidCategory($this->invCategory)) {
+            $this->invCategory = EmployeeDistributionInventoryService::CATEGORY_CONSUMABLES;
         }
 
-        $this->invCategory = $category;
         $this->resetPage();
     }
 
@@ -89,9 +88,7 @@ class EmployeeInventoryWidget extends Widget
     {
         return MyInventory::getUrl([
             'ledgerItem' => $itemId,
-            'category' => $this->invCategory !== EmployeeDistributionInventoryService::CATEGORY_ALL
-                ? $this->invCategory
-                : null,
+            'category' => $this->invCategory,
         ]);
     }
 }

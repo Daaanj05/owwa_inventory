@@ -47,7 +47,10 @@ COPY . .
 COPY --from=assets /app/public/build ./public/build
 COPY docker/Caddyfile /etc/caddy/Caddyfile
 
-RUN mkdir -p bootstrap/cache \
+# Render (and other restricted hosts) refuse to exec binaries that still carry
+# CAP_NET_BIND_SERVICE. We listen on PORT>=10000, so drop the capability.
+RUN setcap -r /usr/local/bin/frankenphp \
+    && mkdir -p bootstrap/cache \
     storage/framework/cache \
     storage/framework/sessions \
     storage/framework/views \

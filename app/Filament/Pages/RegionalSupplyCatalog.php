@@ -60,13 +60,6 @@ class RegionalSupplyCatalog extends Page
         return static::canAccess();
     }
 
-    public function mount(): void
-    {
-        if (blank($this->category)) {
-            $this->category = session('active_item_category_id');
-        }
-    }
-
     public function getTitle(): string|Htmlable
     {
         return 'Regional supply catalog';
@@ -104,15 +97,6 @@ class RegionalSupplyCatalog extends Page
         $this->resetPage();
     }
 
-    public function updatedCategory(): void
-    {
-        $this->resetPage();
-
-        if (filled($this->category)) {
-            session()->put('active_item_category_id', (int) $this->category);
-        }
-    }
-
     public function sortByColumn(string $column): void
     {
         $allowed = ['item_name', 'category_name', 'stock', 'reorder_level'];
@@ -132,11 +116,53 @@ class RegionalSupplyCatalog extends Page
     /** @return array<int, string> */
     public function getCategoryOptions(): array
     {
+        $slugOrder = [
+            'consumables' => 0,
+            'semi_expendable' => 1,
+            'ppe' => 2,
+        ];
+
         return ItemCategory::query()
             ->whereNull('archived_at')
-            ->orderBy('name')
-            ->pluck('name', 'id')
+            ->get()
+            ->sortBy(fn (ItemCategory $category): int => $slugOrder[$category->getTemplateSlug()] ?? 99)
+            ->mapWithKeys(fn (ItemCategory $category): array => [$category->id => $category->name])
             ->all();
+    }
+
+    public function defaultCategoryId(): ?int
+    {
+        $options = $this->getCategoryOptions();
+
+        return $options === [] ? null : (int) array_key_first($options);
+    }
+
+    public function mount(): void
+    {
+        if (blank($this->category)) {
+            $this->category = session('active_item_category_id');
+        }
+
+        if (blank($this->category) || ! array_key_exists((int) $this->category, $this->getCategoryOptions())) {
+            $this->category = $this->defaultCategoryId();
+        }
+
+        if (filled($this->category)) {
+            session()->put('active_item_category_id', (int) $this->category);
+        }
+    }
+
+    public function updatedCategory(): void
+    {
+        $this->resetPage();
+
+        if (blank($this->category) || ! array_key_exists((int) $this->category, $this->getCategoryOptions())) {
+            $this->category = $this->defaultCategoryId();
+        }
+
+        if (filled($this->category)) {
+            session()->put('active_item_category_id', (int) $this->category);
+        }
     }
 
     public function getSupplyOfficeName(): string

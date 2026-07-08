@@ -113,7 +113,7 @@ class MyInventoryTest extends TestCase
             ->assertActionMounted('viewDistributionLedger');
     }
 
-    public function test_category_tab_filters_inventory_and_kpis(): void
+    public function test_category_dropdown_filters_inventory_and_kpis(): void
     {
         $office = Office::factory()->create();
         $consumables = ItemCategory::query()->firstOrCreate(
@@ -158,11 +158,14 @@ class MyInventoryTest extends TestCase
 
         $service = app(EmployeeDistributionInventoryService::class);
 
-        $all = $service->paginatedGroupedInventory($employee, null, 'distribution_date', 'desc', 10, 'all');
+        $this->assertSame(
+            ['consumables', 'semi_expendable', 'ppe'],
+            array_keys(EmployeeDistributionInventoryService::categoryOptions()),
+        );
+
         $consumableRows = $service->paginatedGroupedInventory($employee, null, 'distribution_date', 'desc', 10, 'consumables');
         $ppeRows = $service->paginatedGroupedInventory($employee, null, 'distribution_date', 'desc', 10, 'ppe');
 
-        $this->assertSame(2, $all->total());
         $this->assertSame(1, $consumableRows->total());
         $this->assertSame('Bond Paper', $consumableRows->first()->item_name);
         $this->assertSame(1, $ppeRows->total());
@@ -174,7 +177,10 @@ class MyInventoryTest extends TestCase
 
         Livewire::actingAs($employee)
             ->test(MyInventory::class)
-            ->call('setCategory', 'ppe')
+            ->assertSet('category', 'consumables')
+            ->assertSee('Bond Paper')
+            ->assertDontSee('Desktop Computer')
+            ->set('category', 'ppe')
             ->assertSet('category', 'ppe')
             ->assertSee('Desktop Computer')
             ->assertDontSee('Bond Paper');

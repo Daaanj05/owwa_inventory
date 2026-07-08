@@ -13,6 +13,11 @@
         <div class="owwa-data-panel-header">
             <h2 class="owwa-data-panel-title">Distributed inventory</h2>
             <div style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap;">
+                <select wire:model.live="invCategory" class="owwa-search-bar" style="max-width:14rem;" aria-label="Item category">
+                    @foreach ($categoryOptions as $value => $label)
+                        <option value="{{ $value }}">{{ $label }}</option>
+                    @endforeach
+                </select>
                 <input
                     type="text"
                     wire:model.live.debounce.300ms="invSearch"
@@ -20,21 +25,6 @@
                     class="owwa-search-bar"
                     style="width:14rem;"
                 />
-            </div>
-        </div>
-        <div class="owwa-search-wrap" style="padding:0 1rem 0.75rem;">
-            <div class="owwa-pa-view-tabs owwa-stock-restock-tabs" role="tablist" aria-label="Item category filter">
-                @foreach ($categoryOptions as $value => $label)
-                    <button
-                        type="button"
-                        role="tab"
-                        wire:click="setInvCategory(@js($value))"
-                        class="owwa-pa-view-tab {{ $invCategory === $value ? 'is-active' : '' }}"
-                        aria-selected="{{ $invCategory === $value ? 'true' : 'false' }}"
-                    >
-                        {{ $label }}
-                    </button>
-                @endforeach
             </div>
         </div>
         <div class="owwa-data-panel-body">

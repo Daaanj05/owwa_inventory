@@ -13,8 +13,6 @@ use Illuminate\Support\Facades\DB;
 
 class EmployeeDistributionInventoryService
 {
-    public const CATEGORY_ALL = 'all';
-
     public const CATEGORY_CONSUMABLES = 'consumables';
 
     public const CATEGORY_SEMI_EXPENDABLE = 'semi_expendable';
@@ -27,7 +25,6 @@ class EmployeeDistributionInventoryService
     public static function categoryOptions(): array
     {
         return [
-            self::CATEGORY_ALL => 'All',
             self::CATEGORY_CONSUMABLES => 'Consumables',
             self::CATEGORY_SEMI_EXPENDABLE => 'Semi-Expendable',
             self::CATEGORY_PPE => 'Property, Plant and Equipment',
@@ -42,13 +39,15 @@ class EmployeeDistributionInventoryService
     /**
      * @return array{totalItems: int, totalQuantity: int, totalQuantityThisYear: int}
      */
-    public function summaryFor(User $user, string $category = self::CATEGORY_ALL): array
+    public function summaryFor(User $user, string $category = self::CATEGORY_CONSUMABLES): array
     {
-        $base = Distribution::query()->where('distributed_to', $user->id);
-
-        if ($category !== self::CATEGORY_ALL) {
-            $base->whereIn('item_id', $this->itemIdsForCategorySlug($category));
+        if (! self::isValidCategory($category)) {
+            $category = self::CATEGORY_CONSUMABLES;
         }
+
+        $base = Distribution::query()
+            ->where('distributed_to', $user->id)
+            ->whereIn('item_id', $this->itemIdsForCategorySlug($category));
 
         return [
             'totalItems' => (int) (clone $base)->distinct('item_id')->count('item_id'),
@@ -65,8 +64,12 @@ class EmployeeDistributionInventoryService
     public function groupedInventoryQuery(
         User $user,
         ?string $search = null,
-        string $category = self::CATEGORY_ALL,
+        string $category = self::CATEGORY_CONSUMABLES,
     ): Builder {
+        if (! self::isValidCategory($category)) {
+            $category = self::CATEGORY_CONSUMABLES;
+        }
+
         $query = Distribution::query()
             ->select([
                 'distributions.item_id',
@@ -77,15 +80,12 @@ class EmployeeDistributionInventoryService
             ->join('items', 'items.id', '=', 'distributions.item_id')
             ->join('item_categories', 'item_categories.id', '=', 'items.item_category_id')
             ->where('distributed_to', $user->id)
+            ->whereIn('items.item_category_id', $this->categoryIdsForSlug($category))
             ->groupBy('distributions.item_id', 'items.name', 'item_categories.name')
             ->addSelect([
                 'items.name as item_name',
                 'item_categories.name as category_name',
             ]);
-
-        if ($category !== self::CATEGORY_ALL) {
-            $query->whereIn('items.item_category_id', $this->categoryIdsForSlug($category));
-        }
 
         if (filled($search)) {
             $term = '%'.$search.'%';
@@ -104,7 +104,7 @@ class EmployeeDistributionInventoryService
         string $sortBy,
         string $sortDir,
         int $perPage = 10,
-        string $category = self::CATEGORY_ALL,
+        string $category = self::CATEGORY_CONSUMABLES,
     ): LengthAwarePaginator {
         $query = $this->groupedInventoryQuery($user, $search, $category);
 

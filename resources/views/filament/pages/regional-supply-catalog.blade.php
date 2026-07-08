@@ -35,8 +35,7 @@
 
         <div class="owwa-search-wrap" style="display:flex;gap:0.75rem;flex-wrap:wrap;align-items:center;">
             @if(count($categories) > 0)
-                <select wire:model.live="category" class="owwa-search-bar" style="max-width:14rem;">
-                    <option value="">All categories</option>
+                <select wire:model.live="category" class="owwa-search-bar" style="max-width:14rem;" aria-label="Item category">
                     @foreach($categories as $id => $name)
                         <option value="{{ $id }}">{{ $name }}</option>
                     @endforeach

@@ -44,7 +44,7 @@ class MyInventory extends Page
     public string $search = '';
 
     #[Url]
-    public string $category = EmployeeDistributionInventoryService::CATEGORY_ALL;
+    public string $category = EmployeeDistributionInventoryService::CATEGORY_CONSUMABLES;
 
     #[Url]
     public ?int $ledgerItem = null;
@@ -52,12 +52,21 @@ class MyInventory extends Page
     public function mount(): void
     {
         if (! EmployeeDistributionInventoryService::isValidCategory($this->category)) {
-            $this->category = EmployeeDistributionInventoryService::CATEGORY_ALL;
+            $this->category = EmployeeDistributionInventoryService::CATEGORY_CONSUMABLES;
         }
 
         if ($this->ledgerItem !== null) {
             $this->openDistributionLedger($this->ledgerItem);
         }
+    }
+
+    public function updatedCategory(): void
+    {
+        if (! EmployeeDistributionInventoryService::isValidCategory($this->category)) {
+            $this->category = EmployeeDistributionInventoryService::CATEGORY_CONSUMABLES;
+        }
+
+        $this->resetPage();
     }
 
     public static function canAccess(): bool
@@ -95,16 +104,6 @@ class MyInventory extends Page
 
     public function updatedSearch(): void
     {
-        $this->resetPage();
-    }
-
-    public function setCategory(string $category): void
-    {
-        if (! EmployeeDistributionInventoryService::isValidCategory($category)) {
-            return;
-        }
-
-        $this->category = $category;
         $this->resetPage();
     }
 

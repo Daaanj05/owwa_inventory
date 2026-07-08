@@ -29,7 +29,8 @@ fi
 
 mkdir -p bootstrap/cache/filament storage/framework/views storage/app/templates /config/caddy /data/caddy
 
-if [ ! -f storage/app/templates/.synced ] && [ -d resources/owwa-templates ]; then
+# Free tier has no Shell/disk: always refresh templates from the image on boot.
+if [ -d resources/owwa-templates ]; then
     cp -r resources/owwa-templates/. storage/app/templates/ 2>/dev/null || true
     touch storage/app/templates/.synced
 fi
