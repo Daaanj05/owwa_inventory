@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: owwa-inventory
+    name: owwa4a-inventory
     runtime: docker
     plan: free
     region: singapore
