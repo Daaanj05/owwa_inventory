@@ -44,8 +44,8 @@ class RequisitionResource extends Resource
             /** @var User|null $user */
             $user = Filament::auth()->user();
             $query = static::getModel()::query();
-            if ($user && $user->isUnitConsolidator() && $user->office_id) {
-                $query->where('office_id', $user->office_id)
+            if ($user && $user->isUnitConsolidator()) {
+                $query = $user->applyUnitConsolidatorRequisitionScope($query)
                     ->where('status', Requisition::STATUS_PENDING);
             } elseif ($user && $user->isSupplyCustodian()) {
                 $query->whereHas('requestedBy', function (Builder $q): void {
@@ -121,13 +121,7 @@ class RequisitionResource extends Resource
         }
 
         if ($user->isUnitConsolidator()) {
-            // Unit Consolidator sees only requisitions from their own office/department (including employee requests).
-            // They compile employee requests into one consolidated requisition (Create) to send to the Supply Custodian.
-            if ($user->office_id) {
-                $query->where('office_id', $user->office_id);
-            }
-
-            return $query;
+            return $user->applyUnitConsolidatorRequisitionScope($query);
         }
 
         if ($user->isEmployee()) {

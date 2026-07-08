@@ -29,9 +29,15 @@ class UserResource extends Resource
 
     protected static ?int $navigationSort = 5;
 
+    protected static ?string $modelLabel = 'User';
+
     public static function getEloquentQuery(): Builder
     {
-        $query = parent::getEloquentQuery()->with(['pendingPasswordResetRequest']);
+        $query = parent::getEloquentQuery()->with([
+            'pendingPasswordResetRequest',
+            'assignments.office',
+            'assignments.department',
+        ]);
         $user = Filament::auth()->user();
         if ($user && $user->isUnitConsolidator() && $user->office_id) {
             $query->where('office_id', $user->office_id)

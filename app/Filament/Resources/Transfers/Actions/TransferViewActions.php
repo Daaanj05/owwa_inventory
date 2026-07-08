@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Transfers\Actions;
 
+use App\Filament\Resources\Transfers\TransferResource;
 use App\Filament\Support\OwwaFormModalDefaults;
 use App\Models\Transfer;
 use App\Services\OwwaTemplateExportService;
@@ -14,7 +15,7 @@ class TransferViewActions
 {
     public static function editAction(): EditAction
     {
-        return OwwaFormModalDefaults::editAction(OwwaFormModalDefaults::WIDTH_STANDARD);
+        return OwwaFormModalDefaults::editActionForResource(TransferResource::class, OwwaFormModalDefaults::WIDTH_STANDARD);
     }
 
     public static function exportOwwaAction(): Action

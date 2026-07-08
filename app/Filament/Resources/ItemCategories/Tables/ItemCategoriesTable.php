@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\ItemCategories\Tables;
 
+use App\Filament\Resources\ItemCategories\ItemCategoryResource;
 use App\Filament\Resources\ItemCategories\Schemas\ItemCategoryInfolist;
 use App\Filament\Support\ConfiguresOwwaViewAction;
 use App\Filament\Support\OwwaFormModalDefaults;
@@ -46,11 +47,12 @@ class ItemCategoriesTable
                         ItemCategoryInfolist::modalDetailSections(),
                     ),
                     [
-                        OwwaFormModalDefaults::editAction(OwwaFormModalDefaults::WIDTH_COMPACT),
+                        OwwaFormModalDefaults::editActionForResource(ItemCategoryResource::class, OwwaFormModalDefaults::WIDTH_COMPACT),
                     ],
+                    modelLabel: ItemCategoryResource::getModelLabel(),
                 ),
                 ActionGroup::make([
-                    OwwaFormModalDefaults::editAction(OwwaFormModalDefaults::WIDTH_COMPACT),
+                    OwwaFormModalDefaults::editActionForResource(ItemCategoryResource::class, OwwaFormModalDefaults::WIDTH_COMPACT),
                     Action::make('archive')
                         ->label('Archive')
                         ->icon('heroicon-o-archive-box')

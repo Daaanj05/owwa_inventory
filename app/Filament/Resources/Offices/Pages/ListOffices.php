@@ -55,7 +55,7 @@ class ListOffices extends ListRecords
                 Flex::make([
                     $this->getTabsContentComponent(),
                     Actions::make([
-                        OwwaFormModalDefaults::createAction(OwwaFormModalDefaults::WIDTH_COMPACT),
+                        OwwaFormModalDefaults::createActionForResource(OfficeResource::class, OwwaFormModalDefaults::WIDTH_COMPACT),
                     ])->alignEnd(),
                 ])->alignBetween()->verticallyAlignCenter(),
                 RenderHook::make(PanelsRenderHook::RESOURCE_PAGES_LIST_RECORDS_TABLE_BEFORE),

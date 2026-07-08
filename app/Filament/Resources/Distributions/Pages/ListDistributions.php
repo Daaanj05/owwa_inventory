@@ -73,7 +73,7 @@ class ListDistributions extends ListRecords
     protected function getHeaderActions(): array
     {
         return [
-            OwwaFormModalDefaults::createAction(OwwaFormModalDefaults::WIDTH_COMPACT)
+            OwwaFormModalDefaults::createActionForResource(DistributionResource::class, OwwaFormModalDefaults::WIDTH_COMPACT)
                 ->mutateDataUsing(function (array $data): array {
                     $user = Filament::auth()->user();
 

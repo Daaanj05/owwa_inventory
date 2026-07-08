@@ -27,6 +27,8 @@ class ItemCategoryResource extends Resource
 
     protected static ?int $navigationSort = 4;
 
+    protected static ?string $modelLabel = 'Item category';
+
     public static function form(Schema $schema): Schema
     {
         return ItemCategoryForm::configure($schema);

@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Models\Acquisition;
 use App\Models\AcquisitionPaperwork;
 use App\Models\AcquisitionPaperworkLine;
 use App\Models\Department;
@@ -98,7 +99,7 @@ class AcquisitionPaperworkDemoSeeder extends Seeder
 
         $paperwork = AcquisitionPaperwork::query()->updateOrCreate(
             ['reference_code' => $spec['reference_code']],
-            [
+            array_merge($this->demoWorkflowResetAttributes(), [
                 'office_id' => $office->id,
                 'requesting_office_id' => $requestingOffice->id,
                 'department_id' => $department?->id,
@@ -113,8 +114,12 @@ class AcquisitionPaperworkDemoSeeder extends Seeder
                 'approved_by_name' => 'Roberto Cruz',
                 'inspection_officer_name' => 'Ana Reyes',
                 'custodian_name' => 'Supply Custodian',
-            ],
+            ]),
         );
+
+        Acquisition::query()
+            ->where('acquisition_paperwork_id', $paperwork->id)
+            ->delete();
 
         foreach ($spec['lines'] as $lineSpec) {
             $item = $items[$lineSpec['item_code']] ?? null;
@@ -147,19 +152,44 @@ class AcquisitionPaperworkDemoSeeder extends Seeder
             return;
         }
 
-        $service->submitPo($paperwork->fresh(['lines.item']));
+        $paperwork = $paperwork->fresh(['lines.item']);
+        $service->submitPo($paperwork);
 
         if (($spec['in_progress_stop'] ?? null) === 'po_submitted') {
             return;
         }
 
-        $service->approvePo($paperwork->fresh(['lines.item']));
-        $service->submitIar($paperwork->fresh(['lines.item']));
-        $service->approveIar($paperwork->fresh(['lines.item']));
+        $paperwork = $paperwork->fresh(['lines.item']);
+        $service->approvePo($paperwork);
+        $service->submitIar($paperwork);
+        $service->approveIar($paperwork);
 
         if ($spec['received']) {
             $service->recordCustodyReceipts($paperwork->fresh(['lines.item']));
         }
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function demoWorkflowResetAttributes(): array
+    {
+        return [
+            'phase' => AcquisitionPaperwork::PHASE_PR,
+            'pr_status' => AcquisitionPaperwork::STATUS_DRAFT,
+            'po_status' => AcquisitionPaperwork::STATUS_DRAFT,
+            'iar_status' => AcquisitionPaperwork::STATUS_DRAFT,
+            'pr_number' => null,
+            'po_number' => null,
+            'iar_number' => null,
+            'pr_submitted_at' => null,
+            'po_submitted_at' => null,
+            'iar_submitted_at' => null,
+            'pr_completed_at' => null,
+            'po_completed_at' => null,
+            'iar_completed_at' => null,
+            'received_at' => null,
+        ];
     }
 
     /**

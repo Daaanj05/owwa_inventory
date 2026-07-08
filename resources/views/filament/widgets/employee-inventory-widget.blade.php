@@ -1,14 +1,18 @@
 @php
+    use App\Services\EmployeeDistributionInventoryService;
+
     $rows = $this->getInventoryRows();
     $sort = $this->invSort;
     $dir = $this->invDir;
+    $invCategory = $this->invCategory;
+    $categoryOptions = EmployeeDistributionInventoryService::categoryOptions();
 @endphp
 
 <x-filament-widgets::widget>
     <div class="owwa-data-panel">
         <div class="owwa-data-panel-header">
             <h2 class="owwa-data-panel-title">Distributed inventory</h2>
-            <div style="display:flex;align-items:center;gap:0.5rem;">
+            <div style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap;">
                 <input
                     type="text"
                     wire:model.live.debounce.300ms="invSearch"
@@ -16,6 +20,21 @@
                     class="owwa-search-bar"
                     style="width:14rem;"
                 />
+            </div>
+        </div>
+        <div class="owwa-search-wrap" style="padding:0 1rem 0.75rem;">
+            <div class="owwa-pa-view-tabs owwa-stock-restock-tabs" role="tablist" aria-label="Item category filter">
+                @foreach ($categoryOptions as $value => $label)
+                    <button
+                        type="button"
+                        role="tab"
+                        wire:click="setInvCategory(@js($value))"
+                        class="owwa-pa-view-tab {{ $invCategory === $value ? 'is-active' : '' }}"
+                        aria-selected="{{ $invCategory === $value ? 'true' : 'false' }}"
+                    >
+                        {{ $label }}
+                    </button>
+                @endforeach
             </div>
         </div>
         <div class="owwa-data-panel-body">
@@ -27,16 +46,16 @@
                                 $columns = [
                                     'item_name' => 'Item',
                                     'category_name' => 'Category',
-                                    'quantity' => 'Qty',
-                                    'distribution_date' => 'Date',
-                                    'distributed_by_name' => 'Distributed by',
+                                    'quantity' => 'Total qty',
+                                    'distribution_date' => 'Last received',
+                                    'distribution_count' => 'Distributions',
                                 ];
                             @endphp
                             @foreach($columns as $col => $label)
                                 <th
                                     wire:click="sortInventory('{{ $col }}')"
                                     style="cursor:pointer;user-select:none;"
-                                    class="{{ $col === 'quantity' ? 'owwa-num' : '' }}"
+                                    class="{{ in_array($col, ['quantity', 'distribution_count'], true) ? 'owwa-num' : '' }}"
                                 >
                                     {{ $label }}
                                     @if($sort === $col)
@@ -44,22 +63,34 @@
                                     @endif
                                 </th>
                             @endforeach
-                            <th>Remarks</th>
                         </tr>
                     </thead>
                     <tbody>
                         @forelse($rows as $row)
                             <tr>
-                                <td class="owwa-cell-primary">{{ $row->item_name }}</td>
+                                <td class="owwa-cell-primary">
+                                    <a
+                                        href="{{ $this->ledgerUrl((int) $row->item_id) }}"
+                                        class="font-medium text-primary-600 hover:text-primary-500 dark:text-primary-400 dark:hover:text-primary-300"
+                                        title="{{ $row->item_name }}"
+                                    >
+                                        {{ $row->item_name }}
+                                    </a>
+                                </td>
                                 <td class="owwa-cell-muted">{{ $row->category_name }}</td>
-                                <td class="owwa-num owwa-cell-primary">{{ number_format($row->quantity) }}</td>
-                                <td class="owwa-cell-muted">{{ $row->distribution_date?->format('M d, Y') ?? '—' }}</td>
-                                <td class="owwa-cell-muted">{{ $row->distributed_by_name }}</td>
-                                <td class="owwa-cell-muted">{{ $row->remarks ?? '—' }}</td>
+                                <td class="owwa-num owwa-cell-primary">{{ number_format((int) $row->total_quantity) }}</td>
+                                <td class="owwa-cell-muted">
+                                    @if (filled($row->last_distribution_date))
+                                        {{ \Illuminate\Support\Carbon::parse($row->last_distribution_date)->format('M d, Y') }}
+                                    @else
+                                        —
+                                    @endif
+                                </td>
+                                <td class="owwa-num owwa-cell-muted">{{ number_format((int) $row->distribution_count) }}</td>
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="6">
+                                <td colspan="5">
                                     <div class="owwa-empty">
                                         <svg class="owwa-empty-icon" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
                                             <path stroke-linecap="round" stroke-linejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" />

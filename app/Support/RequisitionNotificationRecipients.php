@@ -10,16 +10,31 @@ class RequisitionNotificationRecipients
     /**
      * @return Collection<int, User>
      */
-    public static function unitConsolidatorsForOffice(int $officeId): Collection
+    public static function unitConsolidatorsForOffice(int $officeId, ?int $departmentId = null): Collection
     {
         if ($officeId <= 0) {
             return new Collection;
         }
 
-        return User::query()
+        $query = User::query()
             ->where('role', User::ROLE_UNIT_CONSOLIDATOR)
-            ->where('office_id', $officeId)
-            ->get();
+            ->where(function ($scoped) use ($officeId, $departmentId): void {
+                $scoped->where(function ($legacy) use ($officeId, $departmentId): void {
+                    $legacy->where('office_id', $officeId);
+
+                    if ($departmentId !== null && $departmentId > 0) {
+                        $legacy->where('department_id', $departmentId);
+                    }
+                })->orWhereHas('assignments', function ($assignments) use ($officeId, $departmentId): void {
+                    $assignments->where('office_id', $officeId);
+
+                    if ($departmentId !== null && $departmentId > 0) {
+                        $assignments->where('department_id', $departmentId);
+                    }
+                });
+            });
+
+        return $query->get();
     }
 
     /**

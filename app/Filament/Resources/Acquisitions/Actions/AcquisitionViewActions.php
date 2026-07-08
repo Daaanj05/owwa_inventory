@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Acquisitions\Actions;
 
+use App\Filament\Resources\Acquisitions\AcquisitionResource;
 use App\Filament\Support\OwwaFormModalDefaults;
 use App\Models\Acquisition;
 use App\Services\OwwaTemplateExportService;
@@ -14,7 +15,7 @@ class AcquisitionViewActions
 {
     public static function editAction(): EditAction
     {
-        return OwwaFormModalDefaults::editAction(OwwaFormModalDefaults::WIDTH_COMPACT);
+        return OwwaFormModalDefaults::editActionForResource(AcquisitionResource::class, OwwaFormModalDefaults::WIDTH_COMPACT);
     }
 
     public static function exportOwwaAction(): Action

@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\UserLogs\Tables;
 
 use App\Filament\Resources\UserLogs\Schemas\UserLogInfolist;
+use App\Filament\Resources\UserLogs\UserLogResource;
 use App\Filament\Support\ConfiguresOwwaViewAction;
 use App\Filament\Support\OwwaModalSchema;
 use App\Models\UserLog;
@@ -60,6 +61,7 @@ class UserLogsTable
                         fn (UserLog $record): array => OwwaTransactionViewPresenter::forUserLog($record),
                         UserLogInfolist::modalDetailSections(),
                     ),
+                    modelLabel: UserLogResource::getModelLabel(),
                 ),
             ])
             ->recordUrl(null)

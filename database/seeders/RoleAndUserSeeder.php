@@ -10,9 +10,14 @@ class RoleAndUserSeeder extends Seeder
 {
     public function run(): void
     {
-        $regional = Office::firstOrCreate(
+        $regional = Office::query()->updateOrCreate(
             ['code' => 'OWWA-IVA'],
-            ['name' => 'OWWA Regional Office IV-A', 'is_satellite' => false, 'address' => 'CALABARZON']
+            [
+                'name' => 'OWWA Regional Office IV-A',
+                'is_satellite' => false,
+                'is_regional_supply' => true,
+                'address' => 'CALABARZON',
+            ],
         );
 
         User::updateOrCreate(

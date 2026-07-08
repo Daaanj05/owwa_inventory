@@ -78,6 +78,7 @@ class TransfersTable
                         TransferViewActions::printViewAction(),
                     ],
                     '3xl',
+                    modelLabel: TransferResource::getModelLabel(),
                 ),
             ])
             ->toolbarActions([

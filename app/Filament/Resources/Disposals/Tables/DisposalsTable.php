@@ -85,6 +85,7 @@ class DisposalsTable
                         DisposalViewActions::printViewAction(),
                     ],
                     '3xl',
+                    modelLabel: DisposalResource::getModelLabel(),
                 ),
             ])
             ->toolbarActions([

@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\PhysicalInventoryPlans\Actions;
 
+use App\Filament\Resources\PhysicalInventoryPlans\PhysicalInventoryPlanResource;
 use App\Filament\Support\OwwaFormModalDefaults;
 use App\Models\PhysicalInventoryPlan;
 use App\Services\InventoryPlanValidator;
@@ -14,7 +15,7 @@ class PhysicalInventoryPlanActions
 {
     public static function editAction(): EditAction
     {
-        return OwwaFormModalDefaults::editAction(OwwaFormModalDefaults::WIDTH_STANDARD)
+        return OwwaFormModalDefaults::editActionForResource(PhysicalInventoryPlanResource::class, OwwaFormModalDefaults::WIDTH_STANDARD)
             ->extraModalWindowAttributes(['class' => OwwaFormModalDefaults::MODAL_WINDOW_CLASS.' owwa-inventory-plan-modal'])
             ->visible(fn (PhysicalInventoryPlan $record): bool => ! $record->isCompleted())
             ->before(function (EditAction $action, PhysicalInventoryPlan $record): void {

@@ -99,7 +99,7 @@ class ListItems extends ListRecords
                 Flex::make([
                     $this->getTabsContentComponent(),
                     Actions::make([
-                        OwwaFormModalDefaults::createAction(OwwaFormModalDefaults::WIDTH_COMPACT)
+                        OwwaFormModalDefaults::createActionForResource(ItemResource::class, OwwaFormModalDefaults::WIDTH_COMPACT)
                             ->fillForm(fn (): array => [
                                 'item_category_id' => $this->activeItemCategoryId() ?: null,
                             ])

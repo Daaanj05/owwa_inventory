@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Departments\Tables;
 
+use App\Filament\Resources\Departments\DepartmentResource;
 use App\Filament\Resources\Departments\Schemas\DepartmentInfolist;
 use App\Filament\Support\ConfiguresOwwaViewAction;
 use App\Filament\Support\OwwaFormModalDefaults;
@@ -54,8 +55,8 @@ class DepartmentsTable
                     ->preload()
                     ->placeholder('All offices'),
             ])
-            ->emptyStateHeading('No departments yet')
-            ->emptyStateDescription('Create departments under their respective offices. Departments are used to track issuances and requisitions.')
+            ->emptyStateHeading('No sub-offices/departments yet')
+            ->emptyStateDescription('Create sub-offices and departments under their respective offices. These are used to track issuances and requisitions.')
             ->emptyStateIcon('heroicon-o-user-group')
             ->recordActions([
                 ConfiguresOwwaViewAction::make(
@@ -64,11 +65,12 @@ class DepartmentsTable
                         DepartmentInfolist::modalDetailSections(),
                     ),
                     [
-                        OwwaFormModalDefaults::editAction(OwwaFormModalDefaults::WIDTH_COMPACT),
+                        OwwaFormModalDefaults::editActionForResource(DepartmentResource::class, OwwaFormModalDefaults::WIDTH_COMPACT),
                     ],
+                    modelLabel: DepartmentResource::getModelLabel(),
                 ),
                 ActionGroup::make([
-                    OwwaFormModalDefaults::editAction(OwwaFormModalDefaults::WIDTH_COMPACT),
+                    OwwaFormModalDefaults::editActionForResource(DepartmentResource::class, OwwaFormModalDefaults::WIDTH_COMPACT),
                     Action::make('archive')
                         ->label('Archive')
                         ->icon('heroicon-o-archive-box')

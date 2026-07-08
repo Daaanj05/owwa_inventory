@@ -15,22 +15,24 @@ class DemoDataSeeder extends Seeder
 {
     public function run(): void
     {
-        $regional = Office::firstOrCreate(
+        $regional = Office::query()->updateOrCreate(
             ['code' => 'OWWA-IVA'],
             [
                 'name' => 'OWWA Regional Office IV-A',
                 'fund_cluster' => '01',
                 'is_satellite' => false,
+                'is_regional_supply' => true,
                 'address' => 'CALABARZON',
             ],
         );
 
-        $satellite = Office::firstOrCreate(
+        $satellite = Office::query()->updateOrCreate(
             ['code' => 'OWWA-LAG'],
             [
                 'name' => 'OWWA Satellite Office — Laguna',
                 'fund_cluster' => '01',
                 'is_satellite' => true,
+                'is_regional_supply' => false,
                 'address' => 'Sta. Cruz, Laguna',
             ],
         );
@@ -57,6 +59,9 @@ class DemoDataSeeder extends Seeder
 
         $uc = User::where('email', 'authorized@owwa.gov.ph')->firstOrFail();
         $uc->update(['office_id' => $regional->id, 'department_id' => $ops->id]);
+        $uc->syncOfficeAssignments([
+            ['office_id' => $regional->id, 'department_id' => $ops->id],
+        ]);
 
         $sysAdmin = User::where('email', 'admin@owwa.gov.ph')->first();
         $sysAdmin?->update(['office_id' => $regional->id]);
@@ -107,7 +112,9 @@ class DemoDataSeeder extends Seeder
                 'department_id' => $welfare->id,
                 'email_verified_at' => now(),
             ]
-        );
+        )->syncOfficeAssignments([
+            ['office_id' => $satellite->id, 'department_id' => $welfare->id],
+        ]);
 
         $consumables = ItemCategory::firstOrCreate(
             ['name' => 'Consumables'],

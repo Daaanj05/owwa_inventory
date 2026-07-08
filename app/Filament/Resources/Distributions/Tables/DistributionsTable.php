@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Distributions\Tables;
 
 use App\Filament\Resources\Distributions\Actions\DistributionViewActions;
+use App\Filament\Resources\Distributions\DistributionResource;
 use App\Filament\Resources\Distributions\Schemas\DistributionInfolist;
 use App\Filament\Support\ConfiguresOwwaViewAction;
 use App\Filament\Support\OwwaModalSchema;
@@ -69,6 +70,7 @@ class DistributionsTable
                         DistributionViewActions::exportOwwaAction(),
                     ],
                     '5xl',
+                    modelLabel: DistributionResource::getModelLabel(),
                 ),
                 Action::make('exportOwwa')
                     ->label('Export OWWA form')

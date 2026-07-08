@@ -16,6 +16,7 @@ class ConfiguresOwwaViewAction
         string $modalWidth = '5xl',
         ?string $extraModalClass = null,
         ?string $modalHeading = null,
+        ?string $modelLabel = null,
     ): ViewAction {
         $windowClass = 'owwa-view-record-modal owwa-record-modal';
         if ($extraModalClass !== null) {
@@ -42,6 +43,8 @@ class ConfiguresOwwaViewAction
 
         if ($modalHeading !== null) {
             $action->modalHeading($modalHeading);
+        } elseif ($modelLabel !== null) {
+            $action->modalHeading(OwwaFormModalDefaults::viewHeading($modelLabel));
         }
 
         return $action;

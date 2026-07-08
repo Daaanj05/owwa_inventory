@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\PhysicalInventoryPlans\Tables;
 
 use App\Filament\Resources\PhysicalInventoryPlans\Actions\PhysicalInventoryPlanActions;
+use App\Filament\Resources\PhysicalInventoryPlans\PhysicalInventoryPlanResource;
 use App\Filament\Resources\PhysicalInventoryPlans\Schemas\PhysicalInventoryPlanModalSchema;
 use App\Filament\Support\ConfiguresOwwaViewAction;
 use App\Filament\Support\OwwaFormModalDefaults;
@@ -70,6 +71,7 @@ class PhysicalInventoryPlansTable
                     footerActions: PhysicalInventoryPlanActions::modalFooterActions(),
                     modalWidth: OwwaFormModalDefaults::WIDTH_STANDARD,
                     extraModalClass: 'owwa-inventory-plan-modal',
+                    modelLabel: PhysicalInventoryPlanResource::getModelLabel(),
                 ),
             ])
             ->toolbarActions([

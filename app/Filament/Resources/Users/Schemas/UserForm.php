@@ -3,11 +3,12 @@
 namespace App\Filament\Resources\Users\Schemas;
 
 use App\Models\Department;
+use App\Models\Office;
 use App\Models\User;
 use Filament\Facades\Filament;
+use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
-use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
@@ -22,44 +23,33 @@ class UserForm
         $isUnitConsolidator = $user && $user->isUnitConsolidator();
 
         return $schema
-            ->columns(1)
+            ->columns(fn (string $operation): int => self::isCreateOperation($operation) ? 3 : 1)
             ->components([
-                Section::make('New user')
-                    ->columnSpanFull()
-                    ->columns(3)
-                    ->compact()
-                    ->visible(fn (string $operation): bool => self::isCreateOperation($operation))
-                    ->schema([
-                        self::firstNameField(),
-                        self::middleNameField(),
-                        self::lastNameField(),
-                        self::emailField()->columnSpan(2),
-                        self::roleField($isUnitConsolidator)->columnSpan(1),
-                        self::officeField($isUnitConsolidator, $user)->columnSpan(2),
-                        self::departmentField($isUnitConsolidator, $user)->columnSpan(1),
-                    ]),
-                Section::make('Account information')
-                    ->description('User login credentials and role assignment.')
-                    ->columnSpanFull()
-                    ->columns(2)
-                    ->visible(fn (string $operation): bool => self::isEditOperation($operation))
-                    ->schema([
-                        self::firstNameField(),
-                        self::middleNameField(),
-                        self::lastNameField(),
-                        self::emailField(),
-                        self::passwordField(),
-                        self::roleField($isUnitConsolidator)->columnSpanFull(),
-                    ]),
-                Section::make('Assignment')
-                    ->description('Office and department this user belongs to.')
-                    ->columnSpanFull()
-                    ->columns(2)
-                    ->visible(fn (string $operation): bool => self::isEditOperation($operation))
-                    ->schema([
-                        self::officeField($isUnitConsolidator, $user),
-                        self::departmentField($isUnitConsolidator, $user),
-                    ]),
+                self::firstNameField()
+                    ->visible(fn (string $operation): bool => self::isCreateOperation($operation) || self::isEditOperation($operation)),
+                self::middleNameField()
+                    ->visible(fn (string $operation): bool => self::isCreateOperation($operation) || self::isEditOperation($operation)),
+                self::lastNameField()
+                    ->visible(fn (string $operation): bool => self::isCreateOperation($operation) || self::isEditOperation($operation)),
+                self::emailField()
+                    ->columnSpan(fn (string $operation): int => self::isCreateOperation($operation) ? 2 : 1)
+                    ->visible(fn (string $operation): bool => self::isCreateOperation($operation) || self::isEditOperation($operation)),
+                self::roleField($isUnitConsolidator)
+                    ->columnSpan(fn (string $operation): int => self::isCreateOperation($operation) ? 1 : 2)
+                    ->visible(fn (string $operation): bool => self::isCreateOperation($operation) || self::isEditOperation($operation)),
+                self::passwordField()
+                    ->visible(fn (string $operation): bool => self::isEditOperation($operation)),
+                self::officeField($isUnitConsolidator, $user)
+                    ->visible(fn (string $operation, Get $get): bool => (self::isCreateOperation($operation) || self::isEditOperation($operation))
+                        && ! self::isUnitConsolidatorRole($get))
+                    ->columnSpan(fn (string $operation): int => self::isCreateOperation($operation) ? 2 : 1),
+                self::departmentField($isUnitConsolidator, $user)
+                    ->visible(fn (string $operation, Get $get): bool => (self::isCreateOperation($operation) || self::isEditOperation($operation))
+                        && ! self::isUnitConsolidatorRole($get)),
+                self::assignmentsRepeater()
+                    ->visible(fn (string $operation, Get $get): bool => (self::isCreateOperation($operation) || self::isEditOperation($operation))
+                        && self::isUnitConsolidatorRole($get))
+                    ->columnSpanFull(),
             ]);
     }
 
@@ -141,7 +131,7 @@ class UserForm
                 'name',
                 fn (Builder $query) => $isUnitConsolidator && $user?->office_id
                     ? $query->where('id', $user->office_id)
-                    : $query
+                    : $query->active()
             )
             ->searchable()
             ->preload()
@@ -155,7 +145,7 @@ class UserForm
     protected static function departmentField(bool $isUnitConsolidator, ?User $user): Select
     {
         return Select::make('department_id')
-            ->label('Department')
+            ->label('Sub-Office/Department')
             ->options(fn (Get $get): array => self::departmentOptions($get, $isUnitConsolidator, $user))
             ->searchable()
             ->placeholder('None')
@@ -164,8 +154,48 @@ class UserForm
             ->rules(fn (Get $get): array => self::departmentRules($get));
     }
 
+    protected static function assignmentsRepeater(): Repeater
+    {
+        return Repeater::make('assignments')
+            ->label('Handled offices & sub-offices/departments')
+            ->schema([
+                Select::make('office_id')
+                    ->label('Office')
+                    ->options(fn (): array => Office::query()
+                        ->active()
+                        ->orderBy('name')
+                        ->pluck('name', 'id')
+                        ->all())
+                    ->required()
+                    ->searchable()
+                    ->live()
+                    ->afterStateUpdated(fn (Set $set) => $set('department_id', null)),
+                Select::make('department_id')
+                    ->label('Sub-Office/Department')
+                    ->options(fn (Get $get): array => self::assignmentDepartmentOptions($get))
+                    ->required()
+                    ->searchable()
+                    ->disabled(fn (Get $get): bool => blank($get('office_id')))
+                    ->rules(fn (Get $get): array => self::assignmentDepartmentRules($get)),
+            ])
+            ->columns(2)
+            ->minItems(1)
+            ->defaultItems(1)
+            ->addActionLabel('Add office & sub-office/department')
+            ->required(fn (Get $get): bool => self::isUnitConsolidatorRole($get));
+    }
+
+    protected static function isUnitConsolidatorRole(Get $get): bool
+    {
+        return $get('role') === User::ROLE_UNIT_CONSOLIDATOR;
+    }
+
     protected static function officeIsRequired(Get $get, bool $isUnitConsolidator): bool
     {
+        if (self::isUnitConsolidatorRole($get)) {
+            return false;
+        }
+
         if ($isUnitConsolidator) {
             return true;
         }
@@ -199,12 +229,51 @@ class UserForm
     }
 
     /**
+     * @return array<int, string>
+     */
+    protected static function assignmentDepartmentOptions(Get $get): array
+    {
+        $officeId = filled($get('office_id')) ? (int) $get('office_id') : null;
+
+        if ($officeId === null) {
+            return [];
+        }
+
+        return Department::query()
+            ->active()
+            ->where('office_id', $officeId)
+            ->orderBy('name')
+            ->pluck('name', 'id')
+            ->all();
+    }
+
+    /**
      * @return array<int, mixed>
      */
     protected static function departmentRules(Get $get): array
     {
         if (blank($get('department_id'))) {
             return [];
+        }
+
+        if (blank($get('office_id'))) {
+            return ['prohibited'];
+        }
+
+        return [
+            Rule::exists('departments', 'id')->where(
+                fn ($query) => $query->where('office_id', $get('office_id'))
+            ),
+        ];
+    }
+
+    /**
+     * @return array<int, mixed>
+     */
+    protected static function assignmentDepartmentRules(Get $get): array
+    {
+        if (blank($get('department_id'))) {
+            return ['required'];
         }
 
         if (blank($get('office_id'))) {

@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\ReferenceSeries\Tables;
 
+use App\Filament\Resources\ReferenceSeries\ReferenceSeriesResource;
 use App\Filament\Resources\ReferenceSeries\Schemas\ReferenceSeriesInfolist;
 use App\Filament\Support\ConfiguresOwwaViewAction;
 use App\Filament\Support\OwwaFormModalDefaults;
@@ -77,11 +78,12 @@ class ReferenceSeriesTable
                         ReferenceSeriesInfolist::modalDetailSections(),
                     ),
                     [
-                        OwwaFormModalDefaults::editAction(OwwaFormModalDefaults::WIDTH_COMPACT),
+                        OwwaFormModalDefaults::editActionForResource(ReferenceSeriesResource::class, OwwaFormModalDefaults::WIDTH_COMPACT),
                     ],
+                    modelLabel: ReferenceSeriesResource::getModelLabel(),
                 ),
                 ActionGroup::make([
-                    OwwaFormModalDefaults::editAction(OwwaFormModalDefaults::WIDTH_COMPACT),
+                    OwwaFormModalDefaults::editActionForResource(ReferenceSeriesResource::class, OwwaFormModalDefaults::WIDTH_COMPACT),
                     Action::make('archive')
                         ->label('Archive')
                         ->icon('heroicon-o-archive-box')

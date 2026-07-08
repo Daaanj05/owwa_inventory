@@ -85,7 +85,7 @@ class AcquisitionPaperworkCompletionService
             'pr_submitted_at' => now(),
         ]);
 
-        return $paperwork->fresh();
+        return $paperwork;
     }
 
     public function approvePr(AcquisitionPaperwork $paperwork): AcquisitionPaperwork
@@ -106,7 +106,7 @@ class AcquisitionPaperworkCompletionService
             'po_status' => AcquisitionPaperwork::STATUS_DRAFT,
         ]);
 
-        return $paperwork->fresh();
+        return $paperwork;
     }
 
     public function submitPo(AcquisitionPaperwork $paperwork): AcquisitionPaperwork
@@ -128,7 +128,7 @@ class AcquisitionPaperworkCompletionService
             'po_submitted_at' => now(),
         ]);
 
-        return $paperwork->fresh();
+        return $paperwork;
     }
 
     public function approvePo(AcquisitionPaperwork $paperwork): AcquisitionPaperwork
@@ -149,7 +149,7 @@ class AcquisitionPaperworkCompletionService
             'iar_status' => AcquisitionPaperwork::STATUS_DRAFT,
         ]);
 
-        return $paperwork->fresh();
+        return $paperwork;
     }
 
     public function submitIar(AcquisitionPaperwork $paperwork): AcquisitionPaperwork
@@ -171,7 +171,7 @@ class AcquisitionPaperworkCompletionService
             'iar_submitted_at' => now(),
         ]);
 
-        return $paperwork->fresh();
+        return $paperwork;
     }
 
     public function approveIar(AcquisitionPaperwork $paperwork): AcquisitionPaperwork
@@ -191,7 +191,7 @@ class AcquisitionPaperworkCompletionService
             'iar_completed_at' => now(),
         ]);
 
-        return $paperwork->fresh();
+        return $paperwork;
     }
 
     /**
@@ -242,7 +242,7 @@ class AcquisitionPaperworkCompletionService
     {
         $this->submitPr($paperwork);
 
-        return $this->approvePr($paperwork->fresh());
+        return $this->approvePr($paperwork);
     }
 
     /** @deprecated Use submitPo() and approvePo() */
@@ -250,7 +250,7 @@ class AcquisitionPaperworkCompletionService
     {
         $this->submitPo($paperwork);
 
-        return $this->approvePo($paperwork->fresh());
+        return $this->approvePo($paperwork);
     }
 
     /** @deprecated Use submitIar() and approveIar() */
@@ -258,6 +258,6 @@ class AcquisitionPaperworkCompletionService
     {
         $this->submitIar($paperwork);
 
-        return $this->approveIar($paperwork->fresh());
+        return $this->approveIar($paperwork);
     }
 }

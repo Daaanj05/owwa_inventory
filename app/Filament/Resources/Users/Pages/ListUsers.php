@@ -5,6 +5,7 @@ namespace App\Filament\Resources\Users\Pages;
 use App\Filament\Concerns\HasSystemAdminWizardHeading;
 use App\Filament\Resources\Users\UserResource;
 use App\Filament\Support\OwwaFormModalDefaults;
+use App\Filament\Support\UserAssignmentActionHooks;
 use App\Models\User;
 use App\Notifications\UserWelcomeNotification;
 use App\Services\PasswordResetRequestService;
@@ -77,16 +78,18 @@ class ListUsers extends ListRecords
         $generatedPassword = null;
         $welcomeMailResult = null;
 
-        $createAction = OwwaFormModalDefaults::createAction(OwwaFormModalDefaults::WIDTH_COMPACT)
+        $createAction = OwwaFormModalDefaults::createActionForResource(UserResource::class, OwwaFormModalDefaults::WIDTH_COMPACT)
             ->mutateDataUsing(function (array $data) use (&$generatedPassword): array {
                 $generatedPassword = $this->generateTemporaryPassword();
                 $data['password'] = $generatedPassword;
                 $data['email_verified_at'] = null;
                 $data['must_change_password'] = true;
 
-                return $data;
+                return UserAssignmentActionHooks::prepareCreateData($data);
             })
-            ->after(function (User $record) use (&$generatedPassword, &$welcomeMailResult): void {
+            ->after(function (User $record, array $data) use (&$generatedPassword, &$welcomeMailResult): void {
+                UserAssignmentActionHooks::syncAfterSave($record, $data);
+
                 $welcomeMailResult = MailDelivery::notify($record, new UserWelcomeNotification(
                     $generatedPassword ?? '',
                     User::panelLoginUrlFor($record),

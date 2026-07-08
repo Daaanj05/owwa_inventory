@@ -2,8 +2,9 @@
 
 namespace App\Filament\Widgets;
 
-use App\Models\Distribution;
+use App\Filament\Pages\MyInventory;
 use App\Models\User;
+use App\Services\EmployeeDistributionInventoryService;
 use Filament\Facades\Filament;
 use Filament\Widgets\Widget;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -27,6 +28,8 @@ class EmployeeInventoryWidget extends Widget
 
     public string $invSearch = '';
 
+    public string $invCategory = EmployeeDistributionInventoryService::CATEGORY_ALL;
+
     public static function canView(): bool
     {
         $user = Filament::auth()->user();
@@ -36,7 +39,7 @@ class EmployeeInventoryWidget extends Widget
 
     public function sortInventory(string $column): void
     {
-        $allowed = ['item_name', 'category_name', 'quantity', 'distribution_date', 'distributed_by_name'];
+        $allowed = ['item_name', 'category_name', 'quantity', 'distribution_date', 'distribution_count'];
 
         if (! in_array($column, $allowed, true)) {
             return;
@@ -50,43 +53,45 @@ class EmployeeInventoryWidget extends Widget
         }
     }
 
+    public function setInvCategory(string $category): void
+    {
+        if (! EmployeeDistributionInventoryService::isValidCategory($category)) {
+            return;
+        }
+
+        $this->invCategory = $category;
+        $this->resetPage();
+    }
+
+    public function updatedInvSearch(): void
+    {
+        $this->resetPage();
+    }
+
     public function getInventoryRows(): LengthAwarePaginator
     {
         $user = Filament::auth()->user();
-        if (! $user) {
+        if (! $user instanceof User) {
             return (new \Illuminate\Pagination\LengthAwarePaginator([], 0, 10, 1))->onEachSide(0);
         }
 
-        /** @var \Illuminate\Database\Eloquent\Builder<Distribution> $query */
-        $query = Distribution::query()
-            ->select('distributions.*')
-            ->join('items', 'items.id', '=', 'distributions.item_id')
-            ->join('item_categories', 'item_categories.id', '=', 'items.item_category_id')
-            ->join('users as distributor', 'distributor.id', '=', 'distributions.distributed_by')
-            ->where('distributions.distributed_to', $user->id)
-            ->addSelect([
-                'items.name as item_name',
-                'item_categories.name as category_name',
-                'distributor.name as distributed_by_name',
-            ]);
+        return app(EmployeeDistributionInventoryService::class)->paginatedGroupedInventory(
+            $user,
+            filled($this->invSearch) ? $this->invSearch : null,
+            $this->invSort,
+            $this->invDir,
+            10,
+            $this->invCategory,
+        );
+    }
 
-        if (filled($this->invSearch)) {
-            $term = '%'.$this->invSearch.'%';
-            $query->where(function ($q) use ($term): void {
-                $q->where('items.name', 'like', $term)
-                    ->orWhere('item_categories.name', 'like', $term)
-                    ->orWhere('distributor.name', 'like', $term);
-            });
-        }
-
-        $sortColumn = match ($this->invSort) {
-            'item_name' => 'items.name',
-            'category_name' => 'item_categories.name',
-            'quantity' => 'distributions.quantity',
-            'distributed_by_name' => 'distributor.name',
-            default => 'distributions.distribution_date',
-        };
-
-        return $query->orderBy($sortColumn, $this->invDir)->paginate(10)->onEachSide(0);
+    public function ledgerUrl(int $itemId): string
+    {
+        return MyInventory::getUrl([
+            'ledgerItem' => $itemId,
+            'category' => $this->invCategory !== EmployeeDistributionInventoryService::CATEGORY_ALL
+                ? $this->invCategory
+                : null,
+        ]);
     }
 }

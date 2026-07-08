@@ -45,11 +45,14 @@ class MyStockLevels extends Page
     #[Url]
     public string $restockFilter = 'active';
 
+    public static function shouldRegisterNavigation(): bool
+    {
+        return false;
+    }
+
     public static function canAccess(): bool
     {
-        $user = Filament::auth()->user();
-
-        return $user instanceof User && $user->isEmployee();
+        return false;
     }
 
     public function getTitle(): string|Htmlable

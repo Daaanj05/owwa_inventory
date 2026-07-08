@@ -4,6 +4,7 @@ namespace App\Filament\Resources\Requisitions\Tables;
 
 use App\Filament\Resources\Requisitions\Actions\CustodianRequisitionActions;
 use App\Filament\Resources\Requisitions\Actions\RequisitionExportActions;
+use App\Filament\Resources\Requisitions\RequisitionResource;
 use App\Filament\Resources\Requisitions\Schemas\RequisitionInfolistSchema;
 use App\Filament\Support\ConfiguresOwwaViewAction;
 use App\Filament\Support\OwwaModalSchema;
@@ -149,6 +150,7 @@ class RequisitionsTable
                             }),
                     ],
                     '5xl',
+                    modelLabel: RequisitionResource::getModelLabel(),
                 ),
             ])
             ->toolbarActions([

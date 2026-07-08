@@ -138,7 +138,7 @@ class ListTransfers extends ListRecords
     {
         $actionsComponent = Actions::make([
             $this->coaExportReportAction('coaTransfer', 'owwa.export.bulk.transfers'),
-            OwwaFormModalDefaults::createAction(OwwaFormModalDefaults::WIDTH_STANDARD)
+            OwwaFormModalDefaults::createActionForResource(TransferResource::class, OwwaFormModalDefaults::WIDTH_STANDARD)
                 ->fillForm(fn (): array => [
                     'item_category_filter' => $this->activeItemCategoryId() ?: null,
                     'from_office_id' => CustodianOfficeScope::inventoryOfficeId(),

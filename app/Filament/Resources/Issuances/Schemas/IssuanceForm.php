@@ -207,8 +207,13 @@ class IssuanceForm
                                 'name',
                                 function (Builder $query) use ($scopeActive, $isUnitConsolidator, $user) {
                                     $query = $scopeActive($query);
-                                    if ($isUnitConsolidator && $user->office_id) {
-                                        $query->where('id', $user->office_id);
+
+                                    if ($isUnitConsolidator && $user instanceof User) {
+                                        $officeIds = $user->assignedOfficeIds();
+
+                                        if ($officeIds !== []) {
+                                            $query->whereIn('id', $officeIds);
+                                        }
                                     }
 
                                     return $query;
@@ -232,18 +237,29 @@ class IssuanceForm
                             }),
                         Select::make('department_id')
                             ->label('Department')
-                            ->relationship(
-                                'department',
-                                'name',
-                                function (Builder $query) use ($scopeActive, $isUnitConsolidator, $user) {
-                                    $query = $scopeActive($query);
-                                    if ($isUnitConsolidator && $user->office_id) {
-                                        $query->where('office_id', $user->office_id);
-                                    }
+                            ->options(function (Get $get) use ($scopeActive, $isUnitConsolidator, $user): array {
+                                $officeId = filled($get('office_id')) ? (int) $get('office_id') : null;
+                                $query = \App\Models\Department::query();
+                                $scopeActive($query);
 
-                                    return $query;
+                                if ($officeId !== null) {
+                                    $query->where('office_id', $officeId);
                                 }
-                            )
+
+                                if ($isUnitConsolidator && $user instanceof User) {
+                                    $assignedDepartmentIds = $user->assignments()
+                                        ->when($officeId !== null, fn ($assignmentQuery) => $assignmentQuery->where('office_id', $officeId))
+                                        ->pluck('department_id')
+                                        ->map(fn ($id): int => (int) $id)
+                                        ->all();
+
+                                    if ($assignedDepartmentIds !== []) {
+                                        $query->whereIn('id', $assignedDepartmentIds);
+                                    }
+                                }
+
+                                return $query->orderBy('name')->pluck('name', 'id')->all();
+                            })
                             ->required(fn (Get $get): bool => self::isSemiExpendableCategory($get('item_category_filter')))
                             ->searchable()
                             ->preload()
@@ -257,8 +273,8 @@ class IssuanceForm
                             ->relationship(
                                 'issuedTo',
                                 'name',
-                                fn (Builder $query) => $isUnitConsolidator && $user->office_id
-                                    ? $query->where('office_id', $user->office_id)->where('role', User::ROLE_EMPLOYEE)
+                                fn (Builder $query) => $isUnitConsolidator && $user instanceof User
+                                    ? $query->whereIn('office_id', $user->assignedOfficeIds())->where('role', User::ROLE_EMPLOYEE)
                                     : $query
                             )
                             ->searchable()

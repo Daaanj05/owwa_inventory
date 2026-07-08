@@ -28,7 +28,10 @@ class RequisitionWorkflowNotificationService
 
         if ($requester->isEmployee()) {
             $this->notifyUsers(
-                RequisitionNotificationRecipients::unitConsolidatorsForOffice((int) $requisition->office_id),
+                RequisitionNotificationRecipients::unitConsolidatorsForOffice(
+                    (int) $requisition->office_id,
+                    $requisition->department_id ? (int) $requisition->department_id : null,
+                ),
                 'New employee requisition',
                 $this->bodyFor($requisition),
                 $requisition,

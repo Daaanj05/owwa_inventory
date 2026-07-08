@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\IncidentReports\Actions;
 
+use App\Filament\Resources\IncidentReports\IncidentReportResource;
 use App\Filament\Support\OwwaFormModalDefaults;
 use App\Models\Disposal;
 use App\Services\OwwaTemplateExportService;
@@ -14,7 +15,7 @@ class IncidentReportViewActions
 {
     public static function editAction(): EditAction
     {
-        return OwwaFormModalDefaults::editAction(OwwaFormModalDefaults::WIDTH_STANDARD);
+        return OwwaFormModalDefaults::editActionForResource(IncidentReportResource::class, OwwaFormModalDefaults::WIDTH_STANDARD);
     }
 
     public static function exportOwwaAction(): Action

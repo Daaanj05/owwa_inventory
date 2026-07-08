@@ -52,8 +52,8 @@ class SystemAdminStatsWidget extends StatsOverviewWidget
                 ->descriptionIcon('heroicon-o-building-office-2')
                 ->color('success'),
 
-            Stat::make('Departments', number_format($totalDepartments))
-                ->description('Active departments')
+            Stat::make('Sub-Office/Departments', number_format($totalDepartments))
+                ->description('Active sub-offices/departments')
                 ->descriptionIcon('heroicon-o-user-group')
                 ->color('info'),
 

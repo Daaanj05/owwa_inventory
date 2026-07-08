@@ -19,7 +19,7 @@ class RequisitionCompileService
      */
     public function eligibleEmployeeRequisitionOptions(User $unitConsolidator): array
     {
-        if (! $unitConsolidator->office_id) {
+        if (! $unitConsolidator->office_id && $unitConsolidator->assignedOfficeIds() === []) {
             return [];
         }
 
@@ -37,8 +37,9 @@ class RequisitionCompileService
 
     public function eligibleEmployeeRequisitionsQuery(User $unitConsolidator): Builder
     {
-        return RequisitionResource::getEloquentQuery()
-            ->where('office_id', $unitConsolidator->office_id)
+        return $unitConsolidator->applyUnitConsolidatorRequisitionScope(
+            RequisitionResource::getEloquentQuery()
+        )
             ->where('status', Requisition::STATUS_ACCEPTED)
             ->whereNull('compiled_into_requisition_id')
             ->whereHas('requestedBy', fn (Builder $query): Builder => $query->where('role', User::ROLE_EMPLOYEE))

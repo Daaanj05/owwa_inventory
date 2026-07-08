@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Offices\Tables;
 
+use App\Filament\Resources\Offices\OfficeResource;
 use App\Filament\Resources\Offices\Schemas\OfficeInfolist;
 use App\Filament\Support\ConfiguresOwwaViewAction;
 use App\Filament\Support\OwwaFormModalDefaults;
@@ -37,6 +38,12 @@ class OfficesTable
                     ->falseIcon('heroicon-o-minus-circle')
                     ->trueColor('success')
                     ->falseColor('gray'),
+                TextColumn::make('is_regional_supply')
+                    ->label('Regional supply')
+                    ->badge()
+                    ->formatStateUsing(fn (bool $state): string => $state ? 'Regional supply' : '—')
+                    ->color(fn (bool $state): string => $state ? 'info' : 'gray')
+                    ->toggleable(),
                 TextColumn::make('status')
                     ->label('Status')
                     ->state(fn ($record): string => $record->archived_at ? 'Archived' : 'Active')
@@ -54,11 +61,12 @@ class OfficesTable
                         OfficeInfolist::modalDetailSections(),
                     ),
                     [
-                        OwwaFormModalDefaults::editAction(OwwaFormModalDefaults::WIDTH_COMPACT),
+                        OwwaFormModalDefaults::editActionForResource(OfficeResource::class, OwwaFormModalDefaults::WIDTH_COMPACT),
                     ],
+                    modelLabel: OfficeResource::getModelLabel(),
                 ),
                 ActionGroup::make([
-                    OwwaFormModalDefaults::editAction(OwwaFormModalDefaults::WIDTH_COMPACT),
+                    OwwaFormModalDefaults::editActionForResource(OfficeResource::class, OwwaFormModalDefaults::WIDTH_COMPACT),
                     Action::make('archive')
                         ->label('Archive')
                         ->icon('heroicon-o-archive-box')

@@ -10,6 +10,13 @@ A centralized, web-based inventory system for OWWA Regional Office IV-A, with pr
 - **Ollama** (DeepSeek/Neuron) for RAG and procurement recommendations
 - **Cloudflare Tunnel** for secure access (see [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md))
 
+## Render production notes
+
+- Runtime is **FrankenPHP** (concurrent HTTP), not `php artisan serve`, so Render `/up` health checks are not blocked by a slow Filament/Livewire request mid-demo.
+- Boot runs `migrate` only by default. Set `SEED_ON_BOOT=true` (and optionally `SEED_DEMO=true`) **once** for an empty database; do not leave seeding enabled on every wake/restart.
+- Free tier does **not** support persistent disks; OWWA Excel templates ship in the Docker image and are synced on boot from `resources/owwa-templates`.
+- Free-tier instances can still sleep after inactivity — open the site before a presentation to warm it.
+
 ## Requirements
 
 - PHP 8.2+ (with extensions: pdo_mysql, mbstring, xml, curl, etc.; **ext-intl** required for Filament)

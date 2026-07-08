@@ -17,6 +17,7 @@ class EnsureOrgStructureSeeder extends Seeder
                 'name' => 'OWWA Regional Office IV-A',
                 'fund_cluster' => '01',
                 'is_satellite' => false,
+                'is_regional_supply' => true,
                 'address' => 'CALABARZON',
                 'accountable_officer_name' => 'Marita C. Ablis',
                 'accountable_officer_designation' => 'Supply Officer',
@@ -31,6 +32,7 @@ class EnsureOrgStructureSeeder extends Seeder
                 'name' => 'OWWA Satellite Office — Laguna',
                 'fund_cluster' => '01',
                 'is_satellite' => true,
+                'is_regional_supply' => false,
                 'address' => 'Sta. Cruz, Laguna',
                 'accountable_officer_name' => 'Pedro Santos',
                 'accountable_officer_designation' => 'Satellite Supply Officer',
@@ -65,6 +67,14 @@ class EnsureOrgStructureSeeder extends Seeder
                     ->value('id'),
                 'email_verified_at' => now(),
             ],
-        );
+        )->syncOfficeAssignments([
+            [
+                'office_id' => $satellite->id,
+                'department_id' => (int) Department::query()
+                    ->where('office_id', $satellite->id)
+                    ->where('name', 'Welfare Services Unit')
+                    ->value('id'),
+            ],
+        ]);
     }
 }

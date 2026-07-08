@@ -15,6 +15,56 @@ class SupplyOfficeResolverTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_resolve_prefers_designated_regional_supply_office(): void
+    {
+        $earlierByName = Office::factory()->create([
+            'name' => 'AAA Other Regional',
+            'is_satellite' => false,
+            'is_regional_supply' => false,
+        ]);
+        $designated = Office::factory()->create([
+            'name' => 'ZZZ Designated Supply',
+            'is_satellite' => false,
+            'is_regional_supply' => true,
+        ]);
+
+        $this->assertSame($designated->id, app(SupplyOfficeResolver::class)->resolve());
+        $this->assertNotSame($earlierByName->id, app(SupplyOfficeResolver::class)->resolve());
+    }
+
+    public function test_setting_regional_supply_clears_other_offices(): void
+    {
+        $first = Office::factory()->create([
+            'name' => 'First',
+            'is_satellite' => false,
+            'is_regional_supply' => true,
+        ]);
+        $second = Office::factory()->create([
+            'name' => 'Second',
+            'is_satellite' => false,
+            'is_regional_supply' => false,
+        ]);
+
+        $second->update(['is_regional_supply' => true]);
+
+        $this->assertFalse($first->fresh()->is_regional_supply);
+        $this->assertTrue($second->fresh()->is_regional_supply);
+        $this->assertSame($second->id, app(SupplyOfficeResolver::class)->resolve());
+    }
+
+    public function test_regional_supply_cannot_remain_satellite(): void
+    {
+        $office = Office::factory()->create([
+            'is_satellite' => true,
+            'is_regional_supply' => false,
+        ]);
+
+        $office->update(['is_regional_supply' => true]);
+
+        $this->assertFalse($office->fresh()->is_satellite);
+        $this->assertTrue($office->fresh()->is_regional_supply);
+    }
+
     public function test_resolve_returns_regional_office_when_not_satellite(): void
     {
         Office::factory()->create(['name' => 'Satellite', 'is_satellite' => true]);
@@ -44,7 +94,10 @@ class SupplyOfficeResolverTest extends TestCase
 
     public function test_regional_stock_available_for_item_at_supply_office(): void
     {
-        $regional = Office::factory()->create(['is_satellite' => false]);
+        $regional = Office::factory()->create([
+            'is_satellite' => false,
+            'is_regional_supply' => true,
+        ]);
         $satellite = Office::factory()->create(['is_satellite' => true]);
         $category = ItemCategory::factory()->create(['name' => 'Consumables']);
         $item = Item::factory()->create(['item_category_id' => $category->id]);

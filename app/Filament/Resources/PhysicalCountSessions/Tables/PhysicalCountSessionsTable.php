@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\PhysicalCountSessions\Tables;
 
 use App\Filament\Resources\PhysicalCountSessions\Actions\PhysicalCountSessionActions;
+use App\Filament\Resources\PhysicalCountSessions\PhysicalCountSessionResource;
 use App\Filament\Resources\PhysicalCountSessions\Schemas\PhysicalCountSessionModalSchema;
 use App\Filament\Support\ConfiguresOwwaViewAction;
 use App\Models\PhysicalCountSession;
@@ -94,6 +95,7 @@ class PhysicalCountSessionsTable
                     footerActions: PhysicalCountSessionActions::modalFooterActions(),
                     modalWidth: '5xl',
                     extraModalClass: 'owwa-physical-count-modal',
+                    modelLabel: PhysicalCountSessionResource::getModelLabel(),
                 ),
                 ActionGroup::make([
                     Action::make('archive')

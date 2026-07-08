@@ -6,10 +6,8 @@ services:
     region: singapore
     branch: main
     healthCheckPath: /up
-    disk:
-      name: owwa-templates
-      mountPath: /var/www/html/storage/app/templates
-      sizeGB: 1
+    # Free tier does not support persistent disks. Templates are copied from
+    # resources/owwa-templates into storage/app/templates on image build + boot.
     envVars:
       - key: APP_ENV
         value: production
@@ -29,8 +27,12 @@ services:
         value: "5432"
       - key: DB_SSLMODE
         value: require
+      # Do not reseed on every wake/restart (causes long boots + mid-demo 503 recovery).
+      # First empty DB only: set SEED_ON_BOOT=true once, optionally with SEED_DEMO=true.
+      - key: SEED_ON_BOOT
+        value: "false"
       - key: SEED_DEMO
-        value: "true"
+        value: "false"
       - key: SESSION_DRIVER
         value: database
       - key: SESSION_SECURE_COOKIE

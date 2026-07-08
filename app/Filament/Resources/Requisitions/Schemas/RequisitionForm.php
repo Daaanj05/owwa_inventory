@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Requisitions\Schemas;
 
+use App\Models\Department;
 use App\Models\Item;
 use App\Models\ItemCategory;
 use App\Models\Requisition;
@@ -84,24 +85,41 @@ class RequisitionForm
                             ->columnSpanFull(),
                         Select::make('office_id')
                             ->label('Office')
-                            ->relationship('office', 'name', $scopeActive)
+                            ->relationship(
+                                'office',
+                                'name',
+                                function ($query) use ($scopeActive, $isUnitConsolidator, $user) {
+                                    $query = $scopeActive($query);
+
+                                    if ($isUnitConsolidator && $user instanceof User) {
+                                        $officeIds = $user->assignedOfficeIds();
+
+                                        if ($officeIds !== []) {
+                                            $query->whereIn('id', $officeIds);
+                                        }
+                                    }
+
+                                    return $query;
+                                }
+                            )
                             ->required()
                             ->searchable()
                             ->preload()
                             ->default($user?->office_id)
                             ->dehydrated()
                             ->hidden(fn (): bool => $isEmployee && ! $needsOfficeSelection)
-                            ->disabled(! $isCustodian && filled($user?->office_id)),
+                            ->disabled(! $isCustodian && ! $isUnitConsolidator && filled($user?->office_id))
+                            ->live(),
                         Select::make('department_id')
                             ->label('Department')
-                            ->relationship('department', 'name', $scopeActive)
+                            ->options(fn (Get $get): array => self::departmentOptionsForRequisition($get, $isUnitConsolidator, $user, $scopeActive))
                             ->searchable()
                             ->preload()
                             ->placeholder('None')
                             ->default($user?->department_id)
                             ->dehydrated()
                             ->hidden(fn (): bool => $isEmployee && filled($user?->department_id))
-                            ->disabled(! $isCustodian && filled($user?->department_id)),
+                            ->disabled(! $isCustodian && ! $isUnitConsolidator && filled($user?->department_id)),
                         Select::make('status')
                             ->label('Status')
                             ->options([
@@ -254,6 +272,39 @@ class RequisitionForm
             })
             ->minItems(1)
             ->addActionLabel('Add another item');
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    protected static function departmentOptionsForRequisition(
+        Get $get,
+        bool $isUnitConsolidator,
+        ?User $user,
+        callable $scopeActive,
+    ): array {
+        $officeId = filled($get('office_id')) ? (int) $get('office_id') : null;
+
+        $query = Department::query();
+        $scopeActive($query);
+
+        if ($officeId !== null) {
+            $query->where('office_id', $officeId);
+        }
+
+        if ($isUnitConsolidator && $user instanceof User) {
+            $assignedDepartmentIds = $user->assignments()
+                ->when($officeId !== null, fn ($assignmentQuery) => $assignmentQuery->where('office_id', $officeId))
+                ->pluck('department_id')
+                ->map(fn ($id): int => (int) $id)
+                ->all();
+
+            if ($assignedDepartmentIds !== []) {
+                $query->whereIn('id', $assignedDepartmentIds);
+            }
+        }
+
+        return $query->orderBy('name')->pluck('name', 'id')->all();
     }
 
     /**

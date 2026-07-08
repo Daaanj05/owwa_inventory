@@ -51,7 +51,7 @@ class ListIncidentReports extends ListRecords
     public function content(Schema $schema): Schema
     {
         $actionsComponent = Actions::make([
-            OwwaFormModalDefaults::createAction(OwwaFormModalDefaults::WIDTH_STANDARD)
+            OwwaFormModalDefaults::createActionForResource(IncidentReportResource::class, OwwaFormModalDefaults::WIDTH_STANDARD)
                 ->fillForm(fn (): array => [
                     'disposal_type' => 'lost_stolen_damaged',
                     'office_id' => CustodianOfficeScope::inventoryOfficeId(),

@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Disposals\Actions;
 
+use App\Filament\Resources\Disposals\DisposalResource;
 use App\Filament\Support\OwwaFormModalDefaults;
 use App\Models\Disposal;
 use App\Services\OwwaTemplateExportService;
@@ -14,7 +15,7 @@ class DisposalViewActions
 {
     public static function editAction(): EditAction
     {
-        return OwwaFormModalDefaults::editAction(OwwaFormModalDefaults::WIDTH_STANDARD);
+        return OwwaFormModalDefaults::editActionForResource(DisposalResource::class, OwwaFormModalDefaults::WIDTH_STANDARD);
     }
 
     public static function exportOwwaAction(): Action

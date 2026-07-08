@@ -679,8 +679,8 @@ button[role="combobox"],
     gap: 0 !important;
 }
 
-/* Compact modal body padding */
-.fi-modal .fi-modal-content {
+/* Compact modal body padding — OWWA record modals use wider inset below */
+.fi-modal:not(:has(.owwa-record-modal)) .fi-modal-content {
     padding: 0.75rem 1rem !important;
 }
 
@@ -5348,22 +5348,22 @@ button.owwa-pagination-page:hover {
 .fi-modal-window.owwa-view-record-modal .fi-modal-header,
 .fi-modal-window.owwa-view-record-modal .fi-modal-content,
 .fi-modal-window.owwa-view-record-modal .fi-modal-footer {
-    padding-left: 0.75rem;
-    padding-right: 0.75rem;
+    padding-left: 1.75rem;
+    padding-right: 1.75rem;
 }
 
 @media (min-width: 640px) {
     .fi-modal-window.owwa-view-record-modal .fi-modal-header,
     .fi-modal-window.owwa-view-record-modal .fi-modal-content,
     .fi-modal-window.owwa-view-record-modal .fi-modal-footer {
-        padding-left: 1rem;
-        padding-right: 1rem;
+        padding-left: 2rem;
+        padding-right: 2rem;
     }
 }
 
 .fi-modal-window.owwa-view-record-modal .fi-modal-footer {
-    padding-top: 0.5rem;
-    padding-bottom: 0.65rem;
+    padding-top: 0.75rem;
+    padding-bottom: 0.85rem;
 }
 
 /* Avoid modal body growing and leaving a tall empty band above Close */
@@ -5425,6 +5425,14 @@ button.owwa-pagination-page:hover {
     font-weight: 400;
     font-size: 0.9375rem;
     color: #374151;
+}
+
+/* Panel / status badges: hug label text instead of stretching full row width */
+.fi-modal-window.owwa-view-record-modal .fi-in-entry-content-ctn .fi-badge {
+    width: fit-content;
+    max-width: 100%;
+    display: inline-flex;
+    justify-content: center;
 }
 
 .fi-modal-window.owwa-view-record-modal .fi-in-placeholder {
@@ -6298,11 +6306,21 @@ button.owwa-pagination-page:hover {
 }
 
 /* OWWA record modal shell (view + create + edit) */
+.fi-modal-window-ctn:has(.owwa-record-modal),
+.fi-modal-window-ctn:has(.owwa-physical-count-modal) {
+    border-radius: 0.75rem !important;
+    overflow: hidden !important;
+    isolation: isolate;
+}
+
 .fi-modal-window.owwa-record-modal,
 .fi-modal-window.owwa-physical-count-modal {
     max-height: 90vh;
     display: flex;
     flex-direction: column;
+    overflow: hidden !important;
+    border-radius: 0.75rem !important;
+    background-clip: padding-box;
 }
 
 .fi-modal-window.owwa-record-modal .fi-modal-content,
@@ -6318,17 +6336,18 @@ button.owwa-pagination-page:hover {
     bottom: 0;
     z-index: 2;
     background: var(--white, #fff);
-    border-top: 1px solid var(--gray-200, #e5e7eb);
+    border-top: none;
     display: flex;
     flex-wrap: wrap;
     gap: 0.5rem;
     justify-content: flex-end;
+    border-bottom-left-radius: 0.75rem !important;
+    border-bottom-right-radius: 0.75rem !important;
 }
 
 .dark .fi-modal-window.owwa-record-modal .fi-modal-footer,
 .dark .fi-modal-window.owwa-physical-count-modal .fi-modal-footer {
     background: var(--gray-900, #111827);
-    border-top-color: var(--gray-700, #374151);
 }
 
 .fi-modal-window.owwa-record-modal .fi-modal-footer-actions,
@@ -6405,6 +6424,143 @@ button.owwa-pagination-page:hover {
 
 .fi-modal-window.owwa-record-modal .fi-fo-repeater .fi-fo-repeater-item {
     padding: 0.75rem;
+}
+
+/*
+ * Filament table repeaters use .fi-fo-table-repeater (not .fi-fo-repeater).
+ * Default Filament styles draw vertical dividers via border-s / border-e on th/td.
+ */
+.fi-modal-window.owwa-record-modal .fi-fo-table-repeater {
+    min-width: 0;
+}
+
+.fi-modal-window.owwa-record-modal .fi-fo-table-repeater > table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    table-layout: fixed;
+    /* Keep the outer table edge; only strip inner column dividers below. */
+    border: 1px solid #e5e7eb !important;
+    border-radius: 0.5rem;
+    overflow: hidden;
+    font-size: 0.8125rem;
+    box-shadow: none !important;
+    --tw-ring-shadow: 0 0 #0000 !important;
+    --tw-ring-offset-shadow: 0 0 #0000 !important;
+}
+
+/*
+ * Filament default (compact + xl):
+ *   [&:not(:first-of-type)]:border-s
+ *   [&:not(:last-of-type)]:border-e
+ * Kill those inner vertical lines only — do not touch the outer table border.
+ */
+.fi-modal-window.owwa-record-modal .fi-fo-table-repeater > table > thead > tr > th,
+.fi-modal-window.owwa-record-modal .fi-fo-table-repeater > table > tbody > tr > td,
+.fi-modal-window.owwa-record-modal .fi-fo-table-repeater.fi-compact > table > tbody > tr > td {
+    border-inline-start: 0 !important;
+    border-inline-end: 0 !important;
+    border-left: 0 !important;
+    border-right: 0 !important;
+}
+
+@supports (container-type: inline-size) {
+    @container (min-width: 36rem) {
+        .fi-modal-window.owwa-record-modal .fi-fo-table-repeater > table > thead > tr > th,
+        .fi-modal-window.owwa-record-modal .fi-fo-table-repeater > table > tbody > tr > td,
+        .fi-modal-window.owwa-record-modal .fi-fo-table-repeater.fi-compact > table > tbody > tr > td {
+            border-inline-start: 0 !important;
+            border-inline-end: 0 !important;
+            border-left: 0 !important;
+            border-right: 0 !important;
+        }
+    }
+}
+
+/* Slightly larger Code column; Name takes most remaining room; keep delete actions visible. */
+.fi-modal-window.owwa-record-modal .fi-fo-table-repeater > table > thead > tr > th,
+.fi-modal-window.owwa-record-modal .fi-fo-table-repeater > table > tbody > tr > td {
+    text-align: start !important;
+}
+
+.fi-modal-window.owwa-record-modal .fi-fo-table-repeater > table > thead > tr > th:nth-child(1),
+.fi-modal-window.owwa-record-modal .fi-fo-table-repeater > table > tbody > tr > td:nth-child(1) {
+    width: 58%;
+}
+
+.fi-modal-window.owwa-record-modal .fi-fo-table-repeater > table > thead > tr > th:nth-child(2),
+.fi-modal-window.owwa-record-modal .fi-fo-table-repeater > table > tbody > tr > td:nth-child(2) {
+    width: 10.5rem;
+}
+
+.fi-modal-window.owwa-record-modal .fi-fo-table-repeater > table > thead > tr > th:nth-child(3),
+.fi-modal-window.owwa-record-modal .fi-fo-table-repeater > table > tbody > tr > td:nth-child(3),
+.fi-modal-window.owwa-record-modal .fi-fo-table-repeater > table .fi-fo-table-repeater-empty-header-cell {
+    width: 2.75rem;
+    min-width: 2.75rem;
+    max-width: 3rem;
+    overflow: visible;
+}
+
+.fi-modal-window.owwa-record-modal .fi-fo-table-repeater .fi-fo-table-repeater-actions {
+    justify-content: center;
+    overflow: visible;
+}
+
+.fi-modal-window.owwa-record-modal .fi-fo-table-repeater > table > thead > tr > th {
+    padding: 0.35rem 0.5rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #374151;
+    background: #f9fafb;
+    border-bottom: 1px solid #e5e7eb !important;
+    border-top: none !important;
+}
+
+.fi-modal-window.owwa-record-modal .fi-fo-table-repeater > table > tbody > tr > td {
+    padding: 0.25rem 0.5rem;
+    vertical-align: middle;
+    border-top: none !important;
+    border-bottom: none !important;
+}
+
+.fi-modal-window.owwa-record-modal .fi-fo-table-repeater > table > tbody > tr + tr > td {
+    border-top: 1px solid #f3f4f6 !important;
+}
+
+.fi-modal-window.owwa-record-modal .fi-fo-table-repeater .fi-input-wrp {
+    min-height: 0;
+    box-shadow: none !important;
+    background: transparent !important;
+}
+
+.fi-modal-window.owwa-record-modal .fi-fo-table-repeater .fi-input-wrp-input,
+.fi-modal-window.owwa-record-modal .fi-fo-table-repeater input {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.8125rem;
+    min-height: 1.75rem;
+    border: none !important;
+    box-shadow: none !important;
+    background: transparent !important;
+}
+
+.fi-modal-window.owwa-record-modal .fi-fo-table-repeater .fi-input-wrp:focus-within {
+    box-shadow: 0 0 0 1px #93c5fd !important;
+    border-radius: 0.25rem;
+}
+
+.dark .fi-modal-window.owwa-record-modal .fi-fo-table-repeater > table {
+    border-color: #374151;
+}
+
+.dark .fi-modal-window.owwa-record-modal .fi-fo-table-repeater > table > thead > tr > th {
+    background: #1f2937;
+    color: #e5e7eb;
+    border-bottom-color: #374151;
+}
+
+.dark .fi-modal-window.owwa-record-modal .fi-fo-table-repeater > table > tbody > tr + tr > td {
+    border-top-color: #374151;
 }
 
 /* Request Items repeater — two item cards per row (container grid) */

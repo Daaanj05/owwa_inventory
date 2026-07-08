@@ -1,0 +1,10 @@
+{
+	auto_https off
+	admin off
+}
+
+:{$PORT:10000} {
+	root * /var/www/html/public
+	encode zstd gzip
+	php_server
+}

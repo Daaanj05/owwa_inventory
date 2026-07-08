@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Items\Tables;
 
 use App\Filament\Concerns\SyncsActiveItemCategory;
+use App\Filament\Resources\Items\ItemResource;
 use App\Filament\Resources\Items\Schemas\ItemInfolist;
 use App\Filament\Support\ConfiguresOwwaViewAction;
 use App\Filament\Support\OwwaFormModalDefaults;
@@ -34,9 +35,10 @@ class ItemsTable
                         ItemInfolist::modalDetailSections(),
                     ),
                     [
-                        OwwaFormModalDefaults::editAction(OwwaFormModalDefaults::WIDTH_COMPACT),
+                        OwwaFormModalDefaults::editActionForResource(ItemResource::class, OwwaFormModalDefaults::WIDTH_COMPACT),
                     ],
                     '5xl',
+                    modelLabel: ItemResource::getModelLabel(),
                 ),
             ])
             ->recordUrl(null)

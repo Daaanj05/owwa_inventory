@@ -75,7 +75,7 @@ class ListPhysicalCountSessions extends ListRecords
                 ->url(fn (): string => PhysicalCountSessionResource::getUrl('start-mobile', [
                     'category' => $this->activeItemCategoryId(),
                 ])),
-            OwwaFormModalDefaults::createAction(OwwaFormModalDefaults::WIDTH_STANDARD)
+            OwwaFormModalDefaults::createActionForResource(PhysicalCountSessionResource::class, OwwaFormModalDefaults::WIDTH_STANDARD)
                 ->fillForm(fn (): array => PhysicalCountSessionForm::defaultCreateFormData($this->activeItemCategoryId()))
                 ->mutateFormDataUsing(function (array $data): array {
                     $categoryId = $this->activeItemCategoryId();

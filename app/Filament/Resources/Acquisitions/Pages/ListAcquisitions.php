@@ -128,7 +128,7 @@ class ListAcquisitions extends ListRecords
     public function content(Schema $schema): Schema
     {
         $actionsComponent = Actions::make([
-            OwwaFormModalDefaults::createAction(OwwaFormModalDefaults::WIDTH_WIDE)
+            OwwaFormModalDefaults::createActionForResource(AcquisitionResource::class, OwwaFormModalDefaults::WIDTH_WIDE)
                 ->label('New acquisition')
                 ->mutateFormDataUsing(function (array $data): array {
                     $categoryId = $this->activeItemCategoryId();

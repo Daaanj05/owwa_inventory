@@ -16,6 +16,16 @@ class SupplyOfficeResolver
 
     public function resolveOffice(): ?Office
     {
+        $designated = Office::query()
+            ->active()
+            ->where('is_regional_supply', true)
+            ->orderBy('name')
+            ->first();
+
+        if ($designated !== null) {
+            return $designated;
+        }
+
         $regionalOffice = Office::query()
             ->active()
             ->where('is_satellite', false)

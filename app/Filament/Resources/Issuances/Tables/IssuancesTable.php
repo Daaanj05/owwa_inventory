@@ -98,6 +98,7 @@ class IssuancesTable
                         IssuanceViewActions::printViewAction(),
                     ],
                     '4xl',
+                    modelLabel: IssuanceResource::getModelLabel(),
                 ),
             ])
             ->toolbarActions([

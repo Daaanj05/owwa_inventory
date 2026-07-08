@@ -1,19 +1,33 @@
 #!/bin/sh
 set -e
 
+cd /var/www/html
+
 if [ -n "$APP_KEY" ] && ! echo "$APP_KEY" | grep -q '^base64:'; then
     export APP_KEY="base64:${APP_KEY}"
 fi
 
 php artisan package:discover --ansi
 php artisan migrate --force
-php artisan db:seed --force
 
-if [ "$SEED_DEMO" = "true" ]; then
-    php artisan db:seed --class=DemoDataSeeder --force || echo "WARN: DemoDataSeeder failed; continuing startup"
+# Seed only on explicit boot flag when the users table is empty (first provision).
+# Never reseed an existing presentation/demo database on every wake/restart.
+if [ "$SEED_ON_BOOT" = "true" ]; then
+    user_count="$(php artisan tinker --execute='echo Illuminate\Support\Facades\Schema::hasTable("users") ? (string) App\Models\User::query()->count() : "0";' 2>/dev/null || echo "0")"
+    if [ "$user_count" = "0" ]; then
+        echo "INFO: Empty database detected; running DatabaseSeeder..."
+        php artisan db:seed --force
+        if [ "$SEED_DEMO" = "true" ]; then
+            php artisan db:seed --class=DemoDataSeeder --force || echo "WARN: DemoDataSeeder failed; continuing startup"
+        fi
+    else
+        echo "INFO: Skipping seeders (users already present)."
+    fi
+elif [ "$SEED_DEMO" = "true" ]; then
+    echo "WARN: SEED_DEMO=true ignored without SEED_ON_BOOT=true (refusing to reseed on every boot)."
 fi
 
-mkdir -p bootstrap/cache/filament storage/framework/views storage/app/templates
+mkdir -p bootstrap/cache/filament storage/framework/views storage/app/templates /config/caddy /data/caddy
 
 if [ ! -f storage/app/templates/.synced ] && [ -d resources/owwa-templates ]; then
     cp -r resources/owwa-templates/. storage/app/templates/ 2>/dev/null || true
@@ -35,4 +49,8 @@ php artisan tinker --execute="Illuminate\Support\Facades\DB::connection()->getPd
     exit 1
 }
 
-exec php artisan serve --host=0.0.0.0 --port="${PORT:-10000}"
+export PORT="${PORT:-10000}"
+export SERVER_NAME=":${PORT}"
+
+echo "INFO: Starting FrankenPHP on port ${PORT} (concurrent HTTP)..."
+exec frankenphp run --config /etc/caddy/Caddyfile --adapter caddyfile

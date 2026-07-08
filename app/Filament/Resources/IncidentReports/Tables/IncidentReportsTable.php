@@ -66,6 +66,7 @@ class IncidentReportsTable
                         IncidentReportViewActions::printViewAction(),
                     ],
                     '3xl',
+                    modelLabel: IncidentReportResource::getModelLabel(),
                 ),
             ])
             ->toolbarActions([

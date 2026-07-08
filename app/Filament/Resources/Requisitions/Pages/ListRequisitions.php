@@ -262,18 +262,41 @@ class ListRequisitions extends ListRecords
 
                     $data['requested_by'] = $user->id;
 
-                    if (blank($user->office_id)) {
-                        throw ValidationException::withMessages([
-                            'office_id' => 'Your account has no Office assigned. Please contact the System Admin.',
-                        ]);
-                    }
-
-                    $data['office_id'] = (int) $user->office_id;
-                    $data['department_id'] = $user->department_id ? (int) $user->department_id : null;
-
                     if ($user->isEmployee()) {
+                        if (blank($user->office_id)) {
+                            throw ValidationException::withMessages([
+                                'office_id' => 'Your account has no Office assigned. Please contact the System Admin.',
+                            ]);
+                        }
+
+                        $data['office_id'] = (int) $user->office_id;
+                        $data['department_id'] = $user->department_id ? (int) $user->department_id : null;
                         $data['remarks'] = null;
                         $data['purpose'] = null;
+
+                        return $data;
+                    }
+
+                    if ($user->isUnitConsolidator()) {
+                        $officeId = (int) ($data['office_id'] ?? 0);
+                        $departmentId = (int) ($data['department_id'] ?? 0);
+
+                        if ($officeId <= 0 || $departmentId <= 0) {
+                            throw ValidationException::withMessages([
+                                'office_id' => 'Select the office and sub-office/department for this requisition.',
+                            ]);
+                        }
+
+                        if (! $user->coversOfficeDepartment($officeId, $departmentId)) {
+                            throw ValidationException::withMessages([
+                                'office_id' => 'You are not assigned to handle this office and sub-office/department.',
+                            ]);
+                        }
+
+                        $data['office_id'] = $officeId;
+                        $data['department_id'] = $departmentId;
+
+                        return $data;
                     }
 
                     return $data;

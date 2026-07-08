@@ -104,7 +104,7 @@ class ListDisposals extends ListRecords
     {
         $actionsComponent = Actions::make([
             $this->coaExportReportAction('coaDisposal', 'owwa.export.bulk.disposals'),
-            OwwaFormModalDefaults::createAction(OwwaFormModalDefaults::WIDTH_MEDIUM)
+            OwwaFormModalDefaults::createActionForResource(DisposalResource::class, OwwaFormModalDefaults::WIDTH_MEDIUM)
                 ->fillForm(fn (): array => [
                     'disposal_type' => DisposalForm::defaultDisposalType(),
                     'item_category_filter' => $this->activeItemCategoryId() ?: null,

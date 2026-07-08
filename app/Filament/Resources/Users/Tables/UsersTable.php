@@ -3,9 +3,11 @@
 namespace App\Filament\Resources\Users\Tables;
 
 use App\Filament\Resources\Users\Schemas\UserInfolist;
+use App\Filament\Resources\Users\UserResource;
 use App\Filament\Support\ConfiguresOwwaViewAction;
 use App\Filament\Support\OwwaFormModalDefaults;
 use App\Filament\Support\OwwaModalSchema;
+use App\Filament\Support\UserAssignmentActionHooks;
 use App\Models\User;
 use App\Services\PasswordResetRequestService;
 use App\Support\FriendlyMessages;
@@ -133,7 +135,12 @@ class UsersTable
                         UserInfolist::modalDetailSections(),
                     ),
                     [
-                        OwwaFormModalDefaults::editAction(OwwaFormModalDefaults::WIDTH_STANDARD),
+                        OwwaFormModalDefaults::editActionForResource(UserResource::class, OwwaFormModalDefaults::WIDTH_STANDARD)
+                            ->mutateRecordDataUsing(fn (array $data, User $record): array => UserAssignmentActionHooks::fillAssignments($data, $record))
+                            ->mutateDataUsing(fn (array $data, User $record): array => UserAssignmentActionHooks::prepareSaveData($data, $record))
+                            ->after(function (User $record, array $data): void {
+                                UserAssignmentActionHooks::syncAfterSave($record, $data);
+                            }),
                         Action::make('resendVerification')
                             ->label('Resend verification email')
                             ->icon('heroicon-o-envelope')
@@ -212,9 +219,15 @@ class UsersTable
                                     ->send();
                             }),
                     ],
+                    modelLabel: UserResource::getModelLabel(),
                 ),
                 ActionGroup::make([
-                    OwwaFormModalDefaults::editAction(OwwaFormModalDefaults::WIDTH_STANDARD),
+                    OwwaFormModalDefaults::editActionForResource(UserResource::class, OwwaFormModalDefaults::WIDTH_STANDARD)
+                        ->mutateRecordDataUsing(fn (array $data, User $record): array => UserAssignmentActionHooks::fillAssignments($data, $record))
+                        ->mutateDataUsing(fn (array $data, User $record): array => UserAssignmentActionHooks::prepareSaveData($data, $record))
+                        ->after(function (User $record, array $data): void {
+                            UserAssignmentActionHooks::syncAfterSave($record, $data);
+                        }),
                 ])
                     ->label('Actions')
                     ->icon('heroicon-m-ellipsis-vertical')

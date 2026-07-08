@@ -28,6 +28,21 @@ class DepartmentResource extends Resource
 
     protected static ?int $navigationSort = 2;
 
+    public static function getNavigationLabel(): string
+    {
+        return 'Sub-Office/Departments';
+    }
+
+    public static function getModelLabel(): string
+    {
+        return 'Sub-Office/Department';
+    }
+
+    public static function getPluralModelLabel(): string
+    {
+        return 'Sub-Office/Departments';
+    }
+
     public static function getEloquentQuery(): Builder
     {
         return parent::getEloquentQuery()->active();

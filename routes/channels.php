@@ -8,7 +8,7 @@ Broadcast::channel('App.Models.User.{id}', function (User $user, int $id): bool 
 });
 
 Broadcast::channel('requisitions.office.{officeId}', function (User $user, int $officeId): bool {
-    return (int) $user->office_id === $officeId
+    return $user->hasOfficeAssignment($officeId)
         && ($user->isUnitConsolidator() || $user->isEmployee());
 });
 
@@ -21,7 +21,7 @@ Broadcast::channel('requisitions.user.{userId}', function (User $user, int $user
 });
 
 Broadcast::channel('issuances.office.{officeId}', function (User $user, int $officeId): bool {
-    return (int) $user->office_id === $officeId;
+    return $user->hasOfficeAssignment($officeId);
 });
 
 Broadcast::channel('issuances.custodian', function (User $user): bool {

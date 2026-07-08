@@ -7,6 +7,7 @@ use App\Support\CustodianOfficeScope;
 use Filament\Models\Contracts\FilamentUser;
 use Filament\Panel;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
@@ -92,6 +93,158 @@ class User extends Authenticatable implements FilamentUser, MustVerifyEmail
     public function department()
     {
         return $this->belongsTo(Department::class);
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $rows
+     * @return array<int, array{office_id: int, department_id: int}>
+     */
+    public static function normalizeAssignmentRows(array $rows): array
+    {
+        $normalized = [];
+        $seen = [];
+
+        foreach ($rows as $row) {
+            $officeId = (int) ($row['office_id'] ?? 0);
+            $departmentId = (int) ($row['department_id'] ?? 0);
+
+            if ($officeId <= 0 || $departmentId <= 0) {
+                continue;
+            }
+
+            $key = "{$officeId}:{$departmentId}";
+
+            if (isset($seen[$key])) {
+                continue;
+            }
+
+            $seen[$key] = true;
+            $normalized[] = [
+                'office_id' => $officeId,
+                'department_id' => $departmentId,
+            ];
+        }
+
+        return $normalized;
+    }
+
+    /**
+     * @return HasMany<UserOfficeAssignment, $this>
+     */
+    public function assignments(): HasMany
+    {
+        return $this->hasMany(UserOfficeAssignment::class);
+    }
+
+    /**
+     * @param  array<int, array{office_id: int, department_id: int}>  $rows
+     */
+    public function syncOfficeAssignments(array $rows): void
+    {
+        $this->assignments()->delete();
+
+        foreach ($rows as $row) {
+            $officeId = (int) ($row['office_id'] ?? 0);
+            $departmentId = (int) ($row['department_id'] ?? 0);
+
+            if ($officeId <= 0 || $departmentId <= 0) {
+                continue;
+            }
+
+            $this->assignments()->create([
+                'office_id' => $officeId,
+                'department_id' => $departmentId,
+            ]);
+        }
+
+        $first = $this->assignments()->orderBy('id')->first();
+
+        if ($first !== null) {
+            $this->forceFill([
+                'office_id' => $first->office_id,
+                'department_id' => $first->department_id,
+            ])->saveQuietly();
+        }
+    }
+
+    public function coversOfficeDepartment(int $officeId, int $departmentId): bool
+    {
+        if ($this->isUnitConsolidator()) {
+            return $this->assignments()
+                ->where('office_id', $officeId)
+                ->where('department_id', $departmentId)
+                ->exists();
+        }
+
+        return (int) ($this->office_id ?? 0) === $officeId
+            && (int) ($this->department_id ?? 0) === $departmentId;
+    }
+
+    /**
+     * @return array<int, int>
+     */
+    public function assignedOfficeIds(): array
+    {
+        if ($this->isUnitConsolidator()) {
+            return $this->assignments()
+                ->pluck('office_id')
+                ->map(fn ($id): int => (int) $id)
+                ->unique()
+                ->values()
+                ->all();
+        }
+
+        return $this->office_id ? [(int) $this->office_id] : [];
+    }
+
+    /**
+     * @return array<int, int>
+     */
+    public function assignedDepartmentIds(): array
+    {
+        if ($this->isUnitConsolidator()) {
+            return $this->assignments()
+                ->pluck('department_id')
+                ->map(fn ($id): int => (int) $id)
+                ->unique()
+                ->values()
+                ->all();
+        }
+
+        return $this->department_id ? [(int) $this->department_id] : [];
+    }
+
+    public function hasOfficeAssignment(int $officeId): bool
+    {
+        if ($this->isUnitConsolidator()) {
+            return $this->assignments()->where('office_id', $officeId)->exists();
+        }
+
+        return (int) ($this->office_id ?? 0) === $officeId;
+    }
+
+    public function applyUnitConsolidatorRequisitionScope(Builder $query): Builder
+    {
+        if (! $this->isUnitConsolidator()) {
+            return $query;
+        }
+
+        $assignments = $this->relationLoaded('assignments')
+            ? $this->assignments
+            : $this->assignments()->get();
+
+        if ($assignments->isEmpty()) {
+            return $query->whereRaw('1 = 0');
+        }
+
+        return $query->where(function (Builder $scoped) use ($assignments): void {
+            foreach ($assignments as $assignment) {
+                $scoped->orWhere(function (Builder $pair) use ($assignment): void {
+                    $pair->where('office_id', $assignment->office_id)
+                        ->where('department_id', $assignment->department_id);
+                });
+            }
+        });
     }
 
     /**
@@ -186,6 +339,13 @@ class User extends Authenticatable implements FilamentUser, MustVerifyEmail
     {
         if ($this->isSupplyCustodian() || $this->isSystemAdmin()) {
             return ['office_ids' => [], 'department_ids' => []];
+        }
+
+        if ($this->isUnitConsolidator()) {
+            return [
+                'office_ids' => $this->assignedOfficeIds(),
+                'department_ids' => $this->assignedDepartmentIds(),
+            ];
         }
 
         $officeIds = $this->office_id ? [(int) $this->office_id] : [];

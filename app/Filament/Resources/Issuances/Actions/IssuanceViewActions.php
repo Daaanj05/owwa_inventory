@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Issuances\Actions;
 
+use App\Filament\Resources\Issuances\IssuanceResource;
 use App\Filament\Support\OwwaFormModalDefaults;
 use App\Models\Issuance;
 use App\Models\User;
@@ -20,7 +21,7 @@ class IssuanceViewActions
 {
     public static function editAction(): EditAction
     {
-        return OwwaFormModalDefaults::editAction(OwwaFormModalDefaults::WIDTH_WIDE);
+        return OwwaFormModalDefaults::editActionForResource(IssuanceResource::class, OwwaFormModalDefaults::WIDTH_WIDE);
     }
 
     public static function exportOwwaAction(): Action

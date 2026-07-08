@@ -107,7 +107,7 @@ class PhysicalCountSessionActions
 
     public static function editAction(): EditAction
     {
-        return OwwaFormModalDefaults::editAction(OwwaFormModalDefaults::WIDTH_STANDARD)
+        return OwwaFormModalDefaults::editActionForResource(PhysicalCountSessionResource::class, OwwaFormModalDefaults::WIDTH_STANDARD)
             ->visible(fn (PhysicalCountSession $record): bool => ! $record->isArchived())
             ->after(function (PhysicalCountSession $record): void {
                 PhysicalCountPropertyClassResolver::syncSession($record);

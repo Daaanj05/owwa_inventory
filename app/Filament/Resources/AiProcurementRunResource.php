@@ -133,6 +133,7 @@ class AiProcurementRunResource extends Resource
                     footerActions: AiProcurementRunViewActions::modalFooterActions(),
                     modalWidth: '4xl',
                     extraModalClass: 'owwa-ai-run-modal',
+                    modelLabel: AiProcurementRunResource::getModelLabel(),
                 ),
             ])
             ->recordUrl(null)

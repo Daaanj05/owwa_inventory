@@ -24,9 +24,7 @@ class EmployeeStockLevelsWidget extends Widget
 
     public static function canView(): bool
     {
-        $user = Filament::auth()->user();
-
-        return $user instanceof User && $user->isEmployee();
+        return false;
     }
 
     public function sortStock(string $column): void
