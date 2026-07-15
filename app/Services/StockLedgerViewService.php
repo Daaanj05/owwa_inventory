@@ -6,6 +6,7 @@ use App\Models\InventoryUnit;
 use App\Models\Issuance;
 use App\Models\Item;
 use App\Models\Office;
+use App\Support\OwwaReferenceLabels;
 use App\Support\UnitCostKey;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Collection;
@@ -138,7 +139,7 @@ class StockLedgerViewService
     {
         $base = [
             'entity_name' => $office->name,
-            'fund_cluster' => $office->fund_cluster,
+            'fund_cluster' => '',
             'item_name' => $item->name,
             'description' => $item->description,
         ];
@@ -155,6 +156,8 @@ class StockLedgerViewService
 
         return [
             ...$base,
+            'category_slug' => $slug,
+            'asset_identifier_label' => OwwaReferenceLabels::assetIdentifierHeaderLabel($slug),
             'property_number' => $this->resolveAccountablePropertyNumber($item, $slug, $unitCost) ?? '—',
             'unit_cost' => $unitCost !== null ? '₱'.number_format($unitCost, 2) : null,
         ];

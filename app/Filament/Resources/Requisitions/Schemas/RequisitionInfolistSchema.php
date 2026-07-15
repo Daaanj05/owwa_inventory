@@ -5,8 +5,11 @@ namespace App\Filament\Resources\Requisitions\Schemas;
 use App\Models\Requisition;
 use App\Models\RequisitionItem;
 use App\Services\RequisitionFulfillmentService;
+use App\Support\EmployeeRequisitionOriginalSubmission;
+use App\Support\EmployeeRequisitionStatus;
 use App\Support\OwwaReferenceLabels;
 use App\Support\RequisitionLineDisplay;
+use App\Support\RequisitionLineFulfillmentState;
 use App\Support\RequisitionStatus;
 use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\RepeatableEntry\TableColumn;
@@ -25,31 +28,8 @@ class RequisitionInfolistSchema
         return [
             Section::make('Requisition details')
                 ->columns(2)
-                ->schema([
-                    TextEntry::make('related_issuances')
-                        ->label('Related issuances')
-                        ->state(fn (Requisition $record): ?string => RequisitionLineDisplay::relatedIssuancesText($record))
-                        ->placeholder('—')
-                        ->columnSpanFull(),
-                    TextEntry::make('mixed_categories_notice')
-                        ->label('')
-                        ->state(fn (Requisition $record): ?string => $record->hasMixedCategories()
-                            ? RequisitionLineDisplay::mixedCategoriesNotice()
-                            : null)
-                        ->visible(fn (Requisition $record): bool => $record->hasMixedCategories())
-                        ->columnSpanFull(),
-                    TextEntry::make('approvedBy.name')->label('Actioned by')->placeholder('—'),
-                    TextEntry::make('approved_at')->label('Actioned on')->dateTime('M d, Y h:i A')->placeholder('—'),
-                    TextEntry::make('purpose')
-                        ->label('Purpose (RIS)')
-                        ->placeholder('—')
-                        ->columnSpanFull(),
-                    TextEntry::make('remarks')
-                        ->label('Rejection reason')
-                        ->placeholder('—')
-                        ->columnSpanFull()
-                        ->visible(fn (Requisition $record): bool => $record->status === Requisition::STATUS_REJECTED),
-                ]),
+                ->schema(self::detailFields(forModal: true)),
+            self::employeeAllocationsSection(),
             self::requestedItemsSection(),
         ];
     }
@@ -59,42 +39,123 @@ class RequisitionInfolistSchema
         return [
             Section::make('Requisition details')
                 ->columns(2)
-                ->schema([
-                    TextEntry::make('reference_code')->label(OwwaReferenceLabels::requisition()),
-                    TextEntry::make('related_issuances')
-                        ->label('Related issuances')
-                        ->state(fn (Requisition $record): ?string => RequisitionLineDisplay::relatedIssuancesText($record))
-                        ->placeholder('—')
-                        ->columnSpanFull(),
-                    TextEntry::make('mixed_categories_notice')
-                        ->label('')
-                        ->state(fn (Requisition $record): ?string => $record->hasMixedCategories()
-                            ? RequisitionLineDisplay::mixedCategoriesNotice()
-                            : null)
-                        ->visible(fn (Requisition $record): bool => $record->hasMixedCategories())
-                        ->columnSpanFull(),
-                    TextEntry::make('status')
-                        ->label('Status')
-                        ->badge()
-                        ->formatStateUsing(fn (?string $state): string => RequisitionStatus::label($state))
-                        ->color(fn (?string $state): string => RequisitionStatus::color($state)),
-                    TextEntry::make('requestedBy.name')->label('Requested by')->placeholder('—'),
-                    TextEntry::make('created_at')->label('Date filed')->date('M d, Y'),
-                    TextEntry::make('office.name')->label('Office')->placeholder('—'),
-                    TextEntry::make('department.name')->label('Department')->placeholder('—'),
-                    TextEntry::make('approvedBy.name')->label('Actioned by')->placeholder('—'),
-                    TextEntry::make('approved_at')->label('Actioned on')->dateTime('M d, Y h:i A')->placeholder('—'),
-                    TextEntry::make('purpose')
-                        ->label('Purpose (RIS)')
-                        ->placeholder('—')
-                        ->columnSpanFull(),
-                    TextEntry::make('remarks')
-                        ->label('Rejection reason')
-                        ->placeholder('—')
-                        ->columnSpanFull()
-                        ->visible(fn (Requisition $record): bool => $record->status === Requisition::STATUS_REJECTED),
-                ]),
+                ->schema(self::detailFields(forModal: false)),
+            self::employeeAllocationsSection(),
             self::requestedItemsSection(),
+        ];
+    }
+
+    /**
+     * @return array<int, TextEntry>
+     */
+    protected static function detailFields(bool $forModal): array
+    {
+        return [
+            TextEntry::make('transaction_number')
+                ->label(OwwaReferenceLabels::employeeRequisitionTransaction())
+                ->placeholder('—')
+                ->visible(fn (Requisition $record): bool => $record->isEmployeeRequest()),
+            TextEntry::make('ris_number')
+                ->label(OwwaReferenceLabels::requisition())
+                ->state(fn (Requisition $record): ?string => $record->displayRisNumber())
+                ->placeholder('—')
+                ->visible(fn (Requisition $record): bool => $record->isEmployeeRequest()),
+            TextEntry::make('reference_code')
+                ->label(OwwaReferenceLabels::requisition())
+                ->placeholder('—')
+                ->visible(fn (Requisition $record): bool => ! $record->isEmployeeRequest()),
+            TextEntry::make('employee_status')
+                ->label('Status')
+                ->badge()
+                ->state(fn (Requisition $record): string => EmployeeRequisitionStatus::label($record))
+                ->color(fn (Requisition $record): string => EmployeeRequisitionStatus::color($record))
+                ->visible(fn (Requisition $record): bool => $record->isEmployeeRequest()),
+            TextEntry::make('fulfillment_summary')
+                ->label('Fulfillment')
+                ->placeholder('—')
+                ->visible(fn (Requisition $record): bool => $record->isEmployeeRequest() && filled($record->fulfillment_summary)),
+            TextEntry::make('endorsed_at')
+                ->label('Endorsed on')
+                ->dateTime('M d, Y h:i A')
+                ->placeholder('—')
+                ->visible(fn (Requisition $record): bool => $record->isEmployeeRequest() && $record->endorsed_at !== null),
+            TextEntry::make('closed_at')
+                ->label('Closed on')
+                ->dateTime('M d, Y h:i A')
+                ->placeholder('—')
+                ->visible(fn (Requisition $record): bool => $record->isEmployeeRequest() && $record->closed_at !== null),
+            TextEntry::make('related_issuances')
+                ->label('Related issuances')
+                ->state(fn (Requisition $record): ?string => RequisitionLineDisplay::relatedIssuancesText($record))
+                ->placeholder('—')
+                ->columnSpanFull(),
+            TextEntry::make('mixed_categories_notice')
+                ->label('')
+                ->state(fn (Requisition $record): ?string => $record->hasMixedCategories()
+                    ? RequisitionLineDisplay::mixedCategoriesNotice()
+                    : null)
+                ->visible(fn (Requisition $record): bool => $record->hasMixedCategories())
+                ->columnSpanFull(),
+            TextEntry::make('status')
+                ->label('Status')
+                ->badge()
+                ->formatStateUsing(fn (?string $state): string => RequisitionStatus::label($state))
+                ->color(fn (?string $state): string => RequisitionStatus::color($state))
+                ->visible(fn (Requisition $record): bool => ! $forModal && ! $record->isEmployeeRequest()),
+            TextEntry::make('requestedBy.name')
+                ->label('Requested by')
+                ->placeholder('—')
+                ->visible(fn (): bool => ! $forModal),
+            TextEntry::make('created_at')
+                ->label('Date filed')
+                ->date('M d, Y')
+                ->placeholder('—')
+                ->visible(fn (): bool => ! $forModal),
+            TextEntry::make('office.name')
+                ->label('Office')
+                ->placeholder('—')
+                ->visible(fn (): bool => ! $forModal),
+            TextEntry::make('department.name')
+                ->label('Department')
+                ->placeholder('—')
+                ->visible(fn (): bool => ! $forModal),
+            TextEntry::make('approvedBy.name')
+                ->label('Actioned by')
+                ->placeholder('—'),
+            TextEntry::make('approved_at')
+                ->label('Actioned on')
+                ->dateTime('M d, Y h:i A')
+                ->placeholder('—'),
+            TextEntry::make('purpose')
+                ->label(fn (Requisition $record): string => $record->isEmployeeRequest() && $record->compiled_into_requisition_id === null
+                    ? 'Purpose'
+                    : 'Purpose (RIS)')
+                ->state(fn (Requisition $record): ?string => $record->isEmployeeRequest() && $record->compiled_into_requisition_id === null
+                    ? $record->displayEmployeePurpose()
+                    : $record->displayRisPurpose())
+                ->placeholder('—')
+                ->columnSpanFull(),
+            TextEntry::make('original_purpose')
+                ->label('Original purpose (at submit)')
+                ->state(fn (Requisition $record): ?string => EmployeeRequisitionOriginalSubmission::originalPurpose($record))
+                ->placeholder('—')
+                ->columnSpanFull()
+                ->visible(fn (Requisition $record): bool => $record->isEmployeeRequest()
+                    && $record->hasEmployeeContentEdits()
+                    && EmployeeRequisitionOriginalSubmission::originalPurpose($record) !== trim((string) ($record->purpose ?? ''))),
+            TextEntry::make('content_edited_notice')
+                ->label('')
+                ->state(fn (Requisition $record): ?string => $record->hasEmployeeContentEdits()
+                    ? 'Employee edited this request after submitting'
+                        .($record->content_edited_at ? ' · '.$record->content_edited_at->format('M d, Y h:i A') : '')
+                    : null)
+                ->visible(fn (Requisition $record): bool => $record->isEmployeeRequest() && $record->hasEmployeeContentEdits())
+                ->columnSpanFull(),
+            TextEntry::make('remarks')
+                ->label('Rejection reason')
+                ->placeholder('—')
+                ->columnSpanFull()
+                ->visible(fn (Requisition $record): bool => $record->status === Requisition::STATUS_REJECTED),
         ];
     }
 
@@ -102,34 +163,235 @@ class RequisitionInfolistSchema
     {
         return Section::make('Requested items')
             ->schema([
-                RepeatableEntry::make('items')
+                self::employeeRequestedItemsRepeatable(),
+                self::employeeOriginalVsCurrentSection(),
+                self::consolidatedRequestedItemsRepeatable(),
+            ]);
+    }
+
+    protected static function employeeOriginalVsCurrentSection(): Section
+    {
+        return Section::make('Original vs current')
+            ->description('What the employee submitted first, compared with their latest edits.')
+            ->visible(fn (Requisition $record): bool => $record->isEmployeeRequest() && $record->hasEmployeeContentEdits())
+            ->schema([
+                TextEntry::make('original_vs_current_lines')
+                    ->hiddenLabel()
+                    ->state(function (Requisition $record): HtmlString {
+                        $rows = EmployeeRequisitionOriginalSubmission::lineComparisonRows($record);
+
+                        if ($rows === []) {
+                            return new HtmlString('<p class="text-sm text-gray-500">No line differences.</p>');
+                        }
+
+                        $body = collect($rows)
+                            ->map(function (array $row): string {
+                                $current = $row['current_quantity'] === null ? '—' : (string) $row['current_quantity'];
+                                $badge = match ($row['change']) {
+                                    'added' => 'Added',
+                                    'removed' => 'Removed',
+                                    'changed' => 'Changed',
+                                    default => 'Same',
+                                };
+
+                                return sprintf(
+                                    '<tr><td>%s</td><td class="text-right">%d</td><td class="text-right">%s</td><td>%s</td></tr>',
+                                    e($row['item_name']),
+                                    $row['original_quantity'],
+                                    e($current),
+                                    e($badge),
+                                );
+                            })
+                            ->implode('');
+
+                        return new HtmlString(
+                            '<div class="overflow-x-auto"><table class="w-full text-sm">'
+                            .'<thead><tr>'
+                            .'<th class="text-left font-medium">Item</th>'
+                            .'<th class="text-right font-medium">Original qty</th>'
+                            .'<th class="text-right font-medium">Current qty</th>'
+                            .'<th class="text-left font-medium">Change</th>'
+                            .'</tr></thead><tbody>'.$body.'</tbody></table></div>'
+                        );
+                    })
+                    ->columnSpanFull(),
+            ]);
+    }
+
+    protected static function employeeAllocationsSection(): Section
+    {
+        return Section::make('Employee allocations')
+            ->description('Per-employee breakdown of endorsed quantities on this consolidated RIS.')
+            ->visible(fn (Requisition $record): bool => ! $record->isEmployeeRequest()
+                && $record->sourceEndorsements()->exists())
+            ->schema([
+                RepeatableEntry::make('sourceEndorsements')
                     ->hiddenLabel()
                     ->table([
-                        TableColumn::make('Category'),
+                        TableColumn::make('Employee'),
+                        TableColumn::make('Transaction'),
+                        TableColumn::make('Department'),
                         TableColumn::make('Item'),
-                        TableColumn::make('Identifier'),
                         TableColumn::make('Requested'),
-                        TableColumn::make('Issued'),
-                        TableColumn::make('Remaining'),
-                        TableColumn::make('Issue remarks'),
+                        TableColumn::make('Endorsed'),
+                        TableColumn::make('Source purpose'),
+                        TableColumn::make('UC remarks'),
                     ])
                     ->schema([
-                        TextEntry::make('item.category.name')
-                            ->label('Category')
-                            ->badge()
+                        TextEntry::make('requestedBy.name')->label('Employee')->placeholder('—'),
+                        TextEntry::make('sourceRequisition.transaction_number')
+                            ->label('Transaction')
+                            ->placeholder('—'),
+                        TextEntry::make('sourceRequisition.department.name')
+                            ->label('Department')
                             ->placeholder('—'),
                         TextEntry::make('item.name')->label('Item')->placeholder('—'),
-                        TextEntry::make('line_identifier')
-                            ->label(fn (RequisitionItem $record): string => RequisitionLineDisplay::identifierLabel($record))
-                            ->state(fn (RequisitionItem $record): string => RequisitionLineDisplay::identifierValue($record) ?? '—'),
-                        TextEntry::make('quantity')->label('Requested'),
-                        TextEntry::make('quantity_issued')->label('Issued')->placeholder('0'),
-                        TextEntry::make('remaining_qty')
-                            ->label('Remaining')
-                            ->state(fn (RequisitionItem $record): int => app(RequisitionFulfillmentService::class)->remainingQuantity($record)),
-                        TextEntry::make('issue_remarks')->label('Issue remarks')->placeholder('—'),
+                        TextEntry::make('requested_quantity')->label('Requested'),
+                        TextEntry::make('endorsed_quantity')->label('Endorsed'),
+                        TextEntry::make('sourceRequisition.purpose')
+                            ->label('Source purpose')
+                            ->placeholder('—'),
+                        TextEntry::make('employee_remarks')
+                            ->label('UC remarks')
+                            ->placeholder('—'),
                     ]),
             ]);
+    }
+
+    protected static function employeeRequestedItemsRepeatable(): RepeatableEntry
+    {
+        return RepeatableEntry::make('items')
+            ->hiddenLabel()
+            ->visible(fn (Requisition $record): bool => $record->isEmployeeRequest())
+            ->table(fn (Requisition $record): array => $record->endorsed_at !== null
+                ? [
+                    TableColumn::make('Category'),
+                    TableColumn::make('Item'),
+                    TableColumn::make(OwwaReferenceLabels::assetIdentifierTableHeader()),
+                    TableColumn::make('Requested'),
+                    TableColumn::make('Endorsed by UC'),
+                    TableColumn::make('Status'),
+                    TableColumn::make('UC remarks'),
+                ]
+                : [
+                    TableColumn::make('Category'),
+                    TableColumn::make('Item'),
+                    TableColumn::make(OwwaReferenceLabels::assetIdentifierTableHeader()),
+                    TableColumn::make('Qty'),
+                    TableColumn::make('Status'),
+                ])
+            ->schema(fn (Requisition $record): array => self::employeeItemFields($record));
+    }
+
+    /**
+     * @return array<int, TextEntry>
+     */
+    protected static function employeeItemFields(Requisition $requisition): array
+    {
+        $endorsed = $requisition->endorsed_at !== null;
+
+        $fields = [
+            TextEntry::make('item.category.name')
+                ->label('Category')
+                ->badge()
+                ->placeholder('—'),
+            TextEntry::make('item.name')->label('Item')->placeholder('—'),
+            TextEntry::make('line_identifier')
+                ->label(fn (RequisitionItem $record): string => RequisitionLineDisplay::identifierLabel($record))
+                ->state(fn (RequisitionItem $record): string => RequisitionLineDisplay::identifierValue($record) ?? '—'),
+            TextEntry::make('quantity')->label($endorsed ? 'Requested' : 'Qty'),
+        ];
+
+        if ($endorsed) {
+            $fields[] = TextEntry::make('endorsed_quantity')
+                ->label('Endorsed by UC')
+                ->state(function (RequisitionItem $record) use ($requisition): ?int {
+                    return $requisition->employeeLineEndorsement((int) $record->id)?->endorsed_quantity;
+                })
+                ->placeholder('—');
+        }
+
+        $fields[] = TextEntry::make('fulfillment_state')
+            ->label('Status')
+            ->badge()
+            ->state(fn (RequisitionItem $record): string => $record->fulfillmentStateLabel())
+            ->color(fn (RequisitionItem $record): string => RequisitionLineFulfillmentState::color($record->fulfillmentState()));
+
+        if ($endorsed) {
+            $fields[] = TextEntry::make('employee_endorsement_remarks')
+                ->label('UC remarks')
+                ->state(function (RequisitionItem $record) use ($requisition): ?string {
+                    return $requisition->employeeLineEndorsement((int) $record->id)?->employee_remarks;
+                })
+                ->placeholder('—');
+        }
+
+        return $fields;
+    }
+
+    protected static function consolidatedRequestedItemsRepeatable(): RepeatableEntry
+    {
+        return RepeatableEntry::make('items')
+            ->hiddenLabel()
+            ->visible(fn (Requisition $record): bool => ! $record->isEmployeeRequest())
+            ->table([
+                TableColumn::make('Category'),
+                TableColumn::make('Item'),
+                TableColumn::make(OwwaReferenceLabels::assetIdentifierTableHeader()),
+                TableColumn::make('Requested'),
+                TableColumn::make('Status'),
+                TableColumn::make('Issued'),
+                TableColumn::make('Remaining'),
+                TableColumn::make('Remarks'),
+            ])
+            ->schema(self::sharedItemFields(
+                quantityLabel: 'Requested',
+                includeIssued: true,
+                includeRemaining: true,
+            ));
+    }
+
+    /**
+     * @return array<int, TextEntry>
+     */
+    protected static function sharedItemFields(
+        string $quantityLabel,
+        bool $includeIssued,
+        bool $includeRemaining,
+    ): array {
+        $fields = [
+            TextEntry::make('item.category.name')
+                ->label('Category')
+                ->badge()
+                ->placeholder('—'),
+            TextEntry::make('item.name')->label('Item')->placeholder('—'),
+            TextEntry::make('line_identifier')
+                ->label(fn (RequisitionItem $record): string => RequisitionLineDisplay::identifierLabel($record))
+                ->state(fn (RequisitionItem $record): string => RequisitionLineDisplay::identifierValue($record) ?? '—'),
+            TextEntry::make('quantity')->label($quantityLabel),
+            TextEntry::make('fulfillment_state')
+                ->label('Status')
+                ->badge()
+                ->state(fn (RequisitionItem $record): string => $record->fulfillmentStateLabel())
+                ->color(fn (RequisitionItem $record): string => RequisitionLineFulfillmentState::color($record->fulfillmentState())),
+        ];
+
+        if ($includeIssued) {
+            $fields[] = TextEntry::make('quantity_issued')->label('Issued')->placeholder('0');
+        }
+
+        if ($includeRemaining) {
+            $fields[] = TextEntry::make('remaining_qty')
+                ->label('Remaining')
+                ->state(fn (RequisitionItem $record): int => app(RequisitionFulfillmentService::class)->remainingQuantity($record));
+        }
+
+        $fields[] = TextEntry::make('line_remarks')
+            ->label('Remarks')
+            ->state(fn (RequisitionItem $record): ?string => $record->issue_remarks)
+            ->placeholder('—');
+
+        return $fields;
     }
 
     public static function acceptIssueModalDescription(Requisition $record): string|Htmlable

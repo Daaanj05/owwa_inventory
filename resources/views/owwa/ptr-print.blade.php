@@ -28,10 +28,6 @@
             <dd>{{ $transfer->fromOffice?->name ?? $transfer->toOffice?->name ?? '—' }}</dd>
         </div>
         <div>
-            <dt>Fund Cluster</dt>
-            <dd>{{ $transfer->fromOffice?->fund_cluster ?? $transfer->toOffice?->fund_cluster ?? '—' }}</dd>
-        </div>
-        <div>
             <dt>From (Accountable Officer/Agency)</dt>
             <dd>{{ $transfer->fromOffice?->name ?? '—' }}</dd>
         </div>
@@ -53,7 +49,7 @@
         <thead>
             <tr>
                 <th>Date Acquired</th>
-                <th>Property No.</th>
+                <th>{{ \App\Support\OwwaReferenceLabels::assetIdentifierHeaderLabel($transfer->item?->category?->getTemplateSlug()) }}</th>
                 <th>Description</th>
                 <th>Amount</th>
                 <th>Condition</th>

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Filament\Resources\Requisitions\Actions\RequisitionExportActions;
 use App\Http\Concerns\LogsExportActivity;
 use App\Models\Acquisition;
 use App\Models\AcquisitionPaperwork;
@@ -12,9 +13,11 @@ use App\Models\Item;
 use App\Models\PhysicalCountSession;
 use App\Models\Requisition;
 use App\Models\Transfer;
+use App\Models\User;
 use App\Services\OwwaItemReportService;
 use App\Services\OwwaTemplateExportService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class OwwaExportController extends Controller
@@ -100,6 +103,13 @@ class OwwaExportController extends Controller
 
     public function requisition(Requisition $requisition): StreamedResponse
     {
+        $user = Auth::user();
+        abort_unless(
+            $user instanceof User && RequisitionExportActions::userCanExportRis($user),
+            403,
+        );
+        abort_unless($requisition->canExportRis(), 403);
+
         $requisition->load(['office', 'department', 'requestedBy', 'approvedBy', 'items.item']);
 
         $this->logExportActivity(

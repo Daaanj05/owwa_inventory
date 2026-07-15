@@ -10,7 +10,7 @@ use Illuminate\Support\Str;
 
 class OwwaFormModalDefaults
 {
-    public const MODAL_WINDOW_CLASS = 'owwa-view-record-modal owwa-record-modal';
+    public const MODAL_WINDOW_CLASS = 'owwa-view-record-modal owwa-record-modal fi-fixed-positioning-context';
 
     public const WIDTH_COMPACT = '3xl';
 
@@ -45,6 +45,8 @@ class OwwaFormModalDefaults
         return $action
             ->modal()
             ->modalWidth($width)
+            ->closeModalByClickingAway(false)
+            ->closeModalByEscaping(false)
             ->extraModalWindowAttributes(['class' => self::MODAL_WINDOW_CLASS]);
     }
 

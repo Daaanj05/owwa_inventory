@@ -93,9 +93,9 @@ class PhysicalCountSessionViewPresenterTest extends TestCase
         $html = PhysicalCountSessionViewPresenter::missingForCompleteHtml($session);
 
         $this->assertStringContainsString('<br>', (string) $html);
-        $this->assertStringContainsString('Fund Cluster', (string) $html);
+        $this->assertStringContainsString('Accountable Officer Name', (string) $html);
         $this->assertStringContainsString('Load Expected Assets (Book List)', (string) $html);
-        $this->assertStringNotContainsString(', fund cluster', (string) $html);
+        $this->assertStringNotContainsString('Fund Cluster', (string) $html);
     }
 
     public function test_qr_workflow_steps_html_uses_numbered_title_case_labels(): void

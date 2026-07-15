@@ -4,7 +4,6 @@ namespace App\Filament\Resources\Issuances\Schemas;
 
 use App\Filament\Concerns\SyncsActiveItemCategory;
 use App\Models\Acquisition;
-use App\Models\Issuance;
 use App\Models\Item;
 use App\Models\ItemCategory;
 use App\Models\Requisition;
@@ -266,7 +265,7 @@ class IssuanceForm
                             ->live()
                             ->placeholder('—')
                             ->helperText(fn (Get $get): ?string => self::isSemiExpendableCategory($get('item_category_filter'))
-                                ? 'Required for semi-expendable — department code becomes the custodian/location segment in the property number.'
+                                ? 'Required for semi-expendable requisitions — identifies the requesting unit on the RIS. Inventory item no. is assigned at acquisition (office code).'
                                 : null),
                         Select::make('issued_to')
                             ->label('Issued to')
@@ -323,19 +322,23 @@ class IssuanceForm
                             ->dehydrated(false)
                             ->visible(fn (Get $get): bool => self::isSemiExpendableCategory($get('item_category_filter'))
                                 && filled($get('item_id'))
-                                && filled($get('department_id')))
+                                && filled($get('office_id')))
                             ->formatStateUsing(function ($state, Get $get): string {
-                                $issuance = new Issuance([
-                                    'item_id' => (int) $get('item_id'),
-                                    'office_id' => (int) $get('office_id'),
-                                    'department_id' => (int) $get('department_id'),
-                                    'unit_cost' => filled($get('unit_cost')) ? (float) $get('unit_cost') : null,
-                                    'issuance_date' => $get('issuance_date') ?? now(),
-                                ]);
+                                $item = Item::query()->find((int) $get('item_id'));
+                                if ($item === null) {
+                                    return '—';
+                                }
 
-                                return app(SemiExpendablePropertyNumberBuilder::class)->previewNext($issuance);
+                                $unitCost = filled($get('unit_cost')) ? (float) $get('unit_cost') : null;
+
+                                return app(SemiExpendablePropertyNumberBuilder::class)->previewNextForAcquisition(
+                                    (int) $get('office_id'),
+                                    $item,
+                                    $unitCost,
+                                    filled($get('issuance_date')) ? \Illuminate\Support\Carbon::parse($get('issuance_date')) : now(),
+                                );
                             })
-                            ->helperText('Format: SPLV/SPHV-Year-SupplyType-UACS-DeptCode-Seq (assigned on save).'),
+                            ->helperText('Assigned at acquisition using office code: SPLV/SPHV-Year-SupplyType-UACS-OfficeCode-Seq. Issuance reuses this number from stock.'),
                         TextInput::make('semi_value_category_preview')
                             ->label('Value category (COA)')
                             ->disabled()

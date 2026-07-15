@@ -308,10 +308,13 @@ class OwwaTemplateExportMappingTest extends TestCase
 
     public function test_demo_seeder_does_not_assign_ris_prefix_to_issuances(): void
     {
-        $source = file_get_contents(base_path('database/seeders/DemoDataSeeder.php'));
+        $transactionSource = file_get_contents(base_path('database/seeders/DemoTransactionSeeder.php'));
+        $catalogSource = file_get_contents(base_path('app/Support/DemoStockLedgerCatalog.php'));
 
-        $this->assertIsString($source);
-        $this->assertStringNotContainsString("'RIS-2026-'", $source);
-        $this->assertStringContainsString("'2026-01-'", $source);
+        $this->assertIsString($transactionSource);
+        $this->assertIsString($catalogSource);
+        $this->assertStringNotContainsString("'RIS-2026-'", $transactionSource);
+        $this->assertStringNotContainsString("'RIS-2026-'", $catalogSource);
+        $this->assertStringContainsString("'2026-01-", $catalogSource);
     }
 }

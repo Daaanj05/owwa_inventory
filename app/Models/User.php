@@ -129,6 +129,79 @@ class User extends Authenticatable implements FilamentUser, MustVerifyEmail
     }
 
     /**
+     * @param  array<int, array{office_id?: mixed, department_id?: mixed, departments?: array<int, array{department_id?: mixed}>}>  $groups
+     * @return array<int, array{office_id: int, department_id: int}>
+     */
+    public static function flattenOfficeAssignmentGroups(array $groups): array
+    {
+        $rows = [];
+
+        foreach ($groups as $group) {
+            if (array_key_exists('department_id', $group)) {
+                $officeId = (int) ($group['office_id'] ?? 0);
+                $departmentId = (int) ($group['department_id'] ?? 0);
+
+                if ($officeId <= 0 || $departmentId <= 0) {
+                    continue;
+                }
+
+                $rows[] = [
+                    'office_id' => $officeId,
+                    'department_id' => $departmentId,
+                ];
+
+                continue;
+            }
+
+            $officeId = (int) ($group['office_id'] ?? 0);
+            $departments = is_array($group['departments'] ?? null) ? $group['departments'] : [];
+
+            foreach ($departments as $departmentRow) {
+                $departmentId = (int) ($departmentRow['department_id'] ?? 0);
+
+                if ($officeId <= 0 || $departmentId <= 0) {
+                    continue;
+                }
+
+                $rows[] = [
+                    'office_id' => $officeId,
+                    'department_id' => $departmentId,
+                ];
+            }
+        }
+
+        return self::normalizeAssignmentRows($rows);
+    }
+
+    /**
+     * @param  array<int, array{office_id: int, department_id: int}>  $rows
+     * @return array<int, array{office_id: int, departments: array<int, array{department_id: int}>}>
+     */
+    public static function groupOfficeAssignmentsForForm(array $rows): array
+    {
+        $normalized = self::normalizeAssignmentRows($rows);
+        $groups = [];
+
+        foreach ($normalized as $row) {
+            $officeId = $row['office_id'];
+            $departmentId = $row['department_id'];
+
+            if (! isset($groups[$officeId])) {
+                $groups[$officeId] = [
+                    'office_id' => $officeId,
+                    'departments' => [],
+                ];
+            }
+
+            $groups[$officeId]['departments'][] = [
+                'department_id' => $departmentId,
+            ];
+        }
+
+        return array_values($groups);
+    }
+
+    /**
      * @return HasMany<UserOfficeAssignment, $this>
      */
     public function assignments(): HasMany
@@ -212,6 +285,36 @@ class User extends Authenticatable implements FilamentUser, MustVerifyEmail
         }
 
         return $this->department_id ? [(int) $this->department_id] : [];
+    }
+
+    /**
+     * @return array<int, int>
+     */
+    public function assignedDepartmentIdsForOffice(int $officeId): array
+    {
+        if (! $this->isUnitConsolidator()) {
+            return (int) ($this->office_id ?? 0) === $officeId && $this->department_id
+                ? [(int) $this->department_id]
+                : [];
+        }
+
+        return $this->assignments()
+            ->where('office_id', $officeId)
+            ->pluck('department_id')
+            ->map(fn ($id): int => (int) $id)
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    public function hasSingleOfficeAssignment(): bool
+    {
+        return count($this->assignedOfficeIds()) === 1;
+    }
+
+    public function hasSingleDepartmentAssignmentForOffice(int $officeId): bool
+    {
+        return count($this->assignedDepartmentIdsForOffice($officeId)) === 1;
     }
 
     public function hasOfficeAssignment(int $officeId): bool

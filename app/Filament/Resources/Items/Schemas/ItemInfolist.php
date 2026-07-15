@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Items\Schemas;
 
 use App\Models\Item;
+use App\Services\CatalogAssetNumberService;
 use App\Support\ItemPropertyClass;
 use App\Support\SemiExpendableValueCategory;
 use Filament\Infolists\Components\TextEntry;
@@ -44,27 +45,49 @@ class ItemInfolist
                 TextEntry::make('category.name')
                     ->label('Category')
                     ->placeholder('—'),
-                TextEntry::make('item_code')
-                    ->label('Stock number')
+                TextEntry::make('catalog_identifier')
+                    ->label(fn (Item $record): string => app(CatalogAssetNumberService::class)
+                        ->catalogIdentifierLabel($record->category?->getTemplateSlug()))
+                    ->state(fn (Item $record): ?string => $record->catalogAssetIdentifier())
                     ->placeholder('—'),
-                TextEntry::make('description')
-                    ->label('Description')
-                    ->placeholder('—')
-                    ->columnSpanFull(),
+                TextEntry::make('base_name')
+                    ->label('Base item')
+                    ->placeholder('—'),
+                TextEntry::make('sub_item')
+                    ->label('Sub-item')
+                    ->placeholder('—'),
+                TextEntry::make('unit')
+                    ->label('Measurement unit')
+                    ->placeholder('—'),
                 TextEntry::make('reorder_level')
                     ->label('Reorder point'),
                 TextEntry::make('days_to_consume')
                     ->label('Days to consume')
-                    ->placeholder('—'),
+                    ->placeholder('—')
+                    ->visible(fn (Item $record): bool => $record->category?->getTemplateSlug() === 'consumables'),
+                TextEntry::make('description')
+                    ->label('Description')
+                    ->placeholder('—')
+                    ->columnSpanFull(),
                 TextEntry::make('estimated_useful_life')
                     ->label('Estimated useful life')
-                    ->placeholder('—'),
+                    ->placeholder('—')
+                    ->visible(fn (Item $record): bool => in_array(
+                        $record->category?->getTemplateSlug(),
+                        ['semi_expendable', 'ppe'],
+                        true,
+                    )),
                 TextEntry::make('property_class')
                     ->label('Property class')
                     ->formatStateUsing(fn (?string $state): string => filled($state)
                         ? (ItemPropertyClass::options()[$state] ?? $state)
                         : '—')
-                    ->placeholder('—'),
+                    ->placeholder('—')
+                    ->visible(fn (Item $record): bool => in_array(
+                        $record->category?->getTemplateSlug(),
+                        ['semi_expendable', 'ppe'],
+                        true,
+                    )),
                 TextEntry::make('value_type')
                     ->label('Value category')
                     ->formatStateUsing(fn (?string $state): string => SemiExpendableValueCategory::labelForValueType($state))

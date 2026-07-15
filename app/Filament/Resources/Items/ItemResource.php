@@ -26,7 +26,7 @@ class ItemResource extends Resource
 
     protected static bool $shouldRegisterNavigation = false;
 
-    protected static string|UnitEnum|null $navigationGroup = 'Inventory';
+    protected static string|UnitEnum|null $navigationGroup = 'Regional supply';
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedCube;
 
@@ -38,7 +38,7 @@ class ItemResource extends Resource
 
     public static function getEloquentQuery(): Builder
     {
-        $query = parent::getEloquentQuery()->active();
+        $query = parent::getEloquentQuery();
 
         $categoryId = SyncsActiveItemCategory::resolveCategoryIdFromContext();
         if ($categoryId > 0) {

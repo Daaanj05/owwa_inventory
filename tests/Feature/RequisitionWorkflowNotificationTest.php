@@ -98,4 +98,78 @@ class RequisitionWorkflowNotificationTest extends TestCase
             'quantity' => 2,
         ]);
     }
+
+    public function test_consolidated_requisition_notifies_regional_custodian_only(): void
+    {
+        Notification::fake();
+
+        $regionalOffice = Office::factory()->create(['is_regional_supply' => true]);
+        $otherOffice = Office::factory()->create();
+
+        $uc = User::factory()->create([
+            'role' => User::ROLE_UNIT_CONSOLIDATOR,
+            'office_id' => $regionalOffice->id,
+        ]);
+        $regionalCustodian = User::factory()->create([
+            'role' => User::ROLE_SUPPLY_CUSTODIAN,
+            'office_id' => $regionalOffice->id,
+        ]);
+        $otherCustodian = User::factory()->create([
+            'role' => User::ROLE_SUPPLY_CUSTODIAN,
+            'office_id' => $otherOffice->id,
+        ]);
+
+        Requisition::query()->create([
+            'reference_code' => '2026-01-0500',
+            'office_id' => $regionalOffice->id,
+            'requested_by' => $uc->id,
+            'status' => Requisition::STATUS_PENDING,
+        ]);
+
+        Notification::assertSentTo($regionalCustodian, RequisitionWorkflowDatabaseNotification::class);
+        Notification::assertNotSentTo($otherCustodian, RequisitionWorkflowDatabaseNotification::class);
+    }
+
+    public function test_zero_issue_with_remarks_acknowledges_backorder_without_accepting_ris(): void
+    {
+        Notification::fake();
+
+        $office = Office::factory()->create();
+        $uc = User::factory()->create([
+            'role' => User::ROLE_UNIT_CONSOLIDATOR,
+            'office_id' => $office->id,
+        ]);
+        $custodian = User::factory()->create(['role' => User::ROLE_SUPPLY_CUSTODIAN]);
+        $item = Item::factory()->create();
+
+        $requisition = Requisition::query()->create([
+            'reference_code' => '2026-01-0600',
+            'office_id' => $office->id,
+            'requested_by' => $uc->id,
+            'status' => Requisition::STATUS_PENDING,
+        ]);
+
+        $line = RequisitionItem::query()->create([
+            'requisition_id' => $requisition->id,
+            'item_id' => $item->id,
+            'quantity' => 5,
+            'stock_at_request' => 0,
+        ]);
+
+        $result = app(RequisitionFulfillmentService::class)->issueLines($requisition, $custodian, [
+            [
+                'requisition_item_id' => $line->id,
+                'quantity_to_issue' => 0,
+                'issue_remarks' => 'Awaiting regional restock',
+            ],
+        ], now()->toDateString());
+
+        $this->assertSame(0, $result['created']);
+        $this->assertSame(1, $result['acknowledged']);
+        $this->assertSame(Requisition::STATUS_PENDING, $requisition->fresh()->status);
+        $this->assertSame('Awaiting regional restock', $line->fresh()->issue_remarks);
+        $this->assertSame(0, (int) $line->fresh()->stock_available);
+
+        Notification::assertSentTo($uc, RequisitionWorkflowDatabaseNotification::class);
+    }
 }

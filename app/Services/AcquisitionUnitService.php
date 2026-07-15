@@ -12,7 +12,7 @@ use InvalidArgumentException;
 class AcquisitionUnitService
 {
     public function __construct(
-        protected ReferenceCodeService $referenceCodes,
+        protected CatalogAssetNumberService $catalogNumbers,
         protected SemiExpendablePropertyNumberBuilder $semiBuilder,
     ) {}
 
@@ -21,7 +21,7 @@ class AcquisitionUnitService
      */
     public function generateUnitsForAcquisition(Acquisition $acquisition): array
     {
-        $acquisition->loadMissing(['item.category', 'office']);
+        $acquisition->loadMissing(['item.category', 'item.uacsObjectCode', 'office']);
 
         $slug = $acquisition->item?->category?->getTemplateSlug();
         if (! in_array($slug, ['ppe', 'semi_expendable'], true)) {
@@ -46,16 +46,9 @@ class AcquisitionUnitService
                 return;
             }
 
-            $semiPropertyNumber = null;
+            $propertyNumber = $this->resolveCatalogPropertyNumber($acquisition, $item, $slug);
 
             for ($i = $existing; $i < $quantity; $i++) {
-                if ($slug === 'semi_expendable') {
-                    $semiPropertyNumber ??= $this->semiBuilder->resolveOrAssignForAcquisition($acquisition);
-                    $propertyNumber = $semiPropertyNumber;
-                } else {
-                    $propertyNumber = $this->referenceCodes->forPropertyNumber($slug);
-                }
-
                 $units[] = InventoryUnit::query()->create([
                     'property_number' => $propertyNumber,
                     'acquisition_id' => $acquisition->id,
@@ -72,6 +65,30 @@ class AcquisitionUnitService
         });
 
         return $units;
+    }
+
+    protected function resolveCatalogPropertyNumber(Acquisition $acquisition, Item $item, string $slug): string
+    {
+        if ($slug === 'semi_expendable') {
+            $unitCost = $acquisition->unit_cost !== null ? (float) $acquisition->unit_cost : null;
+            $number = $this->catalogNumbers->finalizeSemiWithUnitCost($item, $unitCost);
+            $this->semiBuilder->persistBucketPropertyNumber($item, $unitCost, $number);
+
+            InventoryUnit::query()
+                ->where('item_id', $item->id)
+                ->where('property_number', 'like', 'TEMP-%')
+                ->update(['property_number' => $number]);
+
+            return $number;
+        }
+
+        $number = $item->ppe_property_number;
+        if (blank($number)) {
+            $number = $this->catalogNumbers->mintPpe($item);
+            $item->forceFill(['ppe_property_number' => $number])->saveQuietly();
+        }
+
+        return (string) $number;
     }
 
     public function supportsUnitGeneration(?Item $item): bool

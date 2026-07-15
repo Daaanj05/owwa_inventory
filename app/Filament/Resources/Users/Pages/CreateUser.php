@@ -4,9 +4,9 @@ namespace App\Filament\Resources\Users\Pages;
 
 use App\Filament\Concerns\HasSystemAdminWizardHeading;
 use App\Filament\Resources\Users\UserResource;
+use App\Filament\Support\UserAssignmentActionHooks;
 use App\Models\User;
 use Filament\Resources\Pages\CreateRecord;
-use Illuminate\Validation\ValidationException;
 
 class CreateUser extends CreateRecord
 {
@@ -19,20 +19,13 @@ class CreateUser extends CreateRecord
 
     protected function mutateFormDataBeforeCreate(array $data): array
     {
-        if (($data['role'] ?? null) === User::ROLE_UNIT_CONSOLIDATOR) {
-            $this->pendingAssignments = User::normalizeAssignmentRows($data['assignments'] ?? []);
-            unset($data['assignments'], $data['office_id'], $data['department_id']);
-
-            if ($this->pendingAssignments === []) {
-                throw ValidationException::withMessages([
-                    'assignments' => 'Add at least one office and sub-office/department for a Unit Consolidator.',
-                ]);
-            }
-
-            $first = $this->pendingAssignments[0];
-            $data['office_id'] = $first['office_id'];
-            $data['department_id'] = $first['department_id'];
+        if (($data['role'] ?? null) !== User::ROLE_UNIT_CONSOLIDATOR) {
+            return $data;
         }
+
+        $data = UserAssignmentActionHooks::prepareCreateData($data);
+        $this->pendingAssignments = $data['_assignments'] ?? [];
+        unset($data['_assignments']);
 
         return $data;
     }

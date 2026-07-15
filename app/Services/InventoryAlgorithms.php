@@ -25,6 +25,7 @@ class InventoryAlgorithms
         for ($i = 0; $i < count($values); $i++) {
             if ($i < $periods - 1) {
                 $result[] = null;
+
                 continue;
             }
             $slice = array_slice($values, $i - $periods + 1, $periods);
@@ -51,7 +52,7 @@ class InventoryAlgorithms
      * Positive = increasing consumption, negative = decreasing.
      *
      * @param  array<int|float>  $values  Ordered by time (oldest first).
-     * @return float  Slope per period.
+     * @return float Slope per period.
      */
     public static function linearTrendSlope(array $values): float
     {

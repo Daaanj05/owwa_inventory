@@ -8,8 +8,12 @@ use App\Filament\Pages\InventoryCategoryDashboard;
 use App\Filament\Resources\Distributions\DistributionResource;
 use App\Filament\Support\OwwaFormModalDefaults;
 use App\Models\ItemCategory;
+use App\Models\User;
 use Filament\Facades\Filament;
 use Filament\Resources\Pages\ListRecords;
+use Filament\Schemas\Schema;
+use Filament\Support\Facades\FilamentView;
+use Filament\Tables\View\TablesRenderHook;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Support\HtmlString;
 use Livewire\Attributes\Url;
@@ -31,6 +35,12 @@ class ListDistributions extends ListRecords
 
     public function getHeading(): string|Htmlable
     {
+        $user = Filament::auth()->user();
+
+        if ($user instanceof User && $user->isUnitConsolidator()) {
+            return 'Distributions';
+        }
+
         $categoryName = ItemCategory::query()->whereKey($this->activeItemCategoryId())->value('name');
 
         if (! $categoryName) {
@@ -49,12 +59,59 @@ class ListDistributions extends ListRecords
     {
         parent::mount();
 
-        $this->syncActiveItemCategoryFromRequest();
+        $user = Filament::auth()->user();
+        $redirectWhenMissing = ! ($user instanceof User && $user->isUnitConsolidator());
+
+        $this->syncActiveItemCategoryFromRequest($redirectWhenMissing);
+    }
+
+    public function updatedCategory(): void
+    {
+        session()->put('active_item_category_id', (int) $this->category);
     }
 
     public function getSubheading(): string|Htmlable|null
     {
         return null;
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    public function getPageClasses(): array
+    {
+        $classes = parent::getPageClasses();
+
+        $user = Filament::auth()->user();
+
+        if ($user instanceof User && $user->isUnitConsolidator()) {
+            $classes[] = 'owwa-distributions-uc-toolbar';
+        }
+
+        return $classes;
+    }
+
+    public function content(Schema $schema): Schema
+    {
+        $user = Filament::auth()->user();
+
+        if ($user instanceof User && $user->isUnitConsolidator()) {
+            static $hookRegistered = false;
+
+            if (! $hookRegistered) {
+                $hookRegistered = true;
+
+                FilamentView::registerRenderHook(
+                    TablesRenderHook::TOOLBAR_SEARCH_BEFORE,
+                    fn (): HtmlString => new HtmlString(
+                        (string) view('filament.resources.distributions.partials.category-bar')
+                    ),
+                    scopes: static::class,
+                );
+            }
+        }
+
+        return parent::content($schema);
     }
 
     protected function getWizardHeaderBreadcrumb(string $categoryName, string $taskLabel): string

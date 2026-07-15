@@ -46,9 +46,9 @@
                 wire:model.live.debounce.300ms="search"
                 placeholder="Search items or category…"
                 class="owwa-search-bar"
-                style="flex:1;min-width:12rem;"
+                style="width: 18rem; max-width: 100%;"
             />
-            <span class="owwa-status-badge owwa-status-ok">{{ $officeName }}</span>
+            <span class="owwa-status-badge owwa-status-ok" style="margin-left: auto;">{{ $officeName }}</span>
         </div>
 
         <div class="owwa-data-panel">

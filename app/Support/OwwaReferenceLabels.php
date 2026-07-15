@@ -36,9 +36,21 @@ class OwwaReferenceLabels
 
     public const INVENTORY_ITEM_NO = 'Inventory item no.';
 
+    public const TRANSACTION_NO = 'Transaction No.';
+
     public static function requisition(): string
     {
         return self::RIS;
+    }
+
+    public static function employeeRequisitionTransaction(): string
+    {
+        return self::TRANSACTION_NO;
+    }
+
+    public static function assetIdentifierTableHeader(): string
+    {
+        return 'Asset No.';
     }
 
     public static function acquisition(): string
@@ -105,6 +117,11 @@ class OwwaReferenceLabels
         };
     }
 
+    public static function assetIdentifierHeaderLabel(?string $categorySlug): string
+    {
+        return self::assetIdentifierLabel($categorySlug);
+    }
+
     public static function assetIdentifierValue(?string $categorySlug, ?string $propertyNumber, ?string $itemCode): ?string
     {
         if (self::usesPropertyNumber($categorySlug)) {
@@ -146,9 +163,27 @@ class OwwaReferenceLabels
     public static function propertyNumberHelperText(?string $categorySlug): string
     {
         return match ($categorySlug) {
-            'ppe' => 'Assigned automatically on issuance from the PAR property number series.',
-            'semi_expendable' => 'Assigned automatically on issuance: SPLV/SPHV-Year-SupplyType-UACS-DeptCode-Seq (e.g. SPLV-2024-ICT-106-01-001). Value tier: '.SemiExpendableValueCategory::tierRuleSummary().' (COA Circular 2022-004).',
+            'ppe' => 'Assigned at item register: YEAR-CLASS-UACS-SEQ-LOCATION (e.g. 2026-IT-106-001-RWO4A). One Property No. per catalog item; acquisition units reuse it.',
+            'semi_expendable' => 'Assigned at item register as TEMP-YEAR-CLASS-UACS-SEQ-LOCATION, then finalized to SPLV/SPHV on first acquisition unit cost (≤₱5,000 SPLV; above SPHV). One Inventory item no. per catalog item.',
             default => '',
+        };
+    }
+
+    public static function propertyIdentifierLedgerTooltip(?string $categorySlug): string
+    {
+        return match ($categorySlug) {
+            'ppe' => 'Property number assigned at acquisition; shown from issuance custody.',
+            'semi_expendable' => 'Inventory item number assigned at regional acquisition (one per item catalog).',
+            default => 'Property or inventory identifier for this item.',
+        };
+    }
+
+    public static function propertyIssuanceDateLedgerTooltip(?string $categorySlug): string
+    {
+        return match ($categorySlug) {
+            'ppe' => 'Date this property was issued to you on a PAR.',
+            'semi_expendable' => 'Date this property was issued to you on an ICS.',
+            default => 'Date this property was issued to you.',
         };
     }
 

@@ -20,7 +20,7 @@ class ScanAsset extends Page
 
     protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-qr-code';
 
-    protected static string|UnitEnum|null $navigationGroup = 'Inventory';
+    protected static string|UnitEnum|null $navigationGroup = 'Regional supply';
 
     protected static ?string $navigationLabel = 'Scan asset';
 

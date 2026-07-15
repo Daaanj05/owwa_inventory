@@ -30,10 +30,6 @@
             <dd>{{ $disposal->office?->name ?? '—' }}</dd>
         </div>
         <div>
-            <dt>Fund Cluster</dt>
-            <dd>{{ $disposal->office?->fund_cluster ?? '—' }}</dd>
-        </div>
-        <div>
             <dt>Department/Office</dt>
             <dd>{{ $disposal->office?->name ?? '—' }}</dd>
         </div>
@@ -66,7 +62,7 @@
     <table>
         <thead>
             <tr>
-                <th>Property No.</th>
+                <th>{{ \App\Support\OwwaReferenceLabels::assetIdentifierHeaderLabel($disposal->item?->category?->getTemplateSlug()) }}</th>
                 <th>Description</th>
                 <th>Acquisition Cost</th>
             </tr>

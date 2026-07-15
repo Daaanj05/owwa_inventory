@@ -44,16 +44,10 @@
                     </x-filament::input.wrapper>
                 @endif
                 @if (method_exists($this, 'getFiltersSchema'))
-                    <x-filament::dropdown placement="bottom-end" shift width="xs" class="fi-wi-chart-filter">
+                    <x-filament::dropdown placement="bottom-end" shift width="xl" class="fi-wi-chart-filter owwa-consumption-filters">
                         <x-slot name="trigger">{{ $this->getFiltersTriggerAction() }}</x-slot>
-                        <div class="fi-wi-chart-filter-content">
+                        <div class="fi-wi-chart-filter-content owwa-consumption-filters-content">
                             {{ $this->getFiltersSchema() }}
-                            @if (method_exists($this, 'hasDeferredFilters') && $this->hasDeferredFilters())
-                                <div class="fi-wi-chart-filter-content-actions-ctn">
-                                    {{ $this->getFiltersApplyAction() }}
-                                    {{ $this->getFiltersResetAction() }}
-                                </div>
-                            @endif
                         </div>
                     </x-filament::dropdown>
                 @endif

@@ -206,7 +206,7 @@ class PhysicalCountSession extends Model
     {
         $missing = [];
 
-        foreach (['fund_cluster', 'accountable_officer_name', 'inventory_type_label', 'count_date'] as $field) {
+        foreach (['accountable_officer_name', 'inventory_type_label', 'count_date'] as $field) {
             if ($field === 'inventory_type_label' && $this->usesDerivedInventoryTypeLabel()) {
                 continue;
             }

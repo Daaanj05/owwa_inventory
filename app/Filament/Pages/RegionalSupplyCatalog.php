@@ -28,9 +28,9 @@ class RegionalSupplyCatalog extends Page
 
     protected static string|UnitEnum|null $navigationGroup = 'Requisitions';
 
-    protected static ?string $navigationLabel = 'Regional supply catalog';
+    protected static ?string $navigationLabel = 'Regional Supply Catalog';
 
-    protected static ?string $title = 'Regional supply catalog';
+    protected static ?string $title = 'Regional Supply Catalog';
 
     protected static ?int $navigationSort = 0;
 
@@ -62,7 +62,7 @@ class RegionalSupplyCatalog extends Page
 
     public function getTitle(): string|Htmlable
     {
-        return 'Regional supply catalog';
+        return 'Regional Supply Catalog';
     }
 
     public function getHeading(): string|Htmlable
@@ -70,7 +70,7 @@ class RegionalSupplyCatalog extends Page
         $dashboardUrl = route('filament.admin.pages.dashboard');
 
         return new HtmlString(sprintf(
-            '<span class="owwa-wizard-title" role="list"><a class="owwa-wizard-step owwa-wizard-step-link" href="%s" role="listitem">Requisitions</a><span class="owwa-wizard-separator" aria-hidden="true">&gt;</span><span class="owwa-wizard-step owwa-wizard-step-current" role="listitem">Regional supply catalog</span></span>',
+            '<span class="owwa-wizard-title" role="list"><a class="owwa-wizard-step owwa-wizard-step-link" href="%s" role="listitem">Requisitions</a><span class="owwa-wizard-separator" aria-hidden="true">&gt;</span><span class="owwa-wizard-step owwa-wizard-step-current" role="listitem">Regional Supply Catalog</span></span>',
             e($dashboardUrl),
         ));
     }

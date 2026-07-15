@@ -4,8 +4,8 @@ namespace App\Console\Commands;
 
 use App\Models\Issuance;
 use App\Models\ItemCategory;
-use App\Models\User;
 use App\Notifications\UsefulLifeReminderNotification;
+use App\Support\NotificationRecipientResolver;
 use App\Support\SemiExpendableUsefulLife;
 use Illuminate\Console\Command;
 use Illuminate\Support\Collection;
@@ -35,16 +35,7 @@ class SendEulRemindersCommand extends Command
 
                 $reminderType = $status === SemiExpendableUsefulLife::STATUS_EXPIRED ? 'expired' : 'warning';
 
-                $recipients = User::query()
-                    ->where(function ($query) use ($issuance): void {
-                        $query->where('role', User::ROLE_SUPPLY_CUSTODIAN);
-
-                        if ($issuance->issued_to) {
-                            $query->orWhere('id', $issuance->issued_to);
-                        }
-                    })
-                    ->get()
-                    ->unique('id');
+                $recipients = app(NotificationRecipientResolver::class)->eulReminderRecipients($issuance);
 
                 Notification::send($recipients, new UsefulLifeReminderNotification($issuance, $reminderType));
                 $sent += $recipients->count();

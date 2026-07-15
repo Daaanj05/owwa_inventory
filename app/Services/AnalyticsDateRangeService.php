@@ -71,23 +71,23 @@ class AnalyticsDateRangeService
      */
     public function resolveFromWidgetFilters(array $filters): array
     {
-        $scope = $filters['analytics_scope'] ?? self::SCOPE_CURRENT_YEAR;
-        $includeYearInLabels = $scope === self::SCOPE_LONG_VIEW;
-
         if (! empty($filters['date_from']) && ! empty($filters['date_to'])) {
+            $from = Carbon::parse($filters['date_from'])->startOfDay();
+            $to = Carbon::parse($filters['date_to'])->endOfDay();
+
             return [
-                'from' => Carbon::parse($filters['date_from'])->startOfDay(),
-                'to' => Carbon::parse($filters['date_to'])->endOfDay(),
-                'includeYearInLabels' => $includeYearInLabels,
+                'from' => $from,
+                'to' => $to,
+                'includeYearInLabels' => $from->diffInMonths($to) > 12,
             ];
         }
 
-        $range = $this->getRangeForScope($scope);
+        $range = $this->currentYearRange();
 
         return [
             'from' => $range['from'],
             'to' => $range['to'],
-            'includeYearInLabels' => $includeYearInLabels,
+            'includeYearInLabels' => false,
         ];
     }
 }

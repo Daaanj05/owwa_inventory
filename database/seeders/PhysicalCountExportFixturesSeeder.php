@@ -24,11 +24,9 @@ class PhysicalCountExportFixturesSeeder extends Seeder
             ?? Office::factory()->create([
                 'code' => 'OWWA-IVA',
                 'name' => 'OWWA Regional Office IV-A',
-                'fund_cluster' => '01',
             ]);
 
         $office->update([
-            'fund_cluster' => '01',
             'accountable_officer_name' => 'Marita C. Ablis',
             'accountable_officer_designation' => 'Supply Officer',
             'supply_custodian_name' => 'Supply Custodian',
@@ -149,6 +147,8 @@ class PhysicalCountExportFixturesSeeder extends Seeder
                 ['item_code' => $type['code']],
                 [
                     'item_category_id' => $category->id,
+                    'base_name' => $type['name'],
+                    'sub_item' => null,
                     'name' => $type['name'],
                     'unit' => 'unit',
                     'reorder_level' => 1,
@@ -168,6 +168,15 @@ class PhysicalCountExportFixturesSeeder extends Seeder
             );
 
             app(AcquisitionUnitService::class)->generateUnitsForAcquisition($acquisition->fresh(['item.category', 'office']));
+
+            // RPCPPE export testing needs one physical-count line per unit. Catalog PPE
+            // numbers are shared per item, so uniquify export fixture unit labels only.
+            $units = $acquisition->fresh()->inventoryUnits()->orderBy('id')->get();
+            foreach ($units as $index => $unit) {
+                $unit->update([
+                    'property_number' => $type['code'].'-'.str_pad((string) ($index + 1), 3, '0', STR_PAD_LEFT),
+                ]);
+            }
         }
     }
 
@@ -269,7 +278,7 @@ class PhysicalCountExportFixturesSeeder extends Seeder
             'office_id' => $office->id,
             'item_category_id' => $category->id,
             'count_date' => Carbon::parse('2026-06-30'),
-            'fund_cluster' => '01',
+            'fund_cluster' => '',
             'accountable_officer_name' => 'Marita C. Ablis',
             'accountable_officer_designation' => 'Supply Officer',
             'date_of_assumption' => Carbon::parse('2026-01-01'),

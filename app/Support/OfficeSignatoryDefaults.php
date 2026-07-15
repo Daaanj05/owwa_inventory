@@ -68,7 +68,7 @@ class OfficeSignatoryDefaults
         $office = $officeId ? Office::query()->find($officeId) : null;
 
         return [
-            'fund_cluster' => $office?->fund_cluster,
+            'fund_cluster' => null,
             'accountable_officer_name' => $office?->accountable_officer_name,
             'accountable_officer_designation' => $office?->accountable_officer_designation,
         ];

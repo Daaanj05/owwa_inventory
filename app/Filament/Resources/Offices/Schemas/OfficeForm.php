@@ -22,8 +22,9 @@ class OfficeForm
                 TextInput::make('code')
                     ->label('Office code')
                     ->required()
-                    ->placeholder('e.g. RO-NCR')
-                    ->maxLength(30),
+                    ->placeholder('e.g. RWO4A')
+                    ->maxLength(30)
+                    ->helperText('Required LOCATION segment for Inventory item no. / Property No. Use a stable short code for the regional supply office.'),
                 Toggle::make('is_satellite')
                     ->label('Satellite office')
                     ->helperText('Check if this is a satellite or extension office.')

@@ -56,7 +56,7 @@ class SemiExpendablePropertyNumberPerItemTest extends TestCase
         $this->assertSame($units->first()->property_number, $bucket->property_number);
     }
 
-    public function test_different_unit_costs_get_different_property_numbers(): void
+    public function test_different_unit_costs_share_one_property_number(): void
     {
         $office = Office::factory()->create(['code' => 'OWWA-IVA']);
         $category = ItemCategory::factory()->create(['name' => 'Semi-Expendable']);
@@ -94,12 +94,13 @@ class SemiExpendablePropertyNumberPerItemTest extends TestCase
 
         $this->assertNotNull($lowBucket?->property_number);
         $this->assertNotNull($highBucket?->property_number);
-        $this->assertNotSame($lowBucket->property_number, $highBucket->property_number);
+        $this->assertSame($lowBucket->property_number, $highBucket->property_number);
+        $this->assertSame($lowBucket->property_number, $item->fresh()->semi_expendable_property_number);
     }
 
-    public function test_second_issuance_for_same_cost_reuses_bucket_property_number(): void
+    public function test_second_issuance_for_same_cost_reuses_acquisition_property_number(): void
     {
-        $office = Office::factory()->create(['code' => '01']);
+        $office = Office::factory()->create(['code' => 'OWWA-IVA']);
         $department = Department::query()->create([
             'office_id' => $office->id,
             'name' => 'Admin',
@@ -111,6 +112,23 @@ class SemiExpendablePropertyNumberPerItemTest extends TestCase
             'property_class' => ItemPropertyClass::Ict,
         ]);
         $custodian = User::factory()->create();
+        $user = User::factory()->create();
+
+        $acquisition = Acquisition::query()->create([
+            'reference_code' => 'ACQ-REUSE-1',
+            'item_id' => $item->id,
+            'office_id' => $office->id,
+            'quantity' => 2,
+            'unit_cost' => 4500,
+            'acquisition_date' => now(),
+            'recorded_by' => $user->id,
+        ]);
+
+        app(AcquisitionUnitService::class)->generateUnitsForAcquisition($acquisition->fresh(['item.category', 'office']));
+
+        $canonicalNumber = $item->fresh()->semi_expendable_property_number;
+        $this->assertNotNull($canonicalNumber);
+
         $requisition = Requisition::query()->create([
             'reference_code' => '2026-01-0100',
             'office_id' => $office->id,
@@ -129,6 +147,7 @@ class SemiExpendablePropertyNumberPerItemTest extends TestCase
             'issuance_date' => now(),
             'issued_by' => $custodian->id,
             'issued_to' => $custodian->id,
+            'property_number' => $canonicalNumber,
         ]);
 
         $second = Issuance::query()->create([
@@ -141,14 +160,13 @@ class SemiExpendablePropertyNumberPerItemTest extends TestCase
             'issuance_date' => now(),
             'issued_by' => $custodian->id,
             'issued_to' => $custodian->id,
+            'property_number' => $canonicalNumber,
         ]);
 
-        app(SemiExpendablePropertyNumberBuilder::class)->resolveOrAssignForIssuance($first);
-        app(SemiExpendablePropertyNumberBuilder::class)->resolveOrAssignForIssuance($second);
-
-        $this->assertSame($first->property_number, $second->property_number);
+        $this->assertSame($canonicalNumber, app(SemiExpendablePropertyNumberBuilder::class)->resolveExistingForIssuance($first));
+        $this->assertSame($canonicalNumber, app(SemiExpendablePropertyNumberBuilder::class)->resolveExistingForIssuance($second));
         $this->assertSame(
-            $first->property_number,
+            $canonicalNumber,
             ItemStockBucket::findForItemCost((int) $item->id, 4500.0)?->property_number,
         );
     }

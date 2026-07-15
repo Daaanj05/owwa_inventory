@@ -38,7 +38,7 @@ class StockLevels extends Page
 
     protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-squares-2x2';
 
-    protected static string|UnitEnum|null $navigationGroup = 'Inventory';
+    protected static string|UnitEnum|null $navigationGroup = 'Regional supply';
 
     protected static ?string $navigationLabel = 'Stock levels';
 
@@ -52,7 +52,7 @@ class StockLevels extends Page
     {
         $user = Filament::auth()->user();
 
-        return $user && ! $user->isSystemAdmin() && ! $user->isEmployee();
+        return $user?->isSupplyCustodian() ?? false;
     }
 
     #[Url]

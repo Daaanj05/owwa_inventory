@@ -15,7 +15,7 @@ class ProcurementAgent extends Agent
     {
         $url = rtrim(config('services.ollama.url', 'http://localhost:11434'), '/');
         // Use 127.0.0.1 so PHP can connect to Ollama reliably on Windows
-        $url = preg_replace('#^https?://localhost(?=:\d+|/|$)#i', 'http://127.0.0.1', $url) . '/api';
+        $url = preg_replace('#^https?://localhost(?=:\d+|/|$)#i', 'http://127.0.0.1', $url).'/api';
         $model = config('services.ollama.chat_model', 'deepseek-r1:7b');
 
         return new Ollama(
@@ -32,11 +32,11 @@ class ProcurementAgent extends Agent
     /**
      * Get a one-off recommendation given context (no conversation history).
      */
-    public function recommend(string $context, string $query = null): ?string
+    public function recommend(string $context, ?string $query = null): ?string
     {
         $query ??= 'Based on the inventory data, follow the instructions in the question to first summarize the situation and then output a markdown table of at-risk items as specified.';
 
-        $message = "Context:\n" . $context . "\n\nQuestion: " . $query;
+        $message = "Context:\n".$context."\n\nQuestion: ".$query;
 
         try {
             $response = $this->chat(new UserMessage($message));

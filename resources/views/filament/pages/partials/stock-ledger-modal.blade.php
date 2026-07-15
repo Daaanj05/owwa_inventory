@@ -13,10 +13,6 @@
             <dd>{{ $header['entity_name'] }}</dd>
         </div>
         <div class="owwa-stock-ledger-header-item">
-            <dt>Fund cluster</dt>
-            <dd>{{ $header['fund_cluster'] ?? '—' }}</dd>
-        </div>
-        <div class="owwa-stock-ledger-header-item">
             <dt>Item</dt>
             <dd>{{ $header['item_name'] }}</dd>
         </div>
@@ -35,7 +31,7 @@
             </div>
         @else
             <div class="owwa-stock-ledger-header-item">
-                <dt>Property No.</dt>
+                <dt>{{ $header['asset_identifier_label'] ?? 'Property No.' }}</dt>
                 <dd>{{ $header['property_number'] ?? '—' }}</dd>
             </div>
         @endif

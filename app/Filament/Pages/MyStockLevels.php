@@ -12,7 +12,6 @@ use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Pagination\LengthAwarePaginator as Paginator;
 use Illuminate\Support\Collection;
-use Illuminate\Support\HtmlString;
 use Livewire\Attributes\Url;
 use Livewire\WithPagination;
 use UnitEnum;
@@ -62,12 +61,7 @@ class MyStockLevels extends Page
 
     public function getHeading(): string|Htmlable
     {
-        $dashboardUrl = route('filament.admin.pages.dashboard');
-
-        return new HtmlString(sprintf(
-            '<span class="owwa-wizard-title" role="list"><a class="owwa-wizard-step owwa-wizard-step-link" href="%s" role="listitem">Inventory</a><span class="owwa-wizard-separator" aria-hidden="true">&gt;</span><span class="owwa-wizard-step owwa-wizard-step-current" role="listitem">Stock levels</span></span>',
-            e($dashboardUrl),
-        ));
+        return 'Stock levels';
     }
 
     public function getSubheading(): string|Htmlable|null

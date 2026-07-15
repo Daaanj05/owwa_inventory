@@ -103,4 +103,71 @@ class OwwaNotificationDropdownTest extends TestCase
 
         $this->assertNotNull($notification->fresh()->read_at);
     }
+
+    public function test_read_all_button_remains_visible_after_opening_notifications_individually(): void
+    {
+        $user = User::factory()->create([
+            'role' => User::ROLE_EMPLOYEE,
+            'email_verified_at' => now(),
+        ]);
+
+        $user->notify(new RequisitionWorkflowDatabaseNotification('First', 'One'));
+        $user->notify(new RequisitionWorkflowDatabaseNotification('Second', 'Two'));
+
+        $this->actingAs($user);
+
+        $component = Livewire::test(OwwaNotificationDropdown::class);
+
+        foreach ($user->notifications as $notification) {
+            $component->call('openNotification', $notification->id);
+        }
+
+        $component
+            ->assertSee('Read all')
+            ->assertSee('First')
+            ->assertSee('Second');
+
+        $this->assertSame(0, $user->fresh()->unreadNotifications()->count());
+    }
+
+    public function test_read_all_button_visible_when_all_notifications_already_read(): void
+    {
+        $user = User::factory()->create([
+            'role' => User::ROLE_SYSTEM_ADMIN,
+            'email_verified_at' => now(),
+        ]);
+
+        $user->notify(new RequisitionWorkflowDatabaseNotification('Read item', 'Handled.'));
+        $user->unreadNotifications->markAsRead();
+
+        $this->actingAs($user);
+
+        Livewire::test(OwwaNotificationDropdown::class)
+            ->assertSee('Read all')
+            ->assertSee('Read item');
+    }
+
+    public function test_load_more_reveals_older_notifications(): void
+    {
+        $user = User::factory()->create([
+            'role' => User::ROLE_SUPPLY_CUSTODIAN,
+            'email_verified_at' => now(),
+        ]);
+
+        for ($i = 1; $i <= 20; $i++) {
+            $user->notify(new RequisitionWorkflowDatabaseNotification(
+                "Notification {$i}",
+                "Body {$i}",
+            ));
+        }
+
+        $this->actingAs($user);
+
+        Livewire::test(OwwaNotificationDropdown::class)
+            ->assertSee('Notification 1')
+            ->assertDontSee('Notification 20')
+            ->assertSee('See previous notifications')
+            ->call('loadMoreNotifications')
+            ->assertSee('Notification 20');
+    }
 }

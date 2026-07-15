@@ -23,4 +23,3 @@ class AiProcurementRunPrintController extends Controller
         ]);
     }
 }
-

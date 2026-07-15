@@ -2,6 +2,7 @@
     use Illuminate\Contracts\Pagination\LengthAwarePaginator as LengthAwarePaginatorContract;
     use Illuminate\Pagination\UrlWindow;
 
+    $pageName = $pageName ?? 'page';
     $firstItem = $paginator->firstItem() ?? 0;
     $lastItem = $paginator->lastItem() ?? 0;
     $total = method_exists($paginator, 'total') ? ($paginator->total() ?? 0) : 0;
@@ -32,7 +33,7 @@
         @if (method_exists($paginator, 'onFirstPage') && $paginator->onFirstPage())
             <span class="owwa-pagination-btn owwa-pagination-disabled">Previous</span>
         @elseif ($usesLivewirePagination)
-            <button type="button" wire:click="previousPage('page')" class="owwa-pagination-btn">Previous</button>
+            <button type="button" wire:click="previousPage('{{ $pageName }}')" class="owwa-pagination-btn">Previous</button>
         @else
             <a href="{{ $paginator->previousPageUrl() }}" class="owwa-pagination-btn" rel="prev">Previous</a>
         @endif
@@ -49,7 +50,7 @@
                         @if ((int) $page === (int) $currentPage)
                             <span class="owwa-pagination-page owwa-pagination-page-active">{{ $page }}</span>
                         @elseif ($usesLivewirePagination)
-                            <button type="button" wire:click="gotoPage({{ (int) $page }}, 'page')" class="owwa-pagination-page">{{ $page }}</button>
+                            <button type="button" wire:click="gotoPage({{ (int) $page }}, '{{ $pageName }}')" class="owwa-pagination-page">{{ $page }}</button>
                         @else
                             <a href="{{ $url }}" class="owwa-pagination-page">{{ $page }}</a>
                         @endif
@@ -61,7 +62,7 @@
         {{-- Next --}}
         @if (method_exists($paginator, 'hasMorePages') && $paginator->hasMorePages())
             @if ($usesLivewirePagination)
-                <button type="button" wire:click="nextPage('page')" class="owwa-pagination-btn" rel="next">Next</button>
+                <button type="button" wire:click="nextPage('{{ $pageName }}')" class="owwa-pagination-btn" rel="next">Next</button>
             @else
                 <a href="{{ $paginator->nextPageUrl() }}" class="owwa-pagination-btn" rel="next">Next</a>
             @endif

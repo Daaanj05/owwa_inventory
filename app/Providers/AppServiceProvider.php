@@ -4,20 +4,29 @@ namespace App\Providers;
 
 use App\Models\Acquisition;
 use App\Models\Disposal;
+use App\Models\DisposalBatch;
+use App\Models\Distribution;
 use App\Models\Issuance;
+use App\Models\IssuanceBatch;
 use App\Models\Item;
 use App\Models\PhysicalCountSession;
+use App\Models\PropertyActionRequest;
 use App\Models\Requisition;
 use App\Models\Transfer;
 use App\Observers\AcquisitionObserver;
+use App\Observers\DisposalBatchObserver;
 use App\Observers\DisposalObserver;
+use App\Observers\DistributionObserver;
+use App\Observers\IssuanceBatchObserver;
 use App\Observers\IssuanceObserver;
 use App\Observers\ItemObserver;
 use App\Observers\PhysicalCountSessionObserver;
+use App\Observers\PropertyActionRequestObserver;
 use App\Observers\RequisitionObserver;
 use App\Observers\TransferObserver;
 use App\Support\RetryingFilesystem;
 use Filament\Actions\Action;
+use Filament\Support\View\Components\ModalComponent;
 use Filament\Tables\Table;
 use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Filesystem\Filesystem;
@@ -55,6 +64,9 @@ class AppServiceProvider extends ServiceProvider
             ->mixedCase()
             ->numbers());
 
+        ModalComponent::closedByClickingAway(false);
+        ModalComponent::closedByEscaping(false);
+
         Table::configureUsing(fn (Table $table): Table => $table
             ->paginationPageOptions([10])
             ->defaultPaginationPageOption(10)
@@ -64,11 +76,15 @@ class AppServiceProvider extends ServiceProvider
 
         Acquisition::observe(AcquisitionObserver::class);
         Item::observe(ItemObserver::class);
+        IssuanceBatch::observe(IssuanceBatchObserver::class);
         Issuance::observe(IssuanceObserver::class);
         Transfer::observe(TransferObserver::class);
+        DisposalBatch::observe(DisposalBatchObserver::class);
         Disposal::observe(DisposalObserver::class);
         Requisition::observe(RequisitionObserver::class);
+        Distribution::observe(DistributionObserver::class);
         PhysicalCountSession::observe(PhysicalCountSessionObserver::class);
+        PropertyActionRequest::observe(PropertyActionRequestObserver::class);
 
         if (! class_exists(\ZipArchive::class)) {
             Log::warning('PHP ext-zip is not loaded. OWWA Excel (.xlsx) exports will fail until extension=zip is enabled in the web server php.ini.');

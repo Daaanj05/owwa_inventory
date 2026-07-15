@@ -28,9 +28,11 @@ use App\Support\PtrSignatureLayout;
 use App\Support\RsmiSignatureLayout;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class OwwaTemplateExportService
@@ -1852,7 +1854,7 @@ class OwwaTemplateExportService
 
     public function issuanceFilledSpreadsheet(Issuance $issuance, ?string $formSlug = null): Spreadsheet
     {
-        $issuance->loadMissing('item.category');
+        $issuance->loadMissing(['item.category', 'batch']);
         $templateFilename = $this->getTemplatePathForCategory('issuance', $issuance->item?->category, $formSlug);
         $cellValues = $this->cellValuesForIssuance($issuance, $templateFilename);
 
@@ -1862,9 +1864,9 @@ class OwwaTemplateExportService
     /**
      * @param  Collection<int, Issuance>  $issuances
      */
-    public function canMergeIssuancesIntoSingleRsmiSheet(Collection $issuances): bool
+    public function canExportIssuancesAsRsmiWorkbook(Collection $issuances): bool
     {
-        if ($issuances->count() < 2) {
+        if ($issuances->isEmpty()) {
             return false;
         }
 
@@ -1882,20 +1884,98 @@ class OwwaTemplateExportService
     }
 
     /**
-     * One RSMI workbook with consecutive detail rows for all selected consumable issuances.
+     * @param  Collection<int, Issuance>  $issuances
+     */
+    public function downloadIssuancesRsmiWorkbook(Collection $issuances): StreamedResponse
+    {
+        $issuances = $issuances->sortBy('issuance_date')->values();
+        $batches = $issuances->groupBy(fn (Issuance $issuance): int => (int) ($issuance->issuance_batch_id ?? $issuance->id));
+
+        if ($batches->count() === 1) {
+            $representative = $batches->first()->first();
+            if ($representative !== null) {
+                return $this->downloadIssuance($representative);
+            }
+        }
+
+        $merged = new Spreadsheet;
+        $removedDefaultSheet = false;
+        $usedSheetTitles = [];
+
+        foreach ($batches as $batchLines) {
+            $representative = $batchLines->sortBy('id')->first();
+            if ($representative === null) {
+                continue;
+            }
+
+            $source = $this->issuanceFilledSpreadsheet($representative);
+            $sheet = $source->getSheet(0);
+            $serial = $representative->controlNumber() ?? ('batch_'.$representative->issuance_batch_id);
+            $sheet->setTitle($this->uniqueExcelSheetTitleForRsmiBatch((string) $serial, $usedSheetTitles));
+            $merged->addExternalSheet($sheet);
+
+            if (! $removedDefaultSheet) {
+                $merged->removeSheetByIndex(0);
+                $removedDefaultSheet = true;
+            }
+
+            $source->disconnectWorksheets();
+            unset($source);
+        }
+
+        $merged->setActiveSheetIndex(0);
+        $writer = new Xlsx($merged);
+
+        return response()->streamDownload(function () use ($writer): void {
+            $writer->save('php://output');
+        }, OwwaExportFilename::batch('RSMI'), [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ]);
+    }
+
+    /**
+     * @deprecated Use downloadIssuancesRsmiWorkbook() which groups by issuance batch.
+     *
+     * @param  Collection<int, Issuance>  $issuances
+     */
+    public function canMergeIssuancesIntoSingleRsmiSheet(Collection $issuances): bool
+    {
+        return $this->canExportIssuancesAsRsmiWorkbook($issuances) && $issuances->count() >= 2;
+    }
+
+    /**
+     * @deprecated Use downloadIssuancesRsmiWorkbook()
      *
      * @param  Collection<int, Issuance>  $issuances
      */
     public function downloadIssuancesRsmiMerged(Collection $issuances): StreamedResponse
     {
-        $issuances = $issuances->sortBy('issuance_date')->values();
-        $first = $issuances->first();
-        $first->loadMissing('item.category');
-        $templateFilename = $this->getTemplatePathForCategory('issuance', $first->item?->category);
-        $cellValues = $this->cellValuesForIssuanceRsmiBulk($issuances);
-        $filename = OwwaExportFilename::batch('RSMI');
+        return $this->downloadIssuancesRsmiWorkbook($issuances);
+    }
 
-        return $this->downloadFromTemplate($templateFilename, $cellValues, $filename);
+    /**
+     * @param  array<string, true>  $usedTitles
+     */
+    protected function uniqueExcelSheetTitleForRsmiBatch(string $serial, array &$usedTitles): string
+    {
+        $base = Str::slug($serial, '_');
+        if ($base === '') {
+            $base = 'rsmi';
+        }
+
+        $base = mb_substr($base, 0, 31);
+        $title = $base;
+        $suffix = 2;
+
+        while (isset($usedTitles[$title])) {
+            $suffixLabel = '_'.$suffix;
+            $title = mb_substr($base, 0, 31 - mb_strlen($suffixLabel)).$suffixLabel;
+            $suffix++;
+        }
+
+        $usedTitles[$title] = true;
+
+        return $title;
     }
 
     public function issuanceSpreadsheetBinary(Issuance $issuance, ?string $formSlug = null): string
@@ -1969,32 +2049,34 @@ class OwwaTemplateExportService
      */
     public function cellValuesForIssuance(Issuance $issuance, ?string $templatePath = null): array
     {
-        $issuance->load(['item', 'office', 'department', 'issuedBy', 'issuedTo']);
+        $lines = $issuance->batchLines();
+        $representative = $lines->first() ?? $issuance;
+        $representative->load(['item', 'office', 'department', 'issuedBy', 'issuedTo', 'batch']);
 
         $pathForMatch = $templatePath !== null ? str_replace('\\', '/', $templatePath) : '';
 
         if ($pathForMatch !== '') {
             if (str_contains($pathForMatch, 'RSMI') || str_contains($pathForMatch, 'Appendix 64')) {
-                return $this->cellValuesForIssuanceRsmi($issuance);
+                return $this->cellValuesForIssuanceRsmiBulk($lines);
             }
             if (str_contains($pathForMatch, 'PAR') || str_contains($pathForMatch, 'Appendix 71')) {
-                return $this->cellValuesForIssuancePar($issuance);
+                return $this->cellValuesForIssuanceParBulk($lines);
             }
             if (str_contains($pathForMatch, 'ICS') || str_contains($pathForMatch, 'Appendix 59')) {
-                return $this->cellValuesForIssuanceIcs($issuance);
+                return $this->cellValuesForIssuanceIcsBulk($lines);
             }
         }
 
         return [
-            'B2' => $issuance->reference_code,
-            'B3' => $issuance->issuance_date?->format('Y-m-d'),
-            'B4' => $issuance->item?->name,
-            'B5' => (string) $issuance->quantity,
-            'B6' => $issuance->office?->name,
-            'B7' => $issuance->department?->name ?? '',
-            'B8' => $issuance->issuedTo?->name ?? '',
-            'B9' => $issuance->issuedBy?->name ?? '',
-            'B10' => $issuance->remarks ?? '',
+            'B2' => $representative->controlNumber(),
+            'B3' => $representative->issuance_date?->format('Y-m-d'),
+            'B4' => $representative->item?->name,
+            'B5' => (string) $representative->quantity,
+            'B6' => $representative->office?->name,
+            'B7' => $representative->department?->name ?? '',
+            'B8' => $representative->issuedTo?->name ?? '',
+            'B9' => $representative->issuedBy?->name ?? '',
+            'B10' => $representative->remarks ?? '',
         ];
     }
 
@@ -2030,7 +2112,7 @@ class OwwaTemplateExportService
             ->last() ?? now()->format('Y-m-d');
 
         $rsmiSerial = $this->ensureControlNumberFormat(
-            $first->reference_code,
+            $first->controlNumber(),
             $first->issuance_date?->format('Y-m-d'),
             'monthly'
         );
@@ -2040,7 +2122,7 @@ class OwwaTemplateExportService
         OwwaCellMapping::applyHeader($values, (array) ($rsmiMap['header'] ?? []), [
             'entity_name' => $office?->name ?? '',
             'serial_no' => $rsmiSerial,
-            'fund_cluster' => $office?->fund_cluster ?? $office?->name ?? '',
+            'fund_cluster' => '',
             'date' => $reportDate,
         ]);
 
@@ -2162,81 +2244,137 @@ class OwwaTemplateExportService
      */
     protected function cellValuesForIssuancePar(Issuance $issuance): array
     {
-        $item = $issuance->item;
-        $office = $issuance->office;
-        $dateAcquired = $this->lookupDateAcquired($issuance->item_id);
-        $description = $this->formatItemDescription($item);
+        return $this->cellValuesForIssuanceParBulk($issuance->batchLines());
+    }
+
+    /**
+     * @param  Collection<int, Issuance>  $issuances
+     * @return array<string, string|int|float|null>
+     */
+    protected function cellValuesForIssuanceParBulk(Collection $issuances): array
+    {
+        $issuances = $issuances->sortBy('id')->values();
+        $first = $issuances->first();
+        if ($first === null) {
+            return [];
+        }
+
+        $first->loadMissing(['item', 'office', 'department', 'issuedBy', 'issuedTo', 'batch']);
+        $office = $first->office;
+        $batch = $first->batch;
 
         $parMap = OwwaCellMapping::form('PAR');
         $detailStart = (int) ($parMap['detail']['start_row'] ?? 11);
+        $maxRows = (int) ($parMap['detail']['max_rows'] ?? 30);
+        $detailEnd = $detailStart + $maxRows - 1;
         $cols = (array) ($parMap['detail']['columns'] ?? []);
 
         $values = [];
         OwwaCellMapping::applyHeader($values, (array) ($parMap['header'] ?? []), [
             'entity_name' => $office?->name ?? '',
-            'fund_cluster' => $office?->fund_cluster ?? '',
-            'par_no' => $this->ensureControlNumberFormat($issuance->reference_code, $issuance->issuance_date?->format('Y-m-d'), 'yearly'),
+            'fund_cluster' => '',
+            'par_no' => $this->ensureControlNumberFormat($first->controlNumber(), $first->issuance_date?->format('Y-m-d'), 'yearly'),
         ]);
 
-        $values[OwwaCellMapping::columnCell($cols['quantity'] ?? 'A', $detailStart)] = (string) $issuance->quantity;
-        $values[OwwaCellMapping::columnCell($cols['unit'] ?? 'B', $detailStart)] = $item?->unit ?? '';
-        $values[OwwaCellMapping::columnCell($cols['description'] ?? 'C', $detailStart)] = $description;
-        $values[OwwaCellMapping::columnCell($cols['property_number'] ?? 'D', $detailStart)] = $issuance->property_number ?? $item?->item_code ?? '';
-        $values[OwwaCellMapping::columnCell($cols['date_acquired'] ?? 'E', $detailStart)] = $dateAcquired ?? '';
-        $values[OwwaCellMapping::columnCell($cols['amount'] ?? 'F', $detailStart)] = $issuance->amount ?? $issuance->unit_cost ?? '';
+        $row = $detailStart;
+        foreach ($issuances as $issuance) {
+            if ($row > $detailEnd) {
+                break;
+            }
+
+            $issuance->loadMissing('item');
+            $item = $issuance->item;
+            $dateAcquired = $this->lookupDateAcquired($issuance->item_id);
+            $description = $this->formatItemDescription($item);
+
+            $values[OwwaCellMapping::columnCell($cols['quantity'] ?? 'A', $row)] = (string) $issuance->quantity;
+            $values[OwwaCellMapping::columnCell($cols['unit'] ?? 'B', $row)] = $item?->unit ?? '';
+            $values[OwwaCellMapping::columnCell($cols['description'] ?? 'C', $row)] = $description;
+            $values[OwwaCellMapping::columnCell($cols['property_number'] ?? 'D', $row)] = $issuance->property_number ?? $item?->item_code ?? '';
+            $values[OwwaCellMapping::columnCell($cols['date_acquired'] ?? 'E', $row)] = $dateAcquired ?? '';
+            $values[OwwaCellMapping::columnCell($cols['amount'] ?? 'F', $row)] = $issuance->amount ?? $issuance->unit_cost ?? '';
+            $row++;
+        }
 
         return array_merge($values, [
-            'A45' => $issuance->issuedTo?->name ?? $issuance->custodian_printed_name ?? '',
-            'D45' => $issuance->custodian_printed_name ?? $issuance->issuedBy?->name ?? '',
-            'A48' => $issuance->issued_to_designation ?? $issuance->issuedTo?->office?->name ?? '',
-            'D48' => $issuance->custodian_designation ?? $office?->name ?? '',
-            'A50' => $issuance->issuance_date?->format('Y-m-d') ?? '',
-            'D50' => $issuance->issuance_date?->format('Y-m-d') ?? '',
+            'A45' => $first->issuedTo?->name ?? $batch?->custodian_printed_name ?? $first->custodian_printed_name ?? '',
+            'D45' => $batch?->custodian_printed_name ?? $first->custodian_printed_name ?? $first->issuedBy?->name ?? '',
+            'A48' => $batch?->issued_to_designation ?? $first->issued_to_designation ?? $first->issuedTo?->office?->name ?? '',
+            'D48' => $batch?->custodian_designation ?? $first->custodian_designation ?? $office?->name ?? '',
+            'A50' => $first->issuance_date?->format('Y-m-d') ?? '',
+            'D50' => $first->issuance_date?->format('Y-m-d') ?? '',
         ]);
     }
 
     /**
      * Cell mapping for Appendix 59 - Inventory Custodian Slip (ICS). Semi-expendable issuance.
-     * Headers span merged rows 9-11; first data row = 12.
-     * Columns: A=Quantity, B=Unit, C=Unit Cost, D=Total Cost, E(+F merged)=Description, G=Inventory Item No., H=Estimated Useful Life.
      *
      * @return array<string, string|int|float|null>
      */
     protected function cellValuesForIssuanceIcs(Issuance $issuance): array
     {
-        $item = $issuance->item;
-        $office = $issuance->office;
-        $unitCost = $issuance->unit_cost !== null ? (float) $issuance->unit_cost : null;
-        $totalCost = $issuance->amount !== null ? (float) $issuance->amount : ($unitCost !== null ? $unitCost * ($issuance->quantity ?? 1) : null);
-        $usefulLife = $issuance->estimated_useful_life ?? $item?->estimated_useful_life ?? '';
+        return $this->cellValuesForIssuanceIcsBulk($issuance->batchLines());
+    }
+
+    /**
+     * @param  Collection<int, Issuance>  $issuances
+     * @return array<string, string|int|float|null>
+     */
+    protected function cellValuesForIssuanceIcsBulk(Collection $issuances): array
+    {
+        $issuances = $issuances->sortBy('id')->values();
+        $first = $issuances->first();
+        if ($first === null) {
+            return [];
+        }
+
+        $first->loadMissing(['item', 'office', 'department', 'issuedBy', 'issuedTo', 'batch']);
+        $office = $first->office;
+        $batch = $first->batch;
 
         $icsMap = OwwaCellMapping::form('ICS');
         $detailStart = (int) ($icsMap['detail']['start_row'] ?? 12);
+        $maxRows = (int) ($icsMap['detail']['max_rows'] ?? 30);
+        $detailEnd = $detailStart + $maxRows - 1;
         $cols = (array) ($icsMap['detail']['columns'] ?? []);
 
         $values = [];
         OwwaCellMapping::applyHeader($values, (array) ($icsMap['header'] ?? []), [
             'entity_name' => $office?->name ?? '',
-            'fund_cluster' => $office?->fund_cluster ?? '',
-            'ics_no' => $this->ensureControlNumberFormat($issuance->reference_code, $issuance->issuance_date?->format('Y-m-d'), 'yearly'),
+            'fund_cluster' => '',
+            'ics_no' => $this->ensureControlNumberFormat($first->controlNumber(), $first->issuance_date?->format('Y-m-d'), 'yearly'),
         ]);
 
-        $values[OwwaCellMapping::columnCell($cols['quantity'] ?? 'A', $detailStart)] = (string) $issuance->quantity;
-        $values[OwwaCellMapping::columnCell($cols['unit'] ?? 'B', $detailStart)] = $item?->unit ?? '';
-        $values[OwwaCellMapping::columnCell($cols['unit_cost'] ?? 'C', $detailStart)] = $unitCost !== null ? $unitCost : '';
-        $values[OwwaCellMapping::columnCell($cols['total_cost'] ?? 'D', $detailStart)] = $totalCost !== null ? $totalCost : '';
-        $values[OwwaCellMapping::columnCell($cols['description'] ?? 'E', $detailStart)] = $this->formatItemDescription($item);
-        $values[OwwaCellMapping::columnCell($cols['inventory_item_no'] ?? 'G', $detailStart)] = $issuance->property_number ?? $item?->item_code ?? '';
-        $values[OwwaCellMapping::columnCell($cols['useful_life'] ?? 'H', $detailStart)] = $usefulLife;
+        $row = $detailStart;
+        foreach ($issuances as $issuance) {
+            if ($row > $detailEnd) {
+                break;
+            }
+
+            $issuance->loadMissing('item');
+            $item = $issuance->item;
+            $unitCost = $issuance->unit_cost !== null ? (float) $issuance->unit_cost : null;
+            $totalCost = $issuance->amount !== null ? (float) $issuance->amount : ($unitCost !== null ? $unitCost * ($issuance->quantity ?? 1) : null);
+            $usefulLife = $issuance->estimated_useful_life ?? $item?->estimated_useful_life ?? '';
+
+            $values[OwwaCellMapping::columnCell($cols['quantity'] ?? 'A', $row)] = (string) $issuance->quantity;
+            $values[OwwaCellMapping::columnCell($cols['unit'] ?? 'B', $row)] = $item?->unit ?? '';
+            $values[OwwaCellMapping::columnCell($cols['unit_cost'] ?? 'C', $row)] = $unitCost !== null ? $unitCost : '';
+            $values[OwwaCellMapping::columnCell($cols['total_cost'] ?? 'D', $row)] = $totalCost !== null ? $totalCost : '';
+            $values[OwwaCellMapping::columnCell($cols['description'] ?? 'E', $row)] = $this->formatItemDescription($item);
+            $values[OwwaCellMapping::columnCell($cols['inventory_item_no'] ?? 'G', $row)] = $issuance->property_number ?? $item?->item_code ?? '';
+            $values[OwwaCellMapping::columnCell($cols['useful_life'] ?? 'H', $row)] = $usefulLife;
+            $row++;
+        }
 
         return array_merge($values, [
-            'A44' => $issuance->received_from_name ?? $issuance->issuedBy?->name ?? '',
-            'A46' => $issuance->issuedTo?->name ?? '',
-            'F46' => $issuance->custodian_printed_name ?? $issuance->issuedBy?->name ?? '',
-            'A49' => $issuance->issued_to_designation ?? '',
-            'F49' => $issuance->custodian_designation ?? '',
-            'A51' => $issuance->issuance_date?->format('Y-m-d') ?? '',
-            'F51' => $issuance->issuance_date?->format('Y-m-d') ?? '',
+            'A44' => $batch?->received_from_name ?? $first->received_from_name ?? $first->issuedBy?->name ?? '',
+            'A46' => $first->issuedTo?->name ?? '',
+            'F46' => $batch?->custodian_printed_name ?? $first->custodian_printed_name ?? $first->issuedBy?->name ?? '',
+            'A49' => $batch?->issued_to_designation ?? $first->issued_to_designation ?? '',
+            'F49' => $batch?->custodian_designation ?? $first->custodian_designation ?? '',
+            'A51' => $first->issuance_date?->format('Y-m-d') ?? '',
+            'F51' => $first->issuance_date?->format('Y-m-d') ?? '',
         ]);
     }
 
@@ -2320,7 +2458,7 @@ class OwwaTemplateExportService
         $values = [];
         OwwaCellMapping::applyHeader($values, (array) ($scMap['header'] ?? []), [
             'entity_name' => $office?->name ?? '',
-            'fund_cluster' => $office?->fund_cluster ?? '',
+            'fund_cluster' => '',
             'item' => $item?->name ?? '',
             'stock_no' => $item?->item_code ?? '',
             'description' => $item?->description ?? '',
@@ -2386,7 +2524,7 @@ class OwwaTemplateExportService
         return [
             'header' => [
                 'entity_name' => $office?->name ?? '',
-                'fund_cluster' => $office?->fund_cluster ?? '',
+                'fund_cluster' => '',
                 'property_type' => \App\Support\ItemPropertyClass::propertyTypeLabel($propertyClass),
                 'property_number' => $item?->resolvedSemiExpendablePropertyNumber() ?? $item?->item_code ?? '',
                 'description' => $this->formatItemDescription($item),
@@ -2438,7 +2576,7 @@ class OwwaTemplateExportService
         $values = [];
         OwwaCellMapping::applyHeader($values, (array) ($ptrMap['header'] ?? []), [
             'entity_name' => $from?->name ?? $to?->name ?? '',
-            'fund_cluster' => $from?->fund_cluster ?? $to?->fund_cluster ?? '',
+            'fund_cluster' => '',
             'from_accountable' => $transfer->from_accountable_officer ?? $from?->name ?? '',
             'ptr_no' => $this->ensureControlNumberFormat($transfer->reference_code, $transfer->transfer_date?->format('Y-m-d'), 'yearly'),
             'to_accountable' => $transfer->to_accountable_officer ?? $to?->name ?? '',
@@ -2475,7 +2613,7 @@ class OwwaTemplateExportService
         OwwaCellMapping::applyHeader($values, (array) ($rsmiMap['header'] ?? []), [
             'entity_name' => $from?->name ?? $to?->name ?? '',
             'serial_no' => $this->ensureControlNumberFormat($transfer->reference_code, $transfer->transfer_date?->format('Y-m-d'), 'monthly'),
-            'fund_cluster' => $from?->fund_cluster ?? $to?->fund_cluster ?? '',
+            'fund_cluster' => '',
             'date' => $transfer->transfer_date?->format('Y-m-d') ?? '',
         ]);
 
@@ -2603,7 +2741,7 @@ class OwwaTemplateExportService
         $values = [];
         OwwaCellMapping::applyHeader($values, (array) ($risMap['header'] ?? []), [
             'entity_name' => $office?->name ?? '',
-            'fund_cluster' => $office?->fund_cluster ?? '',
+            'fund_cluster' => '',
             'division' => $department?->name ?? '',
             'responsibility_center_code' => $responsibilityCenterCode,
             'office' => $office?->name ?? '',
@@ -2634,10 +2772,11 @@ class OwwaTemplateExportService
             $values[OwwaCellMapping::columnCell($columns['description'] ?? 'C', $row)] = $item?->name ?? '';
             $values[OwwaCellMapping::columnCell($columns['quantity'] ?? 'D', $row)] = (string) $itemLine->quantity;
 
-            if ($itemLine->stock_available !== null) {
+            if ($itemLine->stock_available !== null || $itemLine->stock_at_request !== null) {
                 $yesCol = $columns['stock_yes'] ?? 'E';
                 $noCol = $columns['stock_no_col'] ?? 'F';
-                if ((int) $itemLine->stock_available > 0) {
+                $stockLevel = $itemLine->stock_available ?? $itemLine->stock_at_request;
+                if ((int) $stockLevel > 0) {
                     $values[OwwaCellMapping::columnCell($yesCol, $row)] = 'X';
                 } else {
                     $values[OwwaCellMapping::columnCell($noCol, $row)] = 'X';
@@ -2648,7 +2787,7 @@ class OwwaTemplateExportService
                 $values[OwwaCellMapping::columnCell($columns['issue_quantity'] ?? 'G', $row)] = (string) $itemLine->quantity_issued;
             }
 
-            $issueRemarks = $itemLine->issue_remarks ?? $itemLine->remarks ?? '';
+            $issueRemarks = $itemLine->issue_remarks ?? '';
             if ($issueRemarks !== '') {
                 $values[OwwaCellMapping::columnCell($columns['issue_remarks'] ?? 'H', $row)] = $issueRemarks;
             }
@@ -2924,7 +3063,7 @@ class OwwaTemplateExportService
             $templateFilename = $this->getTemplatePathForCategory('issuance', $issuance->item?->category, $formSlug);
         }
         $formCode = $this->resolveOwwaFormCode($templateFilename);
-        $filename = $this->buildOwwaExportFilename($formCode, $issuance->reference_code ?? (string) $issuance->getKey());
+        $filename = $this->buildOwwaExportFilename($formCode, $issuance->controlNumber() ?? (string) $issuance->getKey());
 
         return $this->downloadFromTemplate(
             $templateFilename,
@@ -3304,7 +3443,7 @@ class OwwaTemplateExportService
         int $continuationPageCount = 1,
     ): array {
         $case->loadMissing(['office', 'requestingOffice', 'department', 'lines.item']);
-        $office = $case->office;
+        $office = app(\App\Support\SupplyOfficeResolver::class)->resolveOffice() ?? $case->office;
         $prMap = OwwaCellMapping::form('PR');
         $headerMap = (array) ($prMap['header'] ?? []);
         $values = [];
@@ -3316,7 +3455,7 @@ class OwwaTemplateExportService
 
         OwwaCellMapping::applyHeader($values, $headerMap, [
             'entity_name' => $office?->name ?? '',
-            'fund_cluster' => $office?->fund_cluster ?? '',
+            'fund_cluster' => '',
             'pr_no' => $prNumber,
             'date' => $case->pr_date?->format('Y-m-d') ?? '',
             'responsibility_center_code' => $this->requestingOfficeResponsibilityCenterCode($case),
@@ -3379,7 +3518,7 @@ class OwwaTemplateExportService
             'delivery_term' => $poData['delivery_term'] ?? '',
             'date_of_delivery' => $poData['date_of_delivery'] ?? '',
             'payment_term' => $poData['payment_term'] ?? '',
-            'fund_cluster' => $office?->fund_cluster ?? '',
+            'fund_cluster' => '',
         ]);
 
         $this->applyProcurementDetailRows($values, 'PO', $lines ?? $case->lines, [
@@ -3410,7 +3549,7 @@ class OwwaTemplateExportService
         int $continuationPageCount = 1,
     ): array {
         $case->loadMissing(['office', 'requestingOffice', 'department', 'lines.item']);
-        $office = $case->office;
+        $office = app(\App\Support\SupplyOfficeResolver::class)->resolveOffice() ?? $case->office;
         $iarData = (array) ($case->iar_data ?? []);
         $poNoDate = trim(($case->po_number ?? '').' / '.($case->po_date?->format('Y-m-d') ?? ''), ' /');
         $iarMap = OwwaCellMapping::form('IAR');
@@ -3418,7 +3557,7 @@ class OwwaTemplateExportService
 
         OwwaCellMapping::applyHeader($values, (array) ($iarMap['header'] ?? []), [
             'entity_name' => $office?->name ?? '',
-            'fund_cluster' => $office?->fund_cluster ?? '',
+            'fund_cluster' => '',
             'supplier' => $case->supplier ?? '',
             'iar_no' => $this->ensureControlNumberFormat(
                 $case->iar_number,
@@ -3465,7 +3604,10 @@ class OwwaTemplateExportService
     {
         $case->loadMissing(['office', 'requestingOffice', 'department']);
 
-        return $case->requestingOffice?->name
+        $regional = app(\App\Support\SupplyOfficeResolver::class)->resolveOffice();
+
+        return $regional?->name
+            ?? $case->requestingOffice?->name
             ?? $case->department?->name
             ?? $case->office?->name
             ?? '';
@@ -3475,7 +3617,10 @@ class OwwaTemplateExportService
     {
         $case->loadMissing(['office', 'requestingOffice', 'department']);
 
-        return $case->requestingOffice?->code
+        $regional = app(\App\Support\SupplyOfficeResolver::class)->resolveOffice();
+
+        return $regional?->code
+            ?? $case->requestingOffice?->code
             ?? $case->department?->code
             ?? $case->office?->code
             ?? '';

@@ -41,7 +41,11 @@ class AcquisitionPaperworkDemoSeeder extends Seeder
             ->keyBy('name');
 
         $items = Item::query()
-            ->whereIn('item_code', DemoStockLedgerCatalog::allCoreItemCodes())
+            ->whereIn('item_code', array_merge(
+                DemoStockLedgerCatalog::allCoreItemCodes(),
+                DemoStockLedgerCatalog::variantConsumableCodes(),
+                DemoStockLedgerCatalog::variantPpeCodes(),
+            ))
             ->get()
             ->keyBy('item_code');
 

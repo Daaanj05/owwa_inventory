@@ -142,6 +142,12 @@ class AnnexA1BlockLayout
                 continue;
             }
 
+            if ($field === 'fund_cluster') {
+                $values[self::headerCell($field, $blockStartRow)] = '';
+
+                continue;
+            }
+
             $label = (string) ($spec['label'] ?? '');
             $raw = $data[$field];
             $values[self::headerCell($field, $blockStartRow)] = $label.($raw ?? '');

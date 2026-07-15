@@ -17,12 +17,15 @@ class UserAssignmentActionHooks
             return $data;
         }
 
-        $assignments = User::normalizeAssignmentRows($data['assignments'] ?? []);
-        unset($data['assignments']);
+        $groups = $data['office_groups'] ?? [];
+        self::assertUniqueOfficeGroups($groups);
+
+        $assignments = User::flattenOfficeAssignmentGroups($groups);
+        unset($data['office_groups']);
 
         if ($assignments === []) {
             throw ValidationException::withMessages([
-                'assignments' => 'Add at least one office and sub-office/department for a Unit Consolidator.',
+                'office_groups' => 'Add at least one office and sub-office/department for a Unit Consolidator.',
             ]);
         }
 
@@ -44,14 +47,16 @@ class UserAssignmentActionHooks
             return $data;
         }
 
-        $data['assignments'] = $record->assignments()
-            ->orderBy('id')
-            ->get()
-            ->map(fn ($assignment): array => [
-                'office_id' => $assignment->office_id,
-                'department_id' => $assignment->department_id,
-            ])
-            ->all();
+        $data['office_groups'] = User::groupOfficeAssignmentsForForm(
+            $record->assignments()
+                ->orderBy('id')
+                ->get()
+                ->map(fn ($assignment): array => [
+                    'office_id' => $assignment->office_id,
+                    'department_id' => $assignment->department_id,
+                ])
+                ->all(),
+        );
 
         return $data;
     }
@@ -66,12 +71,15 @@ class UserAssignmentActionHooks
             return $data;
         }
 
-        $assignments = User::normalizeAssignmentRows($data['assignments'] ?? []);
-        unset($data['assignments']);
+        $groups = $data['office_groups'] ?? [];
+        self::assertUniqueOfficeGroups($groups);
+
+        $assignments = User::flattenOfficeAssignmentGroups($groups);
+        unset($data['office_groups']);
 
         if ($assignments === []) {
             throw ValidationException::withMessages([
-                'assignments' => 'Add at least one office and sub-office/department for a Unit Consolidator.',
+                'office_groups' => 'Add at least one office and sub-office/department for a Unit Consolidator.',
             ]);
         }
 
@@ -99,5 +107,69 @@ class UserAssignmentActionHooks
         }
 
         $record->syncOfficeAssignments($assignments);
+    }
+
+    /**
+     * @param  array<int, array{office_id?: mixed, department_id?: mixed, departments?: array<int, array{department_id?: mixed}>}>|array<int, array{office_id: int, department_id: int}>  $groups
+     */
+    protected static function assertUniqueOfficeGroups(array $groups): void
+    {
+        if ($groups === []) {
+            return;
+        }
+
+        if (isset($groups[0]['department_id'])) {
+            $officeIds = collect($groups)
+                ->pluck('office_id')
+                ->filter()
+                ->map(fn (mixed $id): int => (int) $id);
+
+            if ($officeIds->count() !== $officeIds->unique()->count()) {
+                throw ValidationException::withMessages([
+                    'office_groups' => 'Each office may only be added once. Add more departments under the existing office entry.',
+                ]);
+            }
+
+            $departmentIds = collect($groups)
+                ->pluck('department_id')
+                ->filter()
+                ->map(fn (mixed $id): int => (int) $id);
+
+            if ($departmentIds->count() !== $departmentIds->unique()->count()) {
+                throw ValidationException::withMessages([
+                    'office_groups' => 'Each sub-office/department may only be assigned once.',
+                ]);
+            }
+
+            return;
+        }
+
+        $officeIds = collect($groups)
+            ->pluck('office_id')
+            ->filter()
+            ->map(fn (mixed $id): int => (int) $id);
+
+        if ($officeIds->count() !== $officeIds->unique()->count()) {
+            throw ValidationException::withMessages([
+                'office_groups' => 'Each office may only be added once. Add more departments under the existing office entry.',
+            ]);
+        }
+
+        $departmentIds = collect($groups)
+            ->flatMap(function (array $group): array {
+                $departments = is_array($group['departments'] ?? null) ? $group['departments'] : [];
+
+                return collect($departments)
+                    ->pluck('department_id')
+                    ->filter()
+                    ->map(fn (mixed $id): int => (int) $id)
+                    ->all();
+            });
+
+        if ($departmentIds->count() !== $departmentIds->unique()->count()) {
+            throw ValidationException::withMessages([
+                'office_groups' => 'Each sub-office/department may only be assigned once.',
+            ]);
+        }
     }
 }

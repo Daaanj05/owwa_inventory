@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Filament\Resources\Items\Pages\CreateItem;
 use App\Models\ItemCategory;
 use App\Models\Office;
+use App\Models\UacsObjectCode;
 use App\Models\User;
 use App\Support\ItemPropertyClass;
 use Filament\Facades\Filament;
@@ -27,6 +28,11 @@ class SemiItemEulRequiredTest extends TestCase
         ]);
 
         $category = ItemCategory::factory()->create(['name' => 'Semi-Expendable']);
+        $uacs = UacsObjectCode::query()->create([
+            'code' => '106',
+            'name' => 'Office equipment',
+            'is_active' => true,
+        ]);
 
         session(['active_item_category_id' => $category->id]);
 
@@ -34,10 +40,11 @@ class SemiItemEulRequiredTest extends TestCase
             ->test(CreateItem::class)
             ->fillForm([
                 'item_category_id' => $category->id,
-                'name' => 'Office chair',
+                'base_name' => 'Office chair',
                 'unit' => 'piece',
                 'reorder_level' => 0,
                 'property_class' => ItemPropertyClass::OfficeEquipment,
+                'uacs_object_code_id' => $uacs->id,
                 'estimated_useful_life' => null,
             ])
             ->call('create')
@@ -55,6 +62,11 @@ class SemiItemEulRequiredTest extends TestCase
         ]);
 
         $category = ItemCategory::factory()->create(['name' => 'Semi-Expendable']);
+        $uacs = UacsObjectCode::query()->create([
+            'code' => '106',
+            'name' => 'Office equipment',
+            'is_active' => true,
+        ]);
 
         session(['active_item_category_id' => $category->id]);
 
@@ -62,10 +74,11 @@ class SemiItemEulRequiredTest extends TestCase
             ->test(CreateItem::class)
             ->fillForm([
                 'item_category_id' => $category->id,
-                'name' => 'Office chair',
+                'base_name' => 'Office chair',
                 'unit' => 'piece',
                 'reorder_level' => 0,
                 'property_class' => ItemPropertyClass::OfficeEquipment,
+                'uacs_object_code_id' => $uacs->id,
                 'estimated_useful_life' => '5 yrs',
             ])
             ->call('create')
@@ -73,6 +86,7 @@ class SemiItemEulRequiredTest extends TestCase
             ->assertNotified();
 
         $this->assertDatabaseHas('items', [
+            'base_name' => 'Office chair',
             'name' => 'Office chair',
             'estimated_useful_life' => '5 yrs',
         ]);

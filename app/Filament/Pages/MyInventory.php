@@ -2,8 +2,12 @@
 
 namespace App\Filament\Pages;
 
+use App\Filament\Resources\PropertyActionRequests\PropertyActionRequestResource;
+use App\Models\Issuance;
+use App\Models\PropertyActionRequest;
 use App\Models\User;
 use App\Services\EmployeeDistributionInventoryService;
+use App\Support\SemiExpendableUsefulLife;
 use BackedEnum;
 use Filament\Actions\Action;
 use Filament\Facades\Filament;
@@ -24,11 +28,11 @@ class MyInventory extends Page
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedClipboardDocumentList;
 
-    protected static string|UnitEnum|null $navigationGroup = 'Inventory';
+    protected static string|UnitEnum|null $navigationGroup = 'My items';
 
-    protected static ?string $navigationLabel = 'My inventory';
+    protected static ?string $navigationLabel = 'My Inventory';
 
-    protected static ?string $title = 'My inventory';
+    protected static ?string $title = 'My Inventory';
 
     protected static ?int $navigationSort = 0;
 
@@ -47,7 +51,12 @@ class MyInventory extends Page
     public string $category = EmployeeDistributionInventoryService::CATEGORY_CONSUMABLES;
 
     #[Url]
+    public string $custodyTab = EmployeeDistributionInventoryService::CUSTODY_TAB_ON_HAND;
+
+    #[Url]
     public ?int $ledgerItem = null;
+
+    public int $ledgerPage = 1;
 
     public function mount(): void
     {
@@ -69,6 +78,15 @@ class MyInventory extends Page
         $this->resetPage();
     }
 
+    public function updatedCustodyTab(): void
+    {
+        if (! EmployeeDistributionInventoryService::isValidCustodyTab($this->custodyTab)) {
+            $this->custodyTab = EmployeeDistributionInventoryService::CUSTODY_TAB_ON_HAND;
+        }
+
+        $this->resetPage();
+    }
+
     public static function canAccess(): bool
     {
         $user = Filament::auth()->user();
@@ -78,17 +96,12 @@ class MyInventory extends Page
 
     public function getTitle(): string|Htmlable
     {
-        return 'My inventory';
+        return 'My Inventory';
     }
 
     public function getHeading(): string|Htmlable
     {
-        $dashboardUrl = route('filament.admin.pages.dashboard');
-
-        return new HtmlString(sprintf(
-            '<span class="owwa-wizard-title" role="list"><a class="owwa-wizard-step owwa-wizard-step-link" href="%s" role="listitem">Inventory</a><span class="owwa-wizard-separator" aria-hidden="true">&gt;</span><span class="owwa-wizard-step owwa-wizard-step-current" role="listitem">My inventory</span></span>',
-            e($dashboardUrl),
-        ));
+        return 'My Inventory';
     }
 
     public function getSubheading(): string|Htmlable|null
@@ -109,7 +122,9 @@ class MyInventory extends Page
 
     public function sortByColumn(string $column): void
     {
-        $allowed = ['item_name', 'category_name', 'quantity', 'distribution_date', 'distribution_count'];
+        $allowed = $this->usesPropertyIssuanceView()
+            ? ['item_name', 'quantity', 'distribution_date', 'distribution_count', 'last_distribution_date']
+            : ['item_name', 'quantity', 'distribution_date', 'distribution_count'];
 
         if (! in_array($column, $allowed, true)) {
             return;
@@ -131,7 +146,7 @@ class MyInventory extends Page
             return ['totalItems' => 0, 'totalQuantity' => 0, 'totalQuantityThisYear' => 0];
         }
 
-        return app(EmployeeDistributionInventoryService::class)->summaryFor($user, $this->category);
+        return app(EmployeeDistributionInventoryService::class)->summaryFor($user, $this->category, $this->custodyTab);
     }
 
     public function getInventoryRows(): LengthAwarePaginator
@@ -148,7 +163,50 @@ class MyInventory extends Page
             $this->sortDir,
             10,
             $this->category,
+            $this->custodyTab,
         );
+    }
+
+    public function usesPropertyIssuanceView(): bool
+    {
+        return EmployeeDistributionInventoryService::usesPropertyIssuanceView($this->category);
+    }
+
+    public function propertyActionUrl(Issuance $issuance, string $actionType): string
+    {
+        return PropertyActionRequestResource::createUrlForIssuance($issuance->id, $actionType);
+    }
+
+    public function suggestedPropertyActionType(Issuance $issuance): string
+    {
+        $slug = $issuance->item?->category?->getTemplateSlug();
+
+        if ($slug === 'semi_expendable') {
+            $status = SemiExpendableUsefulLife::statusForIssuance($issuance);
+
+            if (in_array($status, [SemiExpendableUsefulLife::STATUS_NEARING, SemiExpendableUsefulLife::STATUS_EXPIRED], true)) {
+                return PropertyActionRequest::ACTION_REPLACEMENT;
+            }
+        }
+
+        return PropertyActionRequest::ACTION_DISPOSAL;
+    }
+
+    public function showPropertyActionCta(Issuance $issuance): bool
+    {
+        if ($this->custodyTab !== EmployeeDistributionInventoryService::CUSTODY_TAB_ON_HAND) {
+            return false;
+        }
+
+        $slug = $issuance->item?->category?->getTemplateSlug();
+
+        if ($slug !== 'semi_expendable') {
+            return false;
+        }
+
+        $status = SemiExpendableUsefulLife::statusForIssuance($issuance);
+
+        return in_array($status, [SemiExpendableUsefulLife::STATUS_NEARING, SemiExpendableUsefulLife::STATUS_EXPIRED], true);
     }
 
     public function openDistributionLedger(int $itemId): void
@@ -163,6 +221,8 @@ class MyInventory extends Page
         } catch (AuthorizationException) {
             abort(403);
         }
+
+        $this->ledgerPage = 1;
 
         $this->mountAction('viewDistributionLedger', [
             'itemId' => $itemId,
@@ -179,7 +239,7 @@ class MyInventory extends Page
             ->modalHeading(function (): string {
                 $ledger = $this->resolveMountedDistributionLedger();
 
-                return $ledger['header']['item_name'].' — distribution history';
+                return $ledger['header']['item_name'].' — Distribution History';
             })
             ->modalContent(fn (): HtmlString => new HtmlString(view(
                 'filament.pages.partials.employee-distribution-ledger-modal',
@@ -187,11 +247,41 @@ class MyInventory extends Page
             )->render()));
     }
 
+    public function openPropertyIssuanceLedger(int $itemId): void
+    {
+        $user = Filament::auth()->user();
+        if (! $user instanceof User) {
+            abort(403);
+        }
+
+        try {
+            app(EmployeeDistributionInventoryService::class)->assertEmployeeOwnsPropertyItem(
+                $user,
+                $itemId,
+                $this->custodyTab,
+            );
+        } catch (AuthorizationException) {
+            abort(403);
+        }
+
+        $this->ledgerPage = 1;
+
+        $this->mountAction('viewDistributionLedger', [
+            'itemId' => $itemId,
+        ]);
+    }
+
+    public function openPropertyItemLedger(int $itemId): void
+    {
+        $this->openPropertyIssuanceLedger($itemId);
+    }
+
     /**
      * @return array{
      *     header: array<string, string|null>,
-     *     columns: array<string, string>,
-     *     rows: array<int, array<string, mixed>>
+     *     columns: array<string, array{label: string, tooltip?: string}|string>,
+     *     rows: array<int, array<string, mixed>>,
+     *     paginator: \Illuminate\Contracts\Pagination\LengthAwarePaginator
      * }
      */
     protected function resolveMountedDistributionLedger(): array
@@ -204,6 +294,20 @@ class MyInventory extends Page
             abort(403);
         }
 
-        return app(EmployeeDistributionInventoryService::class)->presentLedger($user, $itemId);
+        if ($this->usesPropertyIssuanceView()) {
+            return app(EmployeeDistributionInventoryService::class)->presentPropertyIssuanceLedgerPaginated(
+                $user,
+                $itemId,
+                max(1, $this->ledgerPage),
+                10,
+                $this->custodyTab,
+            );
+        }
+
+        return app(EmployeeDistributionInventoryService::class)->presentLedgerPaginated(
+            $user,
+            $itemId,
+            max(1, $this->ledgerPage),
+        );
     }
 }

@@ -9,9 +9,14 @@ use App\Filament\Support\ConfiguresOwwaViewAction;
 use App\Filament\Support\OwwaFormModalDefaults;
 use App\Filament\Support\OwwaModalSchema;
 use App\Filament\Support\OwwaTableDefaults;
+use App\Models\Item;
 use App\Models\ItemCategory;
+use App\Services\CatalogAssetNumberService;
 use App\Support\OwwaTransactionViewPresenter;
 use App\Support\SemiExpendableValueCategory;
+use Filament\Actions\Action;
+use Filament\Actions\ActionGroup;
+use Filament\Actions\BulkAction;
 use Filament\Actions\BulkActionGroup;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
@@ -40,16 +45,50 @@ class ItemsTable
                     '5xl',
                     modelLabel: ItemResource::getModelLabel(),
                 ),
+                ActionGroup::make([
+                    OwwaFormModalDefaults::editActionForResource(ItemResource::class, OwwaFormModalDefaults::WIDTH_COMPACT),
+                    Action::make('archive')
+                        ->label('Archive')
+                        ->icon('heroicon-o-archive-box')
+                        ->color('gray')
+                        ->requiresConfirmation()
+                        ->modalHeading('Archive item')
+                        ->modalDescription('This item will be hidden from active lists but kept for history. Use the Archived tab to view or restore it.')
+                        ->visible(fn (Item $record): bool => $record->archived_at === null)
+                        ->action(fn (Item $record) => $record->update(['archived_at' => now()])),
+                    Action::make('restore')
+                        ->label('Restore')
+                        ->icon('heroicon-o-arrow-uturn-left')
+                        ->visible(fn (Item $record): bool => $record->archived_at !== null)
+                        ->action(fn (Item $record) => $record->update(['archived_at' => null])),
+                ])
+                    ->label('Actions')
+                    ->icon('heroicon-m-ellipsis-vertical')
+                    ->color('gray'),
             ])
             ->recordUrl(null)
             ->recordAction('view')
             ->toolbarActions([
                 BulkActionGroup::make([
-                    \Filament\Actions\BulkAction::make('archive')
+                    BulkAction::make('archive')
                         ->label('Archive selected')
                         ->icon('heroicon-o-archive-box')
                         ->requiresConfirmation()
-                        ->action(fn ($records) => $records->each->update(['archived_at' => now()])),
+                        ->deselectRecordsAfterCompletion()
+                        ->action(fn ($records) => $records->each(function (Item $record): void {
+                            if ($record->archived_at === null) {
+                                $record->update(['archived_at' => now()]);
+                            }
+                        })),
+                    BulkAction::make('restore')
+                        ->label('Restore selected')
+                        ->icon('heroicon-o-arrow-uturn-left')
+                        ->deselectRecordsAfterCompletion()
+                        ->action(fn ($records) => $records->each(function (Item $record): void {
+                            if ($record->archived_at !== null) {
+                                $record->update(['archived_at' => null]);
+                            }
+                        })),
                 ]),
             ]);
 
@@ -68,9 +107,17 @@ class ItemsTable
                 ->weight(\Filament\Support\Enums\FontWeight::Medium)
                 ->wrap()
                 ->grow(),
-            TextColumn::make('item_code')
-                ->label('Stock No.')
-                ->searchable()
+            TextColumn::make('catalog_identifier')
+                ->label(fn (): string => app(CatalogAssetNumberService::class)
+                    ->catalogIdentifierLabel(self::activeCategorySlug()))
+                ->state(fn (Item $record): ?string => $record->catalogAssetIdentifier())
+                ->searchable(query: function ($query, string $search): void {
+                    $query->where(function ($q) use ($search): void {
+                        $q->where('item_code', 'like', "%{$search}%")
+                            ->orWhere('semi_expendable_property_number', 'like', "%{$search}%")
+                            ->orWhere('ppe_property_number', 'like', "%{$search}%");
+                    });
+                })
                 ->placeholder('—')
                 ->grow(false),
             TextColumn::make('unit')
@@ -93,13 +140,6 @@ class ItemsTable
             ->numeric()
             ->sortable()
             ->width('5rem')
-            ->grow(false);
-
-        $columns[] = TextColumn::make('status')
-            ->label('Status')
-            ->state(fn ($record): string => $record->archived_at ? 'Archived' : 'Active')
-            ->badge()
-            ->color(fn (string $state): string => $state === 'Archived' ? 'gray' : 'success')
             ->grow(false);
 
         return $columns;
@@ -127,14 +167,17 @@ class ItemsTable
 
     public static function isActiveSemiExpendableCategory(): bool
     {
+        return self::activeCategorySlug() === 'semi_expendable';
+    }
+
+    public static function activeCategorySlug(): ?string
+    {
         $categoryId = SyncsActiveItemCategory::resolveCategoryIdFromContext();
 
         if ($categoryId <= 0) {
-            return false;
+            return null;
         }
 
-        $category = ItemCategory::query()->find($categoryId);
-
-        return $category?->getTemplateSlug() === 'semi_expendable';
+        return ItemCategory::query()->find($categoryId)?->getTemplateSlug();
     }
 }

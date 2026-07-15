@@ -22,8 +22,14 @@ class SystemAdminOfficeSetupTest extends TestCase
         $source = file_get_contents(app_path('Filament/Resources/Users/Schemas/UserForm.php'));
 
         $this->assertIsString($source);
-        $this->assertStringContainsString("Repeater::make('assignments')", $source);
+        $this->assertStringContainsString("Repeater::make('office_groups')", $source);
         $this->assertStringContainsString('Sub-Office/Department', $source);
+        $this->assertStringContainsString('owwa-uc-office-groups-repeater', $source);
+        $this->assertStringContainsString('Add sub-office/department', $source);
+        $this->assertStringContainsString('->table([', $source);
+        $this->assertStringContainsString('->simple(', $source);
+        $this->assertStringContainsString('deleteAction(', $source);
+        $this->assertStringNotContainsString('owwa-uc-assignments-table-repeater', $source);
     }
 
     public function test_department_resource_uses_sub_office_labels(): void

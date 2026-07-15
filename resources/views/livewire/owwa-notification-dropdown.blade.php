@@ -4,6 +4,7 @@
     $unreadCount = $this->getUnreadNotificationsCount();
     $grouped = $this->getGroupedNotifications();
     $hasNotifications = $this->getVisibleNotifications()->isNotEmpty();
+    $hasMoreNotifications = $this->hasMoreNotifications();
     $pollingInterval = $this->getPollingInterval();
 @endphp
 
@@ -39,15 +40,15 @@
     >
         <div class="owwa-notif-header">
             <h2 class="owwa-notif-title">Notifications</h2>
-            @if ($unreadCount > 0)
-                <button
-                    type="button"
-                    class="owwa-notif-mark-all"
-                    wire:click="markAllNotificationsAsRead"
-                >
-                    Mark all as read
-                </button>
-            @endif
+            <button
+                type="button"
+                class="owwa-notif-mark-all {{ $unreadCount === 0 ? 'owwa-notif-mark-all--disabled' : '' }}"
+                wire:click.stop="markAllNotificationsAsRead"
+                @disabled($unreadCount === 0)
+                aria-disabled="{{ $unreadCount === 0 ? 'true' : 'false' }}"
+            >
+                Read all
+            </button>
         </div>
 
         <div class="owwa-notif-tabs">
@@ -122,5 +123,17 @@
                 @endforeach
             @endif
         </div>
+
+        @if ($hasMoreNotifications)
+            <div class="owwa-notif-load-more-wrap">
+                <button
+                    type="button"
+                    class="owwa-notif-load-more"
+                    wire:click.stop="loadMoreNotifications"
+                >
+                    See previous notifications
+                </button>
+            </div>
+        @endif
     </div>
 </div>

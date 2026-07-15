@@ -25,7 +25,7 @@ class AcquisitionPaperworkActions
             ->tableIcon(null)
             ->extraAttributes(['class' => 'sr-only'])
             ->visible(fn (AcquisitionPaperwork $record): bool => ! $record->isReceived())
-            ->extraModalWindowAttributes(['class' => 'owwa-view-record-modal owwa-record-modal owwa-acquisition-paperwork-modal'])
+            ->extraModalWindowAttributes(['class' => OwwaFormModalDefaults::MODAL_WINDOW_CLASS.' owwa-acquisition-paperwork-modal'])
             ->modalHeading(fn (AcquisitionPaperwork $record): string => AcquisitionPaperworkViewPresenter::editModalHeading($record))
             ->modalSubmitActionLabel('Save draft')
             ->modalSubmitAction(fn (Action $action): Action => $action->visible(
@@ -383,7 +383,7 @@ class AcquisitionPaperworkActions
             ->label($heading)
             ->modalHeading($heading)
             ->modalWidth('5xl')
-            ->extraModalWindowAttributes(['class' => 'owwa-view-record-modal owwa-record-modal'])
+            ->extraModalWindowAttributes(['class' => OwwaFormModalDefaults::MODAL_WINDOW_CLASS])
             ->schema([$section])
             ->modalSubmitAction(false)
             ->modalCancelActionLabel('Close')

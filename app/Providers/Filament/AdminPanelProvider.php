@@ -2,12 +2,16 @@
 
 namespace App\Providers\Filament;
 
+use App\Filament\Pages\Auth\AccountSettings;
 use App\Filament\Pages\Auth\EditProfile;
 use App\Filament\Pages\Auth\Login;
 use App\Filament\Pages\Auth\RequestPasswordReset;
 use App\Filament\Pages\Auth\ResetPassword;
 use App\Filament\Pages\Dashboard;
+use App\Filament\Pages\EmployeeCustody;
 use App\Filament\Pages\InventoryCategoryDashboard;
+use App\Filament\Pages\OfficePropertyRegister;
+use App\Filament\Resources\Distributions\DistributionResource;
 use App\Filament\Resources\IncidentReports\IncidentReportResource;
 use App\Filament\Widgets\ConsumptionSharePieWidget;
 use App\Filament\Widgets\ConsumptionTrendsWidget;
@@ -25,6 +29,8 @@ use App\Http\Middleware\TouchUserSessionActivity;
 use App\Livewire\OwwaNotificationDropdown;
 use App\Models\ItemCategory;
 use App\Support\FilamentSessionAudit;
+use App\Support\InventoryCategoryOptions;
+use Filament\Actions\Action;
 use Filament\Enums\ThemeMode;
 use Filament\Facades\Filament;
 use Filament\Http\Middleware\AuthenticateSession;
@@ -58,6 +64,13 @@ class AdminPanelProvider extends PanelProvider
             ->emailVerification()
             ->passwordReset(requestAction: RequestPasswordReset::class, resetAction: ResetPassword::class)
             ->profile(EditProfile::class, isSimple: false)
+            ->userMenuItems([
+                'profile' => fn (Action $action): Action => $action->label('Profile'),
+                'settings' => fn (): Action => Action::make('settings')
+                    ->label('Settings')
+                    ->icon(Heroicon::OutlinedCog6Tooth)
+                    ->url(fn (): string => AccountSettings::getUrl()),
+            ])
             ->colors([
                 // Filament\Support\Colors\Color::Blue (inlined to avoid IDE false positives).
                 'primary' => [
@@ -92,8 +105,11 @@ class AdminPanelProvider extends PanelProvider
                 return FilamentSessionAudit::idleLogoutMonitorHtml();
             }, scopes: ['authenticated'])
             ->navigationGroups([
-                NavigationGroup::make('Inventory'),
+                NavigationGroup::make('My items'),
+                NavigationGroup::make('Office'),
+                NavigationGroup::make('Regional supply'),
                 NavigationGroup::make('Requisitions'),
+                NavigationGroup::make('Compliance'),
                 NavigationGroup::make('Analytics'),
                 NavigationGroup::make('Setup'),
             ])
@@ -159,11 +175,14 @@ class AdminPanelProvider extends PanelProvider
             ->values()
             ->map(
                 fn (ItemCategory $category): NavigationItem => NavigationItem::make($category->name)
-                    ->group('Inventory')
+                    ->group('Regional supply')
                     ->icon(Heroicon::OutlinedArchiveBox)
                     ->sort(20 + $this->getCategoryNavigationWeight($category->name))
                     ->url(fn (): string => InventoryCategoryDashboard::getUrl(['category' => $category->id]))
-                    ->visible(fn (): bool => Filament::auth()->check() && ! Filament::auth()->user()?->isSystemAdmin() && ! Filament::auth()->user()?->isEmployee())
+                    ->visible(fn (): bool => Filament::auth()->check()
+                        && ! Filament::auth()->user()?->isSystemAdmin()
+                        && ! Filament::auth()->user()?->isEmployee()
+                        && ! Filament::auth()->user()?->isUnitConsolidator())
                     ->isActiveWhen(
                         fn (): bool => request()->routeIs('filament.admin.pages.inventory-category-dashboard')
                         && (int) request()->query('category') === $category->id
@@ -172,7 +191,7 @@ class AdminPanelProvider extends PanelProvider
             ->all();
 
         $incidentNav = NavigationItem::make('Incident reports')
-            ->group('Inventory')
+            ->group('Compliance')
             ->icon(Heroicon::OutlinedExclamationTriangle)
             ->sort(50)
             ->url(fn (): string => IncidentReportResource::getUrl())
@@ -180,9 +199,41 @@ class AdminPanelProvider extends PanelProvider
                 && (Filament::auth()->user()?->isSupplyCustodian() ?? false))
             ->isActiveWhen(fn (): bool => request()->routeIs('filament.admin.resources.incident-reports.*'));
 
+        $defaultConsumablesCategoryId = InventoryCategoryOptions::defaultConsumablesCategoryId();
+
+        $ucDistributionsNav = NavigationItem::make('Distributions')
+            ->group('Office')
+            ->icon(Heroicon::OutlinedGift)
+            ->sort(10)
+            ->url(fn (): string => DistributionResource::getUrl('index', ['category' => $defaultConsumablesCategoryId]))
+            ->visible(fn (): bool => Filament::auth()->check()
+                && (Filament::auth()->user()?->isUnitConsolidator() ?? false))
+            ->isActiveWhen(fn (): bool => request()->routeIs('filament.admin.resources.distributions.*'));
+
+        $ucRegistryNav = NavigationItem::make('Office Property Registry')
+            ->group('Office')
+            ->icon(Heroicon::OutlinedClipboardDocumentList)
+            ->sort(11)
+            ->url(fn (): string => OfficePropertyRegister::getUrl())
+            ->visible(fn (): bool => Filament::auth()->check()
+                && (Filament::auth()->user()?->isUnitConsolidator() ?? false))
+            ->isActiveWhen(fn (): bool => request()->routeIs('filament.admin.pages.office-property-register'));
+
+        $ucEmployeeCustodyNav = NavigationItem::make('Employee Custody')
+            ->group('Office')
+            ->icon(Heroicon::OutlinedUsers)
+            ->sort(12)
+            ->url(fn (): string => EmployeeCustody::getUrl())
+            ->visible(fn (): bool => Filament::auth()->check()
+                && (Filament::auth()->user()?->isUnitConsolidator() ?? false))
+            ->isActiveWhen(fn (): bool => request()->routeIs('filament.admin.pages.employee-custody'));
+
         return [
             ...$items,
             ...$categoryItems,
+            $ucDistributionsNav,
+            $ucRegistryNav,
+            $ucEmployeeCustodyNav,
             $incidentNav,
         ];
     }

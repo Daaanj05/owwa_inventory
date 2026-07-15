@@ -43,25 +43,51 @@ return [
     'semi_cap_threshold' => 50000,
 
     'semi_property_number' => [
-        'pattern' => '{value_category}-{acq_year}-{supply_type_code}-{uacs_prefix}-{custodian_code}-{seq:3}',
+        'pattern' => '{value_category}-{acq_year}-{class_code}-{uacs_code}-{seq:3}-{location}',
+        'provisional_prefix' => 'TEMP',
     ],
 
-    'semi_supply_type_codes' => [
-        'ict' => 'ICT',
+    'ppe_property_number' => [
+        'pattern' => '{acq_year}-{class_code}-{uacs_code}-{seq:3}-{location}',
+    ],
+
+    'catalog_class_codes' => [
+        'information_technology' => 'IT',
+        'furniture_fixtures' => 'FF',
         'office_equipment' => 'OE',
+        'communication_equipment' => 'CE',
+        'appliances' => 'AP',
+        'machinery_equipment' => 'ME',
+        'transportation_equipment' => 'TE',
+        'medical_equipment' => 'MD',
+    ],
+
+    // Legacy key aliases — prefer catalog_class_codes + UacsObjectCode.
+    'semi_supply_type_codes' => [
+        'information_technology' => 'IT',
+        'furniture_fixtures' => 'FF',
+        'office_equipment' => 'OE',
+        'communication_equipment' => 'CE',
+        'appliances' => 'AP',
+        'machinery_equipment' => 'ME',
+        'transportation_equipment' => 'TE',
+        'medical_equipment' => 'MD',
+        // legacy
+        'ict' => 'IT',
         'furnitures_fixtures' => 'FF',
-        'sports_equipment' => 'SE',
-        'medical_equipment' => 'ME',
-        'vehicle_equipment' => 'VE',
+        'sports_equipment' => 'ME',
+        'vehicle_equipment' => 'TE',
     ],
 
     'semi_uacs_prefixes' => [
-        'ict' => '106',
+        'information_technology' => '106',
+        'furniture_fixtures' => '106',
         'office_equipment' => '106',
-        'furnitures_fixtures' => '106',
-        'sports_equipment' => '106',
+        'communication_equipment' => '106',
+        'appliances' => '106',
+        'machinery_equipment' => '106',
+        'transportation_equipment' => '106',
         'medical_equipment' => '106',
-        'vehicle_equipment' => '106',
     ],
 
     /*
@@ -73,12 +99,14 @@ return [
     'semi_min_useful_life_years' => 1,
 
     'semi_useful_life_defaults' => [
-        'ict' => '5 yrs',
+        'information_technology' => '5 yrs',
+        'furniture_fixtures' => '5 yrs',
         'office_equipment' => '5 yrs',
-        'furnitures_fixtures' => '5 yrs',
-        'sports_equipment' => '5 yrs',
+        'communication_equipment' => '5 yrs',
+        'appliances' => '5 yrs',
+        'machinery_equipment' => '5 yrs',
+        'transportation_equipment' => '5 yrs',
         'medical_equipment' => '5 yrs',
-        'vehicle_equipment' => '5 yrs',
     ],
 
     'eul_nearing_days' => (int) env('INVENTORY_EUL_NEARING_DAYS', 90),
@@ -103,23 +131,9 @@ return [
     |--------------------------------------------------------------------------
     | QR public asset lookup
     |--------------------------------------------------------------------------
-    |
-    | When enabled, QR labels encode a public URL (/assets/{propertyNumber})
-    | that opens a read-only asset card in the phone browser.
-    |
     */
 
     'qr_public_lookup' => env('INVENTORY_QR_PUBLIC_LOOKUP', true),
-
-    /*
-    |--------------------------------------------------------------------------
-    | Requisition list refresh when WebSockets are unavailable
-    |--------------------------------------------------------------------------
-    |
-    | When Filament Echo / Reverb is not configured, requisition pages poll on
-    | this interval (e.g. 60s). Set to null or empty to disable polling.
-    |
-    */
 
     'requisition_poll_interval' => env('REQUISITION_POLL_INTERVAL', '60s'),
 

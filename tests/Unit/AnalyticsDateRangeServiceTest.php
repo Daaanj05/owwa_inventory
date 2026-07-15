@@ -60,12 +60,22 @@ class AnalyticsDateRangeServiceTest extends TestCase
     {
         $service = app(AnalyticsDateRangeService::class);
         $resolved = $service->resolveFromWidgetFilters([
-            'analytics_scope' => AnalyticsDateRangeService::SCOPE_LONG_VIEW,
             'date_from' => '2023-01-01',
             'date_to' => '2023-12-31',
         ]);
 
         $this->assertSame('2023-01-01', $resolved['from']->toDateString());
+        $this->assertFalse($resolved['includeYearInLabels']);
+    }
+
+    public function test_resolve_from_widget_filters_sets_year_labels_for_long_ranges(): void
+    {
+        $service = app(AnalyticsDateRangeService::class);
+        $resolved = $service->resolveFromWidgetFilters([
+            'date_from' => '2022-01-01',
+            'date_to' => '2024-06-30',
+        ]);
+
         $this->assertTrue($resolved['includeYearInLabels']);
     }
 

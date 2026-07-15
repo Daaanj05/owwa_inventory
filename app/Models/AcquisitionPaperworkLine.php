@@ -50,6 +50,12 @@ class AcquisitionPaperworkLine extends Model
 
     public function stockNumber(): string
     {
-        return (string) ($this->item?->item_code ?? '');
+        $this->loadMissing('item.category');
+
+        if ($this->item === null) {
+            return '';
+        }
+
+        return (string) (app(\App\Services\CatalogAssetNumberService::class)->catalogIdentifierForItem($this->item) ?? '');
     }
 }

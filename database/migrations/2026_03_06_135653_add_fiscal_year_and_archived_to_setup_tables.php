@@ -14,7 +14,7 @@ return new class extends Migration
     {
         $defaultFiscalYearId = DB::table('fiscal_years')->orderBy('start_date')->value('id');
 
-        Schema::table('offices', function (Blueprint $table) use ($defaultFiscalYearId): void {
+        Schema::table('offices', function (Blueprint $table): void {
             $table->foreignId('fiscal_year_id')->nullable()->after('id')->constrained('fiscal_years')->cascadeOnDelete();
             $table->timestamp('archived_at')->nullable()->after('address');
         });
@@ -22,7 +22,7 @@ return new class extends Migration
             DB::table('offices')->whereNull('fiscal_year_id')->update(['fiscal_year_id' => $defaultFiscalYearId]);
         }
 
-        Schema::table('departments', function (Blueprint $table) use ($defaultFiscalYearId): void {
+        Schema::table('departments', function (Blueprint $table): void {
             $table->foreignId('fiscal_year_id')->nullable()->after('id')->constrained('fiscal_years')->cascadeOnDelete();
             $table->timestamp('archived_at')->nullable()->after('code');
         });
@@ -30,7 +30,7 @@ return new class extends Migration
             DB::table('departments')->whereNull('fiscal_year_id')->update(['fiscal_year_id' => $defaultFiscalYearId]);
         }
 
-        Schema::table('items', function (Blueprint $table) use ($defaultFiscalYearId): void {
+        Schema::table('items', function (Blueprint $table): void {
             $table->foreignId('fiscal_year_id')->nullable()->after('id')->constrained('fiscal_years')->cascadeOnDelete();
             $table->timestamp('archived_at')->nullable()->after('description');
         });

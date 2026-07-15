@@ -6,16 +6,15 @@ use App\Filament\Concerns\SyncsActiveItemCategory;
 use App\Models\AcquisitionPaperwork;
 use App\Models\Item;
 use App\Models\ItemCategory;
-use App\Models\Office;
 use App\Models\ReferenceSeries;
 use App\Services\ReferenceCodeService;
 use App\Support\AcquisitionPaperworkViewPresenter;
-use App\Support\CustodianOfficeScope;
 use App\Support\OwwaReferenceLabels;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Repeater;
+use Filament\Forms\Components\Repeater\TableColumn;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
@@ -24,6 +23,7 @@ use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\View as SchemaView;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
+use Illuminate\Support\HtmlString;
 
 class AcquisitionPaperworkForm
 {
@@ -63,27 +63,32 @@ class AcquisitionPaperworkForm
                             ->label(OwwaReferenceLabels::acquisitionPaperwork())
                             ->disabled()
                             ->visible(fn (string $operation): bool => $operation !== 'create'),
-                        ...self::officeFieldComponents(),
-                        Select::make('item_category_id')
+                        Placeholder::make('item_category_display')
                             ->label('Item category')
-                            ->options(fn (): array => ItemCategory::query()->whereNull('archived_at')->orderBy('name')->pluck('name', 'id')->all())
+                            ->content(function (?AcquisitionPaperwork $record): string {
+                                if (filled($record?->itemCategory?->name)) {
+                                    return (string) $record->itemCategory->name;
+                                }
+
+                                $categoryId = SyncsActiveItemCategory::resolveCategoryIdFromContext();
+
+                                return ItemCategory::query()->find($categoryId)?->name ?? '—';
+                            }),
+                        Hidden::make('item_category_id')
                             ->default(fn (): mixed => SyncsActiveItemCategory::resolveCategoryIdFromContext())
-                            ->required()
-                            ->searchable()
-                            ->disabled(fn (string $operation): bool => $operation === 'edit'),
-                        Select::make('requesting_office_id')
+                            ->dehydrated()
+                            ->required(),
+                        Placeholder::make('office_section_display')
                             ->label('Office/Section')
-                            ->hintIcon(Heroicon::QuestionMarkCircle, 'Regional or satellite office requesting this purchase.')
-                            ->relationship(
-                                'requestingOffice',
-                                'name',
-                                fn ($query) => $query->active()->orderBy('name'),
-                            )
-                            ->required()
-                            ->searchable()
-                            ->preload()
-                            ->default(fn (): ?int => auth()->user()?->office_id)
-                            ->disabled(fn (?AcquisitionPaperwork $record): bool => ! self::isPrEditable($record)),
+                            ->content(fn (): string => app(\App\Support\SupplyOfficeResolver::class)->resolveOfficeName() ?? '—'),
+                        Hidden::make('office_id')
+                            ->default(fn (): ?int => app(\App\Support\SupplyOfficeResolver::class)->resolve())
+                            ->dehydrated()
+                            ->required(),
+                        Hidden::make('requesting_office_id')
+                            ->default(fn (): ?int => app(\App\Support\SupplyOfficeResolver::class)->resolve())
+                            ->dehydrated()
+                            ->required(),
                     ]),
                 Section::make('Purchase request')
                     ->description(fn (string $operation, ?AcquisitionPaperwork $record): ?string => $operation === 'create' || self::isPrEditable($record)
@@ -132,8 +137,7 @@ class AcquisitionPaperworkForm
 
     protected static function showsOfficeAsDisplay(?AcquisitionPaperwork $record): bool
     {
-        return CustodianOfficeScope::hasFixedInventoryOffice()
-            || ($record !== null && ! self::isPrEditable($record));
+        return true;
     }
 
     /**
@@ -141,43 +145,7 @@ class AcquisitionPaperworkForm
      */
     protected static function officeFieldComponents(): array
     {
-        return [
-            Placeholder::make('office_display')
-                ->label('Office')
-                ->hintIcon(Heroicon::QuestionMarkCircle, 'Agency or entity name printed on the purchase request.')
-                ->content(function (?AcquisitionPaperwork $record): string {
-                    if (filled($record?->office?->name)) {
-                        return $record->office->name;
-                    }
-
-                    $officeId = CustodianOfficeScope::inventoryOfficeId();
-
-                    if ($officeId === null) {
-                        return '—';
-                    }
-
-                    return Office::query()->find($officeId)?->name ?? '—';
-                })
-                ->visible(fn (?AcquisitionPaperwork $record): bool => self::showsOfficeAsDisplay($record)),
-            Hidden::make('office_id')
-                ->default(fn (): ?int => CustodianOfficeScope::inventoryOfficeId())
-                ->dehydrated()
-                ->visible(fn (?AcquisitionPaperwork $record): bool => self::showsOfficeAsDisplay($record) && $record === null),
-            Select::make('office_id')
-                ->label('Office')
-                ->hintIcon(Heroicon::QuestionMarkCircle, 'Agency or entity name printed on the purchase request.')
-                ->relationship(
-                    'office',
-                    'name',
-                    fn ($query) => CustodianOfficeScope::officeQuery($query),
-                )
-                ->required()
-                ->searchable()
-                ->preload()
-                ->default(fn (): ?int => CustodianOfficeScope::inventoryOfficeId())
-                ->dehydrated()
-                ->visible(fn (?AcquisitionPaperwork $record): bool => ! self::showsOfficeAsDisplay($record)),
-        ];
+        return [];
     }
 
     protected static function isReceived(?AcquisitionPaperwork $record): bool
@@ -265,12 +233,17 @@ class AcquisitionPaperworkForm
                 ->hintIcon(Heroicon::QuestionMarkCircle, 'Assigned automatically when you complete the PR phase.')
                 ->visible(fn (string $operation): bool => $operation !== 'create')
                 ->columnSpanFull(),
-            DatePicker::make('pr_date')
+            Placeholder::make('pr_date_display')
                 ->label('PR date')
-                ->default(now())
-                ->required()
-                ->disabled(fn (?AcquisitionPaperwork $record): bool => ! self::isPrEditable($record))
+                ->content(function (?AcquisitionPaperwork $record): string {
+                    $date = $record?->pr_date ?? now();
+
+                    return $date->format('M j, Y');
+                })
                 ->columnSpanFull(),
+            Hidden::make('pr_date')
+                ->default(fn (): string => now()->toDateString())
+                ->dehydrated(),
             Textarea::make('purpose')
                 ->label('Purpose')
                 ->required()
@@ -279,16 +252,14 @@ class AcquisitionPaperworkForm
                 ->columnSpanFull(),
             TextInput::make('requested_by_name')
                 ->label('Requested by (printed name)')
+                ->datalist(fn (): array => \App\Models\ProcurementSignatoryName::suggestionsForRole(\App\Models\ProcurementSignatoryName::ROLE_REQUESTED))
+                ->maxLength(255)
                 ->disabled(fn (?AcquisitionPaperwork $record): bool => ! self::isPrEditable($record)),
             TextInput::make('approved_by_name')
                 ->label('Approved by (printed name)')
+                ->datalist(fn (): array => \App\Models\ProcurementSignatoryName::suggestionsForRole(\App\Models\ProcurementSignatoryName::ROLE_APPROVED))
+                ->maxLength(255)
                 ->disabled(fn (?AcquisitionPaperwork $record): bool => ! self::isPrEditable($record)),
-            Textarea::make('remarks')
-                ->label('Remarks')
-                ->hintIcon(Heroicon::QuestionMarkCircle, 'Internal note only — not printed on the purchase request.')
-                ->rows(2)
-                ->disabled(fn (?AcquisitionPaperwork $record): bool => ! self::isPrEditable($record))
-                ->columnSpanFull(),
         ];
     }
 
@@ -296,22 +267,32 @@ class AcquisitionPaperworkForm
     {
         return Repeater::make('lines')
             ->relationship()
-            ->label('')
-            ->hintIcon(Heroicon::QuestionMarkCircle, 'Stock No. comes from the Items catalog (Appendix 58 §5; PR/PO/IAR: as provided by Supply/Property Division). Register the item under Items first. Semi-expendable Property No. is assigned on custody receipt or issuance — not on PR lines.')
+            ->hiddenLabel()
+            ->extraAttributes([
+                'class' => 'owwa-acquisition-lines-repeater fi-fixed-positioning-context',
+            ])
+            ->hintIcon(Heroicon::QuestionMarkCircle, 'Pick the catalog item by name. Stock No. / Inventory item no. / Property No. fills from the Items register and is used on PR/PO/IAR Column A.')
             ->addable(fn (?AcquisitionPaperwork $record): bool => self::isPrEditable($record))
             ->deletable(fn (?AcquisitionPaperwork $record): bool => self::isPrEditable($record))
+            ->table(fn (Get $get): array => [
+                TableColumn::make('Item')
+                    ->markAsRequired()
+                    ->width('18%'),
+                TableColumn::make(self::lineIdentifierColumnLabel((int) $get('item_category_id')))
+                    ->wrapHeader()
+                    ->width('14%'),
+                TableColumn::make('Description')->width('16%'),
+                TableColumn::make('Unit')->width('9%'),
+                TableColumn::make('Qty')->markAsRequired()->width('7%'),
+                TableColumn::make('Unit cost')->width('14%'),
+                TableColumn::make('Total')->width('12%'),
+            ])
+            ->compact()
             ->schema([
                 Select::make('item_id')
-                    ->label('Item (Stock No.)')
-                    ->helperText(function (Get $get): string {
-                        $base = 'Stock No. from Items catalog — not assigned on this PR line.';
-
-                        if (self::isSemiExpendableCategoryId((int) $get('../../item_category_id'))) {
-                            return $base.' Semi-expendable Property No. is assigned on custody receipt.';
-                        }
-
-                        return $base;
-                    })
+                    ->label('Item')
+                    ->hiddenLabel()
+                    ->searchable()
                     ->options(function (Get $get) use ($scopeActive): array {
                         $query = Item::query();
                         $scopeActive($query);
@@ -321,17 +302,35 @@ class AcquisitionPaperworkForm
                             $query->where('item_category_id', $categoryId);
                         }
 
-                        return $query->orderBy('item_code')->get()
-                            ->mapWithKeys(fn (Item $item): array => [
-                                $item->id => trim($item->item_code.' — '.$item->name),
-                            ])
+                        return $query->orderBy('name')->limit(100)->pluck('name', 'id')->all();
+                    })
+                    ->getSearchResultsUsing(function (string $search, Get $get) use ($scopeActive): array {
+                        $query = Item::query()->with(['category', 'uacsObjectCode']);
+                        $scopeActive($query);
+                        $categoryId = $get('../../item_category_id');
+
+                        if (filled($categoryId)) {
+                            $query->where('item_category_id', $categoryId);
+                        }
+
+                        $term = '%'.str_replace(['%', '_'], ['\\%', '\\_'], $search).'%';
+
+                        return $query
+                            ->where(function ($q) use ($term): void {
+                                $q->where('name', 'like', $term)
+                                    ->orWhere('item_code', 'like', $term)
+                                    ->orWhere('semi_expendable_property_number', 'like', $term)
+                                    ->orWhere('ppe_property_number', 'like', $term);
+                            })
+                            ->orderBy('name')
+                            ->limit(50)
+                            ->pluck('name', 'id')
                             ->all();
                     })
+                    ->getOptionLabelUsing(fn ($value): ?string => Item::query()->whereKey($value)->value('name'))
                     ->required()
-                    ->searchable()
                     ->live()
                     ->disabled(fn (Get $get): bool => ! self::isPrEditableFromGet($get))
-                    ->columnSpanFull()
                     ->afterStateUpdated(function ($state, callable $set): void {
                         if (blank($state)) {
                             $set('description', null);
@@ -348,40 +347,73 @@ class AcquisitionPaperworkForm
                         $set('description', $item->name);
                         $set('unit', $item->unit);
                     }),
-                Placeholder::make('stock_no_display')
-                    ->label('Stock No.')
-                    ->content(function (Get $get): string {
+                Placeholder::make('catalog_identifier_preview')
+                    ->hiddenLabel()
+                    ->content(function (Get $get): HtmlString {
                         $itemId = $get('item_id');
                         if (blank($itemId)) {
-                            return '—';
+                            return new HtmlString('<span class="owwa-cell-muted">—</span>');
                         }
 
-                        return (string) (Item::query()->find($itemId)?->item_code ?? '—');
-                    })
-                    ->visible(fn (Get $get): bool => filled($get('item_id'))),
-                TextInput::make('description')
+                        $item = Item::query()->with(['category', 'uacsObjectCode'])->find($itemId);
+                        if ($item === null) {
+                            return new HtmlString('<span class="owwa-cell-muted">—</span>');
+                        }
+
+                        $identifier = app(\App\Services\CatalogAssetNumberService::class)
+                            ->catalogIdentifierForItem($item);
+
+                        if (blank($identifier)) {
+                            return new HtmlString('<span class="owwa-cell-muted">—</span>');
+                        }
+
+                        return new HtmlString(
+                            '<span style="display:block;word-break:break-all;font-size:0.8125rem;line-height:1.25;">'
+                            .e((string) $identifier)
+                            .'</span>'
+                        );
+                    }),
+                Textarea::make('description')
                     ->label('Description')
+                    ->hiddenLabel()
+                    ->rows(1)
+                    ->autosize()
+                    ->extraInputAttributes(['class' => 'owwa-acquisition-line-desc'])
                     ->disabled(fn (Get $get): bool => ! self::isPrEditableFromGet($get)),
                 TextInput::make('unit')
                     ->label('Unit')
-                    ->disabled(fn (Get $get): bool => ! self::isPrEditableFromGet($get)),
+                    ->hiddenLabel()
+                    ->disabled()
+                    ->dehydrated()
+                    ->extraInputAttributes(['class' => 'owwa-acquisition-line-unit']),
                 TextInput::make('quantity')
                     ->label('Quantity')
+                    ->hiddenLabel()
                     ->numeric()
                     ->minValue(1)
                     ->default(1)
                     ->required()
                     ->live(onBlur: true)
+                    ->extraInputAttributes([
+                        'class' => 'owwa-acquisition-line-qty',
+                        'inputmode' => 'numeric',
+                    ])
                     ->disabled(fn (Get $get): bool => ! self::isPrEditableFromGet($get)),
                 TextInput::make('unit_cost')
                     ->label('Unit cost')
+                    ->hiddenLabel()
                     ->numeric()
                     ->prefix('₱')
                     ->required(fn (Get $get): bool => self::isPrEditableFromGet($get) || self::canEditLineUnitCostFromGet($get))
                     ->live(onBlur: true)
+                    ->extraInputAttributes([
+                        'class' => 'owwa-acquisition-line-unit-cost',
+                        'inputmode' => 'decimal',
+                    ])
                     ->disabled(fn (Get $get): bool => ! self::canEditLineUnitCostFromGet($get)),
                 Placeholder::make('line_total_preview')
-                    ->label('Line total')
+                    ->hiddenLabel()
+                    ->extraAttributes(['class' => 'owwa-acquisition-line-total'])
                     ->content(function (Get $get): string {
                         $quantity = (int) ($get('quantity') ?? 0);
                         $unitCost = $get('unit_cost');
@@ -392,15 +424,21 @@ class AcquisitionPaperworkForm
 
                         return '₱'.number_format((float) $unitCost * $quantity, 2);
                     }),
-                TextInput::make('line_remarks')
-                    ->label('Remarks')
-                    ->disabled(fn (Get $get): bool => ! self::isPrEditableFromGet($get))
-                    ->columnSpanFull(),
             ])
-            ->columns(2)
             ->defaultItems(1)
             ->minItems(1)
             ->addActionLabel('Add line');
+    }
+
+    protected static function lineIdentifierColumnLabel(?int $categoryId): string
+    {
+        if ($categoryId === null || $categoryId <= 0) {
+            return 'Stock No. / Property No.';
+        }
+
+        $slug = ItemCategory::query()->find($categoryId)?->getTemplateSlug();
+
+        return app(\App\Services\CatalogAssetNumberService::class)->catalogIdentifierLabel($slug);
     }
 
     /**

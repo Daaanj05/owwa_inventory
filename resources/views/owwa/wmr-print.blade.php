@@ -30,10 +30,6 @@
             <dd>{{ $disposal->office?->name ?? '—' }}</dd>
         </div>
         <div>
-            <dt>Fund Cluster</dt>
-            <dd>{{ $disposal->office?->fund_cluster ?? '—' }}</dd>
-        </div>
-        <div>
             <dt>Place of Storage</dt>
             <dd>{{ $disposal->office?->name ?? '—' }}</dd>
         </div>

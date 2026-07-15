@@ -70,7 +70,9 @@ class RequisitionIssuanceFormSchema
                     'quantity_requested' => (int) $line->quantity,
                     'quantity_issued' => (int) ($line->quantity_issued ?? 0),
                     'quantity_remaining' => $remaining,
+                    'stock_at_request' => $line->stock_at_request,
                     'stock_available' => $stock,
+                    'is_backordered' => $line->isBackordered(),
                     'quantity_to_issue' => min($remaining, $stock),
                     'issue_remarks' => $line->issue_remarks ?? '',
                 ];
@@ -120,6 +122,8 @@ class RequisitionIssuanceFormSchema
                     Hidden::make('quantity_requested'),
                     Hidden::make('quantity_remaining'),
                     Hidden::make('stock_available'),
+                    Hidden::make('stock_at_request'),
+                    Hidden::make('is_backordered'),
                     Placeholder::make('category_label_display')
                         ->label('Category')
                         ->content(fn (Get $get): string => (string) ($get('category_label') ?? '')),
@@ -146,6 +150,16 @@ class RequisitionIssuanceFormSchema
                     Placeholder::make('stock_available_display')
                         ->label('Stock available')
                         ->content(fn (Get $get): string => (string) ((int) ($get('stock_available') ?? 0))),
+                    Placeholder::make('fulfillment_state_display')
+                        ->label('Line status')
+                        ->content(function (Get $get): string {
+                            if ((bool) ($get('is_backordered') ?? false) && (int) ($get('stock_available') ?? 0) === 0) {
+                                return 'Backordered';
+                            }
+
+                            return 'In stock';
+                        })
+                        ->visible(fn (Get $get): bool => (bool) ($get('is_backordered') ?? false)),
                     TextInput::make('quantity_to_issue')
                         ->label('Qty to issue')
                         ->numeric()
@@ -172,6 +186,10 @@ class RequisitionIssuanceFormSchema
                                 if ($qty > $stock) {
                                     $fail("Quantity to issue cannot exceed available stock ({$stock}).");
                                 }
+
+                                if ($qty === 0 && (int) ($get('stock_available') ?? 0) === 0 && blank($get('../../issue_remarks') ?? $get('issue_remarks'))) {
+                                    $fail('Add issue remarks when recording a backorder with zero stock.');
+                                }
                             },
                         ])
                         ->required()
@@ -179,6 +197,12 @@ class RequisitionIssuanceFormSchema
                     Textarea::make('issue_remarks')
                         ->label('Issue remarks')
                         ->rows(2)
+                        ->required(fn (Get $get): bool => (int) ($get('quantity_to_issue') ?? 0) === 0
+                            && (int) ($get('stock_available') ?? 0) === 0
+                            && (bool) ($get('is_backordered') ?? false))
+                        ->helperText(fn (Get $get): ?string => (bool) ($get('is_backordered') ?? false) && (int) ($get('stock_available') ?? 0) === 0
+                            ? 'Required when qty to issue is 0 and stock is unavailable.'
+                            : null)
                         ->columnSpanFull(),
                 ])
                 ->default(self::defaultLines($record, $remainderOnly))

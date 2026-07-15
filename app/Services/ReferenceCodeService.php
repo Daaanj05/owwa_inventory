@@ -18,6 +18,11 @@ class ReferenceCodeService
         return $this->nextCode(ReferenceSeries::typeForIssuance());
     }
 
+    public function forIssuanceBatch(string $categorySlug): string
+    {
+        return $this->nextCode(ReferenceSeries::typeForIssuanceBatch($categorySlug));
+    }
+
     public function forTransfer(): string
     {
         return $this->nextCode(ReferenceSeries::typeForTransfer());
@@ -28,9 +33,24 @@ class ReferenceCodeService
         return $this->nextCode(ReferenceSeries::typeForDisposal());
     }
 
+    public function forDisposalBatch(string $categorySlug): string
+    {
+        return $this->nextCode(ReferenceSeries::typeForDisposalBatch($categorySlug));
+    }
+
     public function forRequisition(): string
     {
         return $this->nextCode(ReferenceSeries::typeForRequisition());
+    }
+
+    public function forEmployeeRequisitionTransaction(): string
+    {
+        return $this->nextCode(ReferenceSeries::typeForEmployeeRequisitionTransaction());
+    }
+
+    public function forPropertyActionRequest(): string
+    {
+        return $this->nextCode(ReferenceSeries::typeForPropertyActionRequest());
     }
 
     public function forProcurementPr(): string
@@ -196,15 +216,22 @@ class ReferenceCodeService
         }
 
         $normalized = strtoupper(trim($code));
-        if (preg_match('/^\d{4}-\d{2}-\d{4}$/', $normalized) === 1) {
-            return $normalized;
+        if (preg_match('/^\d{4}-\d{2}-(\d{4})$/', $normalized, $matches) === 1) {
+            return now()->format('Y').'-'.now()->format('m').'-'.$matches[1];
         }
 
         $typesRequiringControlFormat = [
             ReferenceSeries::TYPE_REQUISITION,
+            ReferenceSeries::TYPE_EMPLOYEE_REQUISITION_TRANSACTION,
+            ReferenceSeries::TYPE_PROPERTY_ACTION_REQUEST,
             ReferenceSeries::TYPE_ISSUANCE,
+            ReferenceSeries::TYPE_ISSUANCE_CONSUMABLES,
+            ReferenceSeries::TYPE_ISSUANCE_SEMI,
+            ReferenceSeries::TYPE_ISSUANCE_PPE,
             ReferenceSeries::TYPE_TRANSFER,
             ReferenceSeries::TYPE_DISPOSAL,
+            ReferenceSeries::TYPE_DISPOSAL_CONSUMABLES,
+            ReferenceSeries::TYPE_DISPOSAL_PROPERTY,
             ReferenceSeries::TYPE_ACQUISITION,
         ];
 
@@ -213,7 +240,7 @@ class ReferenceCodeService
         }
 
         $year = now()->format('Y');
-        $middle = $resetPeriod === ReferenceSeries::RESET_MONTHLY ? now()->format('m') : '01';
+        $middle = now()->format('m');
         $serial = str_pad((string) $sequence, 4, '0', STR_PAD_LEFT);
 
         return "{$year}-{$middle}-{$serial}";

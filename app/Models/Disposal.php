@@ -13,7 +13,7 @@ class Disposal extends Model
     use HasFactory, LogsUserActivity, SoftDeletes;
 
     protected $fillable = [
-        'reference_code', 'item_id', 'inventory_unit_id', 'office_id', 'department_id', 'place_of_storage', 'quantity',
+        'disposal_batch_id', 'reference_code', 'item_id', 'inventory_unit_id', 'office_id', 'department_id', 'place_of_storage', 'quantity',
         'disposal_date', 'reason', 'disposal_type', 'disposal_mode', 'wmr_inspection_item_no',
         'remarks', 'property_number', 'acquisition_cost', 'circumstances', 'par_issuance_id',
         'police_notified', 'police_station', 'police_notified_date', 'property_status',
@@ -36,6 +36,27 @@ class Disposal extends Model
             'sale_amount' => 'decimal:2',
             'acquisition_cost' => 'decimal:2',
         ];
+    }
+
+    public function controlNumber(): ?string
+    {
+        if ($this->relationLoaded('batch') && filled($this->batch?->reference_code)) {
+            return (string) $this->batch->reference_code;
+        }
+
+        if ($this->disposal_batch_id !== null && ! $this->relationLoaded('batch')) {
+            $this->loadMissing('batch');
+            if (filled($this->batch?->reference_code)) {
+                return (string) $this->batch->reference_code;
+            }
+        }
+
+        return filled($this->reference_code) ? (string) $this->reference_code : null;
+    }
+
+    public function batch(): BelongsTo
+    {
+        return $this->belongsTo(DisposalBatch::class, 'disposal_batch_id');
     }
 
     public function inventoryUnit(): BelongsTo

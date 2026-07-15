@@ -44,7 +44,11 @@ class DemoTransactionSeeder extends Seeder
         ];
 
         $itemMap = Item::query()
-            ->whereIn('item_code', DemoStockLedgerCatalog::allCoreItemCodes())
+            ->whereIn('item_code', array_merge(
+                DemoStockLedgerCatalog::allCoreItemCodes(),
+                DemoStockLedgerCatalog::variantConsumableCodes(),
+                DemoStockLedgerCatalog::variantPpeCodes(),
+            ))
             ->get()
             ->keyBy('item_code');
 
@@ -86,6 +90,57 @@ class DemoTransactionSeeder extends Seeder
             $uc,
             $demoReqSeq,
         );
+
+        $variantIssData = [];
+        foreach (DemoStockLedgerCatalog::variantIssuanceBatchRows() as $row) {
+            $variantIssData[] = [
+                'item' => $row['item'],
+                'qty' => $row['qty'],
+                'date' => $row['date'],
+                'dept' => $departments[$row['dept_code']],
+            ];
+        }
+
+        $workflow->seedIssuanceBatchesFromGroups(
+            $variantIssData,
+            $itemMap->all(),
+            $regional,
+            $joe1,
+            $sc,
+            $uc,
+            $demoReqSeq,
+            'REQ-VAR-',
+        );
+
+        $welfare = Department::query()
+            ->where('office_id', $satellite->id)
+            ->where('code', 'WSU')
+            ->first();
+
+        if ($welfare) {
+            $satelliteIssData = [];
+            foreach (DemoStockLedgerCatalog::satelliteVariantIssuanceBatchRows() as $row) {
+                $satelliteIssData[] = [
+                    'item' => $row['item'],
+                    'qty' => $row['qty'],
+                    'date' => $row['date'],
+                    'dept' => $welfare,
+                ];
+            }
+
+            $ucSatellite = User::query()->where('email', 'consolidator2@owwa.gov.ph')->first() ?? $uc;
+
+            $workflow->seedIssuanceBatchesFromGroups(
+                $satelliteIssData,
+                $itemMap->all(),
+                $satellite,
+                $ucSatellite,
+                $sc,
+                $uc,
+                $demoReqSeq,
+                'REQ-SAT-',
+            );
+        }
 
         $trSeq = 1;
 
@@ -239,7 +294,7 @@ class DemoTransactionSeeder extends Seeder
         $req1->update(['compiled_into_requisition_id' => $compiledReq->id]);
         $req2->update(['compiled_into_requisition_id' => $compiledReq->id]);
 
-        Requisition::updateOrCreate(
+        $req4 = Requisition::updateOrCreate(
             ['reference_code' => 'REQ-2026-0004'],
             [
                 'office_id' => $regional->id,
@@ -250,7 +305,6 @@ class DemoTransactionSeeder extends Seeder
             ],
         );
 
-        $req4 = Requisition::query()->where('reference_code', 'REQ-2026-0004')->firstOrFail();
         RequisitionItem::updateOrCreate(
             ['requisition_id' => $req4->id, 'item_id' => $itemMap['CON-003']->id],
             ['quantity' => 4],

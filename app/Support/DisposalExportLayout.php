@@ -24,7 +24,7 @@ class DisposalExportLayout
         $values = [];
         OwwaCellMapping::applyHeader($values, (array) ($wmrMap['header'] ?? []), [
             'entity_name' => $office?->name ?? '',
-            'fund_cluster' => $office?->fund_cluster ?? $office?->name ?? '',
+            'fund_cluster' => '',
             'place_of_storage' => $placeOfStorage,
             'date' => $disposal->disposal_date?->format('Y-m-d') ?? '',
         ]);
@@ -62,7 +62,7 @@ class DisposalExportLayout
         $values = [];
         OwwaCellMapping::applyHeader($values, (array) ($map['header'] ?? []), [
             'entity_name' => $office?->name ?? '',
-            'fund_cluster' => $office?->fund_cluster ?? '',
+            'fund_cluster' => '',
             'accountable_officer' => $disposal->custodian_printed_name ?? '',
             'accountable_designation' => $disposal->accountable_officer_designation ?? '',
             'accountable_station' => $disposal->accountable_officer_station ?? $office?->name ?? '',
@@ -101,7 +101,7 @@ class DisposalExportLayout
         $values = [];
         OwwaCellMapping::applyHeader($values, (array) ($map['header'] ?? []), [
             'entity_name' => $office?->name ?? '',
-            'fund_cluster' => $office?->fund_cluster ?? '',
+            'fund_cluster' => '',
             'department_office' => $department?->name ?? $office?->name ?? '',
             'rlsddp_no' => $disposal->reference_code ?? '',
             'accountable_officer' => $disposal->custodian_printed_name ?? '',

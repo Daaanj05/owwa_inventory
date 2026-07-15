@@ -2,9 +2,7 @@
 
 namespace App\Services;
 
-use App\Models\Issuance;
 use Carbon\Carbon;
-use Illuminate\Support\Facades\DB;
 
 /**
  * Builds context payload for RAG (Retrieval-Augmented Generation).
@@ -63,7 +61,7 @@ class RagContextService
                 'to' => $to->toDateString(),
                 'months' => $months,
                 'years' => $years,
-                'label' => $years >= 1 ? ($years . ' years') : ($months . ' months'),
+                'label' => $years >= 1 ? ($years.' years') : ($months.' months'),
             ],
             'summary' => [
                 'total_consumption_units' => $consumptionSummary['total'],

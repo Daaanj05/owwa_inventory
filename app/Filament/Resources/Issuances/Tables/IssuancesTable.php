@@ -15,6 +15,7 @@ use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\RestoreBulkAction;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 
 class IssuancesTable
 {
@@ -23,20 +24,35 @@ class IssuancesTable
         $table = $table
             ->deselectAllRecordsWhenFiltered(false)
             ->columns([
-                TextColumn::make('reference_code')
+                TextColumn::make('batch.reference_code')
                     ->label(fn (): string => OwwaReferenceLabels::issuanceControl())
-                    ->searchable()
-                    ->sortable()
+                    ->state(fn (Issuance $record): ?string => $record->controlNumber())
+                    ->searchable(query: function (Builder $query, string $search): Builder {
+                        return $query->where(function (Builder $inner) use ($search): void {
+                            $inner->where('reference_code', 'like', "%{$search}%")
+                                ->orWhereHas('batch', fn (Builder $batchQuery): Builder => $batchQuery->where('reference_code', 'like', "%{$search}%"));
+                        });
+                    })
+                    ->sortable(query: function (Builder $query, string $direction): Builder {
+                        return $query->leftJoin('issuance_batches', 'issuances.issuance_batch_id', '=', 'issuance_batches.id')
+                            ->orderByRaw('COALESCE(issuance_batches.reference_code, issuances.reference_code) '.$direction)
+                            ->select('issuances.*');
+                    })
                     ->weight(\Filament\Support\Enums\FontWeight::Medium)
-                    ->description(fn (Issuance $record): ?string => str_starts_with(strtoupper((string) $record->reference_code), 'RIS-')
+                    ->description(fn (Issuance $record): ?string => str_starts_with(strtoupper((string) $record->controlNumber()), 'RIS-')
                         ? 'Legacy code — use issuance series (YYYY-MM-####), not RIS prefix'
                         : null)
-                    ->color(fn (Issuance $record): ?string => str_starts_with(strtoupper((string) $record->reference_code), 'RIS-')
+                    ->color(fn (Issuance $record): ?string => str_starts_with(strtoupper((string) $record->controlNumber()), 'RIS-')
                         ? 'warning'
                         : null),
                 TextColumn::make('requisition.reference_code')
                     ->label(OwwaReferenceLabels::RIS)
                     ->placeholder('—')
+                    ->searchable()
+                    ->sortable()
+                    ->toggleable(),
+                TextColumn::make('item.item_code')
+                    ->label(OwwaReferenceLabels::STOCK_NO)
                     ->searchable()
                     ->sortable()
                     ->toggleable(),

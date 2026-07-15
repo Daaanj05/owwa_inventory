@@ -17,6 +17,10 @@ class OwwaNotificationDropdown extends BaseDatabaseNotifications
 
     public string $tab = 'all';
 
+    public int $notificationLimit = 15;
+
+    public const NOTIFICATION_PAGE_SIZE = 15;
+
     public function getPollingInterval(): ?string
     {
         return Filament::getDatabaseNotificationsPollingInterval();
@@ -25,6 +29,28 @@ class OwwaNotificationDropdown extends BaseDatabaseNotifications
     public function setTab(string $tab): void
     {
         $this->tab = in_array($tab, ['all', 'unread'], true) ? $tab : 'all';
+        $this->notificationLimit = self::NOTIFICATION_PAGE_SIZE;
+    }
+
+    public function loadMoreNotifications(): void
+    {
+        $this->notificationLimit += self::NOTIFICATION_PAGE_SIZE;
+    }
+
+    public function hasMoreNotifications(): bool
+    {
+        return $this->getVisibleNotifications()->count() < $this->getTotalNotificationsCount();
+    }
+
+    public function getTotalNotificationsCount(): int
+    {
+        $query = $this->getNotificationsQuery();
+
+        if ($this->tab === 'unread') {
+            $query->unread();
+        }
+
+        return (int) $query->count();
     }
 
     public function openNotification(string $id): void
@@ -59,7 +85,7 @@ class OwwaNotificationDropdown extends BaseDatabaseNotifications
         }
 
         /** @var EloquentCollection<int, DatabaseNotification> $notifications */
-        $notifications = $query->limit(50)->get();
+        $notifications = $query->limit($this->notificationLimit)->get();
 
         return $notifications;
     }
@@ -107,6 +133,17 @@ class OwwaNotificationDropdown extends BaseDatabaseNotifications
 
     #[On('databaseNotificationsSent')]
     public function refresh(): void {}
+
+    public function markAllNotificationsAsRead(): void
+    {
+        $user = Filament::auth()->user();
+
+        if ($user === null) {
+            return;
+        }
+
+        $user->unreadNotifications->markAsRead();
+    }
 
     public function render(): View
     {

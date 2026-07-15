@@ -5,7 +5,8 @@
 
 <x-filament-panels::page>
     <div class="owwa-inventory-layout">
-        <div class="owwa-kpi-grid owwa-kpi-grid--4">
+        @if ($this->shouldShowStockSummary())
+            <div class="owwa-kpi-grid owwa-kpi-grid--4">
             <div class="owwa-kpi-card owwa-kpi-card-total">
                 <span class="owwa-kpi-tooltip">Number of listed items in this category.</span>
                 <div class="owwa-kpi-card-inner">
@@ -35,6 +36,7 @@
                 </div>
             </div>
         </div>
+        @endif
 
         <div class="owwa-data-panel-header">
             <h2 class="owwa-data-panel-title">Select a task</h2>
@@ -61,7 +63,7 @@
             </div>
         </div>
 
-        @if ($summary['lowCount'] > 0)
+        @if ($this->shouldShowStockSummary() && $summary['lowCount'] > 0)
             <div class="owwa-data-panel-alert owwa-data-panel-alert-full">
                 <svg class="owwa-alert-icon" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126z" />

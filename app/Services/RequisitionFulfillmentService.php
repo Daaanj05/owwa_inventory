@@ -3,10 +3,12 @@
 namespace App\Services;
 
 use App\Models\Issuance;
+use App\Models\IssuanceBatch;
 use App\Models\Requisition;
 use App\Models\RequisitionItem;
 use App\Models\User;
 use App\Support\SemiExpendableUsefulLife;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 
@@ -39,7 +41,7 @@ class RequisitionFulfillmentService
     /**
      * @param  array<int, array<string, mixed>>  $rows
      * @param  array<string, mixed>  $signatories
-     * @return array{created: int, categories: array<string, int>}
+     * @return array{created: int, acknowledged: int, categories: array<string, int>}
      */
     public function issueLines(
         Requisition $requisition,
@@ -53,16 +55,20 @@ class RequisitionFulfillmentService
         }
 
         $created = 0;
+        $acknowledged = 0;
 
         /** @var array<string, int> $categoryCounts */
         $categoryCounts = [];
 
-        DB::transaction(function () use ($requisition, $custodian, $rows, $issuanceDate, $signatories, &$created, &$categoryCounts): void {
+        DB::transaction(function () use ($requisition, $custodian, $rows, $issuanceDate, $signatories, &$created, &$acknowledged, &$categoryCounts): void {
+            /** @var Collection<int, array{line: RequisitionItem, qty: int, remarks: ?string}> $issueQueue */
+            $issueQueue = collect();
+
             foreach ($rows as $row) {
                 $lineId = (int) ($row['requisition_item_id'] ?? 0);
                 $qtyToIssue = (int) ($row['quantity_to_issue'] ?? 0);
 
-                if ($lineId <= 0 || $qtyToIssue <= 0) {
+                if ($lineId <= 0) {
                     continue;
                 }
 
@@ -74,6 +80,24 @@ class RequisitionFulfillmentService
                     ->first();
 
                 if (! $line) {
+                    continue;
+                }
+
+                $stock = max(0, $this->stockService->getStock((int) $line->item_id, (int) $requisition->office_id));
+
+                if ($qtyToIssue <= 0) {
+                    if (blank($row['issue_remarks'] ?? null)) {
+                        continue;
+                    }
+
+                    $line->update([
+                        'quantity_issued' => (int) ($line->quantity_issued ?? 0),
+                        'stock_available' => $stock,
+                        'issue_remarks' => (string) $row['issue_remarks'],
+                    ]);
+
+                    $acknowledged++;
+
                     continue;
                 }
 
@@ -92,48 +116,85 @@ class RequisitionFulfillmentService
                     );
                 }
 
-                $stock = max(0, $this->stockService->getStock((int) $line->item_id, (int) $requisition->office_id));
                 $qtyToIssue = min($qtyToIssue, $stock);
 
                 if ($qtyToIssue <= 0) {
                     continue;
                 }
 
-                $issuancePayload = [
-                    'requisition_id' => $requisition->id,
-                    'office_id' => $requisition->office_id,
-                    'department_id' => $requisition->department_id,
-                    'item_id' => $line->item_id,
-                    'quantity' => $qtyToIssue,
-                    'issuance_date' => $issuanceDate,
-                    'issued_to' => $requisition->requested_by,
-                    'issued_by' => $custodian->id,
-                ];
-
-                if ($line->item?->category?->getTemplateSlug() === 'semi_expendable') {
-                    $issuancePayload['estimated_useful_life'] = SemiExpendableUsefulLife::resolveForItem($line->item);
-                }
-
-                foreach (['custodian_printed_name', 'custodian_designation', 'issued_to_designation', 'accounting_staff_printed_name'] as $signatoryField) {
-                    if (filled($signatories[$signatoryField] ?? null)) {
-                        $issuancePayload[$signatoryField] = (string) $signatories[$signatoryField];
-                    }
-                }
-
-                Issuance::create($issuancePayload);
-
-                $line->update([
-                    'quantity_issued' => (int) ($line->quantity_issued ?? 0) + $qtyToIssue,
-                    'stock_available' => $stock,
-                    'issue_remarks' => filled($row['issue_remarks'] ?? null)
-                        ? (string) $row['issue_remarks']
-                        : $line->issue_remarks,
+                $issueQueue->push([
+                    'line' => $line,
+                    'qty' => $qtyToIssue,
+                    'remarks' => filled($row['issue_remarks'] ?? null) ? (string) $row['issue_remarks'] : null,
                 ]);
-
-                $categoryName = $line->item?->category?->name ?? 'Other';
-                $categoryCounts[$categoryName] = ($categoryCounts[$categoryName] ?? 0) + 1;
-                $created++;
             }
+
+            $issueQueue
+                ->groupBy(fn (array $entry): string => $entry['line']->item?->category?->getTemplateSlug() ?? 'consumables')
+                ->each(function (Collection $group, string $categorySlug) use ($requisition, $custodian, $issuanceDate, $signatories, &$created, &$categoryCounts): void {
+                    if ($group->isEmpty()) {
+                        return;
+                    }
+
+                    $batchPayload = [
+                        'category_slug' => $categorySlug,
+                        'requisition_id' => $requisition->id,
+                        'office_id' => $requisition->office_id,
+                        'department_id' => $requisition->department_id,
+                        'issuance_date' => $issuanceDate,
+                        'issued_to' => $requisition->requested_by,
+                        'issued_by' => $custodian->id,
+                    ];
+
+                    foreach (['custodian_printed_name', 'custodian_designation', 'issued_to_designation', 'accounting_staff_printed_name', 'received_from_name'] as $signatoryField) {
+                        if (filled($signatories[$signatoryField] ?? null)) {
+                            $batchPayload[$signatoryField] = (string) $signatories[$signatoryField];
+                        }
+                    }
+
+                    $batch = IssuanceBatch::create($batchPayload);
+
+                    foreach ($group as $entry) {
+                        /** @var RequisitionItem $line */
+                        $line = $entry['line'];
+                        $qtyToIssue = $entry['qty'];
+                        $stock = max(0, $this->stockService->getStock((int) $line->item_id, (int) $requisition->office_id));
+
+                        $issuancePayload = [
+                            'issuance_batch_id' => $batch->id,
+                            'requisition_id' => $requisition->id,
+                            'office_id' => $requisition->office_id,
+                            'department_id' => $requisition->department_id,
+                            'item_id' => $line->item_id,
+                            'quantity' => $qtyToIssue,
+                            'issuance_date' => $issuanceDate,
+                            'issued_to' => $requisition->requested_by,
+                            'issued_by' => $custodian->id,
+                        ];
+
+                        if ($line->item?->category?->getTemplateSlug() === 'semi_expendable') {
+                            $issuancePayload['estimated_useful_life'] = SemiExpendableUsefulLife::resolveForItem($line->item);
+                        }
+
+                        foreach (['custodian_printed_name', 'custodian_designation', 'issued_to_designation', 'accounting_staff_printed_name', 'received_from_name'] as $signatoryField) {
+                            if (filled($signatories[$signatoryField] ?? null)) {
+                                $issuancePayload[$signatoryField] = (string) $signatories[$signatoryField];
+                            }
+                        }
+
+                        Issuance::create($issuancePayload);
+
+                        $line->update([
+                            'quantity_issued' => (int) ($line->quantity_issued ?? 0) + $qtyToIssue,
+                            'stock_available' => $stock,
+                            'issue_remarks' => $entry['remarks'] ?? $line->issue_remarks,
+                        ]);
+
+                        $categoryName = $line->item?->category?->name ?? 'Other';
+                        $categoryCounts[$categoryName] = ($categoryCounts[$categoryName] ?? 0) + 1;
+                        $created++;
+                    }
+                });
 
             if ($created > 0) {
                 $requisition->refresh();
@@ -151,8 +212,13 @@ class RequisitionFulfillmentService
             app(RequisitionWorkflowNotificationService::class)->handleCustodianIssued($requisition->fresh());
         }
 
+        if ($acknowledged > 0) {
+            app(RequisitionWorkflowNotificationService::class)->handleBackorderAcknowledged($requisition->fresh());
+        }
+
         return [
             'created' => $created,
+            'acknowledged' => $acknowledged,
             'categories' => $categoryCounts,
         ];
     }

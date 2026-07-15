@@ -2,14 +2,15 @@
 
 namespace App\Services;
 
-use App\Filament\Resources\Requisitions\RequisitionResource;
 use App\Models\Item;
 use App\Models\Requisition;
 use App\Models\RequisitionItem;
+use App\Models\RequisitionSourceEndorsement;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Collection as SupportCollection;
+use Illuminate\Validation\ValidationException;
 use InvalidArgumentException;
 
 class RequisitionCompileService
@@ -17,33 +18,74 @@ class RequisitionCompileService
     /**
      * @return array<int, string>
      */
-    public function eligibleEmployeeRequisitionOptions(User $unitConsolidator): array
-    {
+    public function eligibleEmployeeRequisitionOptions(
+        User $unitConsolidator,
+        ?int $officeId = null,
+        ?int $departmentId = null,
+    ): array {
         if (! $unitConsolidator->office_id && $unitConsolidator->assignedOfficeIds() === []) {
             return [];
         }
 
-        return $this->eligibleEmployeeRequisitionsQuery($unitConsolidator)
+        return $this->eligibleEmployeeRequisitionsQuery($unitConsolidator, $officeId, $departmentId)
             ->orderByDesc('created_at')
             ->get()
             ->mapWithKeys(function (Requisition $requisition): array {
-                $ref = $requisition->reference_code ?? "#{$requisition->id}";
+                $ref = $requisition->transaction_number ?? "#{$requisition->id}";
                 $requester = $requisition->requestedBy?->name ?? 'Employee';
+                $backorderHint = $this->backorderHintForRequisition($requisition);
+                $label = "{$ref} — {$requester}";
 
-                return [$requisition->id => "{$ref} — {$requester}"];
+                if ($backorderHint !== null) {
+                    $label .= " ({$backorderHint})";
+                }
+
+                return [$requisition->id => $label];
             })
             ->all();
     }
 
-    public function eligibleEmployeeRequisitionsQuery(User $unitConsolidator): Builder
+    public function backorderHintForRequisition(Requisition $requisition): ?string
     {
-        return $unitConsolidator->applyUnitConsolidatorRequisitionScope(
-            RequisitionResource::getEloquentQuery()
+        $requisition->loadMissing('items');
+
+        $backorderedLines = $requisition->items->filter(
+            fn (RequisitionItem $line): bool => $line->stock_at_request !== null
+                ? $line->isBackordered()
+                : app(RequisitionStockSnapshotService::class)->regionalStockForItem((int) $line->item_id) < (int) $line->quantity,
+        )->count();
+
+        if ($backorderedLines === 0) {
+            return null;
+        }
+
+        return $backorderedLines === 1
+            ? '1 line awaiting stock'
+            : "{$backorderedLines} lines awaiting stock";
+    }
+
+    public function eligibleEmployeeRequisitionsQuery(
+        User $unitConsolidator,
+        ?int $officeId = null,
+        ?int $departmentId = null,
+    ): Builder {
+        $query = $unitConsolidator->applyUnitConsolidatorRequisitionScope(
+            Requisition::query()
         )
             ->where('status', Requisition::STATUS_ACCEPTED)
             ->whereNull('compiled_into_requisition_id')
             ->whereHas('requestedBy', fn (Builder $query): Builder => $query->where('role', User::ROLE_EMPLOYEE))
             ->with('requestedBy');
+
+        if ($officeId !== null && $officeId > 0) {
+            $query->where('office_id', $officeId);
+        }
+
+        if ($departmentId !== null && $departmentId > 0) {
+            $query->where('department_id', $departmentId);
+        }
+
+        return $query;
     }
 
     /**
@@ -66,52 +108,125 @@ class RequisitionCompileService
     }
 
     /**
-     * @param  Collection<int, Requisition>  $employeeRequisitions
-     * @return array<int, array{item_id: int, item_name: string, quantity: int, line_source_summary: string}>
+     * @param  Collection<int, Requisition>|SupportCollection<int, Requisition>  $employeeRequisitions
+     * @return array<int, array<string, mixed>>
      */
-    public function mergedLineItems(Collection|SupportCollection $employeeRequisitions): array
+    public function buildEndorsementLines(Collection|SupportCollection $employeeRequisitions): array
     {
         if (! $employeeRequisitions instanceof Collection) {
             $employeeRequisitions = new Collection($employeeRequisitions->all());
         }
 
-        $employeeRequisitions->loadMissing(['items.item']);
+        $employeeRequisitions->loadMissing(['items.item.category', 'requestedBy']);
 
-        /** @var array<int, array{item_id: int, item_name: string, quantity: int, sources: array<string, int>}> $merged */
-        $merged = [];
+        $lines = [];
 
         foreach ($employeeRequisitions as $requisition) {
+            $ref = $requisition->transaction_number ?? "#{$requisition->id}";
+            $employeeName = $requisition->requestedBy?->name ?? 'Employee';
+
             foreach ($requisition->items as $line) {
-                $itemId = (int) $line->item_id;
-                $qty = (int) $line->quantity;
+                $requested = (int) $line->quantity;
 
-                if (! isset($merged[$itemId])) {
-                    $merged[$itemId] = [
-                        'item_id' => $itemId,
-                        'item_name' => $line->item?->name ?? "Item #{$itemId}",
-                        'quantity' => 0,
-                        'sources' => [],
-                    ];
-                }
-
-                $merged[$itemId]['quantity'] += $qty;
-                $ref = $requisition->reference_code ?? "#{$requisition->id}";
-                $merged[$itemId]['sources'][$ref] = ($merged[$itemId]['sources'][$ref] ?? 0) + $qty;
+                $lines[] = [
+                    'source_requisition_id' => $requisition->id,
+                    'requisition_item_id' => $line->id,
+                    'item_id' => (int) $line->item_id,
+                    'item_category_id' => $line->item?->item_category_id,
+                    'item_name' => $line->item?->name ?? "Item #{$line->item_id}",
+                    'employee_name' => $employeeName,
+                    'transaction_number' => $ref,
+                    'purpose' => $requisition->purpose,
+                    'requested_quantity' => $requested,
+                    'endorsed_quantity' => $requested,
+                    'employee_remarks' => null,
+                ];
             }
+        }
+
+        return $lines;
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $endorsementLines
+     */
+    public function validateEndorsementLines(array $endorsementLines): void
+    {
+        $errors = [];
+
+        foreach (array_values($endorsementLines) as $index => $line) {
+            $requested = (int) ($line['requested_quantity'] ?? 0);
+            $endorsed = (int) ($line['endorsed_quantity'] ?? 0);
+
+            if ($endorsed < 0 || $endorsed > $requested) {
+                $errors["endorsement_lines.{$index}.endorsed_quantity"] = 'Endorsed quantity must be between 0 and the requested quantity.';
+            }
+
+            if ($endorsed < $requested && blank($line['employee_remarks'] ?? null)) {
+                $errors["endorsement_lines.{$index}.employee_remarks"] = 'Add a remark to the employee when endorsing less than requested.';
+            }
+        }
+
+        if ($errors !== []) {
+            throw ValidationException::withMessages($errors);
+        }
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $endorsementLines
+     * @return array<int, array{item_id: int, item_name: string, quantity: int, requested_total: int, line_source_summary: string, allocation_summary: string}>
+     */
+    public function mergedLineItemsFromEndorsements(array $endorsementLines): array
+    {
+        /** @var array<int, array{item_id: int, item_name: string, quantity: int, requested_total: int, allocations: array<string, array{employee: string, ref: string, endorsed: int}>}> $merged */
+        $merged = [];
+
+        foreach ($endorsementLines as $line) {
+            $endorsed = (int) ($line['endorsed_quantity'] ?? 0);
+
+            if ($endorsed <= 0) {
+                continue;
+            }
+
+            $itemId = (int) $line['item_id'];
+            $requested = (int) ($line['requested_quantity'] ?? 0);
+            $employee = (string) ($line['employee_name'] ?? 'Employee');
+            $ref = (string) ($line['transaction_number'] ?? '');
+            $allocationKey = "{$employee}|{$ref}";
+
+            if (! isset($merged[$itemId])) {
+                $merged[$itemId] = [
+                    'item_id' => $itemId,
+                    'item_name' => (string) ($line['item_name'] ?? "Item #{$itemId}"),
+                    'quantity' => 0,
+                    'requested_total' => 0,
+                    'allocations' => [],
+                ];
+            }
+
+            $merged[$itemId]['quantity'] += $endorsed;
+            $merged[$itemId]['requested_total'] += $requested;
+            $merged[$itemId]['allocations'][$allocationKey] = [
+                'employee' => $employee,
+                'ref' => $ref,
+                'endorsed' => ($merged[$itemId]['allocations'][$allocationKey]['endorsed'] ?? 0) + $endorsed,
+            ];
         }
 
         return collect($merged)
             ->map(function (array $row): array {
-                $sourceParts = [];
-                foreach ($row['sources'] as $ref => $qty) {
-                    $sourceParts[] = "{$ref}: {$qty}";
+                $allocationParts = [];
+                foreach ($row['allocations'] as $allocation) {
+                    $allocationParts[] = "{$allocation['employee']} ({$allocation['ref']}): {$allocation['endorsed']} endorsed";
                 }
 
                 return [
                     'item_id' => $row['item_id'],
                     'item_name' => $row['item_name'],
                     'quantity' => $row['quantity'],
-                    'line_source_summary' => implode(', ', $sourceParts),
+                    'requested_total' => $row['requested_total'],
+                    'line_source_summary' => implode(', ', $allocationParts),
+                    'allocation_summary' => implode(' · ', $allocationParts),
                 ];
             })
             ->values()
@@ -124,15 +239,20 @@ class RequisitionCompileService
      */
     public function mergedLineItemsAsRepeaterState(array $mergedLineItems): array
     {
+        $snapshotService = app(RequisitionStockSnapshotService::class);
+
         return collect($mergedLineItems)
-            ->map(function (array $row): array {
+            ->map(function (array $row) use ($snapshotService): array {
                 $item = Item::query()->find($row['item_id']);
+                $itemId = (int) $row['item_id'];
 
                 return [
                     'item_category_id' => $item?->item_category_id,
-                    'item_id' => $row['item_id'],
+                    'item_id' => $itemId,
                     'quantity' => $row['quantity'],
-                    'remarks' => null,
+                    'requested_total' => $row['requested_total'] ?? $row['quantity'],
+                    'allocation_summary' => $row['allocation_summary'] ?? $row['line_source_summary'] ?? '',
+                    'stock_at_request' => $snapshotService->regionalStockForItem($itemId),
                 ];
             })
             ->values()
@@ -140,10 +260,82 @@ class RequisitionCompileService
     }
 
     /**
-     * @param  Collection<int, Requisition>|SupportCollection<int, Requisition>|array<int, int>  $employeeRequisitions
+     * @param  Collection<int, Requisition>|SupportCollection<int, Requisition>  $employeeRequisitions
+     * @return array<int, array{item_id: int, item_name: string, quantity: int, line_source_summary: string}>
      */
-    public function linkCompiledSources(User $unitConsolidator, Requisition $consolidated, Collection|SupportCollection|array $employeeRequisitions): void
+    public function mergedLineItems(Collection|SupportCollection $employeeRequisitions): array
     {
+        return $this->mergedLineItemsFromEndorsements(
+            $this->buildEndorsementLines($employeeRequisitions),
+        );
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $endorsementLines
+     */
+    public function persistSourceEndorsements(
+        Requisition $consolidated,
+        array $endorsementLines,
+    ): void {
+        foreach ($endorsementLines as $line) {
+            $endorsed = (int) ($line['endorsed_quantity'] ?? 0);
+
+            if ($endorsed <= 0) {
+                continue;
+            }
+
+            RequisitionSourceEndorsement::query()->create([
+                'consolidated_requisition_id' => $consolidated->id,
+                'source_requisition_id' => (int) $line['source_requisition_id'],
+                'requisition_item_id' => (int) $line['requisition_item_id'],
+                'requested_by_user_id' => (int) Requisition::query()
+                    ->whereKey((int) $line['source_requisition_id'])
+                    ->value('requested_by'),
+                'item_id' => (int) $line['item_id'],
+                'requested_quantity' => (int) ($line['requested_quantity'] ?? 0),
+                'endorsed_quantity' => $endorsed,
+                'employee_remarks' => filled($line['employee_remarks'] ?? null)
+                    ? (string) $line['employee_remarks']
+                    : null,
+            ]);
+        }
+    }
+
+    /**
+     * @param  SupportCollection<int, RequisitionSourceEndorsement>|Collection<int, RequisitionSourceEndorsement>  $endorsements
+     */
+    public function formatAllocationSummary(Collection|SupportCollection $endorsements): string
+    {
+        if (! $endorsements instanceof Collection) {
+            $endorsements = new Collection($endorsements->all());
+        }
+
+        $endorsements->loadMissing(['requestedBy', 'sourceRequisition']);
+
+        return $endorsements
+            ->groupBy(fn (RequisitionSourceEndorsement $row): string => (string) $row->requested_by_user_id)
+            ->map(function (Collection $group): string {
+                $first = $group->first();
+                $employee = $first?->requestedBy?->name ?? 'Employee';
+                $ref = $first?->sourceRequisition?->transaction_number ?? "#{$first?->source_requisition_id}";
+                $endorsed = (int) $group->sum('endorsed_quantity');
+
+                return "{$employee} ({$ref}): {$endorsed} endorsed";
+            })
+            ->values()
+            ->implode(' · ');
+    }
+
+    /**
+     * @param  Collection<int, Requisition>|SupportCollection<int, Requisition>|array<int, int>  $employeeRequisitions
+     * @param  array<int, array<string, mixed>>  $endorsementLines
+     */
+    public function linkCompiledSources(
+        User $unitConsolidator,
+        Requisition $consolidated,
+        Collection|SupportCollection|array $employeeRequisitions,
+        array $endorsementLines = [],
+    ): void {
         if (is_array($employeeRequisitions)) {
             $employeeRequisitions = Requisition::query()
                 ->whereIn('id', $employeeRequisitions)
@@ -164,36 +356,52 @@ class RequisitionCompileService
             throw new InvalidArgumentException('Only approved, uncompiled Employee requisitions can be included.');
         }
 
-        if ((int) $consolidated->office_id !== (int) $unitConsolidator->office_id) {
-            throw new InvalidArgumentException('Consolidated requisition office does not match your office.');
+        if (! $unitConsolidator->coversOfficeDepartment(
+            (int) $consolidated->office_id,
+            (int) $consolidated->department_id,
+        )) {
+            throw new InvalidArgumentException('Consolidated requisition office and department are not in your assignments.');
+        }
+
+        if ($endorsementLines !== []) {
+            $this->validateEndorsementLines($endorsementLines);
+            $this->persistSourceEndorsements($consolidated, $endorsementLines);
         }
 
         $eligible->each(fn (Requisition $employeeRequisition) => $employeeRequisition->update([
             'compiled_into_requisition_id' => $consolidated->id,
+            'endorsed_at' => now(),
+            'endorsed_by' => $unitConsolidator->id,
         ]));
     }
 
     /**
      * @param  Collection<int, Requisition>|SupportCollection<int, Requisition>  $employeeRequisitions
-     * @param  array<int, array{item_id?: int, quantity?: int, remarks?: string|null}>  $items
+     * @param  array<int, array{item_id?: int, quantity?: int}>  $items
      */
     public function createConsolidatedRequisition(
         User $unitConsolidator,
         Collection|SupportCollection $employeeRequisitions,
         array $items,
         ?string $purpose = null,
+        ?int $officeId = null,
+        ?int $departmentId = null,
+        array $endorsementLines = [],
     ): Requisition {
         if (! $employeeRequisitions instanceof Collection) {
             $employeeRequisitions = new Collection($employeeRequisitions->all());
         }
 
-        if (! $unitConsolidator->office_id) {
+        $officeId = $officeId ?? (int) $unitConsolidator->office_id;
+        $departmentId = $departmentId ?? (int) $unitConsolidator->department_id;
+
+        if ($officeId <= 0) {
             throw new InvalidArgumentException('Unit Consolidator must have an office assigned.');
         }
 
         $requisition = Requisition::create([
-            'office_id' => $unitConsolidator->office_id,
-            'department_id' => $unitConsolidator->department_id,
+            'office_id' => $officeId,
+            'department_id' => $departmentId > 0 ? $departmentId : null,
             'requested_by' => $unitConsolidator->id,
             'status' => Requisition::STATUS_PENDING,
             'purpose' => $purpose,
@@ -204,16 +412,21 @@ class RequisitionCompileService
                 continue;
             }
 
+            $itemId = (int) $row['item_id'];
+            $stockAtRequest = array_key_exists('stock_at_request', $row)
+                ? ($row['stock_at_request'] !== null ? (int) $row['stock_at_request'] : null)
+                : app(RequisitionStockSnapshotService::class)->regionalStockForItem($itemId);
+
             RequisitionItem::create([
                 'requisition_id' => $requisition->id,
-                'item_id' => (int) $row['item_id'],
+                'item_id' => $itemId,
                 'quantity' => (int) $row['quantity'],
-                'remarks' => filled($row['remarks'] ?? null) ? (string) $row['remarks'] : null,
+                'stock_at_request' => $stockAtRequest,
             ]);
         }
 
-        $this->linkCompiledSources($unitConsolidator, $requisition, $employeeRequisitions);
+        $this->linkCompiledSources($unitConsolidator, $requisition, $employeeRequisitions, $endorsementLines);
 
-        return $requisition->load('items');
+        return $requisition->load(['items', 'sourceEndorsements']);
     }
 }

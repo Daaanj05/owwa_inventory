@@ -163,6 +163,57 @@ class DemoStockLedgerCatalog
     }
 
     /**
+     * Variant consumable codes (siblings of CON-001–008). Kept outside core ledger asserts.
+     *
+     * @return array<int, string>
+     */
+    public static function variantConsumableCodes(): array
+    {
+        return ['CON-009', 'CON-010', 'CON-011', 'CON-012', 'CON-013'];
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    public static function variantPpeCodes(): array
+    {
+        return ['PPE-005'];
+    }
+
+    /**
+     * Issuance rows for sub-item variants — not included in core expected-stock math.
+     *
+     * @return array<int, array{item: string, qty: int, date: string, dept_code: string}>
+     */
+    public static function variantIssuanceBatchRows(): array
+    {
+        return [
+            ['item' => 'CON-009', 'qty' => 10, 'date' => '2026-02-12', 'dept_code' => 'ADM'],
+            ['item' => 'CON-009', 'qty' => 8, 'date' => '2026-03-08', 'dept_code' => 'OPS'],
+            ['item' => 'CON-010', 'qty' => 6, 'date' => '2026-02-12', 'dept_code' => 'FIN'],
+            ['item' => 'CON-011', 'qty' => 15, 'date' => '2026-02-18', 'dept_code' => 'ADM'],
+            ['item' => 'CON-012', 'qty' => 12, 'date' => '2026-03-05', 'dept_code' => 'OPS'],
+            ['item' => 'CON-013', 'qty' => 10, 'date' => '2026-03-15', 'dept_code' => 'FIN'],
+            ['item' => 'PPE-005', 'qty' => 1, 'date' => '2026-02-20', 'dept_code' => 'ADM'],
+            ['item' => 'PPE-005', 'qty' => 1, 'date' => '2026-03-01', 'dept_code' => 'OPS'],
+        ];
+    }
+
+    /**
+     * Satellite Welfare issuances for office → department filter demos.
+     *
+     * @return array<int, array{item: string, qty: int, date: string, dept_code: string}>
+     */
+    public static function satelliteVariantIssuanceBatchRows(): array
+    {
+        return [
+            ['item' => 'CON-009', 'qty' => 5, 'date' => '2026-02-25', 'dept_code' => 'WSU'],
+            ['item' => 'CON-011', 'qty' => 8, 'date' => '2026-03-10', 'dept_code' => 'WSU'],
+            ['item' => 'CON-010', 'qty' => 4, 'date' => '2026-03-12', 'dept_code' => 'WSU'],
+        ];
+    }
+
+    /**
      * Issuance rows grouped by date|department for {@see DemoInventoryWorkflow::seedIssuanceBatchesFromGroups}.
      *
      * @return array<int, array{item: string, qty: int, date: string, dept_code: string}>

@@ -241,4 +241,115 @@ class ConsumptionAnalyticsTest extends TestCase
         $this->assertSame(['Regional Office'], $totals['labels']);
         $this->assertSame([15], $totals['values']);
     }
+
+    public function test_item_ids_filter_narrows_office_totals(): void
+    {
+        $office = Office::factory()->create(['name' => 'Regional Office']);
+        $dept = Department::query()->create([
+            'office_id' => $office->id,
+            'name' => 'Admin Division',
+            'code' => 'AD',
+        ]);
+        $bondA4 = Item::factory()->create([
+            'base_name' => 'Bond Paper',
+            'sub_item' => 'A4',
+            'name' => 'Bond Paper A4',
+        ]);
+        $bondLong = Item::factory()->create([
+            'base_name' => 'Bond Paper',
+            'sub_item' => 'Long',
+            'name' => 'Bond Paper Long',
+        ]);
+
+        $from = Carbon::parse('2026-06-01');
+        $to = Carbon::parse('2026-06-30');
+
+        Issuance::withoutEvents(function () use ($bondA4, $bondLong, $office, $dept, $from): void {
+            Issuance::query()->create([
+                'reference_code' => 'ISS-A4',
+                'item_id' => $bondA4->id,
+                'office_id' => $office->id,
+                'department_id' => $dept->id,
+                'quantity' => 10,
+                'issuance_date' => $from->copy()->addDay(),
+            ]);
+            Issuance::query()->create([
+                'reference_code' => 'ISS-LONG',
+                'item_id' => $bondLong->id,
+                'office_id' => $office->id,
+                'department_id' => $dept->id,
+                'quantity' => 7,
+                'issuance_date' => $from->copy()->addDays(2),
+            ]);
+        });
+
+        $service = app(ConsumptionAnalyticsService::class);
+        $totals = $service->getConsumptionTotalsByOffice(
+            $from,
+            $to,
+            itemIds: [$bondA4->id],
+        );
+
+        $this->assertSame(10, $totals['total']);
+        $this->assertSame(['Regional Office'], $totals['labels']);
+        $this->assertSame([10], $totals['values']);
+    }
+
+    public function test_resolve_consumption_filters_defaults_to_custodian_office(): void
+    {
+        $office = Office::factory()->create([
+            'name' => 'Regional Supply',
+            'is_regional_supply' => true,
+        ]);
+        Department::query()->create([
+            'office_id' => $office->id,
+            'name' => 'Admin',
+            'code' => 'ADM',
+        ]);
+
+        $widget = new class extends \App\Filament\Widgets\ConsumptionTrendsWidget
+        {
+            public function exposeDefaults(): array
+            {
+                return $this->defaultConsumptionOfficeIds();
+            }
+
+            public function exposeDepartments(array $officeIds): array
+            {
+                return $this->departmentOptionsForOffices($officeIds);
+            }
+
+            public function exposeResolved(?array $filters): array
+            {
+                return $this->resolveConsumptionFilters($filters);
+            }
+        };
+
+        \Filament\Facades\Filament::setCurrentPanel(\Filament\Facades\Filament::getPanel('admin'));
+
+        $custodian = \App\Models\User::factory()->create([
+            'role' => \App\Models\User::ROLE_SUPPLY_CUSTODIAN,
+            'office_id' => $office->id,
+        ]);
+
+        $this->actingAs($custodian);
+
+        $this->assertSame([(int) $office->id], $widget->exposeDefaults());
+        $this->assertNotEmpty($widget->exposeDepartments([(int) $office->id]));
+
+        $resolvedEmpty = $widget->exposeResolved([
+            'date_from' => '2026-01-01',
+            'date_to' => '2026-12-31',
+        ]);
+        $this->assertSame([], $resolvedEmpty['office_ids']);
+        $this->assertSame([], $resolvedEmpty['item_ids']);
+
+        $resolvedWithDefault = $widget->exposeResolved([
+            'date_from' => '2026-01-01',
+            'date_to' => '2026-12-31',
+            'office_ids' => [(string) $office->id],
+        ]);
+        $this->assertSame([(int) $office->id], $resolvedWithDefault['office_ids']);
+        $this->assertSame([], $resolvedWithDefault['item_ids']);
+    }
 }

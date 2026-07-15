@@ -44,10 +44,10 @@ class OwwaTransactionViewPresenter
      */
     public static function forIssuance(Issuance $record): array
     {
-        $record->loadMissing(['item', 'office', 'department', 'requisition']);
+        $record->loadMissing(['item', 'office', 'department', 'requisition', 'batch']);
 
         $hero = OwwaRecordHeroData::make(
-            reference: $record->reference_code ?? '—',
+            reference: $record->controlNumber() ?? '—',
             statusLabel: 'Issued',
             statusClass: 'owwa-pc-status-badge--complete',
             meta: [
@@ -132,7 +132,11 @@ class OwwaTransactionViewPresenter
             statusLabel: $record->archived_at ? 'Archived' : 'Active',
             statusClass: $record->archived_at ? 'owwa-pc-status-badge--incomplete' : 'owwa-pc-status-badge--complete',
             meta: [
-                ['label' => 'Stock no.', 'value' => $record->item_code ?? '—'],
+                [
+                    'label' => app(\App\Services\CatalogAssetNumberService::class)
+                        ->catalogIdentifierLabel($record->category?->getTemplateSlug()),
+                    'value' => $record->catalogAssetIdentifier() ?? '—',
+                ],
                 ['label' => 'Category', 'value' => $record->category?->name ?? '—'],
                 ['label' => 'Unit', 'value' => $record->unit ?? '—'],
             ],

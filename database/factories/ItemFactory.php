@@ -13,9 +13,14 @@ class ItemFactory extends Factory
 
     public function definition(): array
     {
+        $baseName = fake()->words(2, true);
+        $subItem = fake()->optional(0.4)->word();
+
         return [
             'item_category_id' => ItemCategory::factory(),
-            'name' => fake()->word(),
+            'base_name' => $baseName,
+            'sub_item' => $subItem,
+            'name' => Item::mergeDisplayName($baseName, $subItem),
             'unit' => fake()->randomElement(['piece', 'box', 'ream']),
             'item_code' => 'ITM-'.fake()->unique()->numberBetween(1000, 9999),
             'value_type' => fake()->randomElement(['low', 'high']),

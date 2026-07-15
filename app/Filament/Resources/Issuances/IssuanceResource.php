@@ -32,7 +32,7 @@ class IssuanceResource extends Resource
 
     protected static bool $shouldRegisterNavigation = false;
 
-    protected static string|UnitEnum|null $navigationGroup = 'Inventory';
+    protected static string|UnitEnum|null $navigationGroup = 'Regional supply';
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedArrowUpTray;
 
@@ -60,7 +60,7 @@ class IssuanceResource extends Resource
             $query->whereRaw('1 = 0');
         }
 
-        return $query;
+        return $query->with(['batch', 'item.category']);
     }
 
     public static function form(Schema $schema): Schema
@@ -74,8 +74,9 @@ class IssuanceResource extends Resource
             ->components([
                 Section::make('Transaction Details')
                     ->schema([
-                        TextEntry::make('reference_code')
-                            ->label(fn (Issuance $record): string => OwwaReferenceLabels::forIssuance($record)),
+                        TextEntry::make('batch.reference_code')
+                            ->label(fn (Issuance $record): string => OwwaReferenceLabels::forIssuance($record))
+                            ->state(fn (Issuance $record): ?string => $record->controlNumber()),
                         TextEntry::make('requisition.reference_code')
                             ->label(OwwaReferenceLabels::RIS)
                             ->placeholder('—')

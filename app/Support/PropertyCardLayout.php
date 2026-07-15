@@ -27,7 +27,7 @@ class PropertyCardLayout
         $values = [];
         OwwaCellMapping::applyHeader($values, (array) (OwwaCellMapping::form('PC')['header'] ?? []), [
             'entity_name' => $office?->name ?? '',
-            'fund_cluster' => $office?->fund_cluster ?? '',
+            'fund_cluster' => '',
             'property_number' => $latestProperty ?? $item->item_code ?? '',
             'description' => self::itemDescription($item),
         ]);
@@ -51,7 +51,7 @@ class PropertyCardLayout
         $values = [];
         OwwaCellMapping::applyHeader($values, (array) (OwwaCellMapping::form('PC')['header'] ?? []), [
             'entity_name' => $office?->name ?? '',
-            'fund_cluster' => $office?->fund_cluster ?? '',
+            'fund_cluster' => '',
             'property_number' => $item?->item_code ?? '',
             'description' => self::itemDescription($item),
         ]);

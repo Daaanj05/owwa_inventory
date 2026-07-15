@@ -3,7 +3,9 @@
 namespace Tests\Feature;
 
 use App\Filament\Pages\MyStockLevels;
+use App\Filament\Pages\StockLevels;
 use App\Filament\Widgets\EmployeeStockLevelsWidget;
+use App\Models\Office;
 use App\Models\User;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -36,5 +38,18 @@ class MyStockLevelsAccessTest extends TestCase
         Livewire::actingAs($employee)
             ->test(MyStockLevels::class)
             ->assertForbidden();
+    }
+
+    public function test_unit_consolidators_cannot_access_stock_levels(): void
+    {
+        $office = Office::factory()->create();
+        $uc = User::factory()->create([
+            'role' => User::ROLE_UNIT_CONSOLIDATOR,
+            'office_id' => $office->id,
+        ]);
+
+        $this->actingAs($uc);
+
+        $this->assertFalse(StockLevels::canAccess());
     }
 }

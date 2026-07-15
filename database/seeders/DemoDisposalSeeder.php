@@ -3,6 +3,7 @@
 namespace Database\Seeders;
 
 use App\Models\Disposal;
+use App\Models\DisposalBatch;
 use App\Models\InventoryUnit;
 use App\Models\Issuance;
 use App\Models\Item;
@@ -35,10 +36,26 @@ class DemoDisposalSeeder extends Seeder
             return;
         }
 
+        $batch = $this->upsertBatch('2026-03-0001', [
+            'category_slug' => 'consumables',
+            'office_id' => $office->id,
+            'disposal_date' => Carbon::parse('2026-03-25'),
+            'disposal_type' => 'waste_sale',
+            'disposal_mode' => 'sold_public',
+            'recorded_by' => $custodian->id,
+            'custodian_printed_name' => 'Supply Custodian',
+            'accountable_officer_designation' => 'Supply Officer',
+            'approved_by_printed_name' => 'Roberto Cruz',
+            'inspection_officer_printed_name' => 'Ana Reyes',
+        ]);
+
         Disposal::query()->updateOrCreate(
-            ['reference_code' => '2026-03-0001'],
             [
+                'disposal_batch_id' => $batch->id,
                 'item_id' => $item->id,
+            ],
+            [
+                'reference_code' => $batch->reference_code,
                 'office_id' => $office->id,
                 'quantity' => 3,
                 'disposal_date' => Carbon::parse('2026-03-25'),
@@ -95,10 +112,26 @@ class DemoDisposalSeeder extends Seeder
             ->orderByDesc('acquisition_date')
             ->value('unit_cost');
 
+        $batch = $this->upsertBatch('2026-03-0002', [
+            'category_slug' => 'semi_expendable',
+            'office_id' => $office->id,
+            'department_id' => $issuance?->department_id,
+            'disposal_date' => Carbon::parse('2026-03-20'),
+            'disposal_type' => 'lost_stolen_damaged',
+            'recorded_by' => $custodian->id,
+            'custodian_printed_name' => 'Supply Custodian',
+            'accountable_officer_designation' => 'Supply Officer',
+            'immediate_supervisor_printed_name' => 'Roberto Cruz',
+            'witness_printed_name' => 'Maria Santos',
+        ]);
+
         Disposal::query()->updateOrCreate(
-            ['reference_code' => '2026-03-0002'],
             [
+                'disposal_batch_id' => $batch->id,
                 'item_id' => $item->id,
+            ],
+            [
+                'reference_code' => $batch->reference_code,
                 'inventory_unit_id' => $unit->id,
                 'office_id' => $office->id,
                 'department_id' => $issuance?->department_id,
@@ -151,10 +184,26 @@ class DemoDisposalSeeder extends Seeder
 
         $acquisitionCost = $unit->acquisition?->unit_cost ?? 55000.00;
 
+        $batch = $this->upsertBatch('2026-03-0003', [
+            'category_slug' => 'ppe',
+            'office_id' => $office->id,
+            'department_id' => $issuance?->department_id,
+            'disposal_date' => Carbon::parse('2026-03-15'),
+            'disposal_type' => 'unserviceable',
+            'recorded_by' => $custodian->id,
+            'custodian_printed_name' => 'Supply Custodian',
+            'accountable_officer_designation' => 'Supply Officer',
+            'approved_by_printed_name' => 'Roberto Cruz',
+            'inspection_officer_printed_name' => 'Ana Reyes',
+        ]);
+
         Disposal::query()->updateOrCreate(
-            ['reference_code' => '2026-03-0003'],
             [
+                'disposal_batch_id' => $batch->id,
                 'item_id' => $item->id,
+            ],
+            [
+                'reference_code' => $batch->reference_code,
                 'inventory_unit_id' => $unit->id,
                 'office_id' => $office->id,
                 'department_id' => $issuance?->department_id,
@@ -173,6 +222,17 @@ class DemoDisposalSeeder extends Seeder
                 'inspection_officer_printed_name' => 'Ana Reyes',
                 'recorded_by' => $custodian->id,
             ],
+        );
+    }
+
+    /**
+     * @param  array<string, mixed>  $attributes
+     */
+    protected function upsertBatch(string $referenceCode, array $attributes): DisposalBatch
+    {
+        return DisposalBatch::query()->updateOrCreate(
+            ['reference_code' => $referenceCode],
+            $attributes,
         );
     }
 }

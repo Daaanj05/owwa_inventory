@@ -4,10 +4,10 @@ namespace App\Filament\Resources\Users\Pages;
 
 use App\Filament\Concerns\HasSystemAdminWizardHeading;
 use App\Filament\Resources\Users\UserResource;
+use App\Filament\Support\UserAssignmentActionHooks;
 use App\Models\User;
 use Filament\Actions\DeleteAction;
 use Filament\Resources\Pages\EditRecord;
-use Illuminate\Validation\ValidationException;
 
 class EditUser extends EditRecord
 {
@@ -30,15 +30,8 @@ class EditUser extends EditRecord
     {
         $record = $this->getRecord();
 
-        if ($record instanceof User && $record->isUnitConsolidator()) {
-            $data['assignments'] = $record->assignments()
-                ->orderBy('id')
-                ->get()
-                ->map(fn ($assignment): array => [
-                    'office_id' => $assignment->office_id,
-                    'department_id' => $assignment->department_id,
-                ])
-                ->all();
+        if ($record instanceof User) {
+            return UserAssignmentActionHooks::fillAssignments($data, $record);
         }
 
         return $data;
@@ -46,22 +39,15 @@ class EditUser extends EditRecord
 
     protected function mutateFormDataBeforeSave(array $data): array
     {
-        if (($data['role'] ?? null) === User::ROLE_UNIT_CONSOLIDATOR) {
-            $this->pendingAssignments = User::normalizeAssignmentRows($data['assignments'] ?? []);
-            unset($data['assignments']);
-
-            if ($this->pendingAssignments === []) {
-                throw ValidationException::withMessages([
-                    'assignments' => 'Add at least one office and sub-office/department for a Unit Consolidator.',
-                ]);
-            }
-
-            $first = $this->pendingAssignments[0];
-            $data['office_id'] = $first['office_id'];
-            $data['department_id'] = $first['department_id'];
-        } else {
+        if (($data['role'] ?? null) !== User::ROLE_UNIT_CONSOLIDATOR) {
             $this->pendingAssignments = null;
+
+            return $data;
         }
+
+        $data = UserAssignmentActionHooks::prepareSaveData($data, $this->getRecord());
+        $this->pendingAssignments = $data['_assignments'] ?? [];
+        unset($data['_assignments']);
 
         return $data;
     }

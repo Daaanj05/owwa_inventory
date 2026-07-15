@@ -29,6 +29,13 @@ class OwwaCellMapping
                 continue;
             }
 
+            // Fund Cluster is retired from the app — keep the template cell blank without errors.
+            if ($field === 'fund_cluster') {
+                $values[$cell] = '';
+
+                continue;
+            }
+
             $label = (string) ($spec['label'] ?? '');
             $raw = $data[$field];
             $values[$cell] = $label.($raw ?? '');

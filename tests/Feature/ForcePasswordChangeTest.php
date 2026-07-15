@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Filament\Pages\Auth\AccountSettings;
 use App\Filament\Pages\Auth\ChangePassword;
 use App\Filament\Pages\Auth\EditProfile;
 use App\Filament\Resources\Users\Pages\ListUsers;
@@ -77,6 +78,20 @@ class ForcePasswordChangeTest extends TestCase
             ->assertRedirect(ChangePassword::getUrl(panel: 'admin'));
     }
 
+    public function test_user_with_must_change_password_is_redirected_from_settings(): void
+    {
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+
+        $user = User::factory()->mustChangePassword()->create([
+            'role' => User::ROLE_EMPLOYEE,
+            'email_verified_at' => now(),
+        ]);
+
+        $this->actingAs($user)
+            ->get('/admin/account/settings')
+            ->assertRedirect(ChangePassword::getUrl(panel: 'admin'));
+    }
+
     public function test_change_password_page_rejects_weak_password(): void
     {
         Filament::setCurrentPanel(Filament::getPanel('admin'));
@@ -141,59 +156,31 @@ class ForcePasswordChangeTest extends TestCase
 
         Livewire::test(EditProfile::class)
             ->assertOk()
-            ->assertSee('Account settings')
+            ->assertSee('Profile')
             ->assertSee('Back')
             ->assertSee('Profile information')
+            ->assertSee('Organization')
+            ->assertDontSee('Change password')
+            ->assertDontSee('Account security');
+    }
+
+    public function test_verified_user_can_access_settings_when_flag_is_false(): void
+    {
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+
+        $user = User::factory()->create([
+            'role' => User::ROLE_EMPLOYEE,
+            'email_verified_at' => now(),
+            'must_change_password' => false,
+        ]);
+
+        $this->actingAs($user);
+
+        Livewire::test(AccountSettings::class)
+            ->assertOk()
+            ->assertSee('Settings')
+            ->assertSee('Email verification')
             ->assertSee('Change password');
-    }
-
-    public function test_profile_rejects_new_password_without_current_password(): void
-    {
-        Filament::setCurrentPanel(Filament::getPanel('admin'));
-
-        $user = User::factory()->create([
-            'role' => User::ROLE_EMPLOYEE,
-            'email_verified_at' => now(),
-            'password' => 'CurrentPass1',
-        ]);
-
-        $this->actingAs($user);
-
-        Livewire::test(EditProfile::class)
-            ->fillForm([
-                'password' => 'NewPass1',
-                'passwordConfirmation' => 'NewPass1',
-            ])
-            ->call('save')
-            ->assertHasFormErrors(['currentPassword']);
-    }
-
-    public function test_profile_updates_password_with_valid_current_password(): void
-    {
-        Filament::setCurrentPanel(Filament::getPanel('admin'));
-
-        $user = User::factory()->create([
-            'role' => User::ROLE_EMPLOYEE,
-            'email_verified_at' => now(),
-            'password' => 'CurrentPass1',
-        ]);
-
-        $this->actingAs($user);
-
-        Livewire::test(EditProfile::class)
-            ->fillForm([
-                'password' => 'NewPass1',
-                'passwordConfirmation' => 'NewPass1',
-                'currentPassword' => 'CurrentPass1',
-            ])
-            ->call('save')
-            ->assertHasNoFormErrors()
-            ->assertNotified();
-
-        $user->refresh();
-
-        $this->assertFalse($user->mustChangePassword());
-        $this->assertTrue(Hash::check('NewPass1', $user->password));
     }
 
     public function test_system_admin_can_access_profile_on_system_admin_panel(): void

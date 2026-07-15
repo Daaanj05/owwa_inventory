@@ -51,11 +51,35 @@ trait SyncsActiveItemCategory
             return self::resolveActiveItemCategoryId((int) $livewireCategory);
         }
 
+        // Prefer the current Livewire page's `category` (URL-bound) over the shared
+        // session so two browser tabs on different inventory categories stay isolated.
+        $fromComponent = self::categoryIdFromCurrentLivewireComponent();
+        if ($fromComponent > 0) {
+            return self::resolveActiveItemCategoryId($fromComponent);
+        }
+
         if (filled(request()->query('category'))) {
             return self::resolveActiveItemCategoryId((int) request()->query('category'));
         }
 
         return self::resolveActiveItemCategoryId((int) session('active_item_category_id', 0));
+    }
+
+    protected static function categoryIdFromCurrentLivewireComponent(): int
+    {
+        try {
+            $component = \Livewire\Livewire::current();
+        } catch (\Throwable) {
+            return 0;
+        }
+
+        if (! is_object($component) || ! property_exists($component, 'category')) {
+            return 0;
+        }
+
+        $category = $component->category ?? null;
+
+        return filled($category) ? (int) $category : 0;
     }
 
     protected static function resolveActiveItemCategoryId(int $categoryId): int

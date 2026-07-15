@@ -27,10 +27,6 @@
             <dt>Entity Name</dt>
             <dd>{{ $disposal->office?->name ?? '—' }}</dd>
         </div>
-        <div>
-            <dt>Fund Cluster</dt>
-            <dd>{{ $disposal->office?->fund_cluster ?? '—' }}</dd>
-        </div>
     </dl>
 
     <p><strong>ITEMS FOR DISPOSAL (Unserviceable)</strong></p>
@@ -39,7 +35,7 @@
             <tr>
                 <th>Date Acquired</th>
                 <th>Particulars / Articles</th>
-                <th>Property No.</th>
+                <th>{{ \App\Support\OwwaReferenceLabels::assetIdentifierHeaderLabel($disposal->item?->category?->getTemplateSlug()) }}</th>
                 <th>Qty</th>
                 <th>Remarks</th>
             </tr>

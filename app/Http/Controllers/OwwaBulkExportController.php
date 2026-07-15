@@ -7,6 +7,7 @@ use App\Filament\Resources\Acquisitions\AcquisitionCustodyQuery;
 use App\Filament\Resources\Acquisitions\AcquisitionResource;
 use App\Filament\Resources\Disposals\DisposalResource;
 use App\Filament\Resources\Issuances\IssuanceResource;
+use App\Filament\Resources\Requisitions\Actions\RequisitionExportActions;
 use App\Filament\Resources\Requisitions\RequisitionResource;
 use App\Filament\Resources\Transfers\TransferResource;
 use App\Http\Concerns\LogsExportActivity;
@@ -15,6 +16,7 @@ use App\Models\Disposal;
 use App\Models\Issuance;
 use App\Models\Requisition;
 use App\Models\Transfer;
+use App\Models\User;
 use App\Services\OwwaItemReportService;
 use App\Services\OwwaTemplateExportService;
 use App\Support\OwwaExportFilename;
@@ -23,6 +25,7 @@ use Illuminate\Database\Eloquent\SoftDeletingScope;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
@@ -235,11 +238,11 @@ class OwwaBulkExportController extends Controller
             return $this->owwaExport->downloadIssuance($records->first());
         }
 
-        if ($this->owwaExport->canMergeIssuancesIntoSingleRsmiSheet($records)) {
-            return $this->owwaExport->downloadIssuancesRsmiMerged($records);
+        if ($this->owwaExport->canExportIssuancesAsRsmiWorkbook($records)) {
+            return $this->owwaExport->downloadIssuancesRsmiWorkbook($records);
         }
 
-        abort(422, 'Today\'s issuances cannot be merged into a single RSMI workbook.');
+        abort(422, 'Today\'s issuances cannot be exported as RSMI workbook.');
     }
 
     public function issuances(Request $request): BinaryFileResponse|StreamedResponse|Response
@@ -276,8 +279,8 @@ class OwwaBulkExportController extends Controller
             return $this->owwaExport->downloadIssuance($records->first());
         }
 
-        if ($this->owwaExport->canMergeIssuancesIntoSingleRsmiSheet($records)) {
-            return $this->owwaExport->downloadIssuancesRsmiMerged($records);
+        if ($this->owwaExport->canExportIssuancesAsRsmiWorkbook($records)) {
+            return $this->owwaExport->downloadIssuancesRsmiWorkbook($records);
         }
 
         return $this->mergedOwwaWorkbookResponse(
@@ -372,7 +375,11 @@ class OwwaBulkExportController extends Controller
 
     public function requisitions(Request $request): BinaryFileResponse|StreamedResponse|Response
     {
-        abort_unless(RequisitionResource::canViewAny(), 403);
+        $user = Auth::user();
+        abort_unless(
+            $user instanceof User && RequisitionExportActions::userCanExportRis($user),
+            403,
+        );
 
         $ids = $this->parseIdsWithLog($request, 'requisitions');
         abort_if($ids === [], 404);

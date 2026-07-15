@@ -18,6 +18,44 @@ class ActiveItemCategoryIsolationTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_list_items_query_uses_livewire_category_not_session(): void
+    {
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+
+        $office = Office::factory()->create();
+        $custodian = User::factory()->create([
+            'role' => User::ROLE_SUPPLY_CUSTODIAN,
+            'office_id' => $office->id,
+        ]);
+
+        $consumables = ItemCategory::factory()->create(['name' => 'Consumables']);
+        $semi = ItemCategory::factory()->create(['name' => 'Semi-Expendable']);
+
+        $bond = Item::factory()->create([
+            'item_category_id' => $consumables->id,
+            'base_name' => 'Bond Paper',
+            'name' => 'Bond Paper',
+            'unit' => 'ream',
+        ]);
+        $chair = Item::factory()->create([
+            'item_category_id' => $semi->id,
+            'base_name' => 'Office chair',
+            'name' => 'Office chair',
+            'unit' => 'unit',
+            'value_type' => 'low',
+            'semi_expendable_property_number' => 'SPLV-2026-FF-001',
+        ]);
+
+        // Simulate another browser tab leaving session on Semi-Expendable.
+        session(['active_item_category_id' => $semi->id]);
+
+        Livewire::actingAs($custodian)
+            ->withQueryParams(['category' => $consumables->id])
+            ->test(ListItems::class)
+            ->assertCanSeeTableRecords([$bond])
+            ->assertCanNotSeeTableRecords([$chair]);
+    }
+
     public function test_url_category_takes_priority_over_session(): void
     {
         $consumables = ItemCategory::factory()->create(['name' => 'Consumables']);
@@ -54,7 +92,7 @@ class ActiveItemCategoryIsolationTest extends TestCase
             ->test(ListItems::class)
             ->mountAction(TestAction::make('create')->schemaComponent(true, 'content'))
             ->fillForm([
-                'name' => 'Bond paper',
+                'base_name' => 'Bond paper',
                 'unit' => 'ream',
                 'reorder_level' => 5,
             ])
@@ -63,6 +101,7 @@ class ActiveItemCategoryIsolationTest extends TestCase
 
         $this->assertDatabaseHas(Item::class, [
             'name' => 'Bond paper',
+            'base_name' => 'Bond paper',
             'item_category_id' => $consumables->id,
         ]);
     }

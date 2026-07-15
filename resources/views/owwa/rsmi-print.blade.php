@@ -40,10 +40,6 @@
             <dd>{{ $issuance->reference_code ?? '—' }}</dd>
         </div>
         <div>
-            <dt>Fund Cluster</dt>
-            <dd>{{ $issuance->office?->fund_cluster ?? '—' }}</dd>
-        </div>
-        <div>
             <dt>Date</dt>
             <dd>{{ $issuance->issuance_date?->format('Y-m-d') ?? '—' }}</dd>
         </div>

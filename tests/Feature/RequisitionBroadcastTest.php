@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Events\RequisitionChanged;
 use App\Filament\Resources\Requisitions\Pages\ListRequisitions;
+use App\Models\Department;
 use App\Models\Office;
 use App\Models\Requisition;
 use App\Models\User;
@@ -18,6 +19,30 @@ use Tests\TestCase;
 class RequisitionBroadcastTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_creating_requisition_survives_broadcast_transport_failure(): void
+    {
+        Event::listen(RequisitionChanged::class, function (): void {
+            throw new \Illuminate\Broadcasting\BroadcastException('Pusher error: connection refused');
+        });
+
+        $office = Office::factory()->create();
+        $employee = User::factory()->create([
+            'role' => User::ROLE_EMPLOYEE,
+            'office_id' => $office->id,
+        ]);
+
+        $requisition = Requisition::query()->create([
+            'office_id' => $office->id,
+            'requested_by' => $employee->id,
+            'status' => Requisition::STATUS_DRAFT,
+        ]);
+
+        $this->assertDatabaseHas(Requisition::class, [
+            'id' => $requisition->id,
+            'status' => Requisition::STATUS_DRAFT,
+        ]);
+    }
 
     public function test_creating_requisition_dispatches_requisition_changed_event(): void
     {
@@ -92,16 +117,25 @@ class RequisitionBroadcastTest extends TestCase
     public function test_office_channel_authorization(): void
     {
         $office = Office::factory()->create();
-        $otherOffice = Office::factory()->create();
+        $department = Department::query()->create([
+            'office_id' => $office->id,
+            'name' => 'Operations',
+            'code' => 'OPS',
+        ]);
 
         $uc = User::factory()->create([
             'role' => User::ROLE_UNIT_CONSOLIDATOR,
             'office_id' => $office->id,
+            'department_id' => $department->id,
+        ]);
+        $uc->syncOfficeAssignments([
+            ['office_id' => $office->id, 'department_id' => $department->id],
         ]);
         $employee = User::factory()->create([
             'role' => User::ROLE_EMPLOYEE,
             'office_id' => $office->id,
         ]);
+        $otherOffice = Office::factory()->create();
         $outsider = User::factory()->create([
             'role' => User::ROLE_EMPLOYEE,
             'office_id' => $otherOffice->id,

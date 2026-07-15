@@ -3,11 +3,13 @@
 namespace App\Filament\Resources\Disposals\Schemas;
 
 use App\Filament\Concerns\SyncsActiveItemCategory;
+use App\Models\InventoryUnit;
 use App\Models\Item;
 use App\Models\ItemCategory;
 use App\Services\DisposalInventoryUnitService;
 use App\Support\CustodianOfficeScope;
 use App\Support\OwwaReferenceLabels;
+use Closure;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Hidden;
@@ -45,6 +47,12 @@ class DisposalForm
                 Hidden::make('inventory_auto_synced')
                     ->dehydrated(false)
                     ->default(false),
+
+                Hidden::make('inventory_unit_id')
+                    ->dehydrated(),
+
+                Hidden::make('par_issuance_id')
+                    ->dehydrated(),
 
                 Section::make('Record disposal')
                     ->columnSpanFull()
@@ -114,6 +122,57 @@ class DisposalForm
                     ->visible(fn (Get $get): bool => filled($get('item_id'))
                         && self::showAssetDetails($get))
                     ->schema([
+                        Select::make('inventory_unit_id')
+                            ->label(fn (Get $get): string => 'Specific '.OwwaReferenceLabels::assetIdentifierLabel(
+                                self::itemCategorySlug($get)
+                            ))
+                            ->options(fn (Get $get): array => $unitService->unitOptions(
+                                self::intOrNull($get('item_id')),
+                                self::intOrNull($get('office_id')),
+                            ))
+                            ->searchable()
+                            ->live()
+                            ->visible(fn (Get $get): bool => self::usesPropertyTracking($get)
+                                && $unitService->hasAvailableUnits(
+                                    self::intOrNull($get('item_id')),
+                                    self::intOrNull($get('office_id')),
+                                )
+                                && $unitService->availableUnitsQuery(
+                                    self::intOrNull($get('item_id')),
+                                    self::intOrNull($get('office_id')),
+                                )->count() > 1)
+                            ->required(fn (Get $get): bool => self::requiresInventoryUnit($get))
+                            ->helperText('Select the exact physical unit being disposed.')
+                            ->columnSpanFull()
+                            ->rules([
+                                fn (Get $get): Closure => function (string $attribute, mixed $value, Closure $fail): void {
+                                    if (blank($value)) {
+                                        return;
+                                    }
+
+                                    $unit = InventoryUnit::query()->find($value);
+                                    if ($unit?->status === InventoryUnit::STATUS_DISPOSED) {
+                                        $fail('This inventory unit has already been disposed.');
+                                    }
+                                },
+                            ])
+                            ->afterStateUpdated(function ($state, Set $set, Get $get) use ($unitService, $syncItemOffice): void {
+                                if (blank($state)) {
+                                    $syncItemOffice($get, $set);
+
+                                    return;
+                                }
+
+                                $unit = InventoryUnit::query()
+                                    ->with(['issuance', 'acquisition'])
+                                    ->find($state);
+
+                                if ($unit === null) {
+                                    return;
+                                }
+
+                                $unitService->applyUnitToFormState($unit, $set);
+                            }),
                         TextInput::make('stock_number_display')
                             ->label(OwwaReferenceLabels::STOCK_NO)
                             ->disabled()
@@ -135,16 +194,19 @@ class DisposalForm
                             ->maxLength(255)
                             ->visible(fn (Get $get): bool => self::usesPropertyTracking($get))
                             ->dehydrated()
+                            ->disabled(fn (Get $get): bool => filled($get('inventory_unit_id')))
                             ->placeholder('Asset tag / property no.')
-                            ->helperText(fn (Get $get): string => OwwaReferenceLabels::propertyNumberHelperText(self::itemCategorySlug($get)) ?: 'Enter the inventory item or property number.'),
+                            ->helperText(fn (Get $get): string => filled($get('inventory_unit_id'))
+                                ? 'Auto-filled from inventory.'
+                                : (OwwaReferenceLabels::propertyNumberHelperText(self::itemCategorySlug($get)) ?: 'Enter the inventory item or property number.')),
                         TextInput::make('acquisition_cost')
                             ->label('Acquisition cost')
                             ->numeric()
                             ->prefix('₱')
                             ->minValue(0)
-                            ->disabled(fn (Get $get): bool => (bool) $get('inventory_auto_synced'))
+                            ->disabled(fn (Get $get): bool => (bool) $get('inventory_auto_synced') || filled($get('inventory_unit_id')))
                             ->dehydrated()
-                            ->helperText(fn (Get $get): string => (bool) $get('inventory_auto_synced')
+                            ->helperText(fn (Get $get): string => (bool) $get('inventory_auto_synced') || filled($get('inventory_unit_id'))
                                 ? 'Auto-filled from inventory.'
                                 : 'Enter acquisition cost if not available from records.'),
                         Textarea::make('remarks')
@@ -320,6 +382,23 @@ class DisposalForm
     protected static function usesPropertyTracking(Get $get): bool
     {
         return OwwaReferenceLabels::usesPropertyNumber(self::itemCategorySlug($get));
+    }
+
+    protected static function requiresInventoryUnit(Get $get): bool
+    {
+        if (! self::usesPropertyTracking($get)) {
+            return false;
+        }
+
+        $unitService = app(DisposalInventoryUnitService::class);
+
+        return $unitService->hasAvailableUnits(
+            self::intOrNull($get('item_id')),
+            self::intOrNull($get('office_id')),
+        ) && $unitService->availableUnitsQuery(
+            self::intOrNull($get('item_id')),
+            self::intOrNull($get('office_id')),
+        )->count() > 1;
     }
 
     protected static function activeCategorySlug(): ?string

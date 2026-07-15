@@ -8,9 +8,9 @@ use App\Models\Item;
 use App\Services\IssuanceNotificationService;
 use App\Services\IssuanceUnitAssignmentService;
 use App\Services\ReferenceCodeService;
-use App\Services\SemiExpendablePropertyNumberBuilder;
 use App\Support\SemiExpendableUsefulLife;
 use App\Support\SemiExpendableValueCategory;
+use Illuminate\Validation\ValidationException;
 
 class IssuanceObserver
 {
@@ -20,7 +20,12 @@ class IssuanceObserver
             throw new \InvalidArgumentException('Issuance must be linked to a requisition. Use Requisitions → Accept & issue.');
         }
 
-        if (empty($issuance->reference_code)) {
+        if (filled($issuance->issuance_batch_id)) {
+            $issuance->loadMissing('batch');
+            if (filled($issuance->batch?->reference_code)) {
+                $issuance->reference_code = $issuance->batch->reference_code;
+            }
+        } elseif (empty($issuance->reference_code)) {
             $issuance->reference_code = app(ReferenceCodeService::class)->forIssuance();
         }
 
@@ -36,9 +41,6 @@ class IssuanceObserver
                 : null;
 
             SemiExpendableValueCategory::assertWithinSemiCap($unitCost);
-
-            $builder = app(SemiExpendablePropertyNumberBuilder::class);
-            $builder->assertDepartmentPresent($issuance);
 
             if ($item !== null && $unitCost !== null) {
                 $item->update([
@@ -57,13 +59,12 @@ class IssuanceObserver
             app(IssuanceUnitAssignmentService::class)->assignUnitToIssuance($issuance);
         }
 
-        if (config('inventory.auto_generate_property_numbers', true) && blank($issuance->property_number)) {
-            if ($slug === 'semi_expendable') {
-                $issuance->property_number = app(SemiExpendablePropertyNumberBuilder::class)
-                    ->resolveOrAssignForIssuance($issuance);
-            } elseif ($slug === 'ppe') {
-                $issuance->property_number = app(ReferenceCodeService::class)->forPropertyNumber($slug);
-            }
+        if (config('inventory.auto_generate_property_numbers', true)
+            && blank($issuance->property_number)
+            && in_array($slug, ['semi_expendable', 'ppe'], true)) {
+            throw ValidationException::withMessages([
+                'property_number' => 'No in-stock inventory unit with an assigned property or inventory number. Record acquisition first.',
+            ]);
         }
 
         if (empty($issuance->issued_by) && auth()->check()) {

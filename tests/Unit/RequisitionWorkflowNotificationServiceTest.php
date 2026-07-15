@@ -55,12 +55,16 @@ class RequisitionWorkflowNotificationServiceTest extends TestCase
     {
         Notification::fake();
 
+        $regionalOffice = Office::factory()->create(['is_regional_supply' => true]);
         $office = Office::factory()->create();
         $uc = User::factory()->create([
             'role' => User::ROLE_UNIT_CONSOLIDATOR,
             'office_id' => $office->id,
         ]);
-        $custodian = User::factory()->create(['role' => User::ROLE_SUPPLY_CUSTODIAN]);
+        $custodian = User::factory()->create([
+            'role' => User::ROLE_SUPPLY_CUSTODIAN,
+            'office_id' => $regionalOffice->id,
+        ]);
 
         $requisition = Requisition::query()->create([
             'office_id' => $office->id,

@@ -6,6 +6,7 @@ use App\Models\Department;
 use App\Models\Issuance;
 use App\Models\Office;
 use Carbon\CarbonInterface;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 
@@ -18,6 +19,7 @@ class ConsumptionAnalyticsService
      * @param  array<int>  $departmentIds  Empty = all departments.
      * @param  array<int>  $officeIds  Empty = all offices.
      * @param  bool  $includeYearInLabels  When true (multi-year view), chart labels use a compact year format.
+     * @param  array<int>  $itemIds  Empty = all items.
      * @return array{labels: array<string>, series: array<string, array<int>>, departments: array<int, string>}
      */
     public function getConsumptionByDepartmentAndPeriod(
@@ -25,7 +27,8 @@ class ConsumptionAnalyticsService
         CarbonInterface $to,
         array $departmentIds = [],
         array $officeIds = [],
-        bool $includeYearInLabels = false
+        bool $includeYearInLabels = false,
+        array $itemIds = [],
     ): array {
         $periods = $this->buildPeriods($from, $to, $includeYearInLabels);
         $labels = $periods->map(fn ($p) => $p['label'])->values()->all();
@@ -34,13 +37,7 @@ class ConsumptionAnalyticsService
             ->whereBetween('issuance_date', [$from->copy()->startOfDay(), $to->copy()->endOfDay()])
             ->whereNotNull('department_id');
 
-        if ($departmentIds !== []) {
-            $query->whereIn('department_id', $departmentIds);
-        }
-
-        if ($officeIds !== []) {
-            $query->whereIn('office_id', $officeIds);
-        }
+        $this->applyScopeFilters($query, $departmentIds, $officeIds, $itemIds);
 
         $departmentIdsUsed = (clone $query)->distinct()->pluck('department_id')->filter()->values();
         $departments = Department::whereIn('id', $departmentIdsUsed)->pluck('name', 'id')->all();
@@ -81,6 +78,7 @@ class ConsumptionAnalyticsService
      * @param  array<int>  $departmentIds  Empty = all departments (optional scoping filter).
      * @param  array<int>  $officeIds  Empty = all offices.
      * @param  bool  $includeYearInLabels  When true (multi-year view), chart labels use a compact year format.
+     * @param  array<int>  $itemIds  Empty = all items.
      * @return array{labels: array<string>, series: array<string, array<int>>, offices: array<int, string>}
      */
     public function getConsumptionByOfficeAndPeriod(
@@ -88,7 +86,8 @@ class ConsumptionAnalyticsService
         CarbonInterface $to,
         array $departmentIds = [],
         array $officeIds = [],
-        bool $includeYearInLabels = false
+        bool $includeYearInLabels = false,
+        array $itemIds = [],
     ): array {
         $periods = $this->buildPeriods($from, $to, $includeYearInLabels);
         $labels = $periods->map(fn ($p) => $p['label'])->values()->all();
@@ -97,13 +96,7 @@ class ConsumptionAnalyticsService
             ->whereBetween('issuance_date', [$from->copy()->startOfDay(), $to->copy()->endOfDay()])
             ->whereNotNull('office_id');
 
-        if ($departmentIds !== []) {
-            $query->whereIn('department_id', $departmentIds);
-        }
-
-        if ($officeIds !== []) {
-            $query->whereIn('office_id', $officeIds);
-        }
+        $this->applyScopeFilters($query, $departmentIds, $officeIds, $itemIds);
 
         $officeIdsUsed = (clone $query)->distinct()->pluck('office_id')->filter()->values();
         $offices = Office::whereIn('id', $officeIdsUsed)->pluck('name', 'id')->all();
@@ -135,6 +128,27 @@ class ConsumptionAnalyticsService
             'series' => $outSeries,
             'offices' => $officeNames,
         ];
+    }
+
+    /**
+     * @param  Builder<\App\Models\Issuance>  $query
+     * @param  array<int>  $departmentIds
+     * @param  array<int>  $officeIds
+     * @param  array<int>  $itemIds
+     */
+    protected function applyScopeFilters(Builder $query, array $departmentIds, array $officeIds, array $itemIds): void
+    {
+        if ($departmentIds !== []) {
+            $query->whereIn('department_id', $departmentIds);
+        }
+
+        if ($officeIds !== []) {
+            $query->whereIn('office_id', $officeIds);
+        }
+
+        if ($itemIds !== []) {
+            $query->whereIn('item_id', $itemIds);
+        }
     }
 
     /**
@@ -173,9 +187,10 @@ class ConsumptionAnalyticsService
         CarbonInterface $to,
         array $departmentIds = [],
         array $officeIds = [],
-        bool $includeYearInLabels = false
+        bool $includeYearInLabels = false,
+        array $itemIds = [],
     ): array {
-        $data = $this->getConsumptionByDepartmentAndPeriod($from, $to, $departmentIds, $officeIds, $includeYearInLabels);
+        $data = $this->getConsumptionByDepartmentAndPeriod($from, $to, $departmentIds, $officeIds, $includeYearInLabels, $itemIds);
 
         $total = 0;
         $topName = null;
@@ -222,9 +237,10 @@ class ConsumptionAnalyticsService
         CarbonInterface $to,
         array $departmentIds = [],
         array $officeIds = [],
-        bool $includeYearInLabels = false
+        bool $includeYearInLabels = false,
+        array $itemIds = [],
     ): array {
-        $data = $this->getConsumptionByDepartmentAndPeriod($from, $to, $departmentIds, $officeIds, $includeYearInLabels);
+        $data = $this->getConsumptionByDepartmentAndPeriod($from, $to, $departmentIds, $officeIds, $includeYearInLabels, $itemIds);
 
         $labels = [];
         $values = [];
@@ -258,9 +274,10 @@ class ConsumptionAnalyticsService
         CarbonInterface $to,
         array $departmentIds = [],
         array $officeIds = [],
-        bool $includeYearInLabels = false
+        bool $includeYearInLabels = false,
+        array $itemIds = [],
     ): array {
-        $data = $this->getConsumptionByOfficeAndPeriod($from, $to, $departmentIds, $officeIds, $includeYearInLabels);
+        $data = $this->getConsumptionByOfficeAndPeriod($from, $to, $departmentIds, $officeIds, $includeYearInLabels, $itemIds);
 
         $total = 0;
         $topName = null;
@@ -307,9 +324,10 @@ class ConsumptionAnalyticsService
         CarbonInterface $to,
         array $departmentIds = [],
         array $officeIds = [],
-        bool $includeYearInLabels = false
+        bool $includeYearInLabels = false,
+        array $itemIds = [],
     ): array {
-        $data = $this->getConsumptionByOfficeAndPeriod($from, $to, $departmentIds, $officeIds, $includeYearInLabels);
+        $data = $this->getConsumptionByOfficeAndPeriod($from, $to, $departmentIds, $officeIds, $includeYearInLabels, $itemIds);
 
         $labels = [];
         $values = [];

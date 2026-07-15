@@ -6,6 +6,7 @@ use App\Models\PhysicalInventoryPlan;
 use App\Models\PhysicalInventoryPlanLine;
 use App\Models\User;
 use App\Notifications\InventoryPlanReminderNotification;
+use App\Support\NotificationRecipientResolver;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Notification;
 
@@ -38,6 +39,8 @@ class InventoryPlanReminderService
         if ($custodians->isEmpty()) {
             return ['sent' => 0, 'skipped' => $lines->count()];
         }
+
+        $recipientResolver = app(NotificationRecipientResolver::class);
 
         foreach ($lines as $line) {
             $line->loadMissing(['plan', 'office', 'physicalCountSession']);
@@ -72,7 +75,7 @@ class InventoryPlanReminderService
             }
 
             Notification::send(
-                $custodians,
+                $recipientResolver->supplyCustodiansForOffice((int) ($line->office_id ?? 0)),
                 new InventoryPlanReminderNotification($line, $reminderType),
             );
 

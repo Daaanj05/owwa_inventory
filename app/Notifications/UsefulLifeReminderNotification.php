@@ -2,13 +2,18 @@
 
 namespace App\Notifications;
 
+use App\Filament\Resources\PropertyActionRequests\PropertyActionRequestResource;
 use App\Models\Issuance;
-use Filament\Notifications\Notification as FilamentNotification;
+use App\Models\PropertyActionRequest;
+use App\Notifications\Concerns\InteractsWithFilamentDatabase;
+use App\Support\SemiExpendableUsefulLife;
+use Filament\Support\Icons\Heroicon;
 use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Notification;
 
 class UsefulLifeReminderNotification extends Notification
 {
+    use InteractsWithFilamentDatabase;
     use Queueable;
 
     public function __construct(
@@ -45,11 +50,21 @@ class UsefulLifeReminderNotification extends Notification
             $body .= ' For SPLV items, consider return, disposal, or an approved extension.';
         }
 
-        return FilamentNotification::make()
-            ->title($title)
-            ->body($body)
-            ->icon(\Filament\Support\Icons\Heroicon::OutlinedClock)
-            ->iconColor($this->reminderType === 'expired' ? 'danger' : 'warning')
-            ->getDatabaseMessage();
+        $actionType = in_array(
+            SemiExpendableUsefulLife::statusForIssuance($this->issuance),
+            [SemiExpendableUsefulLife::STATUS_NEARING, SemiExpendableUsefulLife::STATUS_EXPIRED],
+            true,
+        )
+            ? PropertyActionRequest::ACTION_REPLACEMENT
+            : PropertyActionRequest::ACTION_DISPOSAL;
+
+        return $this->filamentDatabaseMessage(
+            $title,
+            $body,
+            PropertyActionRequestResource::createUrlForIssuance($this->issuance->id, $actionType),
+            'Start property action',
+            Heroicon::OutlinedClock,
+            $this->reminderType === 'expired' ? 'danger' : 'warning',
+        );
     }
 }

@@ -28,10 +28,6 @@
             <dd>{{ $issuance->office?->name ?? '—' }}</dd>
         </div>
         <div>
-            <dt>Fund Cluster</dt>
-            <dd>{{ $issuance->office?->fund_cluster ?? '—' }}</dd>
-        </div>
-        <div>
             <dt>ICS No.</dt>
             <dd>{{ $issuance->reference_code ?? '—' }}</dd>
         </div>

@@ -137,7 +137,7 @@ class OwwaItemReportService
                     'office_id' => $issuance->office_id,
                     'sort_date' => $issuance->issuance_date,
                     'date' => $issuance->issuance_date?->format('Y-m-d'),
-                    'reference' => $issuance->requisition?->reference_code ?? $issuance->reference_code,
+                    'reference' => $issuance->requisition?->reference_code ?? $issuance->controlNumber(),
                     'type' => 'issue',
                     'receipt_qty' => null,
                     'issue_qty' => $issuance->quantity,
@@ -321,7 +321,7 @@ class OwwaItemReportService
                 $rowsByItem[$issuance->item_id][] = [
                     'office_id' => $issuance->office_id,
                     'date' => $issuance->issuance_date?->format('Y-m-d'),
-                    'reference' => $issuance->reference_code,
+                    'reference' => $issuance->controlNumber(),
                     'property_number' => $issuance->property_number ?? $item?->item_code,
                     'description' => $this->itemDescription($item),
                     'estimated_useful_life' => $issuance->estimated_useful_life ?? $item?->estimated_useful_life,
@@ -365,6 +365,53 @@ class OwwaItemReportService
                 ];
             });
 
+        Transfer::query()
+            ->with(['toOffice', 'fromOffice'])
+            ->where('transfer_type', 'return')
+            ->whereIn('item_id', $itemIds)
+            ->when($normalizedOfficeIds !== [], fn ($q) => $q->whereIn('to_office_id', $normalizedOfficeIds))
+            ->orderBy('transfer_date')
+            ->get()
+            ->each(function (Transfer $transfer) use (&$rowsByItem, $itemsById): void {
+                $propertyNumber = $transfer->property_number;
+                if (blank($propertyNumber)) {
+                    return;
+                }
+
+                $rows = &$rowsByItem[$transfer->item_id];
+                foreach ($rows as $index => $row) {
+                    if (($row['property_number'] ?? null) === $propertyNumber && blank($row['returned_qty'] ?? null)) {
+                        $rows[$index]['returned_qty'] = $transfer->quantity;
+                        $rows[$index]['returned_office'] = $transfer->toOffice?->name
+                            ?? $transfer->from_accountable_officer
+                            ?? '—';
+                        $rows[$index]['date'] = $row['date'] ?? $transfer->transfer_date?->format('Y-m-d');
+
+                        return;
+                    }
+                }
+
+                $item = $itemsById->get($transfer->item_id) ?? Item::query()->find($transfer->item_id);
+
+                $rowsByItem[$transfer->item_id][] = [
+                    'office_id' => $transfer->to_office_id,
+                    'date' => $transfer->transfer_date?->format('Y-m-d'),
+                    'reference' => $transfer->reference_code,
+                    'property_number' => $propertyNumber,
+                    'description' => $this->itemDescription($item),
+                    'estimated_useful_life' => $item?->estimated_useful_life,
+                    'issued_qty' => null,
+                    'issued_office' => null,
+                    'returned_qty' => $transfer->quantity,
+                    'returned_office' => $transfer->toOffice?->name ?? '—',
+                    'reissued_qty' => null,
+                    'reissued_office' => null,
+                    'disposed_qty' => null,
+                    'balance_qty' => null,
+                    'remarks' => $transfer->remarks,
+                ];
+            });
+
         return $rowsByItem;
     }
 
@@ -401,7 +448,7 @@ class OwwaItemReportService
                         'sheetName' => $sheetName,
                         'header' => [
                             'entity_name' => $office?->name ?? '',
-                            'fund_cluster' => $office?->fund_cluster ?? '',
+                            'fund_cluster' => '',
                             'property_type' => ItemPropertyClass::propertyTypeLabel($propertyClass),
                         ],
                         'entries' => $this->buildRegistryRows($item, $officeId),
@@ -670,7 +717,7 @@ class OwwaItemReportService
                 'sheetName' => $sheetName,
                 'header' => [
                     'entity_name' => $office?->name ?? '',
-                    'fund_cluster' => $office?->fund_cluster ?? '',
+                    'fund_cluster' => '',
                     'property_type' => ItemPropertyClass::propertyTypeLabel($propertyClass),
                 ],
                 'entries' => $registryRows,
@@ -976,7 +1023,7 @@ class OwwaItemReportService
     {
         $values = [
             'A6' => 'Entity Name: '.($office?->name ?? ''),
-            'F6' => 'Fund Cluster: '.($office?->fund_cluster ?? ''),
+            'F6' => '',
             'A8' => 'Item : '.$item->name,
             'F8' => 'Stock No. : '.($item->item_code ?? ''),
             'A9' => 'Description : '.($item->description ?? ''),
@@ -1031,7 +1078,7 @@ class OwwaItemReportService
         return [
             'header' => [
                 'entity_name' => $office?->name ?? '',
-                'fund_cluster' => $office?->fund_cluster ?? '',
+                'fund_cluster' => '',
                 'property_type' => ItemPropertyClass::propertyTypeLabel($propertyClass),
                 'property_number' => $latestPropertyNumber ?? $item->item_code ?? '',
                 'description' => $this->itemDescription($item),
@@ -1147,7 +1194,7 @@ class OwwaItemReportService
     {
         $values = [
             'A6' => 'Entity Name: '.($office?->name ?? ''),
-            'L6' => 'Fund Cluster : '.($office?->fund_cluster ?? ''),
+            'L6' => '',
             'A7' => 'Semi-Expendable Property: '.ItemPropertyClass::propertyTypeLabel(
                 ItemPropertyClass::resolveForExport($item->property_class),
             ),
@@ -1306,7 +1353,7 @@ class OwwaItemReportService
         return [
             'inventory_type' => $inventoryType,
             'count_date' => $session->count_date?->format('Y-m-d') ?? '',
-            'fund_cluster' => $session->fund_cluster ?? $office?->fund_cluster ?? '',
+            'fund_cluster' => '',
             'accountable_officer' => implode(', ', array_filter([
                 $session->accountable_officer_name,
                 $session->accountable_officer_designation,

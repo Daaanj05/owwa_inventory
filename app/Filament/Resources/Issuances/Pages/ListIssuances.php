@@ -16,6 +16,7 @@ use Filament\Schemas\Components\EmbeddedTable;
 use Filament\Schemas\Components\Flex;
 use Filament\Schemas\Components\RenderHook;
 use Filament\Schemas\Components\Tabs\Tab;
+use Filament\Schemas\Components\View as SchemaView;
 use Filament\Schemas\Schema;
 use Filament\View\PanelsRenderHook;
 use Illuminate\Database\Eloquent\Builder;
@@ -86,17 +87,68 @@ class ListIssuances extends ListRecords
 
     public function getTabs(): array
     {
-        return [
-            'active' => Tab::make('Active')
+        $consumables = $this->isConsumablesCategory();
+
+        $tabs = [
+            'active' => Tab::make($consumables ? 'All issuances' : 'Active')
                 ->modifyQueryUsing(fn (Builder $query): Builder => $query->withoutTrashed())
                 ->excludeQueryWhenResolvingRecord(),
-            'archived' => Tab::make('Archived')
-                ->modifyQueryUsing(fn (Builder $query): Builder => $query->onlyTrashed())
-                ->excludeQueryWhenResolvingRecord(),
-            'all' => Tab::make('All')
-                ->modifyQueryUsing(fn (Builder $query): Builder => $query->withoutGlobalScopes([SoftDeletingScope::class]))
-                ->excludeQueryWhenResolvingRecord(),
         ];
+
+        if ($consumables) {
+            $tabs['today_rsmi'] = Tab::make("Today's RSMI")
+                ->modifyQueryUsing(fn (Builder $query): Builder => $query
+                    ->withoutTrashed()
+                    ->whereDate('issuance_date', today()))
+                ->badge(fn (): ?string => $this->todayRsmiBatchCount() > 0 ? (string) $this->todayRsmiBatchCount() : null)
+                ->excludeQueryWhenResolvingRecord();
+        }
+
+        $tabs['archived'] = Tab::make('Archived')
+            ->modifyQueryUsing(fn (Builder $query): Builder => $query->onlyTrashed())
+            ->excludeQueryWhenResolvingRecord();
+
+        $tabs['all'] = Tab::make('All')
+            ->modifyQueryUsing(fn (Builder $query): Builder => $query->withoutGlobalScopes([SoftDeletingScope::class]))
+            ->excludeQueryWhenResolvingRecord();
+
+        return $tabs;
+    }
+
+    /** @return array{batchCount: int, lineCount: int, totalQty: int, totalAmount: float} */
+    public function getTodayRsmiSummary(): array
+    {
+        $query = IssuanceResource::getEloquentQuery()->whereDate('issuance_date', today());
+
+        return [
+            'batchCount' => (int) (clone $query)->distinct('issuance_batch_id')->count('issuance_batch_id'),
+            'lineCount' => (int) (clone $query)->count(),
+            'totalQty' => (int) (clone $query)->sum('quantity'),
+            'totalAmount' => (float) (clone $query)->sum('amount'),
+        ];
+    }
+
+    protected function isConsumablesCategory(): bool
+    {
+        return ItemCategory::query()
+            ->whereKey($this->activeItemCategoryId())
+            ->first()
+            ?->getTemplateSlug() === 'consumables';
+    }
+
+    protected function todayRsmiBatchCount(): int
+    {
+        return (int) IssuanceResource::getEloquentQuery()
+            ->whereDate('issuance_date', today())
+            ->distinct('issuance_batch_id')
+            ->count('issuance_batch_id');
+    }
+
+    protected function todayRsmiLineCount(): int
+    {
+        return (int) IssuanceResource::getEloquentQuery()
+            ->whereDate('issuance_date', today())
+            ->count();
     }
 
     public function content(Schema $schema): Schema
@@ -163,6 +215,8 @@ class ListIssuances extends ListRecords
         return $schema
             ->components([
                 $flexComponent,
+                SchemaView::make('filament.resources.issuances.partials.today-rsmi-summary')
+                    ->visible(fn (): bool => $this->isConsumablesCategory() && $this->activeTab === 'today_rsmi'),
                 RenderHook::make(PanelsRenderHook::RESOURCE_PAGES_LIST_RECORDS_TABLE_BEFORE),
                 EmbeddedTable::make(),
                 RenderHook::make(PanelsRenderHook::RESOURCE_PAGES_LIST_RECORDS_TABLE_AFTER),

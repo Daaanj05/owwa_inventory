@@ -18,7 +18,7 @@ class ConfiguresOwwaViewAction
         ?string $modalHeading = null,
         ?string $modelLabel = null,
     ): ViewAction {
-        $windowClass = 'owwa-view-record-modal owwa-record-modal';
+        $windowClass = OwwaFormModalDefaults::MODAL_WINDOW_CLASS;
         if ($extraModalClass !== null) {
             $windowClass .= ' '.$extraModalClass;
         }
@@ -30,6 +30,8 @@ class ConfiguresOwwaViewAction
             ->tableIcon(null)
             ->extraAttributes(['class' => 'sr-only'])
             ->extraModalWindowAttributes(['class' => $windowClass])
+            ->closeModalByClickingAway(false)
+            ->closeModalByEscaping(false)
             ->modalSubmitAction(false)
             ->modalCancelActionLabel('Close');
 

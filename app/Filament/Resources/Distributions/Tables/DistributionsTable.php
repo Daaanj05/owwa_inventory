@@ -7,6 +7,7 @@ use App\Filament\Resources\Distributions\DistributionResource;
 use App\Filament\Resources\Distributions\Schemas\DistributionInfolist;
 use App\Filament\Support\ConfiguresOwwaViewAction;
 use App\Filament\Support\OwwaModalSchema;
+use App\Models\User;
 use App\Support\OwwaTransactionViewPresenter;
 use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
@@ -14,6 +15,7 @@ use Filament\Actions\DeleteBulkAction;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Redirect;
 
 class DistributionsTable
@@ -75,6 +77,7 @@ class DistributionsTable
                 Action::make('exportOwwa')
                     ->label('Export OWWA form')
                     ->icon('heroicon-o-document-arrow-down')
+                    ->visible(fn (): bool => Auth::user() instanceof User && Auth::user()->isSupplyCustodian())
                     ->action(fn ($record) => Redirect::away(route('owwa.export.distribution', $record))),
             ])
             ->toolbarActions([

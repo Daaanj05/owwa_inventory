@@ -141,7 +141,9 @@ class ListAcquisitions extends ListRecords
                     $data['po_status'] = AcquisitionPaperwork::STATUS_DRAFT;
                     $data['iar_status'] = AcquisitionPaperwork::STATUS_DRAFT;
                     $data['pr_date'] ??= now()->toDateString();
-                    $data['office_id'] ??= CustodianOfficeScope::inventoryOfficeId();
+                    $regionalOfficeId = app(\App\Support\SupplyOfficeResolver::class)->resolve();
+                    $data['office_id'] = $regionalOfficeId ?? CustodianOfficeScope::inventoryOfficeId();
+                    $data['requesting_office_id'] = $regionalOfficeId ?? $data['office_id'];
 
                     return $data;
                 })

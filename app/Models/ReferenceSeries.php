@@ -21,11 +21,23 @@ class ReferenceSeries extends Model
 
     public const TYPE_ISSUANCE = 'issuance';
 
+    public const TYPE_ISSUANCE_CONSUMABLES = 'issuance_consumables';
+
+    public const TYPE_ISSUANCE_SEMI = 'issuance_semi';
+
+    public const TYPE_ISSUANCE_PPE = 'issuance_ppe';
+
     public const TYPE_TRANSFER = 'transfer';
 
     public const TYPE_DISPOSAL = 'disposal';
 
+    public const TYPE_DISPOSAL_CONSUMABLES = 'disposal_consumables';
+
+    public const TYPE_DISPOSAL_PROPERTY = 'disposal_property';
+
     public const TYPE_REQUISITION = 'requisition';
+
+    public const TYPE_EMPLOYEE_REQUISITION_TRANSACTION = 'employee_requisition_transaction';
 
     public const TYPE_ITEM_CODE_CONSUMABLES = 'item_code_consumables';
 
@@ -36,6 +48,8 @@ class ReferenceSeries extends Model
     public const TYPE_PROPERTY_NUMBER_PPE = 'property_number_ppe';
 
     public const TYPE_PROPERTY_NUMBER_SEMI = 'property_number_semi';
+
+    public const TYPE_PROPERTY_ACTION_REQUEST = 'property_action_request';
 
     public const TYPE_PROCUREMENT_PR = 'procurement_pr';
 
@@ -69,6 +83,16 @@ class ReferenceSeries extends Model
         return self::TYPE_ISSUANCE;
     }
 
+    public static function typeForIssuanceBatch(string $categorySlug): string
+    {
+        return match ($categorySlug) {
+            'consumables' => self::TYPE_ISSUANCE_CONSUMABLES,
+            'semi_expendable' => self::TYPE_ISSUANCE_SEMI,
+            'ppe' => self::TYPE_ISSUANCE_PPE,
+            default => throw new \InvalidArgumentException("Unknown issuance batch category slug: {$categorySlug}"),
+        };
+    }
+
     public static function typeForAcquisition(): string
     {
         return self::TYPE_ACQUISITION;
@@ -84,9 +108,26 @@ class ReferenceSeries extends Model
         return self::TYPE_DISPOSAL;
     }
 
+    public static function typeForDisposalBatch(string $categorySlug): string
+    {
+        return $categorySlug === 'consumables'
+            ? self::TYPE_DISPOSAL_CONSUMABLES
+            : self::TYPE_DISPOSAL_PROPERTY;
+    }
+
     public static function typeForRequisition(): string
     {
         return self::TYPE_REQUISITION;
+    }
+
+    public static function typeForEmployeeRequisitionTransaction(): string
+    {
+        return self::TYPE_EMPLOYEE_REQUISITION_TRANSACTION;
+    }
+
+    public static function typeForPropertyActionRequest(): string
+    {
+        return self::TYPE_PROPERTY_ACTION_REQUEST;
     }
 
     public static function typeForProcurementPr(): string
@@ -128,9 +169,16 @@ class ReferenceSeries extends Model
     {
         return [
             self::TYPE_REQUISITION,
+            self::TYPE_EMPLOYEE_REQUISITION_TRANSACTION,
+            self::TYPE_PROPERTY_ACTION_REQUEST,
             self::TYPE_ISSUANCE,
+            self::TYPE_ISSUANCE_CONSUMABLES,
+            self::TYPE_ISSUANCE_SEMI,
+            self::TYPE_ISSUANCE_PPE,
             self::TYPE_TRANSFER,
             self::TYPE_DISPOSAL,
+            self::TYPE_DISPOSAL_CONSUMABLES,
+            self::TYPE_DISPOSAL_PROPERTY,
             self::TYPE_ACQUISITION,
             self::TYPE_ACQUISITION_PAPERWORK_PR,
             self::TYPE_ACQUISITION_PAPERWORK_PO,

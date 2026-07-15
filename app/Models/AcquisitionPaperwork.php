@@ -99,6 +99,11 @@ class AcquisitionPaperwork extends Model
                 $paperwork->recorded_by = auth()->id();
             }
         });
+
+        static::saved(function (AcquisitionPaperwork $paperwork): void {
+            ProcurementSignatoryName::remember(ProcurementSignatoryName::ROLE_REQUESTED, $paperwork->requested_by_name);
+            ProcurementSignatoryName::remember(ProcurementSignatoryName::ROLE_APPROVED, $paperwork->approved_by_name);
+        });
     }
 
     public function office(): BelongsTo

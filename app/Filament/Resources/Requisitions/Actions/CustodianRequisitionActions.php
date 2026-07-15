@@ -137,8 +137,13 @@ class CustodianRequisitionActions
                     return false;
                 }
 
-                return (int) ($row['requisition_item_id'] ?? 0) > 0
-                    && (int) ($row['quantity_to_issue'] ?? 0) > 0;
+                if ((int) ($row['requisition_item_id'] ?? 0) <= 0) {
+                    return false;
+                }
+
+                $qty = (int) ($row['quantity_to_issue'] ?? 0);
+
+                return $qty > 0 || filled($row['issue_remarks'] ?? null);
             })
             ->unique(fn (array $row): int => (int) $row['requisition_item_id'])
             ->values()
@@ -158,6 +163,7 @@ class CustodianRequisitionActions
         );
 
         $created = (int) ($result['created'] ?? 0);
+        $acknowledged = (int) ($result['acknowledged'] ?? 0);
         $categoryCounts = (array) ($result['categories'] ?? []);
 
         if ($created > 0) {
@@ -168,10 +174,18 @@ class CustodianRequisitionActions
                 ->body(RequisitionLineDisplay::formatIssuanceCategorySummary($created, $categoryCounts).' Status: '.RequisitionStatus::label($record->status).'.')
                 ->success()
                 ->send();
+        } elseif ($acknowledged > 0) {
+            $record->refresh();
+
+            Notification::make()
+                ->title('Backorder recorded')
+                ->body('RIS '.$record->reference_code.' acknowledged — awaiting regional stock.')
+                ->warning()
+                ->send();
         } else {
             Notification::make()
                 ->title('No stock was issued')
-                ->body('Enter a quantity to issue for at least one line with available stock.')
+                ->body('Enter a quantity to issue or add issue remarks for backordered lines.')
                 ->warning()
                 ->send();
         }

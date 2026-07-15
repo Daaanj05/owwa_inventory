@@ -12,6 +12,7 @@ use App\Models\PhysicalCountSession;
 use App\Services\InventoryStockService;
 use App\Support\CustodianOfficeScope;
 use App\Support\OfficeSignatoryDefaults;
+use App\Support\OwwaReferenceLabels;
 use App\Support\PhysicalCountSessionViewPresenter;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\DatePicker;
@@ -94,8 +95,6 @@ class PhysicalCountSessionForm
                             ->helperText('Printed on Appendix 66 as “Type of Inventory Item” (e.g. Office Supplies Inventory, Accountable Forms Inventory).')
                             ->visible(fn (Get $get): bool => $get('count_type') === PhysicalCountSession::TYPE_RPCI)
                             ->columnSpanFull(),
-                        TextInput::make('fund_cluster')
-                            ->label('Fund cluster'),
                         TextInput::make('accountable_officer_name')
                             ->label('Accountable officer'),
                         TextInput::make('accountable_officer_designation')
@@ -175,7 +174,14 @@ class PhysicalCountSessionForm
                                 TextInput::make('article')->label('Article'),
                                 TextInput::make('description')->label('Description'),
                                 TextInput::make('stock_number')->label('Stock / property no.'),
-                                TextInput::make('property_number')->label('Property number'),
+                                TextInput::make('property_number')
+                                    ->label(fn (Get $get): string => OwwaReferenceLabels::assetIdentifierLabel(
+                                        match ($get('../../count_type')) {
+                                            PhysicalCountSession::TYPE_RPCPPE => 'ppe',
+                                            PhysicalCountSession::TYPE_RPCSP => 'semi_expendable',
+                                            default => null,
+                                        }
+                                    )),
                                 TextInput::make('unit_of_measure')->label('Measurement unit'),
                                 TextInput::make('balance_per_card')
                                     ->label('Balance per card')

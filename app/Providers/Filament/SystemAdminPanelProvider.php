@@ -2,6 +2,7 @@
 
 namespace App\Providers\Filament;
 
+use App\Filament\Pages\Auth\AccountSettings;
 use App\Filament\Pages\Auth\EditProfile;
 use App\Filament\Pages\Auth\Login;
 use App\Filament\Pages\Dashboard;
@@ -12,6 +13,7 @@ use App\Http\Middleware\EnsurePasswordChanged;
 use App\Http\Middleware\TouchUserSessionActivity;
 use App\Livewire\OwwaNotificationDropdown;
 use App\Support\FilamentSessionAudit;
+use Filament\Actions\Action;
 use Filament\Enums\ThemeMode;
 use Filament\Http\Middleware\AuthenticateSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
@@ -19,6 +21,7 @@ use Filament\Http\Middleware\DispatchServingFilamentEvent;
 use Filament\Panel;
 use Filament\PanelProvider;
 use Filament\Support\Colors\Color;
+use Filament\Support\Icons\Heroicon;
 use Filament\View\PanelsRenderHook;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
 use Illuminate\Cookie\Middleware\EncryptCookies;
@@ -40,6 +43,13 @@ class SystemAdminPanelProvider extends PanelProvider
             ->login(Login::class)
             ->emailVerification()
             ->profile(EditProfile::class, isSimple: false)
+            ->userMenuItems([
+                'profile' => fn (Action $action): Action => $action->label('Profile'),
+                'settings' => fn (): Action => Action::make('settings')
+                    ->label('Settings')
+                    ->icon(Heroicon::OutlinedCog6Tooth)
+                    ->url(fn (): string => AccountSettings::getUrl()),
+            ])
             ->colors([
                 'primary' => Color::Indigo,
             ])

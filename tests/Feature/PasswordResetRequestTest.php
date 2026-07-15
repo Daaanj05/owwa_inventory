@@ -20,6 +20,15 @@ class PasswordResetRequestTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_forgot_password_page_renders_branded_centered_layout(): void
+    {
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+
+        Livewire::test(RequestPasswordReset::class)
+            ->assertSee('OWWA 4A Calabarzon Inventory')
+            ->assertSee(__('filament-panels::auth/pages/password-reset/request-password-reset.heading'));
+    }
+
     public function test_admin_password_reset_request_creates_pending_row_and_notifies_system_admins(): void
     {
         Notification::fake();

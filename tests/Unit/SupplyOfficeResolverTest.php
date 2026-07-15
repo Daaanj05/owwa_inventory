@@ -73,6 +73,42 @@ class SupplyOfficeResolverTest extends TestCase
         $this->assertSame($regional->id, app(SupplyOfficeResolver::class)->resolve());
     }
 
+    public function test_resolve_prefers_custodian_office_over_alphabetical_non_satellite(): void
+    {
+        $emptyRegional = Office::factory()->create([
+            'name' => 'AAA Empty Regional',
+            'is_satellite' => false,
+            'is_regional_supply' => false,
+        ]);
+        $custodianOffice = Office::factory()->create([
+            'name' => 'ZZZ Stock Office',
+            'is_satellite' => false,
+            'is_regional_supply' => false,
+        ]);
+        User::factory()->create([
+            'role' => User::ROLE_SUPPLY_CUSTODIAN,
+            'office_id' => $custodianOffice->id,
+        ]);
+
+        $this->assertSame($custodianOffice->id, app(SupplyOfficeResolver::class)->resolve());
+        $this->assertNotSame($emptyRegional->id, app(SupplyOfficeResolver::class)->resolve());
+    }
+
+    public function test_backfill_migration_sets_regional_supply_on_owwa_iva_when_unset(): void
+    {
+        $office = Office::factory()->create([
+            'code' => 'OWWA-IVA',
+            'name' => 'OWWA Regional Office IV-A',
+            'is_satellite' => false,
+            'is_regional_supply' => false,
+        ]);
+
+        $migration = require database_path('migrations/2026_07_09_142458_backfill_regional_supply_office.php');
+        $migration->up();
+
+        $this->assertTrue($office->fresh()->is_regional_supply);
+    }
+
     public function test_resolve_falls_back_to_single_custodian_office(): void
     {
         Office::factory()->create(['is_satellite' => true]);

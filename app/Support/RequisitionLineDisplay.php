@@ -2,6 +2,7 @@
 
 namespace App\Support;
 
+use App\Models\Distribution;
 use App\Models\Issuance;
 use App\Models\Requisition;
 use App\Models\RequisitionItem;
@@ -19,7 +20,7 @@ class RequisitionLineDisplay
 
     public static function identifierValue(RequisitionItem $line): ?string
     {
-        $line->loadMissing(['item.category', 'requisition.issuances']);
+        $line->loadMissing(['item.category', 'requisition.compiledIntoRequisition.issuances']);
 
         $slug = $line->item?->category?->getTemplateSlug();
         $propertyNumber = self::latestIssuanceForLine($line)?->property_number;
@@ -33,13 +34,15 @@ class RequisitionLineDisplay
 
     public static function latestIssuanceForLine(RequisitionItem $line): ?Issuance
     {
-        $line->loadMissing('requisition.issuances');
+        $requisition = self::fulfillmentRequisition($line);
 
-        if (! $line->requisition) {
+        if (! $requisition) {
             return null;
         }
 
-        return $line->requisition->issuances
+        $requisition->loadMissing('issuances');
+
+        return $requisition->issuances
             ->where('item_id', $line->item_id)
             ->sortByDesc('id')
             ->first();
@@ -50,9 +53,15 @@ class RequisitionLineDisplay
      */
     public static function relatedIssuanceSummaries(Requisition $requisition): Collection
     {
-        $requisition->loadMissing(['issuances.item.category']);
+        $fulfillmentRequisition = self::fulfillmentRequisitionForRequisition($requisition);
 
-        return $requisition->issuances
+        if (! $fulfillmentRequisition) {
+            return collect();
+        }
+
+        $fulfillmentRequisition->loadMissing(['issuances.item.category']);
+
+        return $fulfillmentRequisition->issuances
             ->sortBy('id')
             ->groupBy(fn (Issuance $issuance): string => $issuance->item?->category?->name ?? 'Other')
             ->flatMap(function (Collection $group, string $categoryName): Collection {
@@ -70,6 +79,20 @@ class RequisitionLineDisplay
         $summaries = self::relatedIssuanceSummaries($requisition);
 
         return $summaries->isNotEmpty() ? $summaries->implode("\n") : null;
+    }
+
+    public static function distributedQuantity(RequisitionItem $line): int
+    {
+        $line->loadMissing('requisition');
+
+        if (! $line->requisition) {
+            return 0;
+        }
+
+        return (int) Distribution::query()
+            ->where('requisition_id', $line->requisition->id)
+            ->where('item_id', $line->item_id)
+            ->sum('quantity');
     }
 
     public static function mixedCategoriesNotice(): string
@@ -90,5 +113,23 @@ class RequisitionLineDisplay
         $summary = $parts !== [] ? ' Records are under: '.implode(', ', $parts).'.' : '';
 
         return "Issued {$created} item(s).{$summary} Find them under Inventory → category → Issuances.";
+    }
+
+    protected static function fulfillmentRequisition(RequisitionItem $line): ?Requisition
+    {
+        $line->loadMissing('requisition.compiledIntoRequisition');
+
+        return self::fulfillmentRequisitionForRequisition($line->requisition);
+    }
+
+    protected static function fulfillmentRequisitionForRequisition(?Requisition $requisition): ?Requisition
+    {
+        if (! $requisition) {
+            return null;
+        }
+
+        $requisition->loadMissing('compiledIntoRequisition');
+
+        return $requisition->compiledIntoRequisition ?? $requisition;
     }
 }

@@ -5,14 +5,12 @@ namespace App\Filament\Pages;
 use App\Filament\Concerns\SyncsActiveItemCategory;
 use App\Filament\Resources\Acquisitions\AcquisitionResource;
 use App\Filament\Resources\Disposals\DisposalResource;
-use App\Filament\Resources\Distributions\DistributionResource;
 use App\Filament\Resources\Issuances\IssuanceResource;
 use App\Filament\Resources\Items\ItemResource;
 use App\Filament\Resources\PhysicalCountSessions\PhysicalCountSessionResource;
 use App\Filament\Resources\PhysicalInventoryPlans\PhysicalInventoryPlanResource;
 use App\Filament\Resources\Transfers\TransferResource;
 use App\Models\ItemCategory;
-use App\Models\User;
 use App\Services\InventoryStockService;
 use Filament\Facades\Filament;
 use Filament\Pages\Page;
@@ -70,7 +68,7 @@ class InventoryCategoryDashboard extends Page
     {
         $user = Filament::auth()->user();
 
-        return $user && ! $user->isSystemAdmin() && ! $user->isEmployee();
+        return $user?->isSupplyCustodian() ?? false;
     }
 
     public function getTitle(): string|Htmlable
@@ -101,6 +99,15 @@ class InventoryCategoryDashboard extends Page
     /** @return array{total: int, totalStockQty: int, lowCount: int, okCount: int} */
     public function getStockSummary(): array
     {
+        if (! $this->shouldShowStockSummary()) {
+            return [
+                'total' => 0,
+                'totalStockQty' => 0,
+                'lowCount' => 0,
+                'okCount' => 0,
+            ];
+        }
+
         $rows = $this->getCategoryStockRows();
         $total = $rows->count();
         $lowCount = $rows->where('is_low', true)->count();
@@ -113,6 +120,13 @@ class InventoryCategoryDashboard extends Page
         ];
     }
 
+    public function shouldShowStockSummary(): bool
+    {
+        $user = Filament::auth()->user();
+
+        return $user?->isSupplyCustodian() ?? false;
+    }
+
     public function getCategoryLabel(): string
     {
         return (string) $this->categoryRecord?->name;
@@ -122,18 +136,17 @@ class InventoryCategoryDashboard extends Page
     public function getTaskCards(): array
     {
         $categoryId = $this->category;
+        $cards = [];
 
-        $cards = [
-            [
+        $user = Filament::auth()->user();
+
+        if ($user?->isSupplyCustodian()) {
+            $cards[] = [
                 'title' => 'Stock levels',
                 'description' => 'View stock on hand and low-stock alerts for this category.',
                 'icon' => 'heroicon-o-squares-2x2',
                 'url' => StockLevels::getUrl(['category' => $categoryId]),
-            ],
-        ];
-
-        $user = Filament::auth()->user();
-        if ($user?->isSupplyCustodian()) {
+            ];
             $cards[] = [
                 'title' => 'Items',
                 'description' => 'Register and maintain catalog items for this category.',
@@ -185,32 +198,6 @@ class InventoryCategoryDashboard extends Page
                 'description' => 'Schedule year-end counts by office and date; get reminders when counts are due.',
                 'icon' => 'heroicon-o-calendar-days',
                 'url' => static::urlWithActiveItemCategory(PhysicalInventoryPlanResource::getUrl('index'), $categoryId),
-            ];
-        }
-
-        if ($user instanceof User && $user->isUnitConsolidator()) {
-            $slug = $this->categoryRecord?->getTemplateSlug();
-
-            if (in_array($slug, ['ppe', 'semi_expendable'], true)) {
-                $cards[] = [
-                    'title' => 'Office property register',
-                    'description' => 'View PPE and semi-expendable property issued to you, including useful life status.',
-                    'icon' => 'heroicon-o-clipboard-document-list',
-                    'url' => OfficePropertyRegister::getUrl(),
-                ];
-            }
-
-            $cards[] = [
-                'title' => 'Regional supply catalog',
-                'description' => 'Browse items and stock at the regional supply office before submitting a requisition.',
-                'icon' => 'heroicon-o-building-storefront',
-                'url' => RegionalSupplyCatalog::getUrl(['category' => $categoryId]),
-            ];
-            $cards[] = [
-                'title' => 'Distributions',
-                'description' => 'Record items distributed to Employees for this category.',
-                'icon' => 'heroicon-o-gift',
-                'url' => static::urlWithActiveItemCategory(DistributionResource::getUrl('index'), $categoryId),
             ];
         }
 

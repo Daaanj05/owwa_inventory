@@ -19,14 +19,17 @@ class SendInventoryPlanRemindersCommandTest extends TestCase
     {
         Notification::fake();
 
-        $custodian = User::factory()->create(['role' => User::ROLE_SUPPLY_CUSTODIAN]);
         $today = Carbon::parse('2026-06-15');
-
         Carbon::setTestNow($today);
 
-        PhysicalInventoryPlanLine::factory()->create([
+        $line = PhysicalInventoryPlanLine::factory()->create([
             'planned_date' => $today->toDateString(),
             'physical_inventory_plan_id' => PhysicalInventoryPlan::factory()->approved()->create()->id,
+        ]);
+
+        $custodian = User::factory()->create([
+            'role' => User::ROLE_SUPPLY_CUSTODIAN,
+            'office_id' => $line->office_id,
         ]);
 
         $this->artisan('inventory:send-plan-reminders')
@@ -37,6 +40,36 @@ class SendInventoryPlanRemindersCommandTest extends TestCase
             InventoryPlanReminderNotification::class,
             fn (InventoryPlanReminderNotification $notification): bool => $notification->reminderType === 'due',
         );
+
+        Carbon::setTestNow();
+    }
+
+    public function test_command_does_not_notify_custodian_from_unrelated_office(): void
+    {
+        Notification::fake();
+
+        $today = Carbon::parse('2026-06-15');
+        Carbon::setTestNow($today);
+
+        $line = PhysicalInventoryPlanLine::factory()->create([
+            'planned_date' => $today->toDateString(),
+            'physical_inventory_plan_id' => PhysicalInventoryPlan::factory()->approved()->create()->id,
+        ]);
+
+        $matchingCustodian = User::factory()->create([
+            'role' => User::ROLE_SUPPLY_CUSTODIAN,
+            'office_id' => $line->office_id,
+        ]);
+        $otherCustodian = User::factory()->create([
+            'role' => User::ROLE_SUPPLY_CUSTODIAN,
+            'office_id' => \App\Models\Office::factory()->create()->id,
+        ]);
+
+        $this->artisan('inventory:send-plan-reminders')
+            ->assertSuccessful();
+
+        Notification::assertSentTo($matchingCustodian, InventoryPlanReminderNotification::class);
+        Notification::assertNotSentTo($otherCustodian, InventoryPlanReminderNotification::class);
 
         Carbon::setTestNow();
     }

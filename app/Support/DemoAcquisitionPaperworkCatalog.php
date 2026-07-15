@@ -170,6 +170,25 @@ class DemoAcquisitionPaperworkCatalog
                     ['item_code' => 'CON-007', 'quantity' => 50, 'unit_cost' => 36.00],
                 ],
             ],
+            [
+                'reference_code' => 'DEMO-PR-CON-VARIANTS',
+                'category' => self::CATEGORY_CONSUMABLES,
+                'office_code' => 'OWWA-IVA',
+                'requesting_office_code' => 'OWWA-LAG',
+                'purpose' => 'Sub-item variant consumables (Bond Paper Long/Short, Ballpen Black/Red, Folder Short)',
+                'pr_date' => '2026-02-05',
+                'po_date' => '2026-02-06',
+                'iar_date' => '2026-02-08',
+                'received' => true,
+                'in_progress_stop' => null,
+                'lines' => [
+                    ['item_code' => 'CON-009', 'quantity' => 80, 'unit_cost' => 185.00],
+                    ['item_code' => 'CON-010', 'quantity' => 60, 'unit_cost' => 185.00],
+                    ['item_code' => 'CON-011', 'quantity' => 100, 'unit_cost' => 8.50],
+                    ['item_code' => 'CON-012', 'quantity' => 80, 'unit_cost' => 8.50],
+                    ['item_code' => 'CON-013', 'quantity' => 90, 'unit_cost' => 12.00],
+                ],
+            ],
         ];
     }
 
@@ -272,6 +291,7 @@ class DemoAcquisitionPaperworkCatalog
                 'in_progress_stop' => null,
                 'lines' => [
                     ['item_code' => 'PPE-001', 'quantity' => 10, 'unit_cost' => 55000.00],
+                    ['item_code' => 'PPE-005', 'quantity' => 6, 'unit_cost' => 52000.00],
                 ],
             ],
             [
@@ -358,6 +378,9 @@ class DemoAcquisitionPaperworkCatalog
                     ['item_code' => 'CON-001', 'quantity' => 30, 'unit_cost' => 185.00],
                     ['item_code' => 'CON-002', 'quantity' => 50, 'unit_cost' => 8.50],
                     ['item_code' => 'CON-006', 'quantity' => 20, 'unit_cost' => 95.00],
+                    ['item_code' => 'CON-009', 'quantity' => 20, 'unit_cost' => 185.00],
+                    ['item_code' => 'CON-010', 'quantity' => 15, 'unit_cost' => 185.00],
+                    ['item_code' => 'CON-011', 'quantity' => 30, 'unit_cost' => 8.50],
                 ],
             ],
             [

@@ -9,18 +9,20 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Collection;
 
 class Issuance extends Model
 {
     use HasFactory, LogsUserActivity, SoftDeletes;
 
     protected $fillable = [
-        'reference_code', 'item_id', 'office_id', 'department_id', 'requisition_id',
+        'issuance_batch_id', 'reference_code', 'item_id', 'office_id', 'department_id', 'requisition_id',
         'quantity', 'unit_cost', 'amount', 'issuance_date', 'remarks',
         'property_number', 'estimated_useful_life', 'eul_expires_at', 'received_from_name',
         'custodian_printed_name', 'accounting_staff_printed_name',
         'custodian_designation', 'issued_to_designation',
         'issued_by', 'issued_to',
+        'custody_ended_at', 'custody_end_type', 'custody_end_reference',
     ];
 
     protected function casts(): array
@@ -28,6 +30,7 @@ class Issuance extends Model
         return [
             'issuance_date' => 'date',
             'eul_expires_at' => 'date',
+            'custody_ended_at' => 'datetime',
             'unit_cost' => 'decimal:2',
             'amount' => 'decimal:2',
         ];
@@ -59,6 +62,54 @@ class Issuance extends Model
 
             $issuance->amount = $quantity * $unitCost;
         }
+    }
+
+    public function controlNumber(): ?string
+    {
+        if ($this->relationLoaded('batch') && filled($this->batch?->reference_code)) {
+            return (string) $this->batch->reference_code;
+        }
+
+        if ($this->issuance_batch_id !== null && ! $this->relationLoaded('batch')) {
+            $this->loadMissing('batch');
+            if (filled($this->batch?->reference_code)) {
+                return (string) $this->batch->reference_code;
+            }
+        }
+
+        return filled($this->reference_code) ? (string) $this->reference_code : null;
+    }
+
+    /**
+     * @return Collection<int, Issuance>
+     */
+    public function batchLines(): Collection
+    {
+        if ($this->issuance_batch_id === null) {
+            return collect([$this]);
+        }
+
+        $this->loadMissing([
+            'batch.lines.item',
+            'batch.lines.office',
+            'batch.lines.department',
+            'batch.lines.issuedBy',
+            'batch.lines.issuedTo',
+            'batch.lines.requisition',
+        ]);
+
+        $lines = $this->batch?->lines;
+
+        if ($lines === null || $lines->isEmpty()) {
+            return collect([$this]);
+        }
+
+        return $lines->sortBy('id')->values();
+    }
+
+    public function batch(): BelongsTo
+    {
+        return $this->belongsTo(IssuanceBatch::class, 'issuance_batch_id');
     }
 
     public function item(): BelongsTo

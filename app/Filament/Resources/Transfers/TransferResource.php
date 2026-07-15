@@ -30,7 +30,7 @@ class TransferResource extends Resource
 
     protected static bool $shouldRegisterNavigation = false;
 
-    protected static string|UnitEnum|null $navigationGroup = 'Inventory';
+    protected static string|UnitEnum|null $navigationGroup = 'Regional supply';
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedArrowsRightLeft;
 

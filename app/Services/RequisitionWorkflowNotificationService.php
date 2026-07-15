@@ -6,7 +6,9 @@ use App\Models\Requisition;
 use App\Models\User;
 use App\Notifications\RequisitionRejectedMailNotification;
 use App\Notifications\RequisitionWorkflowDatabaseNotification;
+use App\Support\EmployeeRequisitionOriginalSubmission;
 use App\Support\MailDelivery;
+use App\Support\NotificationRecipientResolver;
 use App\Support\RequisitionNotificationRecipients;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Notification;
@@ -42,7 +44,7 @@ class RequisitionWorkflowNotificationService
 
         if ($requester->isUnitConsolidator()) {
             $this->notifyUsers(
-                RequisitionNotificationRecipients::supplyCustodians(),
+                app(NotificationRecipientResolver::class)->supplyCustodiansForRegionalOffice(),
                 'Consolidated requisition submitted',
                 $this->bodyFor($requisition),
                 $requisition,
@@ -60,6 +62,22 @@ class RequisitionWorkflowNotificationService
         $requester = $requisition->requestedBy;
 
         if ($requester === null) {
+            return;
+        }
+
+        if ($previousStatus === Requisition::STATUS_DRAFT
+            && $requisition->status === Requisition::STATUS_PENDING
+            && $requester->isEmployee()) {
+            $this->notifyUsers(
+                RequisitionNotificationRecipients::unitConsolidatorsForOffice(
+                    (int) $requisition->office_id,
+                    $requisition->department_id ? (int) $requisition->department_id : null,
+                ),
+                'New employee requisition',
+                $this->bodyFor($requisition),
+                $requisition,
+            );
+
             return;
         }
 
@@ -135,6 +153,124 @@ class RequisitionWorkflowNotificationService
     }
 
     /**
+     * @param  array<int, array<string, mixed>>  $endorsementLines
+     */
+    public function handleEndorsedWithAdjustments(Requisition $consolidated, array $endorsementLines): void
+    {
+        if ($endorsementLines === []) {
+            return;
+        }
+
+        /** @var array<int, array<int, array<string, mixed>>> $bySource */
+        $bySource = [];
+
+        foreach ($endorsementLines as $line) {
+            $requested = (int) ($line['requested_quantity'] ?? 0);
+            $endorsed = (int) ($line['endorsed_quantity'] ?? 0);
+
+            if ($endorsed >= $requested) {
+                continue;
+            }
+
+            $sourceId = (int) ($line['source_requisition_id'] ?? 0);
+            $bySource[$sourceId][] = $line;
+        }
+
+        if ($bySource === []) {
+            return;
+        }
+
+        foreach ($bySource as $sourceId => $reductions) {
+            $source = Requisition::query()
+                ->with('requestedBy')
+                ->find($sourceId);
+
+            $employee = $source?->requestedBy;
+
+            if (! $source instanceof Requisition || ! $employee instanceof User || ! $employee->isEmployee()) {
+                continue;
+            }
+
+            $ref = $source->displayTransactionNumber() ?? "#{$source->id}";
+            $detailParts = [];
+
+            foreach ($reductions as $reduction) {
+                $itemName = (string) ($reduction['item_name'] ?? 'Item');
+                $detailParts[] = sprintf(
+                    '%s: requested %d, endorsed %d. Reason: %s',
+                    $itemName,
+                    (int) ($reduction['requested_quantity'] ?? 0),
+                    (int) ($reduction['endorsed_quantity'] ?? 0),
+                    (string) ($reduction['employee_remarks'] ?? ''),
+                );
+            }
+
+            $body = sprintf(
+                'Your requisition %s was endorsed to Supply Custodian. %s',
+                $ref,
+                implode(' ', $detailParts),
+            );
+
+            $this->notifyUser($employee, 'Requisition endorsed with adjustments', $body, $source);
+        }
+    }
+
+    public function handleEmployeeContentEdited(Requisition $requisition): void
+    {
+        if (! $requisition->isEmployeeRequest() || ! $requisition->isPendingCustodianReview()) {
+            return;
+        }
+
+        if (! EmployeeRequisitionOriginalSubmission::differsFromCurrent($requisition)) {
+            return;
+        }
+
+        $requisition->loadMissing(['requestedBy', 'office']);
+
+        $this->notifyUsers(
+            RequisitionNotificationRecipients::unitConsolidatorsForOffice(
+                (int) $requisition->office_id,
+                $requisition->department_id ? (int) $requisition->department_id : null,
+            ),
+            'Employee updated a pending requisition',
+            sprintf(
+                '%s — %s edited quantities or purpose after submitting.',
+                $requisition->displayTransactionNumber() ?? $requisition->reference_code ?? 'Requisition',
+                $requisition->requestedBy?->name ?? 'Employee',
+            ),
+            $requisition,
+        );
+    }
+
+    public function handleBackorderAcknowledged(Requisition $requisition): void
+    {
+        $requisition->loadMissing(['requestedBy', 'office', 'sourceRequests.requestedBy']);
+
+        $risNumber = $requisition->reference_code ?? 'RIS';
+        $title = 'RIS acknowledged — awaiting stock';
+        $body = sprintf('%s — regional stock is not yet available.', $risNumber);
+
+        $requester = $requisition->requestedBy;
+
+        if ($requester instanceof User) {
+            $this->notifyUser($requester, $title, $body, $requisition);
+        }
+
+        foreach ($requisition->sourceRequests as $sourceRequest) {
+            $employee = $sourceRequest->requestedBy;
+
+            if ($employee instanceof User && $employee->isEmployee()) {
+                $this->notifyUser(
+                    $employee,
+                    $title,
+                    sprintf('%s — your request is queued until stock arrives.', $sourceRequest->displayTransactionNumber() ?? 'Requisition'),
+                    $sourceRequest,
+                );
+            }
+        }
+    }
+
+    /**
      * @param  Collection<int, User>|array<int, User>  $users
      */
     protected function notifyUsers(Collection|array $users, string $title, string $body, Requisition $requisition): void
@@ -168,7 +304,7 @@ class RequisitionWorkflowNotificationService
     protected function bodyFor(Requisition $requisition, bool $includeRemarks = false): string
     {
         $officeName = $requisition->office?->name ?? 'Office';
-        $body = sprintf('%s — %s', $requisition->reference_code ?? 'Requisition', $officeName);
+        $body = sprintf('%s — %s', $requisition->displayTransactionNumber() ?? $requisition->reference_code ?? 'Requisition', $officeName);
 
         if ($includeRemarks && filled($requisition->remarks)) {
             $body .= '. Reason: '.$requisition->remarks;
