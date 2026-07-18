@@ -12,19 +12,8 @@ return new class extends Migration
             return;
         }
 
-        try {
-            Schema::table('issuance_batches', function (Blueprint $table): void {
-                $table->dropUnique(['reference_code']);
-            });
-        } catch (\Throwable) {
-        }
-
-        try {
-            Schema::table('issuance_batches', function (Blueprint $table): void {
-                $table->unique(['category_slug', 'reference_code']);
-            });
-        } catch (\Throwable) {
-        }
+        $this->dropUniqueIndexOnColumns('issuance_batches', ['reference_code']);
+        $this->ensureUniqueIndexOnColumns('issuance_batches', ['category_slug', 'reference_code']);
     }
 
     public function down(): void
@@ -33,18 +22,44 @@ return new class extends Migration
             return;
         }
 
-        try {
-            Schema::table('issuance_batches', function (Blueprint $table): void {
-                $table->dropUnique(['category_slug', 'reference_code']);
+        $this->dropUniqueIndexOnColumns('issuance_batches', ['category_slug', 'reference_code']);
+        $this->ensureUniqueIndexOnColumns('issuance_batches', ['reference_code']);
+    }
+
+    /**
+     * @param  list<string>  $columns
+     */
+    protected function dropUniqueIndexOnColumns(string $table, array $columns): void
+    {
+        foreach (Schema::getIndexes($table) as $index) {
+            if (! ($index['unique'] ?? false) || ($index['columns'] ?? []) !== $columns) {
+                continue;
+            }
+
+            $name = (string) ($index['name'] ?? '');
+            if ($name === '') {
+                continue;
+            }
+
+            Schema::table($table, function (Blueprint $blueprint) use ($name): void {
+                $blueprint->dropUnique($name);
             });
-        } catch (\Throwable) {
+        }
+    }
+
+    /**
+     * @param  list<string>  $columns
+     */
+    protected function ensureUniqueIndexOnColumns(string $table, array $columns): void
+    {
+        foreach (Schema::getIndexes($table) as $index) {
+            if (($index['unique'] ?? false) && ($index['columns'] ?? []) === $columns) {
+                return;
+            }
         }
 
-        try {
-            Schema::table('issuance_batches', function (Blueprint $table): void {
-                $table->unique('reference_code');
-            });
-        } catch (\Throwable) {
-        }
+        Schema::table($table, function (Blueprint $blueprint) use ($columns): void {
+            $blueprint->unique($columns);
+        });
     }
 };

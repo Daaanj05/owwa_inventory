@@ -37,9 +37,9 @@ return new class extends Migration
 
         if (! Schema::hasColumn('issuances', 'issuance_batch_id')) {
             Schema::table('issuances', function (Blueprint $table): void {
+                // Avoid ->after() — not supported on PostgreSQL.
                 $table->foreignId('issuance_batch_id')
                     ->nullable()
-                    ->after('id')
                     ->constrained('issuance_batches')
                     ->nullOnDelete();
             });
@@ -58,45 +58,91 @@ return new class extends Migration
 
     protected function ensureIssuanceBatchCompositeUnique(): void
     {
-        try {
-            Schema::table('issuance_batches', function (Blueprint $table): void {
-                $table->dropUnique(['reference_code']);
-            });
-        } catch (\Throwable) {
+        if (! Schema::hasTable('issuance_batches')) {
+            return;
         }
 
-        try {
-            Schema::table('issuance_batches', function (Blueprint $table): void {
-                $table->unique(['category_slug', 'reference_code']);
-            });
-        } catch (\Throwable) {
-        }
+        $this->dropUniqueIndexOnColumns('issuance_batches', ['reference_code']);
+        $this->ensureUniqueIndexOnColumns('issuance_batches', ['category_slug', 'reference_code']);
     }
 
     protected function dropIssuanceReferenceCodeUniqueIfPresent(): void
     {
-        try {
-            Schema::table('issuances', function (Blueprint $table): void {
-                $table->dropUnique(['reference_code']);
-            });
-        } catch (\Throwable) {
+        if (! Schema::hasTable('issuances')) {
+            return;
         }
 
-        try {
-            Schema::table('issuances', function (Blueprint $table): void {
-                $table->index('reference_code');
+        $this->dropUniqueIndexOnColumns('issuances', ['reference_code']);
+        $this->ensureNonUniqueIndexOnColumns('issuances', ['reference_code']);
+    }
+
+    /**
+     * @param  list<string>  $columns
+     */
+    protected function dropUniqueIndexOnColumns(string $table, array $columns): void
+    {
+        foreach (Schema::getIndexes($table) as $index) {
+            if (! ($index['unique'] ?? false)) {
+                continue;
+            }
+
+            if (($index['columns'] ?? []) !== $columns) {
+                continue;
+            }
+
+            $name = (string) ($index['name'] ?? '');
+            if ($name === '') {
+                continue;
+            }
+
+            Schema::table($table, function (Blueprint $blueprint) use ($name): void {
+                $blueprint->dropUnique($name);
             });
-        } catch (\Throwable) {
         }
+    }
+
+    /**
+     * @param  list<string>  $columns
+     */
+    protected function ensureUniqueIndexOnColumns(string $table, array $columns): void
+    {
+        foreach (Schema::getIndexes($table) as $index) {
+            if (($index['unique'] ?? false) && ($index['columns'] ?? []) === $columns) {
+                return;
+            }
+        }
+
+        Schema::table($table, function (Blueprint $blueprint) use ($columns): void {
+            $blueprint->unique($columns);
+        });
+    }
+
+    /**
+     * @param  list<string>  $columns
+     */
+    protected function ensureNonUniqueIndexOnColumns(string $table, array $columns): void
+    {
+        foreach (Schema::getIndexes($table) as $index) {
+            if (! ($index['unique'] ?? false) && ($index['columns'] ?? []) === $columns) {
+                return;
+            }
+        }
+
+        Schema::table($table, function (Blueprint $blueprint) use ($columns): void {
+            $blueprint->index($columns);
+        });
     }
 
     public function down(): void
     {
-        Schema::table('issuances', function (Blueprint $table): void {
-            $table->dropConstrainedForeignId('issuance_batch_id');
-            $table->dropIndex(['reference_code']);
-            $table->unique('reference_code');
-        });
+        if (Schema::hasColumn('issuances', 'issuance_batch_id')) {
+            Schema::table('issuances', function (Blueprint $table): void {
+                $table->dropConstrainedForeignId('issuance_batch_id');
+            });
+        }
+
+        $this->dropNonUniqueIndexOnColumns('issuances', ['reference_code']);
+        $this->ensureUniqueIndexOnColumns('issuances', ['reference_code']);
 
         Schema::dropIfExists('issuance_batches');
 
@@ -109,8 +155,33 @@ return new class extends Migration
             ->delete();
     }
 
+    /**
+     * @param  list<string>  $columns
+     */
+    protected function dropNonUniqueIndexOnColumns(string $table, array $columns): void
+    {
+        foreach (Schema::getIndexes($table) as $index) {
+            if (($index['unique'] ?? false) || ($index['columns'] ?? []) !== $columns) {
+                continue;
+            }
+
+            $name = (string) ($index['name'] ?? '');
+            if ($name === '') {
+                continue;
+            }
+
+            Schema::table($table, function (Blueprint $blueprint) use ($name): void {
+                $blueprint->dropIndex($name);
+            });
+        }
+    }
+
     protected function backfillIssuanceBatches(): void
     {
+        if (! Schema::hasTable('issuances') || ! Schema::hasTable('item_categories')) {
+            return;
+        }
+
         $categoryNamesById = DB::table('item_categories')
             ->pluck('name', 'id');
 
@@ -154,6 +225,10 @@ return new class extends Migration
 
     protected function seedPerCategoryIssuanceSeries(): void
     {
+        if (! Schema::hasTable('reference_series')) {
+            return;
+        }
+
         $legacy = ReferenceSeries::query()
             ->where('type', ReferenceSeries::TYPE_ISSUANCE)
             ->first();
@@ -195,6 +270,10 @@ return new class extends Migration
 
     protected function syncSeriesCountersFromBatches(): void
     {
+        if (! Schema::hasTable('issuance_batches')) {
+            return;
+        }
+
         $typeBySlug = [
             'consumables' => ReferenceSeries::TYPE_ISSUANCE_CONSUMABLES,
             'semi_expendable' => ReferenceSeries::TYPE_ISSUANCE_SEMI,
