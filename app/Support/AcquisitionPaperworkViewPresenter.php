@@ -17,8 +17,25 @@ class AcquisitionPaperworkViewPresenter
         $iarEval = app(AcquisitionPaperworkCompletionService::class)->evaluateIar($paperwork);
 
         $prState = $paperwork->isPrApproved() ? 'done' : ($paperwork->pr_status === AcquisitionPaperwork::STATUS_PENDING_APPROVAL ? 'active' : ($prEval['can_submit'] ? 'active' : 'pending'));
-        $poState = $paperwork->isPoApproved() ? 'done' : ($paperwork->isPrApproved() ? ($paperwork->po_status === AcquisitionPaperwork::STATUS_PENDING_APPROVAL || $poEval['can_submit'] ? 'active' : 'pending') : 'pending');
-        $iarState = $paperwork->isIarApproved() ? 'done' : ($paperwork->isPoApproved() ? ($paperwork->iar_status === AcquisitionPaperwork::STATUS_PENDING_APPROVAL || $iarEval['can_submit'] ? 'active' : 'pending') : 'pending');
+        $poState = $paperwork->isPoApproved()
+            ? 'done'
+            : ($paperwork->isPrApproved()
+                ? (($paperwork->purchaseOrder?->isPendingApproval() ?? $paperwork->po_status === AcquisitionPaperwork::STATUS_PENDING_APPROVAL)
+                    || $poEval['can_submit']
+                    || $paperwork->purchaseOrder !== null
+                        ? 'active'
+                        : 'pending')
+                : 'pending');
+        $iarState = $paperwork->isIarApproved()
+            ? 'done'
+            : ($paperwork->isPoApproved()
+                ? (($paperwork->purchaseOrder?->inspectionAcceptanceReport?->isPendingApproval()
+                    ?? $paperwork->iar_status === AcquisitionPaperwork::STATUS_PENDING_APPROVAL)
+                    || $iarEval['can_submit']
+                    || $paperwork->purchaseOrder?->inspectionAcceptanceReport !== null
+                        ? 'active'
+                        : 'pending')
+                : 'pending');
         $receivedState = $paperwork->isReceived()
             ? 'done'
             : ($paperwork->isIarApproved() ? 'active' : 'pending');
@@ -177,11 +194,11 @@ class AcquisitionPaperworkViewPresenter
     }
 
     /**
-     * @return array{paperwork: AcquisitionPaperwork, progressPercent: int, workflowSteps: array, lineCount: int, totalAmount: float, custodyReceipts: \Illuminate\Support\Collection}
+     * @return array{paperwork: AcquisitionPaperwork, progressPercent: int, workflowSteps: array, lineCount: int, totalAmount: float, showReceipts: bool, itemRows: array<int, array<string, mixed>>}
      */
     public static function forPaperwork(AcquisitionPaperwork $paperwork): array
     {
-        $paperwork->loadMissing(['office', 'itemCategory', 'lines.item', 'acquisitions.item']);
+        $paperwork->loadMissing(['office', 'itemCategory', 'lines.item.category', 'acquisitions.item']);
 
         return [
             'paperwork' => $paperwork,
@@ -189,7 +206,77 @@ class AcquisitionPaperworkViewPresenter
             'workflowSteps' => self::workflowSteps($paperwork),
             'lineCount' => $paperwork->lines->count(),
             'totalAmount' => $paperwork->totalAmount(),
-            'custodyReceipts' => $paperwork->acquisitions,
+            'showReceipts' => $paperwork->isReceived(),
+            'itemRows' => self::itemRows($paperwork),
         ];
+    }
+
+    /**
+     * Pair paperwork lines with posted custodian receipts (1:1 after receive).
+     *
+     * @return array<int, array{
+     *     stock_no: string,
+     *     description: string,
+     *     quantity: int,
+     *     unit_cost: float,
+     *     amount: float,
+     *     receipt_ref: string|null,
+     *     receipt_date: string|null
+     * }>
+     */
+    public static function itemRows(AcquisitionPaperwork $paperwork): array
+    {
+        $paperwork->loadMissing(['lines.item.category', 'acquisitions']);
+
+        $receiptsByLineId = $paperwork->acquisitions
+            ->keyBy(fn ($acquisition): int => (int) ($acquisition->acquisition_paperwork_line_id ?? 0));
+
+        return $paperwork->lines->map(function ($line) use ($receiptsByLineId): array {
+            $receipt = $receiptsByLineId->get((int) $line->id);
+
+            return [
+                'stock_no' => $line->stockNumber(),
+                'description' => (string) ($line->description ?: $line->item?->name ?: '—'),
+                'quantity' => (int) $line->quantity,
+                'unit_cost' => (float) ($line->unit_cost ?? 0),
+                'amount' => (float) ($line->amount ?? 0),
+                'receipt_ref' => $receipt?->reference_code,
+                'receipt_date' => $receipt?->acquisition_date?->format('M d, Y'),
+            ];
+        })->values()->all();
+    }
+
+    /**
+     * Posted custodian receipts only (Received tab).
+     *
+     * @return array<int, array{
+     *     stock_no: string,
+     *     description: string,
+     *     quantity: int,
+     *     unit_cost: float,
+     *     amount: float,
+     *     receipt_ref: string|null,
+     *     receipt_date: string|null
+     * }>
+     */
+    public static function receivedItemRows(AcquisitionPaperwork $paperwork): array
+    {
+        $paperwork->loadMissing(['acquisitions.item.category', 'acquisitions.acquisitionPaperworkLine.item.category']);
+
+        return $paperwork->acquisitions->map(function ($receipt): array {
+            $line = $receipt->acquisitionPaperworkLine;
+            $item = $receipt->item ?? $line?->item;
+
+            return [
+                'stock_no' => $line?->stockNumber()
+                    ?: (string) (app(\App\Services\CatalogAssetNumberService::class)->catalogIdentifierForItem($item) ?? $item?->item_code ?? ''),
+                'description' => (string) ($line?->description ?: $item?->name ?: '—'),
+                'quantity' => (int) $receipt->quantity,
+                'unit_cost' => (float) ($receipt->unit_cost ?? $line?->unit_cost ?? 0),
+                'amount' => (float) (($receipt->unit_cost ?? $line?->unit_cost ?? 0) * (int) $receipt->quantity),
+                'receipt_ref' => $receipt->reference_code,
+                'receipt_date' => $receipt->acquisition_date?->format('M d, Y'),
+            ];
+        })->values()->all();
     }
 }

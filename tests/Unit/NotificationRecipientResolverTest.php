@@ -74,6 +74,10 @@ class NotificationRecipientResolverTest extends TestCase
             'role' => User::ROLE_EMPLOYEE,
             'office_id' => $otherOffice->id,
         ]);
+        $unitConsolidator = User::factory()->create([
+            'role' => User::ROLE_UNIT_CONSOLIDATOR,
+            'office_id' => $otherOffice->id,
+        ]);
 
         $category = ItemCategory::factory()->create(['name' => 'Semi']);
         $item = Item::factory()->create(['item_category_id' => $category->id]);
@@ -100,6 +104,7 @@ class NotificationRecipientResolverTest extends TestCase
 
         $this->assertTrue($recipients->contains('id', $regionalCustodian->id));
         $this->assertTrue($recipients->contains('id', $accountable->id));
+        $this->assertTrue($recipients->contains('id', $unitConsolidator->id));
         $this->assertFalse($recipients->contains('id', $otherCustodian->id));
     }
 }

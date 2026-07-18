@@ -39,6 +39,23 @@ class ItemFactory extends Factory
         return $this->state(fn (): array => ['property_class' => ItemPropertyClass::OfficeEquipment]);
     }
 
+    public function ppeOfficeEquipment(): static
+    {
+        return $this->state(fn (): array => [
+            'ppe_type' => \App\Support\PpePropertyType::OfficeEquipment,
+            'property_class' => null,
+        ]);
+    }
+
+    public function officeSuppliesInventory(): static
+    {
+        return $this->state(fn (): array => [
+            'inventory_type' => \App\Support\ConsumableInventoryType::OfficeSupplies,
+            'property_class' => null,
+            'ppe_type' => null,
+        ]);
+    }
+
     public function furnituresFixtures(): static
     {
         return $this->state(fn (): array => ['property_class' => ItemPropertyClass::FurnituresFixtures]);

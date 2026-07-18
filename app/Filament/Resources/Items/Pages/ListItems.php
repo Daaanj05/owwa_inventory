@@ -5,6 +5,7 @@ namespace App\Filament\Resources\Items\Pages;
 use App\Filament\Concerns\HasSystemAdminWizardHeading;
 use App\Filament\Concerns\SyncsActiveItemCategory;
 use App\Filament\Pages\InventoryCategoryDashboard;
+use App\Filament\Resources\Items\Actions\ItemBulkCreateAction;
 use App\Filament\Resources\Items\ItemResource;
 use App\Filament\Support\OwwaFormModalDefaults;
 use App\Models\ItemCategory;
@@ -98,6 +99,7 @@ class ListItems extends ListRecords
                 Flex::make([
                     $this->getTabsContentComponent(),
                     Actions::make([
+                        ItemBulkCreateAction::make(),
                         OwwaFormModalDefaults::createActionForResource(ItemResource::class, OwwaFormModalDefaults::WIDTH_COMPACT)
                             ->fillForm(fn (): array => [
                                 'item_category_id' => $this->activeItemCategoryId() ?: null,
@@ -128,7 +130,15 @@ class ListItems extends ListRecords
      */
     public function getPageClasses(): array
     {
-        return array_merge(parent::getPageClasses(), ['owwa-items-list-page', 'owwa-wide-table-page']);
+        $classes = array_merge(parent::getPageClasses(), ['owwa-items-list-page', 'owwa-wide-table-page']);
+
+        $categoryName = ItemCategory::query()->whereKey($this->activeItemCategoryId())->value('name');
+
+        if (filled($categoryName)) {
+            $classes[] = 'owwa-icd--'.\Illuminate\Support\Str::slug($categoryName);
+        }
+
+        return $classes;
     }
 
     public function getTableColumnsSessionKey(): string

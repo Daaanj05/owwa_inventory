@@ -50,7 +50,8 @@ class DemoPhysicalCountSeeder extends Seeder
         $session = PhysicalCountSession::updateOrCreate(
             ['reference_code' => 'PC-DEMO-RPCI-2026'],
             $this->sessionDefaults($category, $office, $custodian, PhysicalCountSession::TYPE_RPCI, [
-                'inventory_type_label' => 'Core Demo — Office Supplies Inventory',
+                'inventory_type' => \App\Support\ConsumableInventoryType::OfficeSupplies,
+                'inventory_type_label' => 'Office Supplies Inventory',
             ]),
         );
 

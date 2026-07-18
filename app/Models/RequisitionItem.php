@@ -6,6 +6,7 @@ use App\Support\RequisitionLineFulfillmentState;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 class RequisitionItem extends Model
 {
@@ -30,6 +31,14 @@ class RequisitionItem extends Model
     public function item(): BelongsTo
     {
         return $this->belongsTo(Item::class);
+    }
+
+    public function acquisitionPaperworkLines(): BelongsToMany
+    {
+        return $this->belongsToMany(
+            AcquisitionPaperworkLine::class,
+            'acquisition_paperwork_line_requisition_item',
+        )->withPivot('quantity')->withTimestamps();
     }
 
     public function isBackordered(): bool

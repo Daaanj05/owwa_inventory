@@ -4,12 +4,16 @@ namespace App\Filament\Resources\Acquisitions\Pages;
 
 use App\Filament\Concerns\HasSystemAdminWizardHeading;
 use App\Filament\Concerns\SyncsActiveItemCategory;
-use App\Filament\Pages\InventoryCategoryDashboard;
 use App\Filament\Resources\Acquisitions\AcquisitionResource;
+use App\Filament\Resources\Acquisitions\Concerns\HasAcquisitionDocumentTabs;
 use App\Filament\Support\OwwaFormModalDefaults;
 use App\Models\AcquisitionPaperwork;
-use App\Models\ItemCategory;
+use App\Models\Requisition;
+use App\Models\User;
+use App\Services\RequisitionPurchaseRequestService;
 use App\Support\CustodianOfficeScope;
+use Filament\Actions\Action;
+use Filament\Actions\CreateAction;
 use Filament\Resources\Pages\ListRecords;
 use Filament\Schemas\Components\Actions;
 use Filament\Schemas\Components\EmbeddedTable;
@@ -20,33 +24,31 @@ use Filament\Schemas\Schema;
 use Filament\View\PanelsRenderHook;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Support\HtmlString;
+use Illuminate\Validation\ValidationException;
 use Livewire\Attributes\Url;
 
 class ListAcquisitions extends ListRecords
 {
+    use HasAcquisitionDocumentTabs;
     use HasSystemAdminWizardHeading;
     use SyncsActiveItemCategory;
 
     #[Url]
     public int|string|null $category = null;
 
+    #[Url(as: 'create_from_requisition')]
+    public ?int $createFromRequisitionId = null;
+
     protected static string $resource = AcquisitionResource::class;
 
     public function getTitle(): string|Htmlable
     {
-        return 'Acquisitions';
+        return 'Purchase requests';
     }
 
     public function getHeading(): string|Htmlable
     {
-        $categoryName = ItemCategory::query()->whereKey($this->activeItemCategoryId())->value('name');
-
-        if (! $categoryName) {
-            return 'Acquisitions';
-        }
-
-        return new HtmlString($this->getWizardHeaderBreadcrumb($categoryName, 'Acquisitions'));
+        return $this->acquisitionWizardHeading('Acquisitions');
     }
 
     public function getSubheading(): ?string
@@ -54,9 +56,6 @@ class ListAcquisitions extends ListRecords
         return null;
     }
 
-    /**
-     * Filament schemas sometimes call `getRecord()` even on "list" pages.
-     */
     public function getRecord(): mixed
     {
         return null;
@@ -67,20 +66,28 @@ class ListAcquisitions extends ListRecords
         parent::mount();
 
         $this->syncActiveItemCategoryFromRequest();
-        $this->normalizeTableActionForReceivedPaperwork();
+        $this->normalizeTableActionForReadOnlyPaperwork();
+
+        $user = auth()->user();
+        if ($this->createFromRequisitionId !== null && $user instanceof User && $user->isSupplyCustodian()) {
+            $this->replaceMountedAction('create', [
+                'sourceRequisitionId' => $this->createFromRequisitionId,
+                'sourceCategoryId' => $this->activeItemCategoryId(),
+            ], ['schemaComponent' => 'content']);
+        }
     }
 
     public function updatedDefaultTableAction(): void
     {
-        $this->normalizeTableActionForReceivedPaperwork();
+        $this->normalizeTableActionForReadOnlyPaperwork();
     }
 
     public function updatedDefaultTableActionRecord(): void
     {
-        $this->normalizeTableActionForReceivedPaperwork();
+        $this->normalizeTableActionForReadOnlyPaperwork();
     }
 
-    protected function normalizeTableActionForReceivedPaperwork(): void
+    protected function normalizeTableActionForReadOnlyPaperwork(): void
     {
         if ($this->defaultTableAction !== 'edit' || blank($this->defaultTableActionRecord)) {
             return;
@@ -88,48 +95,64 @@ class ListAcquisitions extends ListRecords
 
         $paperwork = AcquisitionPaperwork::query()->find($this->defaultTableActionRecord);
 
-        if ($paperwork?->isReceived()) {
+        if ($paperwork && (! $paperwork->isPrEditable() || $paperwork->isPrPendingApproval() || $paperwork->isArchived() || $paperwork->isReceived())) {
             $this->defaultTableAction = 'view';
         }
     }
 
     public function getDefaultActiveTab(): string|int|null
     {
-        return 'all';
+        return 'active';
     }
 
     public function getTabs(): array
     {
         return [
-            'all' => Tab::make('All')
+            'active' => Tab::make('Active')
+                ->modifyQueryUsing(fn (Builder $query): Builder => $query->whereNull('archived_at'))
                 ->excludeQueryWhenResolvingRecord(),
-            'in_progress' => Tab::make('In progress')
-                ->modifyQueryUsing(fn (Builder $query): Builder => $query->whereNull('received_at'))
-                ->excludeQueryWhenResolvingRecord(),
-            'received' => Tab::make('Received')
-                ->modifyQueryUsing(fn (Builder $query): Builder => $query->whereNotNull('received_at'))
+            'archived' => Tab::make('Archived')
+                ->modifyQueryUsing(fn (Builder $query): Builder => $query->whereNotNull('archived_at'))
                 ->excludeQueryWhenResolvingRecord(),
         ];
-    }
-
-    protected function getWizardHeaderBreadcrumb(string $categoryName, string $taskLabel): string
-    {
-        $categoryId = $this->activeItemCategoryId();
-        $dashboardUrl = InventoryCategoryDashboard::getUrl(['category' => $categoryId]);
-
-        return sprintf(
-            '<span class="owwa-wizard-title" role="list"><a class="owwa-wizard-step owwa-wizard-step-link" href="%s" role="listitem">%s</a><span class="owwa-wizard-separator" aria-hidden="true">&gt;</span><span class="owwa-wizard-step owwa-wizard-step-current" role="listitem">%s</span></span>',
-            e($dashboardUrl),
-            e($categoryName),
-            e($taskLabel),
-        );
     }
 
     public function content(Schema $schema): Schema
     {
         $actionsComponent = Actions::make([
             OwwaFormModalDefaults::createActionForResource(AcquisitionResource::class, OwwaFormModalDefaults::WIDTH_WIDE)
-                ->label('New acquisition')
+                ->label('New PR')
+                ->mountUsing(function (CreateAction $action, ?Schema $schema): void {
+                    $sourceRequisitionId = (int) ($action->getArguments()['sourceRequisitionId'] ?? 0);
+                    $sourceCategoryId = (int) ($action->getArguments()['sourceCategoryId'] ?? 0);
+
+                    if ($sourceRequisitionId <= 0 || $sourceCategoryId <= 0) {
+                        $schema?->fill();
+
+                        return;
+                    }
+
+                    $requisition = Requisition::query()->findOrFail($sourceRequisitionId);
+                    $schema?->fill(app(RequisitionPurchaseRequestService::class)->prefillState(
+                        $requisition,
+                        $sourceCategoryId,
+                    ));
+                })
+                ->before(function (CreateAction $action, Schema $schema): void {
+                    $sourceRequisitionId = (int) ($action->getArguments()['sourceRequisitionId'] ?? 0);
+                    $sourceCategoryId = (int) ($action->getArguments()['sourceCategoryId'] ?? 0);
+
+                    if ($sourceRequisitionId <= 0 || $sourceCategoryId <= 0) {
+                        return;
+                    }
+
+                    $requisition = Requisition::query()->findOrFail($sourceRequisitionId);
+                    app(RequisitionPurchaseRequestService::class)->validateShortcutLines(
+                        $requisition,
+                        $sourceCategoryId,
+                        array_values($schema->getRawState()['lines'] ?? []),
+                    );
+                })
                 ->mutateFormDataUsing(function (array $data): array {
                     $categoryId = $this->activeItemCategoryId();
                     if ($categoryId > 0) {
@@ -141,13 +164,45 @@ class ListAcquisitions extends ListRecords
                     $data['po_status'] = AcquisitionPaperwork::STATUS_DRAFT;
                     $data['iar_status'] = AcquisitionPaperwork::STATUS_DRAFT;
                     $data['pr_date'] ??= now()->toDateString();
+                    $data['recorded_by'] = auth()->id();
                     $regionalOfficeId = app(\App\Support\SupplyOfficeResolver::class)->resolve();
                     $data['office_id'] = $regionalOfficeId ?? CustodianOfficeScope::inventoryOfficeId();
                     $data['requesting_office_id'] = $regionalOfficeId ?? $data['office_id'];
 
                     return $data;
                 })
+                ->after(function (AcquisitionPaperwork $record, CreateAction $action): void {
+                    $sourceRequisitionId = (int) ($action->getArguments()['sourceRequisitionId'] ?? 0);
+                    $sourceCategoryId = (int) ($action->getArguments()['sourceCategoryId'] ?? 0);
+
+                    try {
+                        $service = app(RequisitionPurchaseRequestService::class);
+
+                        if ($sourceRequisitionId > 0 && $sourceCategoryId > 0) {
+                            $requisition = Requisition::query()->findOrFail($sourceRequisitionId);
+                            $service->linkShortcutSources(
+                                $record,
+                                $requisition,
+                                $sourceCategoryId,
+                            );
+
+                            return;
+                        }
+
+                        $service->linkSelectedSources(
+                            $record,
+                            $record->requisitions()->pluck('requisitions.id')->all(),
+                        );
+                    } catch (ValidationException $exception) {
+                        $record->delete();
+
+                        throw $exception;
+                    }
+                })
                 ->successRedirectUrl(fn (AcquisitionPaperwork $record): string => AcquisitionResource::viewModalUrl($record)),
+            Action::make('archiveSelectedHint')
+                ->label('Archive tip')
+                ->visible(false),
         ]);
 
         /** @var mixed $actionsComponent */
@@ -160,6 +215,8 @@ class ListAcquisitions extends ListRecords
 
         /** @var mixed $flexComponent */
         $flexComponent = $flexComponent->alignBetween()->verticallyAlignCenter();
+
+        $this->registerAcquisitionDocumentTabsBelowSearch('pr');
 
         return $schema->components([
             $flexComponent,

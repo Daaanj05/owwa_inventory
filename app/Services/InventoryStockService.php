@@ -159,15 +159,15 @@ class InventoryStockService
             }
         };
 
-        $addKeys(DB::table('acquisitions')->select('item_id', 'office_id', 'unit_cost')->distinct()->get(), 'office_id');
-        $addKeys(DB::table('issuances')->select('item_id', 'office_id', 'unit_cost')->distinct()->get(), 'office_id');
-        $addKeys(DB::table('disposals')->select('item_id', 'office_id', 'acquisition_cost as unit_cost')->distinct()->get(), 'office_id');
+        $addKeys(DB::table('acquisitions')->whereNull('deleted_at')->select('item_id', 'office_id', 'unit_cost')->distinct()->get(), 'office_id');
+        $addKeys(DB::table('issuances')->whereNull('deleted_at')->select('item_id', 'office_id', 'unit_cost')->distinct()->get(), 'office_id');
+        $addKeys(DB::table('disposals')->whereNull('deleted_at')->select('item_id', 'office_id', 'acquisition_cost as unit_cost')->distinct()->get(), 'office_id');
         $addKeys(
-            DB::table('transfers')->select('item_id', 'from_office_id as office_id', 'unit_cost')->distinct()->get(),
+            DB::table('transfers')->whereNull('deleted_at')->select('item_id', 'from_office_id as office_id', 'unit_cost')->distinct()->get(),
             'office_id',
         );
         $addKeys(
-            DB::table('transfers')->select('item_id', 'to_office_id as office_id', 'unit_cost')->distinct()->get(),
+            DB::table('transfers')->whereNull('deleted_at')->select('item_id', 'to_office_id as office_id', 'unit_cost')->distinct()->get(),
             'office_id',
         );
 
@@ -236,6 +236,8 @@ class InventoryStockService
      *     reorder_level: int,
      *     is_low: bool,
      *     is_inactive_for_restock: bool,
+     *     inactive_source: ?string,
+     *     restock_status_label: string,
      *     position_key: string
      * }>
      */
@@ -320,6 +322,8 @@ class InventoryStockService
                 'reorder_level' => (int) $item->reorder_level,
                 'is_low' => false,
                 'is_inactive_for_restock' => (bool) ($flag?->is_inactive_for_restock ?? false),
+                'inactive_source' => $flag?->inactive_source,
+                'restock_status_label' => $flag?->statusLabel() ?? 'Active',
                 'position_key' => $position['position_key'],
             ]);
         }
@@ -408,6 +412,7 @@ class InventoryStockService
     protected function buildMovementMap(string $table, string $officeColumn, string $costColumn): array
     {
         return DB::table($table)
+            ->whereNull('deleted_at')
             ->select(
                 'item_id',
                 "{$officeColumn} as office_id",

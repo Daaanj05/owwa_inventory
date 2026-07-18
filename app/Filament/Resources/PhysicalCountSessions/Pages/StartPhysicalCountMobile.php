@@ -108,7 +108,7 @@ class StartPhysicalCountMobile extends Page
             ->whereNull('archived_at')
             ->orderBy('name')
             ->get()
-            ->filter(fn (ItemCategory $category): bool => in_array($category->getTemplateSlug(), ['ppe', 'semi_expendable'], true))
+            ->filter(fn (ItemCategory $category): bool => in_array($category->getTemplateSlug(), ['consumables', 'ppe', 'semi_expendable'], true))
             ->map(fn (ItemCategory $category): array => [
                 'id' => $category->id,
                 'name' => $category->name,
@@ -140,15 +140,17 @@ class StartPhysicalCountMobile extends Page
         $category = ItemCategory::query()->findOrFail($this->itemCategoryId);
         $slug = $category->getTemplateSlug();
 
-        if (! in_array($slug, ['ppe', 'semi_expendable'], true)) {
-            $this->addError('itemCategoryId', 'Only PPE and semi-expendable categories support QR counting.');
+        if (! in_array($slug, ['consumables', 'ppe', 'semi_expendable'], true)) {
+            $this->addError('itemCategoryId', 'Selected category does not support QR counting.');
 
             return;
         }
 
-        $countType = $slug === 'ppe'
-            ? PhysicalCountSession::TYPE_RPCPPE
-            : PhysicalCountSession::TYPE_RPCSP;
+        $countType = match ($slug) {
+            'ppe' => PhysicalCountSession::TYPE_RPCPPE,
+            'semi_expendable' => PhysicalCountSession::TYPE_RPCSP,
+            default => PhysicalCountSession::TYPE_RPCI,
+        };
 
         $defaults = OfficeSignatoryDefaults::forPhysicalCountSession($this->officeId);
 

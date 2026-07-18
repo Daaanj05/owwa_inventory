@@ -119,6 +119,7 @@ class RequisitionsTable
                     ),
                     [
                         RequisitionExportActions::exportRisAction(),
+                        CustodianRequisitionActions::createPurchaseRequestAction(),
                         CustodianRequisitionActions::acceptAndIssueAction(),
                         CustodianRequisitionActions::issueRemainderAction(),
                         CustodianRequisitionActions::rejectAction(),

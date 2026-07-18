@@ -6,10 +6,11 @@ use App\Filament\Resources\IncidentReports\IncidentReportResource;
 use App\Filament\Support\OwwaFormModalDefaults;
 use App\Models\Disposal;
 use App\Services\OwwaTemplateExportService;
+use App\Support\OwwaExportBusyDispatcher;
 use Filament\Actions\Action;
 use Filament\Actions\EditAction;
 use Filament\Forms\Components\Select;
-use Illuminate\Support\Facades\Redirect;
+use Livewire\Component as LivewireComponent;
 
 class IncidentReportViewActions
 {
@@ -29,14 +30,20 @@ class IncidentReportViewActions
                     ->options(fn (): array => app(OwwaTemplateExportService::class)->getAvailableFormsForCategory('incident_report', null))
                     ->default('rlsddp'),
             ])
-            ->action(function (Disposal $record, array $data) {
+            ->action(function (Disposal $record, array $data, Action $action): void {
                 $url = route('owwa.export.disposal', $record);
                 $form = $data['form'] ?? 'rlsddp';
                 if ($form !== '') {
                     $url .= '?form='.urlencode($form);
                 }
 
-                return Redirect::away($url);
+                $livewire = $action->getLivewire();
+                OwwaExportBusyDispatcher::start(
+                    $livewire instanceof LivewireComponent ? $livewire : null,
+                    $url,
+                    'Preparing Excel export…',
+                    'Building your OWWA form…',
+                );
             });
     }
 

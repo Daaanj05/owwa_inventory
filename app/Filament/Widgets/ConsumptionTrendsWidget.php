@@ -12,7 +12,9 @@ use Filament\Widgets\ChartWidget\Concerns\HasFiltersSchema;
 class ConsumptionTrendsWidget extends ChartWidget
 {
     use ConfiguresConsumptionFilters;
-    use HasFiltersSchema;
+    use HasFiltersSchema {
+        updatedFilters as protected updatedChartFilters;
+    }
 
     protected string $view = 'filament.widgets.consumption-trends-widget';
 
@@ -46,6 +48,10 @@ class ConsumptionTrendsWidget extends ChartWidget
         $user = Filament::auth()->user();
         if ($user && ! $user->isSupplyCustodian()) {
             return 'Monthly issuance trend for your office. Based on issuance records (items issued out); only issuances with an office set are included.';
+        }
+
+        if ($this->isConsumptionItemScoped()) {
+            return 'Monthly issuance trend by office and item for the selected filters.';
         }
 
         return 'Monthly issuance trend per office. Includes all offices (regional and satellite) when All offices is selected.';
@@ -89,20 +95,39 @@ class ConsumptionTrendsWidget extends ChartWidget
         return $this->configureConsumptionFiltersSchema($schema, includeMovingAverage: true);
     }
 
+    public function updatedFilters(): void
+    {
+        $this->updatedChartFilters();
+
+        $this->dispatch(
+            'consumption-trend-filters-updated',
+            filters: $this->filters ?? [],
+        );
+    }
+
     protected function getData(): array
     {
         $resolved = $this->resolveConsumptionFilters();
         $showMovingAverage = (bool) (($this->filters ?? [])['show_moving_average'] ?? false);
 
         $service = app(ConsumptionAnalyticsService::class);
-        $result = $service->getConsumptionByOfficeAndPeriod(
-            $resolved['from'],
-            $resolved['to'],
-            $resolved['department_ids'],
-            $resolved['office_ids'],
-            $resolved['includeYearInLabels'],
-            $resolved['item_ids'],
-        );
+        $result = $resolved['item_ids'] !== []
+            ? $service->getConsumptionByOfficeAndItemAndPeriod(
+                $resolved['from'],
+                $resolved['to'],
+                $resolved['department_ids'],
+                $resolved['office_ids'],
+                $resolved['includeYearInLabels'],
+                $resolved['item_ids'],
+            )
+            : $service->getConsumptionByOfficeAndPeriod(
+                $resolved['from'],
+                $resolved['to'],
+                $resolved['department_ids'],
+                $resolved['office_ids'],
+                $resolved['includeYearInLabels'],
+                $resolved['item_ids'],
+            );
 
         $labels = $result['labels'];
         $series = $result['series'];
@@ -118,10 +143,10 @@ class ConsumptionTrendsWidget extends ChartWidget
         $colors = self::$chartColors;
         $index = 0;
 
-        foreach ($series as $officeName => $values) {
+        foreach ($series as $seriesName => $values) {
             $color = $colors[$index % count($colors)];
             $datasets[] = [
-                'label' => $officeName,
+                'label' => $seriesName,
                 'data' => $values,
                 'borderColor' => $color,
                 'backgroundColor' => $color.'18',
@@ -139,10 +164,10 @@ class ConsumptionTrendsWidget extends ChartWidget
 
         if ($showMovingAverage) {
             $maSeries = $service->applyMovingAverageToSeries($series, 3);
-            foreach ($maSeries as $officeName => $maValues) {
+            foreach ($maSeries as $seriesName => $maValues) {
                 $color = $colors[$index % count($colors)];
                 $datasets[] = [
-                    'label' => $officeName.' (MA)',
+                    'label' => $seriesName.' (MA)',
                     'data' => $maValues,
                     'borderColor' => $color,
                     'backgroundColor' => 'transparent',
@@ -236,9 +261,7 @@ class ConsumptionTrendsWidget extends ChartWidget
     }
 
     /**
-     * Summary stats for the current filters (for the stats row in the view).
-     *
-     * @return array{total: int, top_office_name: string|null, top_office_quantity: int, periods_count: int, avg_per_period: float}
+     * @return array{total: int, top_office_name: string|null, top_office_quantity: int, periods_count: int, avg_per_period: float, growth_percent: float|null, trend_slope: float}
      */
     public function getConsumptionSummary(): array
     {

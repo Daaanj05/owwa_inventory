@@ -2,12 +2,12 @@
 
 namespace App\Filament\Resources\Issuances\Pages;
 
-use App\Filament\Concerns\CoaListPageExports;
 use App\Filament\Concerns\HasSystemAdminWizardHeading;
 use App\Filament\Concerns\SyncsActiveItemCategory;
 use App\Filament\Pages\InventoryCategoryDashboard;
 use App\Filament\Resources\Issuances\IssuanceResource;
 use App\Models\ItemCategory;
+use App\Support\OwwaExportBusyDispatcher;
 use Filament\Actions\Action;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ListRecords;
@@ -16,22 +16,27 @@ use Filament\Schemas\Components\EmbeddedTable;
 use Filament\Schemas\Components\Flex;
 use Filament\Schemas\Components\RenderHook;
 use Filament\Schemas\Components\Tabs\Tab;
-use Filament\Schemas\Components\View as SchemaView;
 use Filament\Schemas\Schema;
+use Filament\Support\Facades\FilamentView;
+use Filament\Tables\View\TablesRenderHook;
 use Filament\View\PanelsRenderHook;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\SoftDeletingScope;
 use Illuminate\Support\HtmlString;
 use Livewire\Attributes\Url;
 
 class ListIssuances extends ListRecords
 {
-    use CoaListPageExports;
     use HasSystemAdminWizardHeading;
     use SyncsActiveItemCategory;
 
     #[Url]
     public int|string|null $category = null;
+
+    /**
+     * Consumables-only view within the Active tab: all | today_rsmi.
+     */
+    #[Url]
+    public string $issuanceView = 'all';
 
     protected static string $resource = IssuanceResource::class;
 
@@ -83,52 +88,85 @@ class ListIssuances extends ListRecords
         parent::mount();
 
         $this->syncActiveItemCategoryFromRequest();
+
+        if (($this->activeTab ?? null) === 'all') {
+            $this->activeTab = 'active';
+        }
+
+        if ($this->isConsumablesCategory() && ($this->activeTab ?? null) === 'today_rsmi') {
+            $this->activeTab = 'active';
+            $this->issuanceView = 'today_rsmi';
+        }
+
+        if (! in_array($this->issuanceView, ['all', 'today_rsmi'], true)) {
+            $this->issuanceView = 'all';
+        }
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    public function getPageClasses(): array
+    {
+        $classes = parent::getPageClasses();
+        $classes[] = 'owwa-issuances-list';
+
+        if ($this->isConsumablesCategory()) {
+            $classes[] = 'owwa-issuances-list--consumables';
+        } else {
+            $classes[] = 'owwa-issuances-list--property';
+        }
+
+        return $classes;
+    }
+
+    public function setIssuanceView(string $view): void
+    {
+        if (! in_array($view, ['all', 'today_rsmi'], true)) {
+            return;
+        }
+
+        $this->issuanceView = $view;
+
+        if (($this->activeTab ?? null) === 'archived') {
+            $this->activeTab = 'active';
+        }
+
+        $this->resetTable();
     }
 
     public function getTabs(): array
     {
-        $consumables = $this->isConsumablesCategory();
+        if ($this->isConsumablesCategory()) {
+            return [
+                'active' => Tab::make('Active')
+                    ->modifyQueryUsing(function (Builder $query): Builder {
+                        $query = $query->withoutTrashed();
 
-        $tabs = [
-            'active' => Tab::make($consumables ? 'All issuances' : 'Active')
-                ->modifyQueryUsing(fn (Builder $query): Builder => $query->withoutTrashed())
-                ->excludeQueryWhenResolvingRecord(),
-        ];
+                        if ($this->issuanceView === 'today_rsmi') {
+                            $query->whereDate('issuance_date', today());
+                        }
 
-        if ($consumables) {
-            $tabs['today_rsmi'] = Tab::make("Today's RSMI")
-                ->modifyQueryUsing(fn (Builder $query): Builder => $query
-                    ->withoutTrashed()
-                    ->whereDate('issuance_date', today()))
-                ->badge(fn (): ?string => $this->todayRsmiBatchCount() > 0 ? (string) $this->todayRsmiBatchCount() : null)
-                ->excludeQueryWhenResolvingRecord();
+                        return $query;
+                    })
+                    ->excludeQueryWhenResolvingRecord(),
+                'archived' => Tab::make('Archived')
+                    ->modifyQueryUsing(fn (Builder $query): Builder => $query->onlyTrashed())
+                    ->excludeQueryWhenResolvingRecord(),
+            ];
         }
 
-        $tabs['archived'] = Tab::make('Archived')
-            ->modifyQueryUsing(fn (Builder $query): Builder => $query->onlyTrashed())
-            ->excludeQueryWhenResolvingRecord();
-
-        $tabs['all'] = Tab::make('All')
-            ->modifyQueryUsing(fn (Builder $query): Builder => $query->withoutGlobalScopes([SoftDeletingScope::class]))
-            ->excludeQueryWhenResolvingRecord();
-
-        return $tabs;
-    }
-
-    /** @return array{batchCount: int, lineCount: int, totalQty: int, totalAmount: float} */
-    public function getTodayRsmiSummary(): array
-    {
-        $query = IssuanceResource::getEloquentQuery()->whereDate('issuance_date', today());
-
         return [
-            'batchCount' => (int) (clone $query)->distinct('issuance_batch_id')->count('issuance_batch_id'),
-            'lineCount' => (int) (clone $query)->count(),
-            'totalQty' => (int) (clone $query)->sum('quantity'),
-            'totalAmount' => (float) (clone $query)->sum('amount'),
+            'active' => Tab::make('Active')
+                ->modifyQueryUsing(fn (Builder $query): Builder => $query->withoutTrashed())
+                ->excludeQueryWhenResolvingRecord(),
+            'archived' => Tab::make('Archived')
+                ->modifyQueryUsing(fn (Builder $query): Builder => $query->onlyTrashed())
+                ->excludeQueryWhenResolvingRecord(),
         ];
     }
 
-    protected function isConsumablesCategory(): bool
+    public function isConsumablesCategory(): bool
     {
         return ItemCategory::query()
             ->whereKey($this->activeItemCategoryId())
@@ -136,7 +174,7 @@ class ListIssuances extends ListRecords
             ?->getTemplateSlug() === 'consumables';
     }
 
-    protected function todayRsmiBatchCount(): int
+    public function todayRsmiBatchCount(): int
     {
         return (int) IssuanceResource::getEloquentQuery()
             ->whereDate('issuance_date', today())
@@ -144,79 +182,98 @@ class ListIssuances extends ListRecords
             ->count('issuance_batch_id');
     }
 
-    protected function todayRsmiLineCount(): int
-    {
-        return (int) IssuanceResource::getEloquentQuery()
-            ->whereDate('issuance_date', today())
-            ->count();
-    }
-
     public function content(Schema $schema): Schema
     {
+        static $toolbarPillsHookRegistered = false;
+
+        if (! $toolbarPillsHookRegistered) {
+            $toolbarPillsHookRegistered = true;
+
+            FilamentView::registerRenderHook(
+                TablesRenderHook::TOOLBAR_SEARCH_AFTER,
+                function (): HtmlString {
+                    $livewire = \Livewire\Livewire::current();
+
+                    if (! $livewire instanceof self || ! $livewire->isConsumablesCategory()) {
+                        return new HtmlString('');
+                    }
+
+                    return new HtmlString(
+                        (string) view('filament.resources.issuances.partials.consumable-toolbar', [
+                            'issuanceView' => $livewire->issuanceView,
+                            'activeTab' => $livewire->activeTab ?? 'active',
+                            'todayBadge' => $livewire->todayRsmiBatchCount(),
+                        ])
+                    );
+                },
+                scopes: static::class,
+            );
+        }
+
         $categorySlug = ItemCategory::query()
             ->whereKey($this->activeItemCategoryId())
             ->first()
             ?->getTemplateSlug();
 
-        $selectedExportLabel = match ($categorySlug) {
-            'consumables' => 'Export RSMI — selected rows',
-            'ppe', 'semi_expendable' => 'Export issuance form — selected rows',
-            default => 'Export Report',
-        };
-
-        $issuanceSelectionHint = $categorySlug === 'consumables'
-            ? 'Use Requisitions → Export RIS for the request slip (Appendix 63), not Issuances. RSMI (Appendix 64) is the daily issue report.'
-            : null;
-
-        $actions = [
-            $this->coaExportReportAction(
-                'coaIssuance',
-                'owwa.export.bulk.issuances',
-                $selectedExportLabel,
-                $issuanceSelectionHint,
-            ),
-        ];
-
         if ($categorySlug === 'consumables') {
-            $actions[] = Action::make('exportTodaysRsmi')
-                ->label('Export today\'s RSMI (Excel)')
-                ->icon('heroicon-o-document-arrow-down')
-                ->color('gray')
-                ->action(function (): void {
-                    $count = IssuanceResource::getEloquentQuery()
-                        ->whereDate('issuance_date', today())
-                        ->count();
+            $actions = [
+                Action::make('exportTodaysRsmi')
+                    ->label('Export Today\'s RSMI')
+                    ->icon('heroicon-o-document-arrow-down')
+                    ->color('gray')
+                    ->action(function (): void {
+                        $count = IssuanceResource::getEloquentQuery()
+                            ->whereDate('issuance_date', today())
+                            ->count();
 
-                    if ($count === 0) {
-                        Notification::make()
-                            ->title('No consumable issuances recorded today')
-                            ->body('Record stock issues from Requisitions → Accept & issue, then export today\'s RSMI.')
-                            ->warning()
-                            ->send();
+                        if ($count === 0) {
+                            Notification::make()
+                                ->title('No consumable issuances recorded today')
+                                ->body('Record stock issues from Requisitions → Accept & issue, then export today\'s RSMI.')
+                                ->warning()
+                                ->send();
 
-                        return;
-                    }
+                            return;
+                        }
 
-                    $this->redirect(route('owwa.export.issuances.today-rsmi'));
-                });
+                        OwwaExportBusyDispatcher::start(
+                            $this,
+                            route('owwa.export.issuances.today-rsmi'),
+                            'Preparing Excel export…',
+                            'Building your OWWA form…',
+                        );
+                    }),
+            ];
+
+            $actionsComponent = Actions::make($actions);
+            /** @var mixed $actionsComponent */
+            $actionsComponent = $actionsComponent->alignEnd();
+
+            $tabsAndExports = Flex::make([
+                $this->getTabsContentComponent(),
+                $actionsComponent,
+            ]);
+            /** @var mixed $tabsAndExports */
+            $tabsAndExports = $tabsAndExports->alignBetween()->verticallyAlignCenter();
+
+            return $schema
+                ->components([
+                    $tabsAndExports,
+                    RenderHook::make(PanelsRenderHook::RESOURCE_PAGES_LIST_RECORDS_TABLE_BEFORE),
+                    EmbeddedTable::make(),
+                    RenderHook::make(PanelsRenderHook::RESOURCE_PAGES_LIST_RECORDS_TABLE_AFTER),
+                ]);
         }
 
-        $actionsComponent = Actions::make($actions);
-        /** @var mixed $actionsComponent */
-        $actionsComponent = $actionsComponent->alignEnd();
-
-        $flexComponent = Flex::make([
+        $tabsOnly = Flex::make([
             $this->getTabsContentComponent(),
-            $actionsComponent,
         ]);
-        /** @var mixed $flexComponent */
-        $flexComponent = $flexComponent->alignBetween()->verticallyAlignCenter();
+        /** @var mixed $tabsOnly */
+        $tabsOnly = $tabsOnly->alignStart()->verticallyAlignCenter();
 
         return $schema
             ->components([
-                $flexComponent,
-                SchemaView::make('filament.resources.issuances.partials.today-rsmi-summary')
-                    ->visible(fn (): bool => $this->isConsumablesCategory() && $this->activeTab === 'today_rsmi'),
+                $tabsOnly,
                 RenderHook::make(PanelsRenderHook::RESOURCE_PAGES_LIST_RECORDS_TABLE_BEFORE),
                 EmbeddedTable::make(),
                 RenderHook::make(PanelsRenderHook::RESOURCE_PAGES_LIST_RECORDS_TABLE_AFTER),

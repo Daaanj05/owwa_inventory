@@ -91,7 +91,8 @@ class PhysicalCountQrTest extends TestCase
 
         $this->assertCount(3, $units);
         $this->assertTrue($units->every(fn (InventoryUnit $unit): bool => $unit->status === InventoryUnit::STATUS_IN_STOCK));
-        $this->assertSame(3, $units->pluck('property_number')->unique()->count());
+        $this->assertSame(1, $units->pluck('property_number')->unique()->count());
+        $this->assertTrue($units->every(fn (InventoryUnit $unit): bool => filled($unit->property_number)));
     }
 
     public function test_preload_creates_expected_lines_from_inventory_units(): void
@@ -419,7 +420,11 @@ class PhysicalCountQrTest extends TestCase
     {
         $office = Office::factory()->create();
         $category = ItemCategory::factory()->create(['name' => 'PPE']);
-        $item = Item::factory()->create(['item_category_id' => $category->id]);
+        $item = Item::factory()->create([
+            'item_category_id' => $category->id,
+            'ppe_type' => \App\Support\PpePropertyType::TechnicalScientificEquipment,
+            'property_class' => null,
+        ]);
         $user = User::factory()->create();
 
         return [$office, $category, $item, $user];

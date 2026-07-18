@@ -8,6 +8,7 @@ use App\Filament\Resources\Distributions\Schemas\DistributionInfolist;
 use App\Filament\Support\ConfiguresOwwaViewAction;
 use App\Filament\Support\OwwaModalSchema;
 use App\Models\User;
+use App\Support\OwwaExportBusyDispatcher;
 use App\Support\OwwaTransactionViewPresenter;
 use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
@@ -16,7 +17,7 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Redirect;
+use Livewire\Component as LivewireComponent;
 
 class DistributionsTable
 {
@@ -78,7 +79,15 @@ class DistributionsTable
                     ->label('Export OWWA form')
                     ->icon('heroicon-o-document-arrow-down')
                     ->visible(fn (): bool => Auth::user() instanceof User && Auth::user()->isSupplyCustodian())
-                    ->action(fn ($record) => Redirect::away(route('owwa.export.distribution', $record))),
+                    ->action(function ($record, Action $action): void {
+                        $livewire = $action->getLivewire();
+                        OwwaExportBusyDispatcher::start(
+                            $livewire instanceof LivewireComponent ? $livewire : null,
+                            route('owwa.export.distribution', $record),
+                            'Preparing Excel export…',
+                            'Building your OWWA form…',
+                        );
+                    }),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([

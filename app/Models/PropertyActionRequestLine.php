@@ -11,6 +11,7 @@ class PropertyActionRequestLine extends Model
         'property_action_request_id',
         'issuance_id',
         'inventory_unit_id',
+        'quantity',
         'disposal_id',
         'transfer_id',
         'sort_order',
@@ -19,6 +20,7 @@ class PropertyActionRequestLine extends Model
     protected function casts(): array
     {
         return [
+            'quantity' => 'integer',
             'sort_order' => 'integer',
         ];
     }

@@ -30,7 +30,7 @@ class PhysicalCountCompletionService
     {
         if (! $session->supportsQrScanning()) {
             throw ValidationException::withMessages([
-                'status' => 'Finish counting is only available for PPE and semi-expendable sessions.',
+                'status' => 'Finish counting is only available for QR-enabled physical count sessions.',
             ]);
         }
 

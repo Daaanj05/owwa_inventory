@@ -8,13 +8,15 @@ use App\Filament\Support\OwwaFormModalDefaults;
 use App\Models\AcquisitionPaperwork;
 use App\Services\AcquisitionPaperworkCompletionService;
 use App\Services\InventoryQrLabelService;
+use App\Services\RequisitionPurchaseRequestService;
 use App\Support\AcquisitionPaperworkViewPresenter;
+use App\Support\OwwaExportBusyDispatcher;
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\EditAction;
 use Filament\Notifications\Notification;
-use Illuminate\Support\Facades\Redirect;
 use Illuminate\Validation\ValidationException;
+use Livewire\Component as LivewireComponent;
 
 class AcquisitionPaperworkActions
 {
@@ -24,57 +26,37 @@ class AcquisitionPaperworkActions
             ->label('')
             ->tableIcon(null)
             ->extraAttributes(['class' => 'sr-only'])
-            ->visible(fn (AcquisitionPaperwork $record): bool => ! $record->isReceived())
+            ->visible(fn (AcquisitionPaperwork $record): bool => $record->isPrEditable())
             ->extraModalWindowAttributes(['class' => OwwaFormModalDefaults::MODAL_WINDOW_CLASS.' owwa-acquisition-paperwork-modal'])
             ->modalHeading(fn (AcquisitionPaperwork $record): string => AcquisitionPaperworkViewPresenter::editModalHeading($record))
             ->modalSubmitActionLabel('Save draft')
             ->modalSubmitAction(fn (Action $action): Action => $action->visible(
                 fn (?AcquisitionPaperwork $record): bool => $record !== null
-                    && ! AcquisitionPaperworkViewPresenter::isCurrentPhasePending($record),
+                    && $record->isPrEditable(),
             ))
             ->after(function (AcquisitionPaperwork $record, EditAction $action): void {
-                $workflow = $action->getArguments()['workflow'] ?? null;
-
-                if (! is_string($workflow) || $workflow === '') {
-                    return;
+                if ($record->pr_status === AcquisitionPaperwork::STATUS_DRAFT) {
+                    app(RequisitionPurchaseRequestService::class)->linkSelectedSources(
+                        $record,
+                        $record->requisitions()->pluck('requisitions.id')->all(),
+                    );
                 }
 
-                $config = match ($workflow) {
-                    'submitPr' => [
-                        'handler' => fn (AcquisitionPaperwork $paperwork) => app(AcquisitionPaperworkCompletionService::class)->submitPr($paperwork),
-                        'successTitle' => 'PR submitted',
-                        'successBody' => 'Export the purchase request and route for offline approval.',
-                        'phase' => AcquisitionPaperwork::PHASE_PR,
-                    ],
-                    'submitPo' => [
-                        'handler' => fn (AcquisitionPaperwork $paperwork) => app(AcquisitionPaperworkCompletionService::class)->submitPo($paperwork),
-                        'successTitle' => 'PO submitted',
-                        'successBody' => 'Export the purchase order for the supplier.',
-                        'phase' => AcquisitionPaperwork::PHASE_PO,
-                    ],
-                    'submitIar' => [
-                        'handler' => fn (AcquisitionPaperwork $paperwork) => app(AcquisitionPaperworkCompletionService::class)->submitIar($paperwork),
-                        'successTitle' => 'IAR submitted',
-                        'successBody' => 'Export the inspection report and file with records.',
-                        'phase' => AcquisitionPaperwork::PHASE_IAR,
-                    ],
-                    default => null,
-                };
+                $workflow = $action->getArguments()['workflow'] ?? null;
 
-                if ($config === null) {
+                if ($workflow !== 'submitPr') {
                     return;
                 }
 
                 self::runWorkflowHandler(
                     $record->fresh(),
-                    $config['handler'],
+                    fn (AcquisitionPaperwork $paperwork) => app(AcquisitionPaperworkCompletionService::class)->submitPr($paperwork),
                     $action,
-                    $config['successTitle'],
-                    $config['successBody'],
-                    $config['phase'],
+                    'PR submitted',
+                    'Export the purchase request and route for offline approval.',
+                    AcquisitionPaperwork::PHASE_PR,
                 );
             })
-            ->registerModalActions(self::hiddenPhaseViewActionsForStepper())
             ->extraModalFooterActions(fn (EditAction $editAction): array => self::editModalFooterActions($editAction));
     }
 
@@ -82,7 +64,7 @@ class AcquisitionPaperworkActions
     {
         return self::workflowAction(
             name: 'submitPr',
-            label: $fromEditModal ? 'Save & submit PR for export' : 'Save & submit PR for export',
+            label: 'Save PR',
             description: 'Saves your entries, locks PR fields, and prepares the form for offline export.',
             visible: fn (AcquisitionPaperwork $record): bool => ! $record->isPrApproved()
                 && $record->pr_status === AcquisitionPaperwork::STATUS_DRAFT,
@@ -98,25 +80,51 @@ class AcquisitionPaperworkActions
     {
         return self::workflowAction(
             name: 'approvePr',
-            label: 'Record offline approval',
+            label: 'Record Offline Approval',
             description: 'Assigns PR No. and unlocks PO after offline approval is recorded.',
             visible: fn (AcquisitionPaperwork $record): bool => $record->pr_status === AcquisitionPaperwork::STATUS_PENDING_APPROVAL,
             handler: fn (AcquisitionPaperwork $record) => app(AcquisitionPaperworkCompletionService::class)->approvePr($record),
             successTitle: 'PR approved',
-            successBody: 'PO phase is now unlocked.',
+            successBody: 'Create a purchase order from the PO tab by choosing this PR.',
             phase: AcquisitionPaperwork::PHASE_PR,
         );
+    }
+
+    public static function archiveAction(): Action
+    {
+        return Action::make('archivePr')
+            ->label('Archive')
+            ->icon('heroicon-o-archive-box')
+            ->color('gray')
+            ->visible(fn (AcquisitionPaperwork $record): bool => ! $record->isArchived()
+                && ($record->isPrEditable() || $record->isPrPendingApproval()))
+            ->requiresConfirmation()
+            ->action(function (AcquisitionPaperwork $record): void {
+                app(AcquisitionPaperworkCompletionService::class)->archive($record);
+                Notification::make()->title('PR archived')->success()->send();
+            });
+    }
+
+    public static function restoreAction(): Action
+    {
+        return Action::make('restorePr')
+            ->label('Restore')
+            ->icon('heroicon-o-arrow-uturn-left')
+            ->color('gray')
+            ->visible(fn (AcquisitionPaperwork $record): bool => $record->isArchived())
+            ->action(function (AcquisitionPaperwork $record): void {
+                app(AcquisitionPaperworkCompletionService::class)->restore($record);
+                Notification::make()->title('PR restored')->success()->send();
+            });
     }
 
     public static function submitPoAction(bool $fromEditModal = false): Action
     {
         return self::workflowAction(
             name: 'submitPo',
-            label: 'Save & submit PO for export',
-            description: 'Saves your entries, locks PO fields, and prepares the form for offline export.',
-            visible: fn (AcquisitionPaperwork $record): bool => $record->isPrApproved()
-                && ! $record->isPoApproved()
-                && $record->po_status === AcquisitionPaperwork::STATUS_DRAFT,
+            label: 'Save PO',
+            description: 'Use the PO tab to create and submit purchase orders.',
+            visible: fn (): bool => false,
             handler: fn (AcquisitionPaperwork $record) => app(AcquisitionPaperworkCompletionService::class)->submitPo($record),
             successTitle: 'PO submitted',
             successBody: 'Export the purchase order for the supplier.',
@@ -129,7 +137,7 @@ class AcquisitionPaperworkActions
     {
         return self::workflowAction(
             name: 'approvePo',
-            label: 'Record offline approval',
+            label: 'Record Offline Approval',
             description: 'Assigns PO No. and unlocks IAR.',
             visible: fn (AcquisitionPaperwork $record): bool => $record->po_status === AcquisitionPaperwork::STATUS_PENDING_APPROVAL,
             handler: fn (AcquisitionPaperwork $record) => app(AcquisitionPaperworkCompletionService::class)->approvePo($record),
@@ -143,7 +151,7 @@ class AcquisitionPaperworkActions
     {
         return self::workflowAction(
             name: 'submitIar',
-            label: 'Save & submit IAR for export',
+            label: 'Save IAR',
             description: 'Saves your entries, locks IAR fields, and prepares the form for offline export.',
             visible: fn (AcquisitionPaperwork $record): bool => $record->isPoApproved()
                 && ! $record->isIarApproved()
@@ -160,7 +168,7 @@ class AcquisitionPaperworkActions
     {
         return self::workflowAction(
             name: 'approveIar',
-            label: 'Record offline approval',
+            label: 'Record Offline Approval',
             description: 'Assigns IAR No. You can then record custodian receipt when goods arrive.',
             visible: fn (AcquisitionPaperwork $record): bool => $record->iar_status === AcquisitionPaperwork::STATUS_PENDING_APPROVAL,
             handler: fn (AcquisitionPaperwork $record) => app(AcquisitionPaperworkCompletionService::class)->approveIar($record),
@@ -239,11 +247,25 @@ class AcquisitionPaperworkActions
     public static function exportPrAction(): Action
     {
         return Action::make('exportPr')
-            ->label('Export PR')
+            ->label('Export Excel')
             ->icon('heroicon-o-document-arrow-down')
             ->visible(fn (AcquisitionPaperwork $record): bool => filled($record->pr_number)
                 || $record->pr_status !== AcquisitionPaperwork::STATUS_DRAFT)
-            ->action(fn (AcquisitionPaperwork $record) => Redirect::away(route('owwa.export.acquisition-paperwork.pr', $record)));
+            ->action(function (AcquisitionPaperwork $record, Action $action): void {
+                self::startOwwaExport($action, route('owwa.export.acquisition-paperwork.pr', $record));
+            });
+    }
+
+    public static function exportPrPdfAction(): Action
+    {
+        return Action::make('exportPrPdf')
+            ->label('Export PDF')
+            ->icon('heroicon-o-document-text')
+            ->visible(fn (AcquisitionPaperwork $record): bool => filled($record->pr_number)
+                || $record->pr_status !== AcquisitionPaperwork::STATUS_DRAFT)
+            ->action(function (AcquisitionPaperwork $record, Action $action): void {
+                self::startOwwaExport($action, route('owwa.export.acquisition-paperwork.pr-pdf', $record));
+            });
     }
 
     public static function exportPoAction(): Action
@@ -251,8 +273,11 @@ class AcquisitionPaperworkActions
         return Action::make('exportPo')
             ->label('Export PO')
             ->icon('heroicon-o-document-arrow-down')
-            ->visible(fn (AcquisitionPaperwork $record): bool => $record->isPrApproved())
-            ->action(fn (AcquisitionPaperwork $record) => Redirect::away(route('owwa.export.acquisition-paperwork.po', $record)));
+            ->visible(fn (AcquisitionPaperwork $record): bool => $record->purchaseOrder !== null
+                && ! $record->purchaseOrder->isDraft())
+            ->action(function (AcquisitionPaperwork $record, Action $action): void {
+                self::startOwwaExport($action, route('owwa.export.purchase-order.excel', $record->purchaseOrder));
+            });
     }
 
     public static function exportIarAction(): Action
@@ -260,8 +285,25 @@ class AcquisitionPaperworkActions
         return Action::make('exportIar')
             ->label('Export IAR')
             ->icon('heroicon-o-document-arrow-down')
-            ->visible(fn (AcquisitionPaperwork $record): bool => $record->isPoApproved())
-            ->action(fn (AcquisitionPaperwork $record) => Redirect::away(route('owwa.export.acquisition-paperwork.iar', $record)));
+            ->visible(fn (AcquisitionPaperwork $record): bool => $record->purchaseOrder?->inspectionAcceptanceReport !== null
+                && ! $record->purchaseOrder->inspectionAcceptanceReport->isDraft())
+            ->action(function (AcquisitionPaperwork $record, Action $action): void {
+                self::startOwwaExport(
+                    $action,
+                    route('owwa.export.inspection-acceptance-report.excel', $record->purchaseOrder->inspectionAcceptanceReport),
+                );
+            });
+    }
+
+    protected static function startOwwaExport(Action $action, string $url): void
+    {
+        $livewire = $action->getLivewire();
+        OwwaExportBusyDispatcher::start(
+            $livewire instanceof LivewireComponent ? $livewire : null,
+            $url,
+            'Preparing Excel export…',
+            'Building your OWWA form…',
+        );
     }
 
     /**
@@ -274,41 +316,20 @@ class AcquisitionPaperworkActions
                 $editAction,
                 'submitPrWorkflow',
                 'submitPr',
-                'Save & submit PR for export',
-                fn (AcquisitionPaperwork $record): bool => ! $record->isPrApproved()
-                    && $record->pr_status === AcquisitionPaperwork::STATUS_DRAFT,
-            ),
-            self::makeEditModalSubmitWorkflowAction(
-                $editAction,
-                'submitPoWorkflow',
-                'submitPo',
-                'Save & submit PO for export',
-                fn (AcquisitionPaperwork $record): bool => $record->isPrApproved()
-                    && ! $record->isPoApproved()
-                    && $record->po_status === AcquisitionPaperwork::STATUS_DRAFT,
-            ),
-            self::makeEditModalSubmitWorkflowAction(
-                $editAction,
-                'submitIarWorkflow',
-                'submitIar',
-                'Save & submit IAR for export',
-                fn (AcquisitionPaperwork $record): bool => $record->isPoApproved()
-                    && ! $record->isIarApproved()
-                    && $record->iar_status === AcquisitionPaperwork::STATUS_DRAFT,
+                'Save PR',
+                fn (AcquisitionPaperwork $record): bool => $record->isPrEditable(),
             ),
             self::approvePrAction(),
-            self::approvePoAction(),
-            self::approveIarAction(),
-            self::recordCustodyReceiptAction(),
-            self::printUnitQrLabelsAction(),
+            self::archiveAction(),
+            self::restoreAction(),
             ActionGroup::make([
                 self::exportPrAction(),
-                self::exportPoAction(),
-                self::exportIarAction(),
+                self::exportPrPdfAction(),
             ])
-                ->label('Export')
+                ->label('Export PR')
                 ->icon('heroicon-m-document-arrow-down')
-                ->color('gray'),
+                ->color('gray')
+                ->button(),
         ];
     }
 
@@ -319,18 +340,16 @@ class AcquisitionPaperworkActions
     {
         return [
             self::approvePrAction(),
-            self::approvePoAction(),
-            self::approveIarAction(),
-            self::recordCustodyReceiptAction(),
-            self::printUnitQrLabelsAction(),
+            self::archiveAction(),
+            self::restoreAction(),
             ActionGroup::make([
                 self::exportPrAction(),
-                self::exportPoAction(),
-                self::exportIarAction(),
+                self::exportPrPdfAction(),
             ])
-                ->label('Export')
+                ->label('Export PR')
                 ->icon('heroicon-m-document-arrow-down')
-                ->color('gray'),
+                ->color('gray')
+                ->button(),
         ];
     }
 

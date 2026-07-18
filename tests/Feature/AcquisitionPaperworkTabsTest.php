@@ -30,10 +30,12 @@ class AcquisitionPaperworkTabsTest extends TestCase
 
         Livewire::actingAs($custodian)
             ->test(ListAcquisitions::class)
-            ->assertSee('New acquisition')
-            ->assertSee('In progress')
-            ->assertSee('Received')
-            ->assertSee('All');
+            ->assertSee('New PR')
+            ->assertSee('Active')
+            ->assertSee('Archived')
+            ->assertSee('PR')
+            ->assertSee('PO')
+            ->assertSee('IAR');
     }
 
     public function test_acquisitions_list_shows_status_column_heading(): void

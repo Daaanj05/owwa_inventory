@@ -10,10 +10,12 @@ use App\Models\Item;
 use App\Models\ItemCategory;
 use App\Models\PhysicalCountSession;
 use App\Services\InventoryStockService;
+use App\Support\ConsumableInventoryType;
 use App\Support\CustodianOfficeScope;
 use App\Support\OfficeSignatoryDefaults;
 use App\Support\OwwaReferenceLabels;
 use App\Support\PhysicalCountSessionViewPresenter;
+use App\Support\PpePropertyType;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Hidden;
@@ -89,11 +91,32 @@ class PhysicalCountSessionForm
                             ->label('As at date')
                             ->required()
                             ->default(now()),
-                        TextInput::make('inventory_type_label')
-                            ->label('Type of inventory / property')
-                            ->placeholder('e.g. Office Supplies Inventory, Medical/Dental/Laboratory Supplies Inventory')
-                            ->helperText('Printed on Appendix 66 as “Type of Inventory Item” (e.g. Office Supplies Inventory, Accountable Forms Inventory).')
+                        Select::make('inventory_type')
+                            ->label('Inventory type')
+                            ->options(ConsumableInventoryType::options())
+                            ->required(fn (Get $get): bool => $get('count_type') === PhysicalCountSession::TYPE_RPCI)
+                            ->searchable()
+                            ->live()
+                            ->helperText('Scopes RPCI lines and prints as Type of Inventory Item on Appendix 66.')
                             ->visible(fn (Get $get): bool => $get('count_type') === PhysicalCountSession::TYPE_RPCI)
+                            ->dehydrated(fn (Get $get): bool => $get('count_type') === PhysicalCountSession::TYPE_RPCI)
+                            ->afterStateUpdated(function ($state, callable $set): void {
+                                $set('inventory_type_label', ConsumableInventoryType::label($state));
+                            })
+                            ->columnSpanFull(),
+                        Hidden::make('inventory_type_label')
+                            ->dehydrated(),
+                        Select::make('ppe_type')
+                            ->label('Type of PPE')
+                            ->options(PpePropertyType::options())
+                            ->searchable()
+                            ->live()
+                            ->helperText('Scopes RPCPPE expected assets and prints as Type of PPE on Appendix 73.')
+                            ->visible(fn (Get $get): bool => $get('count_type') === PhysicalCountSession::TYPE_RPCPPE)
+                            ->dehydrated(fn (Get $get): bool => $get('count_type') === PhysicalCountSession::TYPE_RPCPPE)
+                            ->afterStateUpdated(function ($state, callable $set): void {
+                                $set('inventory_type_label', PpePropertyType::propertyTypeLabel($state));
+                            })
                             ->columnSpanFull(),
                         TextInput::make('accountable_officer_name')
                             ->label('Accountable officer'),
@@ -116,9 +139,15 @@ class PhysicalCountSessionForm
                         TextInput::make('verified_by_printed_name')->label('Verified by'),
                     ]),
                 Section::make('QR counting workflow')
-                    ->description('Property-tag scanning (PPE and semi-expendable only)')
+                    ->description(fn (Get $get): string => $get('count_type') === PhysicalCountSession::TYPE_RPCI
+                        ? 'Stock QR scanning — scan shelf/stock labels, then enter counted quantity.'
+                        : 'Property-tag scanning (PPE and semi-expendable)')
                     ->columnSpanFull()
-                    ->visible(fn (Get $get): bool => in_array($get('count_type'), [PhysicalCountSession::TYPE_RPCPPE, PhysicalCountSession::TYPE_RPCSP], true))
+                    ->visible(fn (Get $get): bool => in_array($get('count_type'), [
+                        PhysicalCountSession::TYPE_RPCI,
+                        PhysicalCountSession::TYPE_RPCPPE,
+                        PhysicalCountSession::TYPE_RPCSP,
+                    ], true))
                     ->schema([
                         Placeholder::make('qr_workflow_steps')
                             ->hiddenLabel()
@@ -126,9 +155,11 @@ class PhysicalCountSessionForm
                             ->columnSpanFull(),
                     ]),
                 Section::make('Count lines')
-                    ->description(fn (Get $get): ?string => in_array($get('count_type'), [PhysicalCountSession::TYPE_RPCPPE, PhysicalCountSession::TYPE_RPCSP], true)
-                        ? 'Shown on edit only for corrections. On create, use Load expected assets after saving.'
-                        : null)
+                    ->description(fn (Get $get): ?string => match ($get('count_type')) {
+                        PhysicalCountSession::TYPE_RPCPPE, PhysicalCountSession::TYPE_RPCSP => 'Shown on edit only for corrections. On create, use Load expected assets after saving.',
+                        PhysicalCountSession::TYPE_RPCI => 'Add lines manually or use Load stock lines / stock QR scan after saving.',
+                        default => null,
+                    })
                     ->columnSpanFull()
                     ->visible(fn (Get $get, $livewire): bool => self::shouldShowCountLines($get, $livewire))
                     ->schema([
@@ -140,11 +171,24 @@ class PhysicalCountSessionForm
                                     ->label('Item')
                                     ->options(function (Get $get): array {
                                         $categoryId = $get('../../item_category_id');
+                                        $countType = $get('../../count_type');
                                         $query = Item::query()
                                             ->active()
                                             ->orderBy('name');
                                         if (filled($categoryId)) {
                                             $query->where('item_category_id', (int) $categoryId);
+                                        }
+
+                                        if ($countType === PhysicalCountSession::TYPE_RPCI && filled($get('../../inventory_type'))) {
+                                            $query->where('inventory_type', (string) $get('../../inventory_type'));
+                                        }
+
+                                        if ($countType === PhysicalCountSession::TYPE_RPCPPE && filled($get('../../ppe_type'))) {
+                                            $query->where('ppe_type', (string) $get('../../ppe_type'));
+                                        }
+
+                                        if ($countType === PhysicalCountSession::TYPE_RPCSP && filled($get('../../property_class'))) {
+                                            $query->where('property_class', (string) $get('../../property_class'));
                                         }
 
                                         return $query->pluck('name', 'id')->all();
@@ -192,7 +236,7 @@ class PhysicalCountSessionForm
                                     ->label('On hand per count')
                                     ->numeric()
                                     ->default(0)
-                                    ->helperText('Quantity you physically counted (scanner fills this for PPE and semi-expendable).'),
+                                    ->helperText('Quantity you physically counted (scanner fills this for PPE/semi; stock QR prompts qty for consumables).'),
                                 Textarea::make('remarks')->rows(1),
                             ])
                             ->columns(3)

@@ -187,6 +187,7 @@ class SemiExpendableUsefulLifeTest extends TestCase
         );
 
         $this->assertSame('5 yrs', $values['H12']);
+        $this->assertSame('SPLV-2024-ICT-106-01-001', $values['G12']);
     }
 
     public function test_resolve_for_item_falls_back_to_property_class_default(): void

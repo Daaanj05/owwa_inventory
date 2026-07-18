@@ -29,6 +29,12 @@ class PropertyActionRequest extends Model
 
     public const STATUS_EXECUTED = 'executed';
 
+    public const OUTCOME_DISPOSE = 'dispose';
+
+    public const OUTCOME_TRANSFER = 'transfer';
+
+    public const OUTCOME_RETURN_TO_STOCK = 'return_to_stock';
+
     protected $fillable = [
         'reference_code',
         'action_type',
@@ -235,6 +241,42 @@ class PropertyActionRequest extends Model
 
     public function statusLabel(): string
     {
-        return str_replace('_', ' ', ucwords((string) $this->status, '_'));
+        return match ($this->status) {
+            self::STATUS_APPROVED => 'Approved — awaiting item',
+            self::STATUS_EXECUTED => 'Received & routed',
+            self::STATUS_PENDING_UC => 'Pending UC',
+            self::STATUS_PENDING_SC => 'Pending SC',
+            default => str_replace('_', ' ', ucwords((string) $this->status, '_')),
+        };
+    }
+
+    public function suggestedReceiveOutcome(): string
+    {
+        return match ($this->action_type) {
+            self::ACTION_DISPOSAL => self::OUTCOME_DISPOSE,
+            self::ACTION_RETURN => $this->reason_code === 'needs_repair'
+                ? self::OUTCOME_TRANSFER
+                : self::OUTCOME_RETURN_TO_STOCK,
+            self::ACTION_REPLACEMENT => self::OUTCOME_RETURN_TO_STOCK,
+            default => self::OUTCOME_RETURN_TO_STOCK,
+        };
+    }
+
+    public function linkedDisposalId(): ?int
+    {
+        $this->loadMissing('lines');
+
+        $id = $this->lines->pluck('disposal_id')->filter()->first();
+
+        return $id !== null ? (int) $id : null;
+    }
+
+    public function linkedTransferId(): ?int
+    {
+        $this->loadMissing('lines');
+
+        $id = $this->lines->pluck('transfer_id')->filter()->first();
+
+        return $id !== null ? (int) $id : null;
     }
 }

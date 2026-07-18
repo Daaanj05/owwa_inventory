@@ -14,22 +14,25 @@ class PropertyReturnService
             return;
         }
 
-        DB::transaction(function () use ($transfer): void {
-            $unit = InventoryUnit::query()
+        $quantity = max(1, (int) $transfer->quantity);
+
+        DB::transaction(function () use ($transfer, $quantity): void {
+            $units = InventoryUnit::query()
                 ->where('property_number', $transfer->property_number)
+                ->where('item_id', $transfer->item_id)
                 ->where('status', InventoryUnit::STATUS_ISSUED)
+                ->orderBy('id')
+                ->limit($quantity)
                 ->lockForUpdate()
-                ->first();
+                ->get();
 
-            if ($unit === null) {
-                return;
+            foreach ($units as $unit) {
+                $unit->update([
+                    'status' => InventoryUnit::STATUS_IN_STOCK,
+                    'issuance_id' => null,
+                    'office_id' => $transfer->to_office_id,
+                ]);
             }
-
-            $unit->update([
-                'status' => InventoryUnit::STATUS_IN_STOCK,
-                'issuance_id' => null,
-                'office_id' => $transfer->to_office_id,
-            ]);
         });
     }
 }

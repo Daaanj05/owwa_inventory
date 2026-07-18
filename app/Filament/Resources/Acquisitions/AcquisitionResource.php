@@ -5,6 +5,7 @@ namespace App\Filament\Resources\Acquisitions;
 use App\Filament\Concerns\HasOwwaViewModalUrl;
 use App\Filament\Concerns\SyncsActiveItemCategory;
 use App\Filament\Resources\Acquisitions\Pages\ListAcquisitions;
+use App\Filament\Resources\Acquisitions\Pages\ListReceivedAcquisitions;
 use App\Filament\Resources\Acquisitions\Pages\ViewAcquisition;
 use App\Filament\Resources\Acquisitions\Paperwork\Schemas\AcquisitionPaperworkForm;
 use App\Filament\Resources\Acquisitions\Paperwork\Schemas\AcquisitionPaperworkInfolist;
@@ -84,6 +85,7 @@ class AcquisitionResource extends Resource
     {
         return [
             'index' => ListAcquisitions::route('/'),
+            'received' => ListReceivedAcquisitions::route('/received'),
             'view' => ViewAcquisition::route('/{record}'),
         ];
     }
@@ -99,9 +101,13 @@ class AcquisitionResource extends Resource
 
         $id = $model instanceof Model ? $model->getKey() : $record;
 
-        $tableAction = $model instanceof AcquisitionPaperwork && $model->isReceived()
-            ? 'view'
-            : 'edit';
+        $isReceived = $model instanceof AcquisitionPaperwork
+            && $model->isReceived()
+            && ! $model->isArchived();
+
+        $tableAction = $model instanceof AcquisitionPaperwork && $model->isPrEditable()
+            ? 'edit'
+            : 'view';
 
         $params = array_merge([
             'tableAction' => $tableAction,
@@ -112,6 +118,6 @@ class AcquisitionResource extends Resource
             $params['category'] ??= $categoryId;
         }
 
-        return static::getUrl('index', $params);
+        return static::getUrl($isReceived ? 'received' : 'index', $params);
     }
 }

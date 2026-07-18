@@ -29,10 +29,9 @@ class OwwaCellMapping
                 continue;
             }
 
-            // Fund Cluster is retired from the app — keep the template cell blank without errors.
+            // Fund Cluster stays on the printed OWWA form as a blank field — never overwrite
+            // the template label/underscores with an empty cell.
             if ($field === 'fund_cluster') {
-                $values[$cell] = '';
-
                 continue;
             }
 

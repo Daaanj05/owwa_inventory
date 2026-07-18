@@ -88,6 +88,7 @@
                                 Priority{{ $sortIndicator('priority') }}
                             </button>
                         </th>
+                        <th>Category</th>
                         <th>Item</th>
                         <th>Office</th>
                         <th class="owwa-num">Stock</th>
@@ -117,6 +118,7 @@
                                     <span class="owwa-status-badge" style="background:#fff7ed;color:#9a3412;border:1px solid #fed7aa;">Medium</span>
                                 @endif
                             </td>
+                            <td class="owwa-cell-muted">{{ $row->category_name ?? '—' }}</td>
                             <td class="owwa-cell-primary">
                                 {{ $row->item_name }}
                                 @if(! ($row->has_recent_usage ?? true))

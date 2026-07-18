@@ -2,6 +2,9 @@
 
 namespace Database\Seeders;
 
+use App\Models\Acquisition;
+use App\Models\AcquisitionPaperwork;
+use App\Models\AcquisitionPaperworkLine;
 use App\Models\Department;
 use App\Models\Distribution;
 use App\Models\Issuance;
@@ -9,6 +12,7 @@ use App\Models\Item;
 use App\Models\Office;
 use App\Models\Requisition;
 use App\Models\RequisitionItem;
+use App\Models\StockPositionRestockFlag;
 use App\Models\Transfer;
 use App\Models\User;
 use App\Support\DemoInventoryWorkflow;
@@ -48,6 +52,7 @@ class DemoTransactionSeeder extends Seeder
                 DemoStockLedgerCatalog::allCoreItemCodes(),
                 DemoStockLedgerCatalog::variantConsumableCodes(),
                 DemoStockLedgerCatalog::variantPpeCodes(),
+                ['CON-014'],
             ))
             ->get()
             ->keyBy('item_code');
@@ -196,6 +201,16 @@ class DemoTransactionSeeder extends Seeder
             );
         }
 
+        $this->seedZeroStockRestockLifecycle(
+            $regional,
+            $admin,
+            $joe1,
+            $uc,
+            $sc,
+            $itemMap,
+            $workflow,
+        );
+
         $issSeq = Issuance::query()->count() + 1;
         \App\Models\ReferenceSeries::where('type', 'issuance')->update(['next_sequence' => $issSeq, 'last_generated_at' => now()]);
         \App\Models\ReferenceSeries::where('type', 'transfer')->update(['next_sequence' => $trSeq, 'last_generated_at' => now()]);
@@ -330,5 +345,138 @@ class DemoTransactionSeeder extends Seeder
             ['requisition_id' => $req5->id, 'item_id' => $itemMap['SEM-005']->id],
             ['quantity' => 2],
         );
+    }
+
+    /**
+     * @param  \Illuminate\Support\Collection<string, Item>  $itemMap
+     */
+    protected function seedZeroStockRestockLifecycle(
+        Office $regional,
+        Department $admin,
+        User $employee,
+        User $unitConsolidator,
+        User $supplyCustodian,
+        $itemMap,
+        DemoInventoryWorkflow $workflow,
+    ): void {
+        $item = $itemMap['CON-014'] ?? null;
+
+        if (! $item) {
+            return;
+        }
+
+        $unitCost = 18.75;
+        $depletedQuantity = 40;
+
+        Acquisition::query()->updateOrCreate(
+            ['reference_code' => 'ACQ-DEMO-CON-014-ZERO'],
+            [
+                'item_id' => $item->id,
+                'office_id' => $regional->id,
+                'quantity' => $depletedQuantity,
+                'unit_cost' => $unitCost,
+                'acquisition_date' => Carbon::parse('2024-01-15'),
+                'source' => 'Demo procurement for restock lifecycle',
+                'remarks' => 'Stock fully issued before automatic inactivity',
+                'recorded_by' => $supplyCustodian->id,
+            ],
+        );
+
+        $depletionRequisition = $workflow->seedRequisition(
+            referenceCode: 'REQ-DEMO-CON-014-DEPLETION',
+            office: $regional,
+            department: $admin,
+            requestedBy: $employee,
+            lines: [['item' => $item, 'quantity' => $depletedQuantity]],
+            approvedBy: $supplyCustodian,
+            approvedAt: Carbon::parse('2024-06-30'),
+            remarks: 'Demo issuance that depleted CON-014',
+        );
+        $workflow->issueAllLines($depletionRequisition, $supplyCustodian, '2024-07-01');
+
+        StockPositionRestockFlag::markAutomaticallyInactive(
+            (int) $item->id,
+            (int) $regional->id,
+            $unitCost,
+            Carbon::parse('2024-07-01'),
+        );
+
+        $restockRequisition = Requisition::query()->updateOrCreate(
+            ['reference_code' => 'REQ-2026-0006'],
+            [
+                'office_id' => $regional->id,
+                'department_id' => $admin->id,
+                'requested_by' => $unitConsolidator->id,
+                'status' => Requisition::STATUS_PENDING,
+                'purpose' => 'Restock zero-stock Folder Short (demo)',
+                'remarks' => 'Compiled UC request with zero regional stock',
+                'approved_by' => null,
+                'approved_at' => null,
+            ],
+        );
+
+        $restockLine = RequisitionItem::query()->updateOrCreate(
+            [
+                'requisition_id' => $restockRequisition->id,
+                'item_id' => $item->id,
+            ],
+            [
+                'quantity' => 30,
+                'stock_at_request' => 0,
+                'stock_available' => 0,
+                'quantity_issued' => 0,
+                'issue_remarks' => null,
+            ],
+        );
+
+        $paperwork = AcquisitionPaperwork::query()->updateOrCreate(
+            ['reference_code' => 'DEMO-PR-CON-ZERO-STOCK'],
+            [
+                'office_id' => $regional->id,
+                'requesting_office_id' => $regional->id,
+                'department_id' => $admin->id,
+                'item_category_id' => $item->item_category_id,
+                'recorded_by' => $supplyCustodian->id,
+                'phase' => AcquisitionPaperwork::PHASE_PR,
+                'pr_status' => AcquisitionPaperwork::STATUS_DRAFT,
+                'po_status' => AcquisitionPaperwork::STATUS_DRAFT,
+                'iar_status' => AcquisitionPaperwork::STATUS_DRAFT,
+                'pr_number' => null,
+                'po_number' => null,
+                'iar_number' => null,
+                'pr_date' => Carbon::parse('2026-07-10'),
+                'po_date' => null,
+                'iar_date' => null,
+                'purpose' => 'Restock zero-stock Folder Short (demo)',
+                'supplier' => null,
+                'pr_submitted_at' => null,
+                'po_submitted_at' => null,
+                'iar_submitted_at' => null,
+                'pr_completed_at' => null,
+                'po_completed_at' => null,
+                'iar_completed_at' => null,
+                'received_at' => null,
+            ],
+        );
+
+        $paperworkLine = AcquisitionPaperworkLine::query()->updateOrCreate(
+            [
+                'acquisition_paperwork_id' => $paperwork->id,
+                'item_id' => $item->id,
+            ],
+            [
+                'description' => $item->name,
+                'unit' => $item->unit,
+                'quantity' => 20,
+                'unit_cost' => null,
+                'amount' => null,
+                'line_remarks' => 'Cost to be supplied during procurement',
+            ],
+        );
+
+        $paperwork->requisitions()->syncWithoutDetaching([$restockRequisition->id]);
+        $paperworkLine->requisitionItems()->sync([
+            $restockLine->id => ['quantity' => 20],
+        ]);
     }
 }

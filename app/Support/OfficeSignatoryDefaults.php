@@ -17,8 +17,8 @@ class OfficeSignatoryDefaults
         $recorder ??= auth()->user();
 
         return [
-            'from_accountable_officer' => $fromOffice?->accountable_officer_name,
-            'to_accountable_officer' => $toOffice?->accountable_officer_name,
+            'from_accountable_officer' => self::accountableOfficerForOffice($fromOfficeId, $fromOffice),
+            'to_accountable_officer' => self::accountableOfficerForOffice($toOfficeId, $toOffice),
             'released_by_printed_name' => $recorder instanceof User ? $recorder->name : $fromOffice?->supply_custodian_name,
             'released_by_designation' => $fromOffice?->supply_custodian_designation,
             'approved_by_printed_name' => $fromOffice?->authorized_officer_name,
@@ -26,6 +26,24 @@ class OfficeSignatoryDefaults
             'received_by_printed_name' => $toOffice?->supply_custodian_name,
             'received_by_designation' => $toOffice?->supply_custodian_designation,
         ];
+    }
+
+    protected static function accountableOfficerForOffice(?int $officeId, ?Office $office): ?string
+    {
+        if ($officeId === null) {
+            return null;
+        }
+
+        $ucs = RequisitionNotificationRecipients::unitConsolidatorsForOffice($officeId);
+        if ($ucs->count() === 1) {
+            return $ucs->first()?->name;
+        }
+
+        if ($ucs->isNotEmpty()) {
+            return null;
+        }
+
+        return filled($office?->accountable_officer_name) ? (string) $office->accountable_officer_name : null;
     }
 
     /**

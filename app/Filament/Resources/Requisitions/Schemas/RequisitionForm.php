@@ -11,6 +11,7 @@ use App\Models\RequisitionItem;
 use App\Models\User;
 use App\Services\InventoryStockService;
 use App\Services\RequisitionCompileService;
+use App\Services\RequisitionRestockStatusService;
 use App\Support\OwwaReferenceLabels;
 use App\Support\SupplyOfficeResolver;
 use Closure;
@@ -598,7 +599,7 @@ class RequisitionForm
         return [
             TableColumn::make('Category')->markAsRequired()->alignment(Alignment::Start)->width('14rem'),
             TableColumn::make('Item')->markAsRequired()->alignment(Alignment::Start)->width('auto'),
-            TableColumn::make('Available')->alignment(Alignment::End)->width('3.75rem'),
+            TableColumn::make('Available')->alignment(Alignment::End)->width('13rem'),
             TableColumn::make('Qty')->markAsRequired()->alignment(Alignment::End)->width('3.25rem'),
         ];
     }
@@ -699,11 +700,25 @@ class RequisitionForm
                     return [];
                 }
 
-                return Item::query()
+                $items = Item::query()
                     ->active()
                     ->where('item_category_id', (int) $categoryId)
                     ->orderBy('name')
-                    ->pluck('name', 'id')
+                    ->get(['id', 'name']);
+
+                $statusService = app(RequisitionRestockStatusService::class);
+                $statuses = $statusService->resolveForItems($items->pluck('id')->all());
+
+                return $items
+                    ->mapWithKeys(function (Item $item) use ($statusService, $statuses): array {
+                        $statusLabel = $statusService->displayLabel($statuses[$item->id] ?? null);
+
+                        return [
+                            $item->id => $statusLabel === null
+                                ? $item->name
+                                : "{$item->name} [{$statusLabel}]",
+                        ];
+                    })
                     ->all();
             })
             ->searchable()
@@ -723,7 +738,7 @@ class RequisitionForm
         return Placeholder::make('regional_stock_available')
             ->label('Available')
             ->hiddenLabel()
-            ->content(function (Get $get): string {
+            ->content(function (Get $get): string|HtmlString {
                 $itemId = $get('item_id');
                 if (blank($itemId)) {
                     return '—';
@@ -735,8 +750,19 @@ class RequisitionForm
                 }
 
                 $stock = app(InventoryStockService::class)->getStock((int) $itemId, $supplyOfficeId);
+                $statusService = app(RequisitionRestockStatusService::class);
+                $status = $statusService->resolve((int) $itemId, $supplyOfficeId);
+                $statusLabel = $statusService->displayLabel($status);
 
-                return (string) max(0, $stock);
+                if ($statusLabel === null) {
+                    return (string) max(0, $stock);
+                }
+
+                return new HtmlString(sprintf(
+                    '<div class="flex items-center justify-end gap-2"><span>%d</span><span class="owwa-badge owwa-badge-warning">%s</span></div>',
+                    max(0, $stock),
+                    e($statusLabel),
+                ));
             });
     }
 

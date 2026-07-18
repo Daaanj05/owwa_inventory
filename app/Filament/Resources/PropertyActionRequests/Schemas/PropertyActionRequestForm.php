@@ -82,7 +82,7 @@ class PropertyActionRequestForm
                             ->afterStateUpdated(function (Set $set, Get $get) use ($user): void {
                                 $set('accountable_user_id', null);
                                 $set('lines', [
-                                    ['issuance_id' => null, 'inventory_unit_id' => null],
+                                    ['issuance_id' => null, 'inventory_unit_id' => null, 'quantity' => 1],
                                 ]);
 
                                 if (! $user instanceof User) {
@@ -150,7 +150,7 @@ class PropertyActionRequestForm
                             ->afterStateUpdated(function (Set $set): void {
                                 $set('accountable_user_id', null);
                                 $set('lines', [
-                                    ['issuance_id' => null, 'inventory_unit_id' => null],
+                                    ['issuance_id' => null, 'inventory_unit_id' => null, 'quantity' => 1],
                                 ]);
                             }),
                         Select::make('accountable_user_id')
@@ -176,7 +176,7 @@ class PropertyActionRequestForm
                             ->visible(fn (): bool => $isUnitConsolidator)
                             ->disabled(fn (Get $get): bool => blank($get('office_id')) || blank($get('department_id')))
                             ->afterStateUpdated(fn (Set $set): mixed => $set('lines', [
-                                ['issuance_id' => null, 'inventory_unit_id' => null],
+                                ['issuance_id' => null, 'inventory_unit_id' => null, 'quantity' => 1],
                             ])),
                         Select::make('item_category_id')
                             ->label('Category')
@@ -187,7 +187,7 @@ class PropertyActionRequestForm
                             ->dehydrated(false)
                             ->visible(fn (string $operation): bool => $operation === 'create')
                             ->afterStateUpdated(fn (callable $set): mixed => $set('lines', [
-                                ['issuance_id' => null, 'inventory_unit_id' => null],
+                                ['issuance_id' => null, 'inventory_unit_id' => null, 'quantity' => 1],
                             ])),
                         Select::make('action_type')
                             ->label('Action Type')
@@ -271,6 +271,7 @@ class PropertyActionRequestForm
                                     ->afterStateUpdated(function ($state, callable $set): void {
                                         if (! $state) {
                                             $set('inventory_unit_id', null);
+                                            $set('quantity', 1);
 
                                             return;
                                         }
@@ -282,13 +283,32 @@ class PropertyActionRequestForm
                                         }
 
                                         $set('inventory_unit_id', $issuance->inventoryUnit?->id);
+                                        $set('quantity', max(1, (int) ($issuance->quantity ?? 1)));
                                     }),
-                                Placeholder::make('quantity_display')
+                                TextInput::make('quantity')
                                     ->hiddenLabel()
-                                    ->dehydrated(false)
-                                    ->content(fn (Get $get): string => self::issuanceQuantityLabel(
-                                        self::intOrNull($get('issuance_id')),
-                                    )),
+                                    ->numeric()
+                                    ->required()
+                                    ->minValue(1)
+                                    ->default(1)
+                                    ->maxValue(function (Get $get): ?int {
+                                        $issuance = self::resolveIssuance(self::intOrNull($get('issuance_id')));
+                                        if ($issuance === null) {
+                                            return null;
+                                        }
+
+                                        $available = max(1, (int) ($issuance->quantity ?? 1));
+
+                                        return $available;
+                                    })
+                                    ->helperText(function (Get $get): ?string {
+                                        $issuance = self::resolveIssuance(self::intOrNull($get('issuance_id')));
+                                        if ($issuance === null) {
+                                            return null;
+                                        }
+
+                                        return 'Available: '.max(1, (int) ($issuance->quantity ?? 1));
+                                    }),
                                 Placeholder::make('asset_identifier_display')
                                     ->hiddenLabel()
                                     ->dehydrated(false)

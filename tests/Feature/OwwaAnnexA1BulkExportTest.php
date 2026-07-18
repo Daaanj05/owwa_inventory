@@ -75,13 +75,21 @@ class OwwaAnnexA1BulkExportTest extends TestCase
         try {
             $spreadsheet = IOFactory::load($tmp);
             $this->assertNull($spreadsheet->getSheetByName('SPC'));
-            $this->assertNotNull($spreadsheet->getSheetByName('ICT'));
+            $this->assertNotNull($spreadsheet->getSheetByName('IT'));
             $this->assertNotNull($spreadsheet->getSheetByName('OFFICE EQUIPMENT'));
             $this->assertNull($spreadsheet->getSheetByName('SPORTS EQUIPMENT'));
 
-            $ictSheet = $spreadsheet->getSheetByName('ICT');
-            $this->assertStringContainsString('SEM-100', (string) $ictSheet->getCell('K11')->getValue());
-            $this->assertStringContainsString('SEM-101', (string) $ictSheet->getCell('K32')->getValue());
+            $ictSheet = $spreadsheet->getSheetByName('IT');
+            $this->assertStringContainsString('Alpha ICT device', (string) $ictSheet->getCell('A12')->getValue());
+
+            $ictValues = '';
+            foreach ($ictSheet->getRowIterator() as $row) {
+                foreach ($row->getCellIterator() as $cell) {
+                    $ictValues .= (string) $cell->getValue()."\n";
+                }
+            }
+
+            $this->assertStringContainsString('Beta ICT device', $ictValues);
         } finally {
             @unlink($tmp);
         }

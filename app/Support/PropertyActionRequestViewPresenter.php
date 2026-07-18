@@ -59,8 +59,8 @@ class PropertyActionRequestViewPresenter
             default => 'done',
         };
         $decisionState = match ($record->status) {
-            PropertyActionRequest::STATUS_APPROVED, PropertyActionRequest::STATUS_EXECUTED => 'done',
-            PropertyActionRequest::STATUS_REJECTED => 'done',
+            PropertyActionRequest::STATUS_APPROVED => 'active',
+            PropertyActionRequest::STATUS_EXECUTED, PropertyActionRequest::STATUS_REJECTED => 'done',
             default => 'pending',
         };
 
@@ -68,9 +68,9 @@ class PropertyActionRequestViewPresenter
             ['step' => 1, 'label' => 'Draft', 'shortLabel' => 'Draft', 'description' => $record->status === PropertyActionRequest::STATUS_DRAFT ? 'In progress' : 'Saved', 'state' => $draftState, 'url' => null],
             ['step' => 2, 'label' => 'UC Review', 'shortLabel' => 'UC', 'description' => $record->status === PropertyActionRequest::STATUS_PENDING_UC ? 'Awaiting UC' : ($record->status === PropertyActionRequest::STATUS_DRAFT ? 'Pending' : 'Reviewed'), 'state' => $ucReviewState, 'url' => null],
             ['step' => 3, 'label' => 'SC Review', 'shortLabel' => 'SC', 'description' => $record->status === PropertyActionRequest::STATUS_PENDING_SC ? 'Awaiting SC' : ($record->status === PropertyActionRequest::STATUS_DRAFT || $record->status === PropertyActionRequest::STATUS_PENDING_UC ? 'Pending' : 'Reviewed'), 'state' => $scReviewState, 'url' => null],
-            ['step' => 4, 'label' => 'Decision', 'shortLabel' => 'Done', 'description' => match ($record->status) {
-                PropertyActionRequest::STATUS_APPROVED => 'Approved',
-                PropertyActionRequest::STATUS_EXECUTED => 'Executed',
+            ['step' => 4, 'label' => 'Receive & route', 'shortLabel' => 'Route', 'description' => match ($record->status) {
+                PropertyActionRequest::STATUS_APPROVED => 'Awaiting physical item',
+                PropertyActionRequest::STATUS_EXECUTED => 'Received & routed',
                 PropertyActionRequest::STATUS_REJECTED => 'Rejected',
                 default => 'Pending',
             }, 'state' => $decisionState, 'url' => null],

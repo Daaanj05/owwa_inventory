@@ -84,11 +84,13 @@ class PropertyActionRequestWorkflowService
             'sc_remarks' => $remarks,
         ]);
 
-        $this->notifyRequester(
-            $request,
-            'Property return approved',
-            sprintf('%s was approved by Supply Custodian.', $request->reference_code),
+        $shipMessage = sprintf(
+            '%s was approved in the system. Please send the physical item to the Supply Custodian / Regional Office for receipt and routing.',
+            $request->reference_code,
         );
+
+        $this->notifyRequester($request, 'Property return approved — send item to SC', $shipMessage);
+        $this->notifyAccountableUser($request, 'Property return approved — send item to SC', $shipMessage);
     }
 
     public function rejectBySupplyCustodian(PropertyActionRequest $request, User $custodian, ?string $remarks = null): void
@@ -111,26 +113,70 @@ class PropertyActionRequestWorkflowService
         );
     }
 
-    public function execute(PropertyActionRequest $request, User $custodian): void
-    {
+    /**
+     * SC receives the physical item and routes the outcome (Dispose / Transfer / Return to stock).
+     */
+    public function receiveAndRoute(
+        PropertyActionRequest $request,
+        User $custodian,
+        string $outcome,
+        ?string $newEstimatedUsefulLife = null,
+        ?string $receiptRemarks = null,
+    ): void {
+        $this->execute($request, $custodian, $outcome, $newEstimatedUsefulLife, $receiptRemarks);
+    }
+
+    public function execute(
+        PropertyActionRequest $request,
+        User $custodian,
+        ?string $outcome = null,
+        ?string $newEstimatedUsefulLife = null,
+        ?string $receiptRemarks = null,
+    ): void {
         if ($request->status !== PropertyActionRequest::STATUS_APPROVED) {
             throw new InvalidArgumentException('Request must be approved before execution.');
         }
 
-        DB::transaction(function () use ($request, $custodian): void {
+        $resolvedOutcome = $outcome ?: $request->suggestedReceiveOutcome();
+
+        if (! in_array($resolvedOutcome, [
+            PropertyActionRequest::OUTCOME_DISPOSE,
+            PropertyActionRequest::OUTCOME_TRANSFER,
+            PropertyActionRequest::OUTCOME_RETURN_TO_STOCK,
+        ], true)) {
+            throw new InvalidArgumentException('Invalid receive-and-route outcome.');
+        }
+
+        DB::transaction(function () use ($request, $custodian, $resolvedOutcome, $newEstimatedUsefulLife, $receiptRemarks): void {
             $request->loadMissing(['lines.issuance.item', 'lines.inventoryUnit']);
 
             if ($request->lines->isEmpty()) {
                 throw new InvalidArgumentException('Property action requests require at least one property line.');
             }
 
-            if ($request->action_type === PropertyActionRequest::ACTION_DISPOSAL) {
-                $this->executeDisposal($request, $custodian);
-            } elseif ($request->action_type === PropertyActionRequest::ACTION_RETURN) {
-                $this->executeReturn($request, $custodian);
-            } elseif ($request->action_type === PropertyActionRequest::ACTION_REPLACEMENT) {
-                $this->executeReplacement($request);
+            if (filled($receiptRemarks)) {
+                $existing = trim((string) $request->sc_remarks);
+                $request->update([
+                    'sc_remarks' => $existing === ''
+                        ? $receiptRemarks
+                        : $existing."\n".$receiptRemarks,
+                ]);
             }
+
+            match ($resolvedOutcome) {
+                PropertyActionRequest::OUTCOME_DISPOSE => $this->executeDisposal($request, $custodian),
+                PropertyActionRequest::OUTCOME_TRANSFER => $this->executeReturn(
+                    $request,
+                    $custodian,
+                    custodyEndType: 'transfer',
+                ),
+                PropertyActionRequest::OUTCOME_RETURN_TO_STOCK => $this->executeReturnToStock(
+                    $request,
+                    $custodian,
+                    $newEstimatedUsefulLife,
+                ),
+                default => throw new InvalidArgumentException('Unsupported outcome.'),
+            };
 
             $request->update([
                 'status' => PropertyActionRequest::STATUS_EXECUTED,
@@ -139,13 +185,43 @@ class PropertyActionRequestWorkflowService
         });
     }
 
-    protected function executeReplacement(PropertyActionRequest $request): void
+    protected function executeReturnToStock(
+        PropertyActionRequest $request,
+        User $custodian,
+        ?string $newEstimatedUsefulLife,
+    ): void {
+        $this->executeReturn($request, $custodian, custodyEndType: 'return');
+        $this->applyOptionalEulReset($request, $newEstimatedUsefulLife);
+
+        if ($request->action_type === PropertyActionRequest::ACTION_REPLACEMENT) {
+            $this->notifyRequester(
+                $request,
+                'Item returned to stock — file a new requisition',
+                sprintf(
+                    '%s was received and returned to stock. File a new employee requisition when a replacement is needed.',
+                    $request->reference_code,
+                ),
+            );
+        }
+    }
+
+    protected function applyOptionalEulReset(PropertyActionRequest $request, ?string $newEstimatedUsefulLife): void
     {
-        $this->notifyRequester(
-            $request,
-            'Replacement approved — file a new requisition',
-            sprintf('%s was executed. File a new employee requisition for the replacement item.', $request->reference_code),
-        );
+        if (blank($newEstimatedUsefulLife)) {
+            return;
+        }
+
+        $request->loadMissing('lines.issuance.item');
+
+        foreach ($request->lines as $line) {
+            $item = $line->issuance?->item;
+
+            if ($item === null) {
+                continue;
+            }
+
+            $item->update(['estimated_useful_life' => $newEstimatedUsefulLife]);
+        }
     }
 
     protected function executeDisposal(PropertyActionRequest $request, User $custodian): void
@@ -166,12 +242,15 @@ class PropertyActionRequestWorkflowService
             throw new InvalidArgumentException('Disposal requests require a linked issuance on each line.');
         }
 
+        $lineQuantity = max(1, (int) ($line->quantity ?: $issuance->quantity ?: 1));
+        $issuanceQuantity = max(1, (int) ($issuance->quantity ?? 1));
+
         $disposal = Disposal::query()->create([
             'disposal_type' => 'unserviceable',
             'item_id' => $issuance->item_id,
             'office_id' => $request->office_id,
             'department_id' => $request->department_id,
-            'quantity' => $issuance->quantity ?? 1,
+            'quantity' => $lineQuantity,
             'disposal_date' => now()->toDateString(),
             'reason' => $request->reasonLabel(),
             'remarks' => $request->reason_detail,
@@ -185,25 +264,40 @@ class PropertyActionRequestWorkflowService
 
         $line->update(['disposal_id' => $disposal->id]);
 
-        $this->endIssuanceCustody(
-            $issuance,
-            'disposal',
-            $disposal->reference_code ?? (string) $request->reference_code,
-        );
+        if ($lineQuantity >= $issuanceQuantity) {
+            $this->endIssuanceCustody(
+                $issuance,
+                'disposal',
+                $disposal->reference_code ?? (string) $request->reference_code,
+            );
+        } else {
+            $issuance->update(['quantity' => $issuanceQuantity - $lineQuantity]);
+        }
 
         if ($line->inventory_unit_id) {
             InventoryUnit::query()
                 ->whereKey($line->inventory_unit_id)
                 ->update(['status' => InventoryUnit::STATUS_DISPOSED]);
+        } elseif ($lineQuantity > 0 && filled($issuance->property_number)) {
+            InventoryUnit::query()
+                ->where('property_number', $issuance->property_number)
+                ->where('item_id', $issuance->item_id)
+                ->where('status', InventoryUnit::STATUS_ISSUED)
+                ->orderBy('id')
+                ->limit($lineQuantity)
+                ->update(['status' => InventoryUnit::STATUS_DISPOSED]);
         }
     }
 
-    protected function executeReturn(PropertyActionRequest $request, User $custodian): void
-    {
+    protected function executeReturn(
+        PropertyActionRequest $request,
+        User $custodian,
+        string $custodyEndType = 'return',
+    ): void {
         $request->loadMissing(['office', 'lines.issuance.issuedTo', 'lines.issuance.office']);
 
         foreach ($request->lines as $line) {
-            $this->executeReturnLine($request, $line, $custodian);
+            $this->executeReturnLine($request, $line, $custodian, $custodyEndType);
         }
     }
 
@@ -211,6 +305,7 @@ class PropertyActionRequestWorkflowService
         PropertyActionRequest $request,
         PropertyActionRequestLine $line,
         User $custodian,
+        string $custodyEndType = 'return',
     ): void {
         $issuance = $line->issuance;
 
@@ -233,14 +328,17 @@ class PropertyActionRequestWorkflowService
             $request->reason_detail,
         ])->filter()->implode(' — ');
 
-        $transfer = Transfer::withoutEvents(function () use ($request, $issuance, $toOffice, $remarks, $custodian): Transfer {
+        $lineQuantity = max(1, (int) ($line->quantity ?: $issuance->quantity ?: 1));
+        $issuanceQuantity = max(1, (int) ($issuance->quantity ?? 1));
+
+        $transfer = Transfer::withoutEvents(function () use ($request, $issuance, $toOffice, $remarks, $custodian, $lineQuantity): Transfer {
             $transfer = Transfer::query()->create([
                 'reference_code' => app(ReferenceCodeService::class)->forTransfer(),
                 'transfer_type' => 'return',
                 'from_office_id' => $issuance->office_id,
                 'to_office_id' => $toOffice,
                 'item_id' => $issuance->item_id,
-                'quantity' => $issuance->quantity ?? 1,
+                'quantity' => $lineQuantity,
                 'unit_cost' => $issuance->unit_cost,
                 'transfer_date' => now()->toDateString(),
                 'property_number' => $issuance->property_number,
@@ -258,7 +356,11 @@ class PropertyActionRequestWorkflowService
 
         $line->update(['transfer_id' => $transfer->id]);
 
-        $this->endIssuanceCustody($issuance, 'return', $request->reference_code);
+        if ($lineQuantity >= $issuanceQuantity) {
+            $this->endIssuanceCustody($issuance, $custodyEndType, $request->reference_code);
+        } else {
+            $issuance->update(['quantity' => $issuanceQuantity - $lineQuantity]);
+        }
     }
 
     protected function endIssuanceCustody(Issuance $issuance, string $type, ?string $reference): void

@@ -180,19 +180,21 @@ class PhysicalCountExportMappingTest extends TestCase
             fn (array $tab): array => [$tab['sheetName'] => $tab['propertyClass'] ?? null],
         );
 
-        $this->assertSame(ItemPropertyClass::Ict, $b5BySheet->get('ICT'));
-        $this->assertSame(ItemPropertyClass::SportsEquipment, $b5BySheet->get('SPORTS EQUIPMENT'));
+        $this->assertSame(ItemPropertyClass::Ict, $b5BySheet->get('INFORMATION TECHNOLOGY EQUIPMENT'));
+        $this->assertSame(ItemPropertyClass::SportsEquipment, $b5BySheet->get('MACHINERY AND EQUIPMENT'));
 
         $spreadsheet = app(OwwaTemplateExportService::class)->buildRpcspPhysicalCountSpreadsheet(
             $tabs,
             null,
             $session->fresh(['office', 'lines.item']),
         );
-        $this->assertNotNull($spreadsheet->getSheetByName('ICT'));
-        $this->assertNotNull($spreadsheet->getSheetByName('SPORTS EQUIPMENT'));
+        $itSheet = mb_substr('INFORMATION TECHNOLOGY EQUIPMENT', 0, 31);
+        $meSheet = mb_substr('MACHINERY AND EQUIPMENT', 0, 31);
+        $this->assertNotNull($spreadsheet->getSheetByName($itSheet));
+        $this->assertNotNull($spreadsheet->getSheetByName($meSheet));
         $this->assertStringContainsString(
             'INFORMATION',
-            (string) $spreadsheet->getSheetByName('ICT')?->getCell('B5')->getValue(),
+            (string) $spreadsheet->getSheetByName($itSheet)?->getCell('B5')->getValue(),
         );
     }
 

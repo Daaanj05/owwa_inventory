@@ -2,6 +2,8 @@
 
 namespace App\Filament\Resources\PropertyActionRequests\Schemas;
 
+use App\Filament\Resources\Disposals\DisposalResource;
+use App\Filament\Resources\Transfers\TransferResource;
 use App\Models\PropertyActionRequest;
 use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\RepeatableEntry\TableColumn;
@@ -20,6 +22,7 @@ class PropertyActionRequestInfolistSchema
                 ->columns(2)
                 ->schema(self::detailFields()),
             self::requestedItemsSection(),
+            self::outcomeLinksSection(),
         ];
     }
 
@@ -44,6 +47,24 @@ class PropertyActionRequestInfolistSchema
                 ->label('Details')
                 ->placeholder('—')
                 ->columnSpanFull(),
+            TextEntry::make('category')
+                ->label('Category')
+                ->state(function (PropertyActionRequest $record): string {
+                    $record->loadMissing('lines.issuance.item.category');
+
+                    $categories = $record->lines
+                        ->map(fn ($line) => $line->issuance?->item?->category?->name)
+                        ->filter()
+                        ->unique()
+                        ->values();
+
+                    if ($categories->isEmpty()) {
+                        return '—';
+                    }
+
+                    return $categories->implode(', ');
+                })
+                ->placeholder('—'),
             TextEntry::make('requestedBy.name')
                 ->label('Requested by')
                 ->placeholder('—'),
@@ -63,7 +84,7 @@ class PropertyActionRequestInfolistSchema
             TextEntry::make('status')
                 ->label('Status')
                 ->badge()
-                ->formatStateUsing(fn (?string $state): string => str_replace('_', ' ', ucwords((string) $state, '_')))
+                ->formatStateUsing(fn (PropertyActionRequest $record): string => $record->statusLabel())
                 ->color(fn (?string $state): string => match ($state) {
                     PropertyActionRequest::STATUS_APPROVED, PropertyActionRequest::STATUS_EXECUTED => 'success',
                     PropertyActionRequest::STATUS_REJECTED => 'danger',
@@ -93,7 +114,7 @@ class PropertyActionRequestInfolistSchema
                 ->placeholder('—')
                 ->columnSpanFull(),
             TextEntry::make('executed_at')
-                ->label('Executed on')
+                ->label('Received & routed on')
                 ->dateTime('M d, Y h:i A')
                 ->placeholder('—'),
         ];
@@ -127,10 +148,40 @@ class PropertyActionRequestInfolistSchema
                             ->label('Issued')
                             ->date('M d, Y')
                             ->placeholder('—'),
-                        TextEntry::make('issuance.quantity')
+                        TextEntry::make('quantity')
                             ->label('Qty')
                             ->placeholder('—'),
                     ]),
+            ]);
+    }
+
+    protected static function outcomeLinksSection(): Section
+    {
+        return Section::make('Routed records')
+            ->columns(2)
+            ->visible(fn (PropertyActionRequest $record): bool => $record->status === PropertyActionRequest::STATUS_EXECUTED
+                && ($record->linkedDisposalId() !== null || $record->linkedTransferId() !== null))
+            ->schema([
+                TextEntry::make('disposal_link')
+                    ->label('Disposal')
+                    ->state('Open Disposal')
+                    ->url(function (PropertyActionRequest $record): ?string {
+                        $id = $record->linkedDisposalId();
+
+                        return $id ? DisposalResource::getUrl('view', ['record' => $id]) : null;
+                    })
+                    ->openUrlInNewTab()
+                    ->visible(fn (PropertyActionRequest $record): bool => $record->linkedDisposalId() !== null),
+                TextEntry::make('transfer_link')
+                    ->label('Transfer')
+                    ->state('Open Transfer')
+                    ->url(function (PropertyActionRequest $record): ?string {
+                        $id = $record->linkedTransferId();
+
+                        return $id ? TransferResource::getUrl('view', ['record' => $id]) : null;
+                    })
+                    ->openUrlInNewTab()
+                    ->visible(fn (PropertyActionRequest $record): bool => $record->linkedTransferId() !== null),
             ]);
     }
 }

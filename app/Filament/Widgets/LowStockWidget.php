@@ -280,7 +280,7 @@ class LowStockWidget extends StatsOverviewWidget implements HasActions
                     'identifier' => $identifierLabel,
                     'name' => 'Item',
                     'unit' => 'Unit',
-                    'reorder_level' => 'Reorder at',
+                    'reorder_level' => 'Reorder point',
                 ],
                 'rows' => $items->map(fn (Item $item): array => [
                     'identifier' => $item->catalogAssetIdentifier(),
@@ -304,7 +304,7 @@ class LowStockWidget extends StatsOverviewWidget implements HasActions
                 'identifier' => 'Identifier',
                 'name' => 'Item',
                 'unit' => 'Unit',
-                'reorder_level' => 'Reorder at',
+                'reorder_level' => 'Reorder point',
             ],
             'numeric_keys' => ['reorder_level'],
             'sections' => $sections,
@@ -351,7 +351,7 @@ class LowStockWidget extends StatsOverviewWidget implements HasActions
                 'item' => 'Item',
                 'office' => 'Office',
                 'stock' => 'On hand',
-                'reorder_level' => 'Reorder at',
+                'reorder_level' => 'Reorder point',
             ],
             'numeric_keys' => ['stock', 'reorder_level'],
             'rows' => $slice->map(fn (object $row): array => [

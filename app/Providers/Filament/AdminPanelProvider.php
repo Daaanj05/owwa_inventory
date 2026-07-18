@@ -102,7 +102,14 @@ class AdminPanelProvider extends PanelProvider
                 return '<link rel="stylesheet" href="'.asset('css/filament/admin/owwa-theme.css').'">';
             })
             ->renderHook(PanelsRenderHook::BODY_END, function (): string {
-                return FilamentSessionAudit::idleLogoutMonitorHtml();
+                return FilamentSessionAudit::idleLogoutMonitorHtml()
+                    .view('filament.partials.busy-process-guard', [
+                        'busy' => false,
+                        'busyProperty' => null,
+                        'title' => 'Preparing export…',
+                        'message' => 'Your file is being prepared. Please stay on this page until the download finishes.',
+                        'leaveMessage' => 'Your export is still preparing. Are you sure you want to leave this page?',
+                    ])->render();
             }, scopes: ['authenticated'])
             ->navigationGroups([
                 NavigationGroup::make('My items'),

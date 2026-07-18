@@ -16,6 +16,7 @@ class Item extends Model
     protected $fillable = [
         'item_category_id', 'name', 'base_name', 'sub_item', 'unit', 'item_code',
         'semi_expendable_property_number', 'ppe_property_number', 'value_type', 'property_class',
+        'inventory_type', 'ppe_type',
         'uacs_object_code_id', 'reorder_level', 'description', 'days_to_consume',
         'estimated_useful_life', 'serial_number', 'archived_at',
     ];

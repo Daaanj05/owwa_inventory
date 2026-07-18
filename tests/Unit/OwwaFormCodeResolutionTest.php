@@ -41,7 +41,7 @@ class OwwaFormCodeResolutionTest extends TestCase
                 'AnnexA1',
             ],
             'consumable stock card appendix 58' => [
-                'Consumable/Recording (Stock Levels)/Appendix 58 - SC.xls',
+                'Consumable/Stock Levels & Recording/Appendix 58 - SC.xlsx',
                 'SC',
             ],
             'ppe par appendix 71' => [

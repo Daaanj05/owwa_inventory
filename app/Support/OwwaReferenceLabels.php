@@ -13,6 +13,8 @@ class OwwaReferenceLabels
 {
     public const RIS = 'RIS No.';
 
+    public const RSMI = 'RSMI No.';
+
     /** RSMI Appendix 64 header label — maps to issuance {@see Issuance::$reference_code}, not item serial metadata. */
     public const SERIAL = 'Serial No.';
 
@@ -101,6 +103,17 @@ class OwwaReferenceLabels
         $issuance->loadMissing('item.category');
 
         return self::issuanceControl($issuance->item?->category?->getTemplateSlug());
+    }
+
+    public static function issuanceTransaction(Issuance $issuance): string
+    {
+        $issuance->loadMissing('item.category');
+
+        return match ($issuance->item?->category?->getTemplateSlug()) {
+            'ppe' => self::PAR,
+            'semi_expendable' => self::ICS,
+            default => self::RSMI,
+        };
     }
 
     public static function usesPropertyNumber(?string $categorySlug): bool

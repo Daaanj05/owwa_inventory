@@ -19,8 +19,10 @@ class TransferInventoryUnitService
         }
 
         DB::transaction(function () use ($transfer): void {
-            if (filled($transfer->property_number)) {
-                $this->moveUnitByPropertyNumber($transfer);
+            // Catalog property / inventory item numbers are shared across units of the same item.
+            // Prefer quantity-based moves; only honor a stored unit id when present.
+            if (filled($transfer->inventory_unit_id) && (int) $transfer->quantity === 1) {
+                $this->moveUnitById($transfer);
 
                 return;
             }
@@ -29,15 +31,10 @@ class TransferInventoryUnitService
         });
     }
 
-    protected function moveUnitByPropertyNumber(Transfer $transfer): void
+    protected function moveUnitById(Transfer $transfer): void
     {
-        $propertyNumber = trim((string) $transfer->property_number);
-        if ($propertyNumber === '') {
-            return;
-        }
-
         $unit = InventoryUnit::query()
-            ->where('property_number', $propertyNumber)
+            ->whereKey($transfer->inventory_unit_id)
             ->where('item_id', $transfer->item_id)
             ->where('office_id', $transfer->from_office_id)
             ->where('status', InventoryUnit::STATUS_IN_STOCK)

@@ -31,6 +31,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Style\Font;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -157,6 +158,8 @@ class OwwaTemplateExportService
 
         if ($isPhysicalCountExport) {
             $this->preparePhysicalCountRowExpansion($sheet, (string) $formKey, $cellValues);
+        } elseif (in_array($formKey, ['RSMI', 'PAR', 'ICS'], true)) {
+            $this->prepareIssuanceDetailRowExpansion($sheet, (string) $formKey, $cellValues);
         }
 
         foreach ($cellValues as $cellRef => $value) {
@@ -214,9 +217,19 @@ class OwwaTemplateExportService
                 $this->finalizeDetailSection($formKey, $sheet, $detailCount);
             }
 
+            if (in_array($formKey, ['RSMI', 'PAR', 'ICS'], true)) {
+                $detail = (array) OwwaCellMapping::form($formKey)['detail'];
+                $templateRows = (int) ($detail['template_detail_rows'] ?? $detail['max_rows'] ?? 30);
+                $rowOffset = max(0, $detailCount - $templateRows);
+                $this->underlineFilledIssuanceSignatureCells($sheet, $formKey, $cellValues, $rowOffset);
+            }
+
             if ($formKey === 'RSMI') {
-                $this->ensureRsmiSignatureLines($sheet);
-                $this->applyRsmiRecapMonetaryFormats($sheet, $detailCount);
+                $detail = (array) OwwaCellMapping::form('RSMI')['detail'];
+                $templateRows = (int) ($detail['template_detail_rows'] ?? 21);
+                $rowOffset = max(0, $detailCount - $templateRows);
+                $this->ensureRsmiSignatureLines($sheet, $rowOffset);
+                $this->applyRsmiRecapMonetaryFormats($sheet, $detailCount, $rowOffset);
             }
 
             return;
@@ -246,6 +259,12 @@ class OwwaTemplateExportService
             if ($detailCount > 0) {
                 $this->finalizeDetailSection('IAR', $sheet, $detailCount);
             }
+
+            return;
+        }
+
+        if ($formKey === 'PTR') {
+            PtrSignatureLayout::finalizePrintedNameLayout($sheet);
 
             return;
         }
@@ -589,17 +608,112 @@ class OwwaTemplateExportService
         );
     }
 
-    protected function ensureRsmiSignatureLines(Worksheet $sheet): void
+    protected function ensureRsmiSignatureLines(Worksheet $sheet, int $rowOffset = 0): void
     {
-        $placeholder = RsmiSignatureLayout::SIGNATURE_LINE_PLACEHOLDER;
+        $placeholders = (array) (OwwaCellMapping::form('RSMI')['signature_line_placeholders'] ?? []);
 
-        foreach (RsmiSignatureLayout::signatureLineCells() as $cellRef) {
+        foreach (RsmiSignatureLayout::signatureLineCells($rowOffset) as $cellRef) {
             $value = $sheet->getCell($cellRef)->getValue();
 
-            if (! filled($value)) {
-                $this->setExportCellValue($sheet, $cellRef, $placeholder);
+            if (filled($value)) {
+                continue;
             }
+
+            preg_match('/^([A-Z]+)/', $cellRef, $matches);
+            $column = $matches[1] ?? 'A';
+            $placeholder = (string) ($placeholders[$column] ?? RsmiSignatureLayout::SIGNATURE_LINE_PLACEHOLDER);
+            $this->setExportCellValue($sheet, $cellRef, $placeholder);
         }
+    }
+
+    /**
+     * Apply a single font underline only on filled signature value cells so the printed
+     * line remains after template underscore placeholders are replaced.
+     *
+     * @param  array<string, string|int|float|null>  $cellValues
+     */
+    protected function underlineFilledIssuanceSignatureCells(
+        Worksheet $sheet,
+        string $formKey,
+        array $cellValues,
+        int $rowOffset = 0,
+    ): void {
+        $signatureCells = match ($formKey) {
+            'ICS' => ['A46', 'F46', 'A48', 'F48', 'A50', 'F50'],
+            'PAR' => ['A45', 'D45', 'A47', 'D47', 'A49', 'D49'],
+            'RSMI' => ['A52', 'F52', 'H52'],
+            default => [],
+        };
+
+        foreach ($signatureCells as $cellRef) {
+            $resolved = RsmiSignatureLayout::offsetCell($cellRef, $rowOffset);
+            if (! filled($cellValues[$resolved] ?? null)) {
+                continue;
+            }
+
+            $sheet->getStyle($this->resolveMergeAnchorCell($sheet, $resolved))
+                ->getFont()
+                ->setUnderline(Font::UNDERLINE_SINGLE);
+        }
+    }
+
+    /**
+     * Insert styled detail rows so ICS/PAR/RSMI grow continuously when line count exceeds the template block.
+     *
+     * @param  array<string, string|int|float|null>  $cellValues
+     */
+    protected function prepareIssuanceDetailRowExpansion(Worksheet $sheet, string $formKey, array $cellValues): int
+    {
+        $detail = (array) OwwaCellMapping::form($formKey)['detail'];
+        $startRow = (int) ($detail['start_row'] ?? 12);
+        $templateRows = (int) ($detail['template_detail_rows'] ?? $detail['max_rows'] ?? 30);
+        $insertBefore = (int) ($detail['expand_insert_before_row'] ?? 0);
+
+        if ($insertBefore <= 0 || $templateRows <= 0) {
+            return 0;
+        }
+
+        $detailCount = $this->countDetailRowsFromCellValues($formKey, $cellValues);
+        $extra = max(0, $detailCount - $templateRows);
+
+        if ($extra > 0) {
+            OwwaSpreadsheetLayoutHelper::insertStyledLedgerRows(
+                $sheet,
+                $insertBefore,
+                $extra,
+                (int) ($detail['style_row'] ?? $startRow),
+                (string) ($detail['highest_column'] ?? 'H'),
+            );
+        }
+
+        return $extra;
+    }
+
+    protected function issuanceDetailRowOffset(string $formKey, int $detailCount): int
+    {
+        $detail = (array) OwwaCellMapping::form($formKey)['detail'];
+        $templateRows = (int) ($detail['template_detail_rows'] ?? $detail['max_rows'] ?? 30);
+
+        return max(0, $detailCount - $templateRows);
+    }
+
+    /**
+     * @param  array<string, string|int|float|null>  $pairs
+     * @return array<string, string|int|float|null>
+     */
+    protected function filledSignatureCells(array $pairs, int $rowOffset = 0): array
+    {
+        $values = [];
+
+        foreach ($pairs as $cellRef => $value) {
+            if (! filled($value)) {
+                continue;
+            }
+
+            $values[RsmiSignatureLayout::offsetCell((string) $cellRef, $rowOffset)] = $value;
+        }
+
+        return $values;
     }
 
     protected function resolveFormKeyFromTemplate(string $templateFilename): ?string
@@ -617,6 +731,7 @@ class OwwaTemplateExportService
             str_contains($normalized, 'Appendix 63') || str_contains($normalized, ' - RIS.') => 'RIS',
             str_contains($normalized, 'Appendix 71') || str_contains($normalized, ' - PAR.') => 'PAR',
             str_contains($normalized, 'Appendix 59') || str_contains($normalized, ' - ICS.') => 'ICS',
+            str_contains($normalized, 'Appendix 76') || str_contains($normalized, ' - PTR.') => 'PTR',
             str_contains($normalized, 'Appendix 66') || str_contains($normalized, ' - RPCI.') => 'RPCI',
             str_contains($normalized, 'Appendix 73') && str_contains($normalized, 'Physical Count') => 'RPCPPE',
             str_contains($normalized, 'Annex-A.8') || str_contains($normalized, 'RPCSP') => 'RPCSP',
@@ -972,14 +1087,14 @@ class OwwaTemplateExportService
         }
     }
 
-    protected function applyRsmiRecapMonetaryFormats(Worksheet $sheet, int $detailRowCount): void
+    protected function applyRsmiRecapMonetaryFormats(Worksheet $sheet, int $detailRowCount, int $rowOffset = 0): void
     {
         if ($detailRowCount <= 0) {
             return;
         }
 
         $detail = (array) OwwaCellMapping::form('RSMI')['detail'];
-        $recapStart = (int) ($detail['recap_start_row'] ?? 36);
+        $recapStart = (int) ($detail['recap_start_row'] ?? 36) + $rowOffset;
 
         OwwaSpreadsheetLayoutHelper::applyMonetaryColumnFormats(
             $sheet,
@@ -1030,11 +1145,15 @@ class OwwaTemplateExportService
         $firstColumn = (string) (reset($columns) ?: 'A');
         $count = 0;
 
+        // Count contiguous detail rows only. Footer/signature cells may reuse the same
+        // column after a gap, and must not inflate the expansion row count.
         for ($row = $startRow; $row < $startRow + $maxRows; $row++) {
             $key = OwwaCellMapping::columnCell($firstColumn, $row);
-            if (filled($cellValues[$key] ?? null)) {
-                $count++;
+            if (! filled($cellValues[$key] ?? null)) {
+                break;
             }
+
+            $count++;
         }
 
         return $count;
@@ -1767,7 +1886,7 @@ class OwwaTemplateExportService
             ? min($clearToCap, max($ledgerEnd, $sampleClearEnd))
             : max($ledgerEnd, $sampleClearEnd);
 
-        foreach (['entity_name', 'fund_cluster', 'property_type'] as $field) {
+        foreach (['entity_name', 'property_type'] as $field) {
             $cell = (string) (OwwaCellMapping::form('ANNEX_A4')['header'][$field]['cell'] ?? '');
             if ($cell !== '') {
                 $sheet->setCellValue($cell, null);
@@ -2051,7 +2170,7 @@ class OwwaTemplateExportService
     {
         $lines = $issuance->batchLines();
         $representative = $lines->first() ?? $issuance;
-        $representative->load(['item', 'office', 'department', 'issuedBy', 'issuedTo', 'batch']);
+        $representative->loadMissing(['item', 'office', 'department', 'issuedBy', 'issuedTo', 'batch']);
 
         $pathForMatch = $templatePath !== null ? str_replace('\\', '/', $templatePath) : '';
 
@@ -2128,19 +2247,16 @@ class OwwaTemplateExportService
 
         $detailConfig = (array) ($rsmiMap['detail'] ?? []);
         $detailStartRow = (int) ($detailConfig['start_row'] ?? 12);
-        $detailEndRow = (int) ($detailConfig['end_row'] ?? 32);
+        $templateDetailRows = (int) ($detailConfig['template_detail_rows'] ?? 21);
         $recapStartRow = (int) ($detailConfig['recap_start_row'] ?? 36);
-        $recapEndRow = (int) ($detailConfig['recap_end_row'] ?? 51);
         $detailColumns = (array) ($detailConfig['columns'] ?? []);
-        $detailToRecapOffset = $recapStartRow - $detailStartRow;
+        $detailCount = $issuances->count();
+        $rowOffset = max(0, $detailCount - $templateDetailRows);
+        $detailToRecapOffset = ($recapStartRow + $rowOffset) - $detailStartRow;
 
         $row = $detailStartRow;
 
         foreach ($issuances as $issuance) {
-            if ($row > $detailEndRow) {
-                break;
-            }
-
             $issuance->loadMissing(['requisition', 'department', 'item']);
             $item = $issuance->item;
             $lineOffice = $issuance->office;
@@ -2161,17 +2277,15 @@ class OwwaTemplateExportService
             $values[OwwaCellMapping::columnCell($detailColumns['amount'] ?? 'H', $row)] = $lineAmount !== null ? $lineAmount : '';
 
             $recapRow = $row + $detailToRecapOffset;
-            if ($recapRow <= $recapEndRow) {
-                $values[OwwaCellMapping::columnCell('B', $recapRow)] = $stockNo;
-                $values[OwwaCellMapping::columnCell('C', $recapRow)] = (string) $quantity;
-                $values[OwwaCellMapping::columnCell('F', $recapRow)] = $unitCost !== null ? $unitCost : '';
-                $values[OwwaCellMapping::columnCell('G', $recapRow)] = $lineAmount !== null ? $lineAmount : '';
-            }
+            $values[OwwaCellMapping::columnCell('B', $recapRow)] = $stockNo;
+            $values[OwwaCellMapping::columnCell('C', $recapRow)] = (string) $quantity;
+            $values[OwwaCellMapping::columnCell('F', $recapRow)] = $unitCost !== null ? $unitCost : '';
+            $values[OwwaCellMapping::columnCell('G', $recapRow)] = $lineAmount !== null ? $lineAmount : '';
 
             $row++;
         }
 
-        return RsmiSignatureLayout::applyIssuanceSignatureBlock($values, $first, $reportDate);
+        return RsmiSignatureLayout::applyIssuanceSignatureBlock($values, $first, $reportDate, $rowOffset);
     }
 
     protected function resolveIssuanceUnitCost(Issuance $issuance): ?float
@@ -2259,15 +2373,22 @@ class OwwaTemplateExportService
             return [];
         }
 
-        $first->loadMissing(['item', 'office', 'department', 'issuedBy', 'issuedTo', 'batch']);
+        $first->loadMissing([
+            'item',
+            'office',
+            'department',
+            'issuedBy.office',
+            'issuedTo.office',
+            'issuedTo.department',
+            'batch',
+        ]);
         $office = $first->office;
         $batch = $first->batch;
 
         $parMap = OwwaCellMapping::form('PAR');
         $detailStart = (int) ($parMap['detail']['start_row'] ?? 11);
-        $maxRows = (int) ($parMap['detail']['max_rows'] ?? 30);
-        $detailEnd = $detailStart + $maxRows - 1;
         $cols = (array) ($parMap['detail']['columns'] ?? []);
+        $rowOffset = $this->issuanceDetailRowOffset('PAR', $issuances->count());
 
         $values = [];
         OwwaCellMapping::applyHeader($values, (array) ($parMap['header'] ?? []), [
@@ -2278,10 +2399,6 @@ class OwwaTemplateExportService
 
         $row = $detailStart;
         foreach ($issuances as $issuance) {
-            if ($row > $detailEnd) {
-                break;
-            }
-
             $issuance->loadMissing('item');
             $item = $issuance->item;
             $dateAcquired = $this->lookupDateAcquired($issuance->item_id);
@@ -2296,14 +2413,34 @@ class OwwaTemplateExportService
             $row++;
         }
 
-        return array_merge($values, [
-            'A45' => $first->issuedTo?->name ?? $batch?->custodian_printed_name ?? $first->custodian_printed_name ?? '',
-            'D45' => $batch?->custodian_printed_name ?? $first->custodian_printed_name ?? $first->issuedBy?->name ?? '',
-            'A48' => $batch?->issued_to_designation ?? $first->issued_to_designation ?? $first->issuedTo?->office?->name ?? '',
-            'D48' => $batch?->custodian_designation ?? $first->custodian_designation ?? $office?->name ?? '',
-            'A50' => $first->issuance_date?->format('Y-m-d') ?? '',
-            'D50' => $first->issuance_date?->format('Y-m-d') ?? '',
-        ]);
+        $receivedByName = $first->issuedTo?->name ?? '';
+        $issuedByName = $batch?->custodian_printed_name
+            ?? $first->custodian_printed_name
+            ?? $first->issuedBy?->name
+            ?? '';
+        $receivedByPosition = $batch?->issued_to_designation
+            ?? $first->issued_to_designation
+            ?? $first->issuedTo?->department?->name
+            ?? $first->department?->name
+            ?? $first->issuedTo?->office?->name
+            ?? '';
+        $issuedByPosition = $batch?->custodian_designation
+            ?? $first->custodian_designation
+            ?? $office?->supply_custodian_designation
+            ?? $first->issuedBy?->office?->name
+            ?? $office?->name
+            ?? '';
+        $date = $first->issuance_date?->format('Y-m-d') ?? '';
+
+        // Underscore lines hold values; retain A44/D44, A46/D46, A48/D48, A50/D50 labels.
+        return array_merge($values, $this->filledSignatureCells([
+            'A45' => $receivedByName,
+            'D45' => $issuedByName,
+            'A47' => $receivedByPosition,
+            'D47' => $issuedByPosition,
+            'A49' => $date,
+            'D49' => $date,
+        ], $rowOffset));
     }
 
     /**
@@ -2328,15 +2465,41 @@ class OwwaTemplateExportService
             return [];
         }
 
-        $first->loadMissing(['item', 'office', 'department', 'issuedBy', 'issuedTo', 'batch']);
+        $first->loadMissing([
+            'item',
+            'office',
+            'department',
+            'issuedBy.office',
+            'issuedTo.office',
+            'issuedTo.department',
+            'batch',
+        ]);
         $office = $first->office;
         $batch = $first->batch;
+        $receivedFromName = $batch?->received_from_name
+            ?? $first->received_from_name
+            ?? $batch?->custodian_printed_name
+            ?? $first->custodian_printed_name
+            ?? $first->issuedBy?->name
+            ?? '';
+        $receivedByName = $first->issuedTo?->name ?? '';
+        $receivedFromPosition = $batch?->custodian_designation
+            ?? $first->custodian_designation
+            ?? $office?->supply_custodian_designation
+            ?? $first->issuedBy?->office?->name
+            ?? $office?->name
+            ?? '';
+        $receivedByPosition = $batch?->issued_to_designation
+            ?? $first->issued_to_designation
+            ?? $first->issuedTo?->department?->name
+            ?? $first->department?->name
+            ?? $first->issuedTo?->office?->name
+            ?? '';
 
         $icsMap = OwwaCellMapping::form('ICS');
         $detailStart = (int) ($icsMap['detail']['start_row'] ?? 12);
-        $maxRows = (int) ($icsMap['detail']['max_rows'] ?? 30);
-        $detailEnd = $detailStart + $maxRows - 1;
         $cols = (array) ($icsMap['detail']['columns'] ?? []);
+        $rowOffset = $this->issuanceDetailRowOffset('ICS', $issuances->count());
 
         $values = [];
         OwwaCellMapping::applyHeader($values, (array) ($icsMap['header'] ?? []), [
@@ -2347,10 +2510,6 @@ class OwwaTemplateExportService
 
         $row = $detailStart;
         foreach ($issuances as $issuance) {
-            if ($row > $detailEnd) {
-                break;
-            }
-
             $issuance->loadMissing('item');
             $item = $issuance->item;
             $unitCost = $issuance->unit_cost !== null ? (float) $issuance->unit_cost : null;
@@ -2363,19 +2522,21 @@ class OwwaTemplateExportService
             $values[OwwaCellMapping::columnCell($cols['total_cost'] ?? 'D', $row)] = $totalCost !== null ? $totalCost : '';
             $values[OwwaCellMapping::columnCell($cols['description'] ?? 'E', $row)] = $this->formatItemDescription($item);
             $values[OwwaCellMapping::columnCell($cols['inventory_item_no'] ?? 'G', $row)] = $issuance->property_number ?? $item?->item_code ?? '';
-            $values[OwwaCellMapping::columnCell($cols['useful_life'] ?? 'H', $row)] = $usefulLife;
+            $values[OwwaCellMapping::columnCell($cols['estimated_useful_life'] ?? 'H', $row)] = $usefulLife;
             $row++;
         }
 
-        return array_merge($values, [
-            'A44' => $batch?->received_from_name ?? $first->received_from_name ?? $first->issuedBy?->name ?? '',
-            'A46' => $first->issuedTo?->name ?? '',
-            'F46' => $batch?->custodian_printed_name ?? $first->custodian_printed_name ?? $first->issuedBy?->name ?? '',
-            'A49' => $batch?->issued_to_designation ?? $first->issued_to_designation ?? '',
-            'F49' => $batch?->custodian_designation ?? $first->custodian_designation ?? '',
-            'A51' => $first->issuance_date?->format('Y-m-d') ?? '',
-            'F51' => $first->issuance_date?->format('Y-m-d') ?? '',
-        ]);
+        // Signature line cells (A46/F46, A48/F48, A50/F50) are underscore placeholders in the
+        // template. Write values onto those lines and leave A49/F49/A51/F51 labels untouched.
+        // Skip blank values so the template underscore length is preserved.
+        return array_merge($values, $this->filledSignatureCells([
+            'A46' => $receivedFromName,
+            'F46' => $receivedByName,
+            'A48' => $receivedFromPosition,
+            'F48' => $receivedByPosition,
+            'A50' => $first->issuance_date?->format('Y-m-d') ?? '',
+            'F50' => $first->issuance_date?->format('Y-m-d') ?? '',
+        ], $rowOffset));
     }
 
     /**
@@ -2570,7 +2731,7 @@ class OwwaTemplateExportService
         $reason = $transfer->reason_for_transfer ?? $transfer->remarks ?? '';
 
         $ptrMap = OwwaCellMapping::form('PTR');
-        $detailStart = (int) ($ptrMap['detail']['start_row'] ?? 17);
+        $detailStart = (int) ($ptrMap['detail']['start_row'] ?? 18);
         $detailCols = (array) ($ptrMap['detail']['columns'] ?? []);
 
         $values = [];
@@ -2879,21 +3040,20 @@ class OwwaTemplateExportService
 
     protected function finalizeAnnexA1Sheet(Worksheet $sheet, int $lastUsedRow): void
     {
-        $ledger = (array) OwwaCellMapping::form('ANNEX_A1')['ledger'];
-        $clearFrom = $lastUsedRow + 1;
-        $clearTo = (int) ($ledger['clear_to_row'] ?? 500);
+        // OWWA Annex A.1 templates ship with a long pre-drawn blank ledger.
+        // PhpSpreadsheet removeRow() does not reliably shrink sheets that still hold
+        // drawings/styles, so collapse leftover rows instead of leaving empty grid space.
+        $highestRow = (int) $sheet->getHighestRow();
 
-        if ($clearTo <= 0 || $clearFrom > $clearTo) {
+        if ($highestRow <= $lastUsedRow) {
             return;
         }
 
-        $styleRow = (int) ($ledger['style_row'] ?? 15);
-        $standardRowHeight = OwwaSpreadsheetLayoutHelper::resolveLedgerRowHeight($sheet, $styleRow);
+        OwwaSpreadsheetLayoutHelper::clearRowRange($sheet, $lastUsedRow + 1, $highestRow, 'L');
 
-        OwwaSpreadsheetLayoutHelper::clearRowRange($sheet, $clearFrom, $clearTo, 'L');
-
-        for ($row = $clearFrom; $row <= $clearTo; $row++) {
-            $sheet->getRowDimension($row)->setRowHeight($standardRowHeight);
+        for ($row = $lastUsedRow + 1; $row <= $highestRow; $row++) {
+            $sheet->getRowDimension($row)->setRowHeight(0);
+            $sheet->getRowDimension($row)->setVisible(false);
         }
     }
 
@@ -2916,7 +3076,7 @@ class OwwaTemplateExportService
         $ledgerStart = AnnexA1BlockLayout::ledgerStartRowForBlockStart($blockStart);
         $clearTo = $ledgerStart + AnnexA1BlockLayout::blankStyleRows() - 1;
 
-        foreach (['entity_name', 'fund_cluster', 'property_type', 'property_number', 'description'] as $field) {
+        foreach (['entity_name', 'property_type', 'property_number', 'description'] as $field) {
             $sheet->setCellValue(AnnexA1BlockLayout::headerCell($field, $blockStart), null);
         }
 
@@ -3473,8 +3633,8 @@ class OwwaTemplateExportService
             'unit' => fn ($line) => $line->unit ?? $line->item?->unit ?? '',
             'description' => fn ($line) => $line->description ?? $line->item?->name ?? '',
             'quantity' => fn ($line) => (string) $line->quantity,
-            'unit_cost' => fn ($line) => $line->unit_cost !== null ? (float) $line->unit_cost : '',
-            'total_cost' => fn ($line) => $line->amount !== null ? (float) $line->amount : '',
+            'unit_cost' => fn ($line) => '',
+            'total_cost' => fn ($line) => '',
         ]);
 
         if ($includeFooter) {

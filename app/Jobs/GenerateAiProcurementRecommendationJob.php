@@ -13,6 +13,7 @@ class GenerateAiProcurementRecommendationJob implements ShouldQueue
 
     /**
      * @param  array<int>  $officeIds
+     * @param  array<int>  $categoryIds
      */
     public function __construct(
         public int $runId,
@@ -20,6 +21,7 @@ class GenerateAiProcurementRecommendationJob implements ShouldQueue
         public string $periodTo,
         public ?int $categoryId,
         public array $officeIds,
+        public array $categoryIds = [],
     ) {}
 
     public function handle(AiProcurementRecommendationService $service): void
@@ -30,6 +32,7 @@ class GenerateAiProcurementRecommendationJob implements ShouldQueue
             periodTo: $this->periodTo,
             categoryId: $this->categoryId,
             officeIds: $this->officeIds,
+            categoryIds: $this->categoryIds,
         );
     }
 

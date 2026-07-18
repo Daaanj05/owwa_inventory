@@ -14,11 +14,15 @@ use App\Http\Concerns\LogsExportActivity;
 use App\Models\Acquisition;
 use App\Models\Disposal;
 use App\Models\Issuance;
+use App\Models\ItemCategory;
 use App\Models\Requisition;
 use App\Models\Transfer;
 use App\Models\User;
+use App\Services\AnnexA4PdfExportService;
 use App\Services\OwwaItemReportService;
 use App\Services\OwwaTemplateExportService;
+use App\Services\StockCardPdfExportService;
+use App\Services\StockLevelExportService;
 use App\Support\OwwaExportFilename;
 use App\Support\OwwaReferenceLabels;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
@@ -42,6 +46,9 @@ class OwwaBulkExportController extends Controller
     public function __construct(
         protected OwwaTemplateExportService $owwaExport,
         protected OwwaItemReportService $itemReport,
+        protected StockLevelExportService $stockLevelExport,
+        protected StockCardPdfExportService $stockCardPdfExport,
+        protected AnnexA4PdfExportService $annexA4PdfExport,
     ) {}
 
     /**
@@ -131,12 +138,7 @@ class OwwaBulkExportController extends Controller
     {
         abort_unless(StockLevels::canAccess(), 403);
 
-        $categoryId = $request->query('category');
-        $search = $request->query('search');
-        $pairs = $this->itemReport->stockLevelPairsForAnnexA1Bulk(
-            $categoryId !== null && $categoryId !== '' ? (int) $categoryId : null,
-            is_string($search) && $search !== '' ? $search : null,
-        );
+        $pairs = $this->resolveStockLevelPairs($request);
 
         abort_if($pairs->isEmpty(), 404);
 
@@ -145,20 +147,70 @@ class OwwaBulkExportController extends Controller
         return $this->itemReport->downloadAnnexA1Bulk($pairs);
     }
 
-    public function annexA4(Request $request): StreamedResponse
+    public function stockCards(Request $request): StreamedResponse|Response
+    {
+        abort_unless(StockLevels::canAccess(), 403);
+
+        $pairs = $this->resolveStockLevelPairs($request);
+        abort_if($pairs->isEmpty(), 404);
+
+        $category = ItemCategory::query()->find((int) $request->query('category'));
+        $slug = $category?->getTemplateSlug() ?? 'consumables';
+        $format = (string) $request->query('format', 'xlsx');
+
+        $this->logExportActivity('Exported bulk stock cards', properties: [
+            'count' => $pairs->count(),
+            'category' => $slug,
+            'format' => $format,
+        ]);
+
+        if ($format === 'pdf') {
+            return $this->stockCardPdfExport->downloadMerged($pairs, $slug);
+        }
+
+        return match ($slug) {
+            'ppe' => $this->itemReport->downloadPropertyCardBulk($pairs),
+            'semi_expendable' => $this->itemReport->downloadAnnexA1Bulk($pairs),
+            default => $this->itemReport->downloadStockCardBulk($pairs),
+        };
+    }
+
+    /**
+     * @return Collection<int, array{item_id: int, office_id: int, unit_cost: float|null}>
+     */
+    protected function resolveStockLevelPairs(Request $request): Collection
+    {
+        $user = Auth::user();
+        $scopedOfficeId = $user?->office_id ? (int) $user->office_id : null;
+
+        return $this->stockLevelExport->resolvePairsFromRequest($request, $scopedOfficeId);
+    }
+
+    public function annexA4(Request $request): StreamedResponse|Response
     {
         abort_unless(StockLevels::canAccess(), 403);
 
         $categoryId = $request->query('category');
         $search = $request->query('search');
+        $restockFilter = (string) $request->query('restock_filter', 'active');
         $pairs = $this->itemReport->stockLevelPairsForAnnexA1Bulk(
             $categoryId !== null && $categoryId !== '' ? (int) $categoryId : null,
             is_string($search) && $search !== '' ? $search : null,
+            $restockFilter,
         );
 
         abort_if($pairs->isEmpty(), 404);
 
-        $this->logExportActivity('Exported bulk Annex A.4 registry', properties: ['count' => $pairs->count()]);
+        $format = (string) $request->query('format', 'xlsx');
+
+        $this->logExportActivity('Exported bulk Annex A.4 registry', properties: [
+            'count' => $pairs->count(),
+            'format' => $format,
+        ]);
+
+        if ($format === 'pdf') {
+            return $this->annexA4PdfExport->download($pairs);
+        }
 
         return $this->itemReport->downloadAnnexA4Bulk($pairs);
     }
@@ -169,9 +221,11 @@ class OwwaBulkExportController extends Controller
 
         $categoryId = $request->query('category');
         $search = $request->query('search');
+        $restockFilter = (string) $request->query('restock_filter', 'active');
         $pairs = $this->itemReport->stockLevelPairsForPropertyCardBulk(
             $categoryId !== null && $categoryId !== '' ? (int) $categoryId : null,
             is_string($search) && $search !== '' ? $search : null,
+            $restockFilter,
         );
 
         abort_if($pairs->isEmpty(), 404);

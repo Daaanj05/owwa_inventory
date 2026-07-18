@@ -8,6 +8,8 @@ use Filament\Facades\Filament;
 use Filament\Schemas\Schema;
 use Filament\Widgets\ChartWidget;
 use Filament\Widgets\ChartWidget\Concerns\HasFiltersSchema;
+use Illuminate\Support\Arr;
+use Livewire\Attributes\On;
 
 class ConsumptionSharePieWidget extends ChartWidget
 {
@@ -33,13 +35,22 @@ class ConsumptionSharePieWidget extends ChartWidget
 
     protected ?string $pollingInterval = null;
 
-    protected ?string $maxHeight = '224px';
+    protected ?string $maxHeight = null;
 
     public static function canView(): bool
     {
         $user = Filament::auth()->user();
 
         return $user?->isSupplyCustodian() ?? false;
+    }
+
+    public function getDescription(): ?string
+    {
+        if ($this->isConsumptionItemScoped()) {
+            return 'Share of total issued units by office and item for the selected filters.';
+        }
+
+        return 'Share of total issued units per office. Includes all offices (regional and satellite) when All offices is selected.';
     }
 
     /**
@@ -71,18 +82,49 @@ class ConsumptionSharePieWidget extends ChartWidget
         return $this->configureConsumptionFiltersSchema($schema);
     }
 
+    /**
+     * @param  array<string, mixed>  $filters
+     */
+    #[On('consumption-trend-filters-updated')]
+    public function syncConsumptionTrendFilters(array $filters): void
+    {
+        $this->filters = Arr::only($filters, [
+            'date_from',
+            'date_to',
+            'office_ids',
+            'department_ids',
+            'item_category_ids',
+            'base_names',
+            'item_ids',
+        ]);
+        $this->filters['item_category_ids'] = $this->normalizeEmptySelectValue($this->filters['item_category_ids'] ?? null);
+        $this->filters['base_names'] = $this->normalizeEmptySelectValue($this->filters['base_names'] ?? null);
+        $this->filters['item_ids'] = $this->normalizeEmptySelectValue($this->filters['item_ids'] ?? null);
+        $this->cachedData = null;
+    }
+
     protected function getData(): array
     {
         $resolved = $this->resolveConsumptionFilters();
+        $service = app(ConsumptionAnalyticsService::class);
 
-        $result = app(ConsumptionAnalyticsService::class)->getConsumptionTotalsByOffice(
-            $resolved['from'],
-            $resolved['to'],
-            $resolved['department_ids'],
-            $resolved['office_ids'],
-            $resolved['includeYearInLabels'],
-            $resolved['item_ids'],
-        );
+        $result = $resolved['item_ids'] !== []
+            ? $service->getConsumptionTotalsByOfficeAndItem(
+                $resolved['from'],
+                $resolved['to'],
+                $resolved['department_ids'],
+                $resolved['office_ids'],
+                $resolved['includeYearInLabels'],
+                $resolved['item_ids'],
+            )
+            : $service->getConsumptionTotalsByOffice(
+                $resolved['from'],
+                $resolved['to'],
+                $resolved['department_ids'],
+                $resolved['office_ids'],
+                $resolved['includeYearInLabels'],
+                $resolved['item_ids'],
+            );
 
         if (empty($result['labels']) || $result['total'] === 0) {
             return [
@@ -125,21 +167,29 @@ class ConsumptionSharePieWidget extends ChartWidget
             'maintainAspectRatio' => false,
             'animation' => false,
             'resizeDelay' => 200,
-            'cutout' => '58%',
+            'cutout' => '55%',
+            'layout' => [
+                'padding' => [
+                    'top' => 4,
+                    'right' => 8,
+                    'bottom' => 4,
+                    'left' => 8,
+                ],
+            ],
             'plugins' => [
                 'legend' => [
                     'display' => true,
                     'position' => 'bottom',
                     'align' => 'center',
                     'labels' => [
-                        'boxWidth' => 10,
-                        'boxHeight' => 10,
+                        'boxWidth' => 8,
+                        'boxHeight' => 8,
                         'borderRadius' => 4,
-                        'padding' => 10,
+                        'padding' => 8,
                         'usePointStyle' => true,
                         'pointStyle' => 'circle',
                         'color' => '#475569',
-                        'font' => ['size' => 12, 'weight' => '500'],
+                        'font' => ['size' => 11, 'weight' => '500'],
                     ],
                 ],
                 'tooltip' => [

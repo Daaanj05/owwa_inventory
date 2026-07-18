@@ -103,7 +103,7 @@ class InventoryQrLabelController extends Controller
     {
         $this->authorizeSupplyCustodian();
 
-        if (! $physicalCountSession->supportsQrScanning()) {
+        if (! $physicalCountSession->supportsUnitQrScanning()) {
             abort(404, 'QR labels are only available for PPE and semi-expendable count sessions.');
         }
 

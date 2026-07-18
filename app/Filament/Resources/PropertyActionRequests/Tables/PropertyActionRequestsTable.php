@@ -76,7 +76,7 @@ class PropertyActionRequestsTable
                     ->visible(fn (): bool => ! $isUnitConsolidatorViewer),
                 TextColumn::make('status')
                     ->badge()
-                    ->formatStateUsing(fn (?string $state): string => str_replace('_', ' ', ucwords((string) $state, '_')))
+                    ->formatStateUsing(fn (PropertyActionRequest $record): string => $record->statusLabel())
                     ->color(fn (?string $state): string => match ($state) {
                         PropertyActionRequest::STATUS_APPROVED, PropertyActionRequest::STATUS_EXECUTED => 'success',
                         PropertyActionRequest::STATUS_REJECTED => 'danger',
@@ -114,7 +114,9 @@ class PropertyActionRequestsTable
                         PropertyActionRequestTableActions::ucRejectFromViewAction(),
                         PropertyActionRequestTableActions::scApproveAction(),
                         PropertyActionRequestTableActions::scRejectAction(),
-                        PropertyActionRequestTableActions::scExecuteAction(),
+                        PropertyActionRequestTableActions::scReceiveAndRouteAction(),
+                        PropertyActionRequestTableActions::openDisposalAction(),
+                        PropertyActionRequestTableActions::openTransferAction(),
                     ],
                     '5xl',
                     modelLabel: PropertyActionRequestResource::getModelLabel(),

@@ -63,6 +63,90 @@ class PropertyActionRequestWorkflowTest extends TestCase
         $this->assertNotNull($issuance->fresh()->custody_ended_at);
         $this->assertSame('disposal', $issuance->fresh()->custody_end_type);
         $this->assertSame($unit->id, Disposal::query()->find($line->disposal_id)?->inventory_unit_id);
+        $this->assertSame('Approved — awaiting item', (new PropertyActionRequest(['status' => PropertyActionRequest::STATUS_APPROVED]))->statusLabel());
+        $this->assertSame('Received & routed', $request->statusLabel());
+    }
+
+    public function test_receive_and_route_dispose_overrides_return_action_type(): void
+    {
+        [$employee, $uc, $custodian, $issuance, $unit] = $this->seedPropertyContext();
+
+        $request = $this->createRequestWithLine([
+            'action_type' => PropertyActionRequest::ACTION_RETURN,
+            'reason_code' => 'good_condition',
+            'requested_by' => $employee->id,
+            'accountable_user_id' => $uc->id,
+            'office_id' => $issuance->office_id,
+            'status' => PropertyActionRequest::STATUS_APPROVED,
+        ], $issuance, $unit);
+
+        app(PropertyActionRequestWorkflowService::class)->receiveAndRoute(
+            $request,
+            $custodian,
+            PropertyActionRequest::OUTCOME_DISPOSE,
+        );
+
+        $request->refresh();
+        $line = $request->lines()->first();
+
+        $this->assertSame(PropertyActionRequest::STATUS_EXECUTED, $request->status);
+        $this->assertNotNull($line?->disposal_id);
+        $this->assertNull($line?->transfer_id);
+        $this->assertSame(InventoryUnit::STATUS_DISPOSED, $unit->fresh()->status);
+    }
+
+    public function test_return_to_stock_can_reset_estimated_useful_life(): void
+    {
+        [$employee, $uc, $custodian, $issuance, $unit] = $this->seedPropertyContext();
+        $item = $issuance->item;
+        $this->assertNotNull($item);
+        $item->update(['estimated_useful_life' => '2 years']);
+
+        $request = $this->createRequestWithLine([
+            'action_type' => PropertyActionRequest::ACTION_RETURN,
+            'reason_code' => 'good_condition',
+            'requested_by' => $employee->id,
+            'accountable_user_id' => $uc->id,
+            'office_id' => $issuance->office_id,
+            'status' => PropertyActionRequest::STATUS_APPROVED,
+        ], $issuance, $unit);
+
+        app(PropertyActionRequestWorkflowService::class)->receiveAndRoute(
+            $request,
+            $custodian,
+            PropertyActionRequest::OUTCOME_RETURN_TO_STOCK,
+            '5 years',
+        );
+
+        $this->assertSame('5 years', $item->fresh()->estimated_useful_life);
+        $this->assertSame(InventoryUnit::STATUS_IN_STOCK, $unit->fresh()->status);
+        $this->assertSame($unit->property_number, $issuance->fresh()->property_number);
+        $this->assertNotNull($request->fresh()->lines->first()?->transfer_id);
+    }
+
+    public function test_transfer_outcome_sets_custody_end_type_transfer(): void
+    {
+        [$employee, $uc, $custodian, $issuance, $unit] = $this->seedPropertyContext();
+
+        $request = $this->createRequestWithLine([
+            'action_type' => PropertyActionRequest::ACTION_RETURN,
+            'reason_code' => 'needs_repair',
+            'requested_by' => $employee->id,
+            'accountable_user_id' => $uc->id,
+            'office_id' => $issuance->office_id,
+            'status' => PropertyActionRequest::STATUS_APPROVED,
+        ], $issuance, $unit);
+
+        $this->assertSame(PropertyActionRequest::OUTCOME_TRANSFER, $request->suggestedReceiveOutcome());
+
+        app(PropertyActionRequestWorkflowService::class)->receiveAndRoute(
+            $request,
+            $custodian,
+            PropertyActionRequest::OUTCOME_TRANSFER,
+        );
+
+        $this->assertSame('transfer', $issuance->fresh()->custody_end_type);
+        $this->assertNotNull($request->fresh()->linkedTransferId());
     }
 
     public function test_return_workflow_restores_unit_to_office_stock(): void

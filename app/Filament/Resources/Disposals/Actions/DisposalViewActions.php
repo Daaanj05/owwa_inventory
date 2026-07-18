@@ -6,10 +6,11 @@ use App\Filament\Resources\Disposals\DisposalResource;
 use App\Filament\Support\OwwaFormModalDefaults;
 use App\Models\Disposal;
 use App\Services\OwwaTemplateExportService;
+use App\Support\OwwaExportBusyDispatcher;
 use Filament\Actions\Action;
 use Filament\Actions\EditAction;
 use Filament\Forms\Components\Select;
-use Illuminate\Support\Facades\Redirect;
+use Livewire\Component as LivewireComponent;
 
 class DisposalViewActions
 {
@@ -30,13 +31,19 @@ class DisposalViewActions
                     ->default(fn (Disposal $record): string => app(OwwaTemplateExportService::class)->resolveDisposalFormSlug($record))
                     ->helperText('Auto-selected based on disposal type and category.'),
             ])
-            ->action(function (Disposal $record, array $data) {
+            ->action(function (Disposal $record, array $data, Action $action): void {
                 $url = route('owwa.export.disposal', $record);
                 if (! empty($data['form'])) {
                     $url .= '?form='.urlencode($data['form']);
                 }
 
-                return Redirect::away($url);
+                $livewire = $action->getLivewire();
+                OwwaExportBusyDispatcher::start(
+                    $livewire instanceof LivewireComponent ? $livewire : null,
+                    $url,
+                    'Preparing Excel export…',
+                    'Building your OWWA form…',
+                );
             });
     }
 

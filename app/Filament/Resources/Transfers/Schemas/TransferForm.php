@@ -3,12 +3,15 @@
 namespace App\Filament\Resources\Transfers\Schemas;
 
 use App\Filament\Concerns\SyncsActiveItemCategory;
+use App\Models\Item;
 use App\Models\ItemCategory;
 use App\Models\Office;
+use App\Models\ProcurementSignatoryName;
 use App\Services\InventoryStockService;
 use App\Services\TransferItemOptionsService;
 use App\Support\CustodianOfficeScope;
 use App\Support\OwwaReferenceLabels;
+use App\Support\RequisitionNotificationRecipients;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Placeholder;
@@ -54,8 +57,13 @@ class TransferForm
                             ->live()
                             ->afterStateUpdated(function ($state, Set $set, Get $get): void {
                                 $set('item_id', null);
+                                $set('property_number', null);
+                                $set('from_accountable_officer', self::defaultAccountableOfficerName(
+                                    filled($state) ? (int) $state : null,
+                                ));
                                 if (filled($state) && (int) $get('to_office_id') === (int) $state) {
                                     $set('to_office_id', null);
+                                    $set('to_accountable_officer', null);
                                 }
                             }),
                         Select::make('to_office_id')
@@ -82,7 +90,13 @@ class TransferForm
                                 'different' => 'Destination office must be different from the source office.',
                             ])
                             ->live()
-                            ->afterStateUpdated(fn (Set $set) => $set('item_id', null)),
+                            ->afterStateUpdated(function ($state, Set $set): void {
+                                $set('item_id', null);
+                                $set('property_number', null);
+                                $set('to_accountable_officer', self::defaultAccountableOfficerName(
+                                    filled($state) ? (int) $state : null,
+                                ));
+                            }),
                     ])
                     ->columns(2),
 
@@ -107,7 +121,10 @@ class TransferForm
                             ->disabled(fn (): bool => self::isCategoryScoped())
                             ->live()
                             ->dehydrated(false)
-                            ->afterStateUpdated(fn (Set $set) => $set('item_id', null)),
+                            ->afterStateUpdated(function (Set $set): void {
+                                $set('item_id', null);
+                                $set('property_number', null);
+                            }),
                         Select::make('item_id')
                             ->label('Item')
                             ->options(function (Get $get): array {
@@ -143,7 +160,12 @@ class TransferForm
                                     ? 'No stock available — increase stock before transferring.'
                                     : null;
                             })
-                            ->afterStateUpdated(fn (Set $set) => $set('unit_cost', null)),
+                            ->afterStateUpdated(function ($state, Set $set): void {
+                                $set('unit_cost', null);
+                                $set('property_number', self::catalogPropertyNumberForItem(
+                                    filled($state) ? (int) $state : null,
+                                ));
+                            }),
                         Select::make('unit_cost')
                             ->label('Unit cost bucket')
                             ->options(function (Get $get): array {
@@ -266,11 +288,19 @@ class TransferForm
                         TextInput::make('from_accountable_officer')
                             ->label('From accountable officer')
                             ->maxLength(255)
-                            ->helperText('PTR cell A8'),
+                            ->datalist(fn (Get $get): array => self::accountableOfficerSuggestions(
+                                filled($get('from_office_id')) ? (int) $get('from_office_id') : null,
+                                ProcurementSignatoryName::ROLE_TRANSFER_FROM_ACCOUNTABLE,
+                            ))
+                            ->helperText('PTR cell A8 — Unit Consolidators of the From office (and previously saved names).'),
                         TextInput::make('to_accountable_officer')
                             ->label('To accountable officer')
                             ->maxLength(255)
-                            ->helperText('PTR cell A9'),
+                            ->datalist(fn (Get $get): array => self::accountableOfficerSuggestions(
+                                filled($get('to_office_id')) ? (int) $get('to_office_id') : null,
+                                ProcurementSignatoryName::ROLE_TRANSFER_TO_ACCOUNTABLE,
+                            ))
+                            ->helperText('PTR cell A9 — Unit Consolidators of the To office (and previously saved names).'),
                         Textarea::make('reason_for_transfer')
                             ->label('Reason for transfer')
                             ->rows(2)
@@ -305,11 +335,25 @@ class TransferForm
                             ->label(fn (Get $get): string => OwwaReferenceLabels::assetIdentifierLabel(
                                 OwwaReferenceLabels::itemCategorySlug((int) $get('item_id'))
                             ))
-                            ->maxLength(255)
-                            ->visible(fn (Get $get): bool => OwwaReferenceLabels::usesPropertyNumber(
-                                OwwaReferenceLabels::itemCategorySlug((int) $get('item_id'))
-                            ))
-                            ->placeholder('Asset tag / property no.'),
+                            ->disabled()
+                            ->dehydrated()
+                            ->visible(fn (Get $get): bool => filled($get('item_id'))
+                                && OwwaReferenceLabels::usesPropertyNumber(
+                                    OwwaReferenceLabels::itemCategorySlug((int) $get('item_id'))
+                                ))
+                            ->afterStateHydrated(function (TextInput $component, $state, Get $get): void {
+                                if (filled($state)) {
+                                    return;
+                                }
+
+                                $number = self::catalogPropertyNumberForItem(
+                                    filled($get('item_id')) ? (int) $get('item_id') : null,
+                                );
+                                if (filled($number)) {
+                                    $component->state($number);
+                                }
+                            })
+                            ->helperText('Auto-filled from the selected catalog item.'),
                         Textarea::make('remarks')
                             ->label('Remarks')
                             ->rows(2)
@@ -325,33 +369,115 @@ class TransferForm
                             ->label('Approved by')
                             ->maxLength(255)
                             ->placeholder('Full name')
+                            ->datalist(fn (): array => ProcurementSignatoryName::suggestionsForRole(
+                                ProcurementSignatoryName::ROLE_TRANSFER_APPROVED,
+                            ))
                             ->helperText('PTR B53'),
                         TextInput::make('approved_by_designation')
                             ->label('Approved by designation')
                             ->maxLength(255)
+                            ->datalist(fn (): array => ProcurementSignatoryName::suggestionsForRole(
+                                ProcurementSignatoryName::ROLE_TRANSFER_APPROVED_DESIGNATION,
+                            ))
                             ->helperText('PTR A54'),
                         TextInput::make('released_by_printed_name')
                             ->label('Released by')
                             ->maxLength(255)
                             ->placeholder('Full name')
+                            ->datalist(fn (): array => ProcurementSignatoryName::suggestionsForRole(
+                                ProcurementSignatoryName::ROLE_TRANSFER_RELEASED,
+                            ))
                             ->helperText('PTR F53'),
                         TextInput::make('released_by_designation')
                             ->label('Released by designation')
                             ->maxLength(255)
+                            ->datalist(fn (): array => ProcurementSignatoryName::suggestionsForRole(
+                                ProcurementSignatoryName::ROLE_TRANSFER_RELEASED_DESIGNATION,
+                            ))
                             ->helperText('PTR F54'),
                         TextInput::make('received_by_printed_name')
                             ->label('Received by')
                             ->maxLength(255)
                             ->placeholder('Full name')
+                            ->datalist(fn (): array => ProcurementSignatoryName::suggestionsForRole(
+                                ProcurementSignatoryName::ROLE_TRANSFER_RECEIVED,
+                            ))
                             ->helperText('PTR H53'),
                         TextInput::make('received_by_designation')
                             ->label('Received by designation')
                             ->maxLength(255)
+                            ->datalist(fn (): array => ProcurementSignatoryName::suggestionsForRole(
+                                ProcurementSignatoryName::ROLE_TRANSFER_RECEIVED_DESIGNATION,
+                            ))
                             ->helperText('PTR H54'),
                     ])
                     ->columns(2)
                     ->visible(fn (Get $get): bool => self::usesPtrForm($get('item_category_filter'))),
             ]);
+    }
+
+    /**
+     * @return list<string>
+     */
+    public static function accountableOfficerSuggestions(?int $officeId, string $rememberRole): array
+    {
+        $names = collect(ProcurementSignatoryName::suggestionsForRole($rememberRole));
+
+        if ($officeId !== null) {
+            $ucs = RequisitionNotificationRecipients::unitConsolidatorsForOffice($officeId);
+            $names = $names->merge($ucs->pluck('name'));
+
+            if ($ucs->isEmpty()) {
+                $officeName = Office::query()->whereKey($officeId)->value('accountable_officer_name');
+                if (filled($officeName)) {
+                    $names->push((string) $officeName);
+                }
+            }
+        }
+
+        return $names
+            ->map(fn (mixed $name): string => trim((string) $name))
+            ->filter()
+            ->unique()
+            ->sort()
+            ->values()
+            ->all();
+    }
+
+    public static function defaultAccountableOfficerName(?int $officeId): ?string
+    {
+        if ($officeId === null) {
+            return null;
+        }
+
+        $ucs = RequisitionNotificationRecipients::unitConsolidatorsForOffice($officeId);
+        if ($ucs->count() === 1) {
+            return $ucs->first()?->name;
+        }
+
+        if ($ucs->isNotEmpty()) {
+            return null;
+        }
+
+        $name = Office::query()->whereKey($officeId)->value('accountable_officer_name');
+
+        return filled($name) ? (string) $name : null;
+    }
+
+    public static function catalogPropertyNumberForItem(?int $itemId): ?string
+    {
+        if ($itemId === null) {
+            return null;
+        }
+
+        $item = Item::query()->with('category')->find($itemId);
+        if ($item === null) {
+            return null;
+        }
+
+        $identifier = $item->catalogAssetIdentifier();
+
+        return filled($identifier) ? (string) $identifier : null;
     }
 
     protected static function usesPtrForm(mixed $categoryId): bool

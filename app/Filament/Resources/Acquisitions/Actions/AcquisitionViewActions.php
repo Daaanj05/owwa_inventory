@@ -6,10 +6,11 @@ use App\Filament\Resources\Acquisitions\AcquisitionResource;
 use App\Filament\Support\OwwaFormModalDefaults;
 use App\Models\Acquisition;
 use App\Services\OwwaTemplateExportService;
+use App\Support\OwwaExportBusyDispatcher;
 use Filament\Actions\Action;
 use Filament\Actions\EditAction;
 use Filament\Forms\Components\Select;
-use Illuminate\Support\Facades\Redirect;
+use Livewire\Component as LivewireComponent;
 
 class AcquisitionViewActions
 {
@@ -42,13 +43,19 @@ class AcquisitionViewActions
                         default => 'Use Acquisitions → PR / PO / IAR paperwork for purchase forms. This export posts one receipt row to the Stock Card (Appendix 58). For the full ledger, open Stock levels and export from the item modal.',
                     }),
             ])
-            ->action(function (Acquisition $record, array $data) {
+            ->action(function (Acquisition $record, array $data, Action $action): void {
                 $url = route('owwa.export.acquisition', $record);
                 if (! empty($data['form'])) {
                     $url .= '?form='.urlencode($data['form']);
                 }
 
-                return Redirect::away($url);
+                $livewire = $action->getLivewire();
+                OwwaExportBusyDispatcher::start(
+                    $livewire instanceof LivewireComponent ? $livewire : null,
+                    $url,
+                    'Preparing Excel export…',
+                    'Building your OWWA form…',
+                );
             });
     }
 }

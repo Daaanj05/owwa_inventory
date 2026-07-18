@@ -22,8 +22,8 @@ return [
     'header_gradient' => 'linear-gradient(135deg, #002a5c 0%, #003f8a 55%, #6b1230 100%)',
 
     'logos' => [
-        'owwa' => 'images/owwa-4a_logo_transparent.png',
-        'bagong_pilipinas' => 'images/Bagong_Pilipinas_logo.png',
+        'owwa' => 'images/owwa-form-logo.png',
+        'bagong_pilipinas' => 'images/bagong-pilipinas-form-logo.png',
     ],
 
     'logo_height' => 64,

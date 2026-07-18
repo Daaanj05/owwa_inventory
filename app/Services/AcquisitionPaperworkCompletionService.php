@@ -2,15 +2,15 @@
 
 namespace App\Services;
 
-use App\Models\Acquisition;
 use App\Models\AcquisitionPaperwork;
-use Illuminate\Support\Collection;
 use Illuminate\Validation\ValidationException;
 
 class AcquisitionPaperworkCompletionService
 {
     public function __construct(
         protected ReferenceCodeService $referenceCodes,
+        protected PurchaseOrderWorkflowService $purchaseOrders,
+        protected InspectionAcceptanceReportWorkflowService $inspectionReports,
     ) {}
 
     /**
@@ -31,14 +31,18 @@ class AcquisitionPaperworkCompletionService
      */
     public function evaluatePo(AcquisitionPaperwork $paperwork): array
     {
-        if (! $paperwork->isPrApproved()) {
+        $purchaseOrder = $paperwork->purchaseOrder;
+
+        if ($purchaseOrder === null) {
             return [
                 'can_submit' => false,
-                'missing_fields' => ['PR must be approved first'],
+                'missing_fields' => $paperwork->isPrApproved()
+                    ? ['Create a purchase order from the PO tab']
+                    : ['PR must be approved first'],
             ];
         }
 
-        $missing = $paperwork->missingPoFields();
+        $missing = $purchaseOrder->missingFields();
 
         return [
             'can_submit' => $missing === [],
@@ -51,14 +55,18 @@ class AcquisitionPaperworkCompletionService
      */
     public function evaluateIar(AcquisitionPaperwork $paperwork): array
     {
-        if (! $paperwork->isPoApproved()) {
+        $iar = $paperwork->purchaseOrder?->inspectionAcceptanceReport;
+
+        if ($iar === null) {
             return [
                 'can_submit' => false,
-                'missing_fields' => ['PO must be approved first'],
+                'missing_fields' => $paperwork->isPoApproved()
+                    ? ['Create an IAR from the IAR tab']
+                    : ['PO must be approved first'],
             ];
         }
 
-        $missing = $paperwork->missingIarFields();
+        $missing = $iar->missingFields();
 
         return [
             'can_submit' => $missing === [],
@@ -68,6 +76,10 @@ class AcquisitionPaperworkCompletionService
 
     public function submitPr(AcquisitionPaperwork $paperwork): AcquisitionPaperwork
     {
+        if ($paperwork->isArchived()) {
+            throw ValidationException::withMessages(['phase' => 'Archived purchase requests cannot be submitted.']);
+        }
+
         if ($paperwork->isPrApproved()) {
             throw ValidationException::withMessages(['phase' => 'PR is already approved.']);
         }
@@ -90,6 +102,10 @@ class AcquisitionPaperworkCompletionService
 
     public function approvePr(AcquisitionPaperwork $paperwork): AcquisitionPaperwork
     {
+        if ($paperwork->isArchived()) {
+            throw ValidationException::withMessages(['phase' => 'Archived purchase requests cannot be approved.']);
+        }
+
         if ($paperwork->isPrApproved()) {
             throw ValidationException::withMessages(['phase' => 'PR is already approved.']);
         }
@@ -101,140 +117,93 @@ class AcquisitionPaperworkCompletionService
         $paperwork->update([
             'pr_number' => $this->referenceCodes->forAcquisitionPaperworkPr(),
             'pr_status' => AcquisitionPaperwork::STATUS_APPROVED,
-            'phase' => AcquisitionPaperwork::PHASE_PO,
+            'phase' => AcquisitionPaperwork::PHASE_PR,
             'pr_completed_at' => now(),
-            'po_status' => AcquisitionPaperwork::STATUS_DRAFT,
         ]);
 
         return $paperwork;
     }
 
+    public function archive(AcquisitionPaperwork $paperwork): AcquisitionPaperwork
+    {
+        $paperwork->update(['archived_at' => now()]);
+
+        return $paperwork;
+    }
+
+    public function restore(AcquisitionPaperwork $paperwork): AcquisitionPaperwork
+    {
+        $paperwork->update(['archived_at' => null]);
+
+        return $paperwork;
+    }
+
+    /** @deprecated Use PurchaseOrderWorkflowService::submit() */
     public function submitPo(AcquisitionPaperwork $paperwork): AcquisitionPaperwork
     {
-        if ($paperwork->isPoApproved()) {
-            throw ValidationException::withMessages(['phase' => 'PO is already approved.']);
+        $purchaseOrder = $paperwork->purchaseOrder;
+
+        if ($purchaseOrder === null) {
+            throw ValidationException::withMessages(['phase' => 'Create a purchase order from an approved PR first.']);
         }
 
-        $evaluation = $this->evaluatePo($paperwork);
+        $this->purchaseOrders->submit($purchaseOrder);
 
-        if (! $evaluation['can_submit']) {
-            throw ValidationException::withMessages([
-                'phase' => 'Missing: '.implode(', ', $evaluation['missing_fields']).'.',
-            ]);
-        }
-
-        $paperwork->update([
-            'po_status' => AcquisitionPaperwork::STATUS_PENDING_APPROVAL,
-            'po_submitted_at' => now(),
-        ]);
-
-        return $paperwork;
+        return $paperwork->fresh() ?? $paperwork;
     }
 
+    /** @deprecated Use PurchaseOrderWorkflowService::approve() */
     public function approvePo(AcquisitionPaperwork $paperwork): AcquisitionPaperwork
     {
-        if ($paperwork->isPoApproved()) {
-            throw ValidationException::withMessages(['phase' => 'PO is already approved.']);
+        $purchaseOrder = $paperwork->purchaseOrder;
+
+        if ($purchaseOrder === null) {
+            throw ValidationException::withMessages(['phase' => 'Create a purchase order from an approved PR first.']);
         }
 
-        if ($paperwork->po_status !== AcquisitionPaperwork::STATUS_PENDING_APPROVAL) {
-            throw ValidationException::withMessages(['phase' => 'Submit PO for approval before marking approved.']);
-        }
+        $this->purchaseOrders->approve($purchaseOrder);
 
-        $paperwork->update([
-            'po_number' => $this->referenceCodes->forAcquisitionPaperworkPo(),
-            'po_status' => AcquisitionPaperwork::STATUS_APPROVED,
-            'phase' => AcquisitionPaperwork::PHASE_IAR,
-            'po_completed_at' => now(),
-            'iar_status' => AcquisitionPaperwork::STATUS_DRAFT,
-        ]);
-
-        return $paperwork;
+        return $paperwork->fresh() ?? $paperwork;
     }
 
+    /** @deprecated Use InspectionAcceptanceReportWorkflowService::submit() */
     public function submitIar(AcquisitionPaperwork $paperwork): AcquisitionPaperwork
     {
-        if ($paperwork->isIarApproved()) {
-            throw ValidationException::withMessages(['phase' => 'IAR is already approved.']);
+        $iar = $paperwork->purchaseOrder?->inspectionAcceptanceReport;
+
+        if ($iar === null) {
+            throw ValidationException::withMessages(['phase' => 'Create an IAR from an approved PO first.']);
         }
 
-        $evaluation = $this->evaluateIar($paperwork);
+        $this->inspectionReports->submit($iar);
 
-        if (! $evaluation['can_submit']) {
-            throw ValidationException::withMessages([
-                'phase' => 'Missing: '.implode(', ', $evaluation['missing_fields']).'.',
-            ]);
-        }
-
-        $paperwork->update([
-            'iar_status' => AcquisitionPaperwork::STATUS_PENDING_APPROVAL,
-            'iar_submitted_at' => now(),
-        ]);
-
-        return $paperwork;
+        return $paperwork->fresh() ?? $paperwork;
     }
 
+    /** @deprecated Use InspectionAcceptanceReportWorkflowService::approve() */
     public function approveIar(AcquisitionPaperwork $paperwork): AcquisitionPaperwork
     {
-        if ($paperwork->isIarApproved()) {
-            throw ValidationException::withMessages(['phase' => 'IAR is already approved.']);
+        $iar = $paperwork->purchaseOrder?->inspectionAcceptanceReport;
+
+        if ($iar === null) {
+            throw ValidationException::withMessages(['phase' => 'Create an IAR from an approved PO first.']);
         }
 
-        if ($paperwork->iar_status !== AcquisitionPaperwork::STATUS_PENDING_APPROVAL) {
-            throw ValidationException::withMessages(['phase' => 'Submit IAR for approval before marking approved.']);
-        }
+        $this->inspectionReports->approve($iar);
 
-        $paperwork->update([
-            'iar_number' => $this->referenceCodes->forAcquisitionPaperworkIar(),
-            'iar_status' => AcquisitionPaperwork::STATUS_APPROVED,
-            'phase' => AcquisitionPaperwork::PHASE_IAR,
-            'iar_completed_at' => now(),
-        ]);
-
-        return $paperwork;
+        return $paperwork->fresh() ?? $paperwork;
     }
 
-    /**
-     * @return Collection<int, Acquisition>
-     */
-    public function recordCustodyReceipts(AcquisitionPaperwork $paperwork): Collection
+    /** @deprecated Use InspectionAcceptanceReportWorkflowService::recordCustodyReceipts() */
+    public function recordCustodyReceipts(AcquisitionPaperwork $paperwork)
     {
-        if (! $paperwork->isIarApproved()) {
-            throw ValidationException::withMessages(['phase' => 'IAR must be approved before recording custodian receipt.']);
+        $iar = $paperwork->purchaseOrder?->inspectionAcceptanceReport;
+
+        if ($iar === null) {
+            throw ValidationException::withMessages(['phase' => 'Create and approve an IAR before recording custodian receipt.']);
         }
 
-        if ($paperwork->isReceived()) {
-            throw ValidationException::withMessages(['phase' => 'Custodian receipts already recorded for this case.']);
-        }
-
-        $paperwork->loadMissing('lines');
-
-        if ($paperwork->lines->isEmpty()) {
-            throw ValidationException::withMessages(['phase' => 'Add at least one line item before recording custodian receipt.']);
-        }
-
-        $source = trim('PO '.($paperwork->po_number ?? '').' / IAR '.($paperwork->iar_number ?? ''));
-        $acquisitionDate = $paperwork->iar_date ?? now();
-
-        $created = collect();
-
-        foreach ($paperwork->lines as $line) {
-            $created->push(Acquisition::query()->create([
-                'acquisition_paperwork_id' => $paperwork->id,
-                'acquisition_paperwork_line_id' => $line->id,
-                'item_id' => $line->item_id,
-                'office_id' => $paperwork->office_id,
-                'quantity' => $line->quantity,
-                'unit_cost' => $line->unit_cost ?? 0,
-                'acquisition_date' => $acquisitionDate,
-                'source' => $source,
-                'recorded_by' => auth()->id(),
-            ]));
-        }
-
-        $paperwork->update(['received_at' => now()]);
-
-        return $created;
+        return $this->inspectionReports->recordCustodyReceipts($iar);
     }
 
     /** @deprecated Use submitPr() and approvePr() */
@@ -245,7 +214,7 @@ class AcquisitionPaperworkCompletionService
         return $this->approvePr($paperwork);
     }
 
-    /** @deprecated Use submitPo() and approvePo() */
+    /** @deprecated Use PurchaseOrderWorkflowService */
     public function completePo(AcquisitionPaperwork $paperwork): AcquisitionPaperwork
     {
         $this->submitPo($paperwork);
@@ -253,7 +222,7 @@ class AcquisitionPaperworkCompletionService
         return $this->approvePo($paperwork);
     }
 
-    /** @deprecated Use submitIar() and approveIar() */
+    /** @deprecated Use InspectionAcceptanceReportWorkflowService */
     public function completeIar(AcquisitionPaperwork $paperwork): AcquisitionPaperwork
     {
         $this->submitIar($paperwork);

@@ -26,6 +26,10 @@ class OfficePropertyRegister extends Page
 {
     use WithPagination;
 
+    public const TAB_ON_HAND = 'on_hand';
+
+    public const TAB_TRANSFERS = 'transfers';
+
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedClipboardDocumentList;
 
     protected static string|UnitEnum|null $navigationGroup = 'Office';
@@ -42,6 +46,15 @@ class OfficePropertyRegister extends Page
 
     #[Url]
     public int|string|null $category = null;
+
+    #[Url]
+    public string $tab = self::TAB_ON_HAND;
+
+    #[Url]
+    public string $direction = 'all';
+
+    #[Url]
+    public ?string $highlight = null;
 
     #[Url]
     public string $sortBy = 'item_name';
@@ -66,6 +79,14 @@ class OfficePropertyRegister extends Page
         if (! filled($this->category)) {
             $this->category = InventoryCategoryOptions::defaultConsumablesCategoryId();
         }
+
+        if (! in_array($this->tab, [self::TAB_ON_HAND, self::TAB_TRANSFERS], true)) {
+            $this->tab = self::TAB_ON_HAND;
+        }
+
+        if (! in_array($this->direction, ['all', 'incoming', 'outgoing'], true)) {
+            $this->direction = 'all';
+        }
     }
 
     public function getTitle(): string|Htmlable
@@ -80,6 +101,10 @@ class OfficePropertyRegister extends Page
 
     public function getSubheading(): ?string
     {
+        if ($this->tab === self::TAB_TRANSFERS) {
+            return 'Incoming = transferred into your office. Outgoing = transferred out. From/To offices shown on each row.';
+        }
+
         return 'Received = from Supply Custodian into your office. Distributed = to employees. Balance = still in office custody.';
     }
 
@@ -101,6 +126,17 @@ class OfficePropertyRegister extends Page
     }
 
     public function updatedSearch(): void
+    {
+        $this->resetPage();
+    }
+
+    public function updatedTab(): void
+    {
+        $this->resetPage();
+        $this->search = '';
+    }
+
+    public function updatedDirection(): void
     {
         $this->resetPage();
     }
@@ -136,6 +172,59 @@ class OfficePropertyRegister extends Page
             $this->sortBy,
             $this->sortDir,
         );
+    }
+
+    public function getTransferRows(): LengthAwarePaginator
+    {
+        $user = Filament::auth()->user();
+
+        if (! $user instanceof User) {
+            return new \Illuminate\Pagination\LengthAwarePaginator([], 0, 10, 1);
+        }
+
+        return app(OfficePropertyRegisterService::class)->paginateTransfersForUser(
+            $user,
+            (int) $this->category,
+            $this->direction,
+            filled($this->search) ? $this->search : null,
+        );
+    }
+
+    public function openTransfer(int $transferId): void
+    {
+        $user = Filament::auth()->user();
+
+        if (! $user instanceof User) {
+            abort(403);
+        }
+
+        try {
+            app(OfficePropertyRegisterService::class)->presentTransferForUser($user, $transferId);
+        } catch (AuthorizationException) {
+            abort(403);
+        }
+
+        $this->mountAction('viewOfficeTransfer', [
+            'transferId' => $transferId,
+        ]);
+    }
+
+    public function viewOfficeTransferAction(): Action
+    {
+        return Action::make('viewOfficeTransfer')
+            ->modalWidth(Width::ThreeExtraLarge)
+            ->extraModalWindowAttributes(['class' => 'owwa-view-record-modal'])
+            ->modalSubmitAction(false)
+            ->modalCancelActionLabel('Close')
+            ->modalHeading(function (): string {
+                $transfer = $this->resolveMountedOfficeTransfer();
+
+                return ($transfer['reference_code'] ?? 'Transfer').' — Transfer details';
+            })
+            ->modalContent(fn (): HtmlString => new HtmlString(view(
+                'filament.pages.partials.office-transfer-modal',
+                ['transfer' => $this->resolveMountedOfficeTransfer()],
+            )->render()));
     }
 
     public function openOfficeStockLedger(int $itemId): void
@@ -232,5 +321,25 @@ class OfficePropertyRegister extends Page
             $itemId,
             max(1, $this->ledgerPage),
         );
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function resolveMountedOfficeTransfer(): array
+    {
+        $user = Filament::auth()->user();
+        $arguments = $this->getMountedAction()?->getArguments() ?? [];
+        $transferId = (int) ($arguments['transferId'] ?? 0);
+
+        if (! $user instanceof User) {
+            abort(403);
+        }
+
+        try {
+            return app(OfficePropertyRegisterService::class)->presentTransferForUser($user, $transferId);
+        } catch (AuthorizationException) {
+            abort(403);
+        }
     }
 }

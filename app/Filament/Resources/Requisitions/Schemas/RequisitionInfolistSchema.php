@@ -2,9 +2,11 @@
 
 namespace App\Filament\Resources\Requisitions\Schemas;
 
+use App\Filament\Resources\Acquisitions\AcquisitionResource;
 use App\Models\Requisition;
 use App\Models\RequisitionItem;
 use App\Services\RequisitionFulfillmentService;
+use App\Services\RequisitionRestockStatusService;
 use App\Support\EmployeeRequisitionOriginalSubmission;
 use App\Support\EmployeeRequisitionStatus;
 use App\Support\OwwaReferenceLabels;
@@ -29,6 +31,7 @@ class RequisitionInfolistSchema
             Section::make('Requisition details')
                 ->columns(2)
                 ->schema(self::detailFields(forModal: true)),
+            self::relatedPurchaseRequestsSection(),
             self::employeeAllocationsSection(),
             self::requestedItemsSection(),
         ];
@@ -40,9 +43,39 @@ class RequisitionInfolistSchema
             Section::make('Requisition details')
                 ->columns(2)
                 ->schema(self::detailFields(forModal: false)),
+            self::relatedPurchaseRequestsSection(),
             self::employeeAllocationsSection(),
             self::requestedItemsSection(),
         ];
+    }
+
+    protected static function relatedPurchaseRequestsSection(): Section
+    {
+        return Section::make('Related PRs')
+            ->visible(fn (Requisition $record): bool => $record->acquisitionPaperworks()->exists())
+            ->schema([
+                TextEntry::make('related_purchase_requests')
+                    ->hiddenLabel()
+                    ->html()
+                    ->state(function (Requisition $record): HtmlString {
+                        $record->loadMissing('acquisitionPaperworks.itemCategory');
+
+                        return new HtmlString($record->acquisitionPaperworks
+                            ->map(function ($paperwork): string {
+                                $label = $paperwork->pr_number
+                                    ?: ($paperwork->reference_code ?: "PR #{$paperwork->id}");
+
+                                return sprintf(
+                                    '<a class="font-medium text-primary-600 hover:underline" href="%s">%s</a>',
+                                    e(AcquisitionResource::viewModalUrl($paperwork, [
+                                        'category' => $paperwork->item_category_id,
+                                    ])),
+                                    e($label),
+                                );
+                            })
+                            ->implode('<br>'));
+                    }),
+            ]);
     }
 
     /**
@@ -267,6 +300,7 @@ class RequisitionInfolistSchema
                 ? [
                     TableColumn::make('Category'),
                     TableColumn::make('Item'),
+                    TableColumn::make('Restock'),
                     TableColumn::make(OwwaReferenceLabels::assetIdentifierTableHeader()),
                     TableColumn::make('Requested'),
                     TableColumn::make('Endorsed by UC'),
@@ -276,6 +310,7 @@ class RequisitionInfolistSchema
                 : [
                     TableColumn::make('Category'),
                     TableColumn::make('Item'),
+                    TableColumn::make('Restock'),
                     TableColumn::make(OwwaReferenceLabels::assetIdentifierTableHeader()),
                     TableColumn::make('Qty'),
                     TableColumn::make('Status'),
@@ -296,6 +331,7 @@ class RequisitionInfolistSchema
                 ->badge()
                 ->placeholder('—'),
             TextEntry::make('item.name')->label('Item')->placeholder('—'),
+            self::restockStatusEntry(),
             TextEntry::make('line_identifier')
                 ->label(fn (RequisitionItem $record): string => RequisitionLineDisplay::identifierLabel($record))
                 ->state(fn (RequisitionItem $record): string => RequisitionLineDisplay::identifierValue($record) ?? '—'),
@@ -337,6 +373,7 @@ class RequisitionInfolistSchema
             ->table([
                 TableColumn::make('Category'),
                 TableColumn::make('Item'),
+                TableColumn::make('Restock'),
                 TableColumn::make(OwwaReferenceLabels::assetIdentifierTableHeader()),
                 TableColumn::make('Requested'),
                 TableColumn::make('Status'),
@@ -365,6 +402,7 @@ class RequisitionInfolistSchema
                 ->badge()
                 ->placeholder('—'),
             TextEntry::make('item.name')->label('Item')->placeholder('—'),
+            self::restockStatusEntry(),
             TextEntry::make('line_identifier')
                 ->label(fn (RequisitionItem $record): string => RequisitionLineDisplay::identifierLabel($record))
                 ->state(fn (RequisitionItem $record): string => RequisitionLineDisplay::identifierValue($record) ?? '—'),
@@ -392,6 +430,21 @@ class RequisitionInfolistSchema
             ->placeholder('—');
 
         return $fields;
+    }
+
+    protected static function restockStatusEntry(): TextEntry
+    {
+        return TextEntry::make('restock_status')
+            ->label('Restock')
+            ->state(function (RequisitionItem $record): ?string {
+                $statusService = app(RequisitionRestockStatusService::class);
+                $status = $statusService->resolve((int) $record->item_id);
+
+                return $statusService->displayLabel($status);
+            })
+            ->badge()
+            ->color('warning')
+            ->placeholder('—');
     }
 
     public static function acceptIssueModalDescription(Requisition $record): string|Htmlable

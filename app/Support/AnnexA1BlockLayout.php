@@ -143,8 +143,6 @@ class AnnexA1BlockLayout
             }
 
             if ($field === 'fund_cluster') {
-                $values[self::headerCell($field, $blockStartRow)] = '';
-
                 continue;
             }
 

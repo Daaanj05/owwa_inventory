@@ -3,6 +3,8 @@
 namespace App\Support;
 
 use App\Models\Transfer;
+use PhpOffice\PhpSpreadsheet\Style\Alignment;
+use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 
 class PtrSignatureLayout
 {
@@ -12,7 +14,17 @@ class PtrSignatureLayout
     public static function applyTransferTypeMarks(array $values, Transfer $transfer): array
     {
         $map = (array) (OwwaCellMapping::form('PTR')['transfer_type_marks'] ?? []);
-        $transferType = $transfer->transfer_type;
+        $othersLabelCell = (string) (OwwaCellMapping::form('PTR')['transfer_type_others_label'] ?? 'F14');
+        $transferType = (string) ($transfer->transfer_type ?? '');
+        $othersSpecify = trim((string) ($transfer->transfer_type_other ?? ''));
+
+        // Template only has Donation / Relocate / Reassignment / Others.
+        if ($transferType === 'return') {
+            $transferType = 'others';
+            if ($othersSpecify === '') {
+                $othersSpecify = 'Return to stock';
+            }
+        }
 
         if ($transferType === 'donation' && isset($map['donation'])) {
             $values[$map['donation']] = 'X';
@@ -21,8 +33,10 @@ class PtrSignatureLayout
         } elseif ($transferType === 'reassignment' && isset($map['reassignment'])) {
             $values[$map['reassignment']] = 'X';
         } elseif ($transferType === 'others' && isset($map['others'])) {
-            $suffix = $transfer->transfer_type_other ? ' '.$transfer->transfer_type_other : '';
-            $values[$map['others']] = 'X'.$suffix;
+            $values[$map['others']] = 'X';
+            $values[$othersLabelCell] = $othersSpecify !== ''
+                ? 'Others (Specify) '.$othersSpecify
+                : 'Others (Specify) _________________';
         }
 
         return $values;
@@ -61,5 +75,54 @@ class PtrSignatureLayout
         }
 
         return $values;
+    }
+
+    /**
+     * Prevent printed-name clipping on PTR signature row 53 (and designations on 54).
+     */
+    public static function finalizePrintedNameLayout(Worksheet $sheet): void
+    {
+        $signatures = (array) (OwwaCellMapping::form('PTR')['signatures'] ?? []);
+        $nameCells = array_values(array_filter([
+            $signatures['approved_name'] ?? null,
+            $signatures['released_name'] ?? null,
+            $signatures['received_name'] ?? null,
+        ], fn (mixed $cell): bool => filled($cell)));
+
+        $designationCells = array_values(array_filter([
+            $signatures['approved_designation'] ?? null,
+            $signatures['released_designation'] ?? null,
+            $signatures['received_designation'] ?? null,
+        ], fn (mixed $cell): bool => filled($cell)));
+
+        foreach (array_merge($nameCells, $designationCells) as $cellRef) {
+            $style = $sheet->getStyle((string) $cellRef);
+            $style->getAlignment()->setWrapText(true);
+            $style->getAlignment()->setVertical(Alignment::VERTICAL_CENTER);
+        }
+
+        self::expandRowForWrappedCells($sheet, 53, ['B', 'F', 'H'], 20.0);
+        self::expandRowForWrappedCells($sheet, 54, ['A', 'F', 'H'], 18.0);
+    }
+
+    /**
+     * @param  list<string>  $wrapColumns
+     */
+    protected static function expandRowForWrappedCells(
+        Worksheet $sheet,
+        int $row,
+        array $wrapColumns,
+        float $minimumHeight = 18.0,
+    ): void {
+        $baseHeight = (float) ($sheet->getRowDimension($row)->getRowHeight() ?: 13.8);
+        $estimated = OwwaSpreadsheetLayoutHelper::estimateWrappedRowHeight(
+            $sheet,
+            $row,
+            $wrapColumns,
+            max($baseHeight, $minimumHeight),
+            2,
+        );
+
+        $sheet->getRowDimension($row)->setRowHeight(min(max($minimumHeight, $estimated), 48.0));
     }
 }

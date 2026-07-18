@@ -183,9 +183,40 @@ class AcquisitionReceivedModalTest extends TestCase
 
         $service = app(AcquisitionPaperworkCompletionService::class);
         $service->completePr($paperwork->fresh());
-        $service->completePo($paperwork->fresh());
-        $service->completeIar($paperwork->fresh());
-        $service->recordCustodyReceipts($paperwork->fresh());
+
+        $poService = app(\App\Services\PurchaseOrderWorkflowService::class);
+        $po = $poService->createFromApprovedPr($paperwork->fresh());
+        $po->update([
+            'supplier_name' => 'Supplier Co.',
+            'supplier_address' => '123 Main St',
+            'mode_of_procurement' => 'Shopping',
+            'place_of_delivery' => 'OWWA RO',
+            'technical_specifications' => 'N/A',
+            'po_date' => now()->toDateString(),
+        ]);
+        $po->lines()->update([
+            'is_ordered' => true,
+            'po_quantity' => 1,
+            'unit_cost' => 500,
+            'amount' => 500,
+        ]);
+        $poService->submit($po->fresh(['lines']));
+        $poService->approve($po->fresh());
+
+        $iarService = app(\App\Services\InspectionAcceptanceReportWorkflowService::class);
+        $iar = $iarService->createFromApprovedPo($po->fresh());
+        $iar->update([
+            'invoice_number' => 'INV100',
+            'invoice_date' => now()->addDay()->toDateString(),
+            'date_inspected' => now()->addDay()->toDateString(),
+            'date_received' => now()->addDays(2)->toDateString(),
+            'inspection_officer_name' => 'Inspector',
+            'custodian_name' => 'Custodian',
+            'iar_date' => now()->toDateString(),
+        ]);
+        $iarService->submit($iar->fresh(['lines']));
+        $iarService->approve($iar->fresh());
+        $iarService->recordCustodyReceipts($iar->fresh());
 
         return $paperwork->fresh();
     }

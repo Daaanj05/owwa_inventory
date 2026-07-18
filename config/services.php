@@ -38,7 +38,8 @@ return [
     'ollama' => [
         'url' => env('OLLAMA_URL', 'http://localhost:11434'),
         'embed_model' => env('OLLAMA_EMBED_MODEL', 'nomic-embed-text'),
-        'chat_model' => env('OLLAMA_CHAT_MODEL', 'deepseek-v3.2:7b'),
+        // Small instruct model: PA narrative only rephrases deterministic at-risk facts.
+        'chat_model' => env('OLLAMA_CHAT_MODEL', 'qwen2.5:3b'),
     ],
 
 ];

@@ -110,6 +110,15 @@ class ReferenceSeriesSeeder extends Seeder
                 'last_generated_at' => null,
             ],
             [
+                'type' => ReferenceSeries::TYPE_ACQUISITION_PAPERWORK,
+                'name' => 'Acquisition paperwork reference',
+                'prefix' => 'AP',
+                'pattern' => '{prefix}-{Y}-{seq:4}',
+                'next_sequence' => 1,
+                'reset_period' => ReferenceSeries::RESET_YEARLY,
+                'last_generated_at' => null,
+            ],
+            [
                 'type' => ReferenceSeries::TYPE_ACQUISITION_PAPERWORK_PR,
                 'name' => 'Purchase request (Appendix 60 PR)',
                 'prefix' => 'PR',

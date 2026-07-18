@@ -7,18 +7,21 @@ use App\Models\Disposal;
 use App\Models\InventoryUnit;
 use App\Models\Issuance;
 use App\Models\Item;
-use App\Models\ItemCategory;
 use App\Models\Office;
 use App\Models\PhysicalCountLine;
 use App\Models\PhysicalCountSession;
 use App\Models\Transfer;
 use App\Support\AnnexA1BlockLayout;
 use App\Support\AnnexA4Layout;
+use App\Support\ConsumableInventoryType;
+use App\Support\IssuanceDistributionVisibility;
 use App\Support\ItemPropertyClass;
 use App\Support\OwwaCellMapping;
 use App\Support\OwwaExportFilename;
 use App\Support\PhysicalCountPageLayout;
 use App\Support\PhysicalCountPropertyClassResolver;
+use App\Support\PpePropertyType;
+use App\Support\PropertyCardLayout;
 use App\Support\UnitCostKey;
 use Illuminate\Support\Collection;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
@@ -142,7 +145,9 @@ class OwwaItemReportService
                     'receipt_qty' => null,
                     'issue_qty' => $issuance->quantity,
                     'issue_office' => $issuance->office?->name,
-                    'office_officer' => $issuance->issuedTo?->name ?? $issuance->office?->name,
+                    'office_officer' => IssuanceDistributionVisibility::holderLabelForIssuance($issuance)
+                        ?? $issuance->issuedTo?->name
+                        ?? $issuance->office?->name,
                     'remarks' => $issuance->remarks,
                     'property_number' => $issuance->property_number,
                     'unit_cost' => $issuance->unit_cost,
@@ -326,7 +331,9 @@ class OwwaItemReportService
                     'description' => $this->itemDescription($item),
                     'estimated_useful_life' => $issuance->estimated_useful_life ?? $item?->estimated_useful_life,
                     'issued_qty' => $issuance->quantity,
-                    'issued_office' => $issuance->issuedTo?->name ?? $issuance->office?->name,
+                    'issued_office' => IssuanceDistributionVisibility::holderLabelForIssuance($issuance)
+                        ?? $issuance->issuedTo?->name
+                        ?? $issuance->office?->name,
                     'returned_qty' => null,
                     'returned_office' => null,
                     'reissued_qty' => null,
@@ -476,54 +483,110 @@ class OwwaItemReportService
         );
     }
 
-    public function propertyCardFilledSpreadsheet(Item $item, Office $office, ?int $officeId): Spreadsheet
+    public function propertyCardFilledSpreadsheet(Item $item, Office $office, ?int $officeId, ?float $unitCost = null): Spreadsheet
     {
         return $this->templateExport->renderFilledSpreadsheet(
             PropertyCardLayout::templatePath(),
-            $this->cellValuesForPropertyCard($item, $office, $officeId),
+            $this->cellValuesForPropertyCard($item, $office, $officeId, $unitCost),
+        );
+    }
+
+    public function stockCardFilledSpreadsheet(Item $item, Office $office, ?int $officeId, ?float $unitCost = null): Spreadsheet
+    {
+        $templatePath = $this->resolveItemReportTemplate($item, 'sc');
+        $sheet = $this->resolveItemReportSheet($item, 'sc');
+
+        return $this->templateExport->renderFilledSpreadsheet(
+            $templatePath,
+            $this->cellValuesForSc($item, $office, $officeId, $unitCost),
+            $sheet['sheetIndex'],
+            $sheet['sheetName'],
         );
     }
 
     /**
      * @return Collection<int, array{item_id: int, office_id: int}>
      */
-    public function stockLevelPairsForPropertyCardBulk(?int $categoryId, ?string $search): Collection
+    public function stockLevelPairsForPropertyCardBulk(?int $categoryId, ?string $search, string $restockFilter = 'active'): Collection
     {
-        $rows = $this->stockService->getStockLevelsList();
-        $user = auth()->user();
+        $scopedOfficeId = auth()->user()?->office_id ? (int) auth()->user()->office_id : null;
 
-        if ($user && $user->office_id) {
-            $rows = $rows->where('office_id', (int) $user->office_id)->values();
-        }
+        $pairs = app(StockLevelExportService::class)->resolvePairs(
+            categoryId: $categoryId,
+            search: $search,
+            restockFilter: $restockFilter,
+            scopedOfficeId: $scopedOfficeId,
+        );
 
-        if ($categoryId !== null && $categoryId > 0) {
-            $category = ItemCategory::query()->find($categoryId);
-            if ($category !== null && $category->getTemplateSlug() === 'ppe') {
-                $rows = $rows->where('category_name', $category->name)->values();
-            } else {
-                return collect();
+        return $pairs
+            ->filter(function (array $pair): bool {
+                $item = Item::query()->with('category')->find($pair['item_id']);
+
+                return $item?->category?->getTemplateSlug() === 'ppe';
+            })
+            ->map(fn (array $pair): array => [
+                'item_id' => $pair['item_id'],
+                'office_id' => $pair['office_id'],
+                'unit_cost' => $pair['unit_cost'],
+            ])
+            ->values();
+    }
+
+    public function downloadStockCardBulk(Collection $pairs): StreamedResponse
+    {
+        $merged = new Spreadsheet;
+        $removedDefaultSheet = false;
+        $usedSheetTitles = [];
+
+        foreach ($pairs as $pair) {
+            $itemId = (int) ($pair['item_id'] ?? 0);
+            $officeId = (int) ($pair['office_id'] ?? 0);
+            $unitCost = isset($pair['unit_cost']) ? (float) $pair['unit_cost'] : null;
+
+            if ($itemId <= 0 || $officeId <= 0) {
+                continue;
             }
-        } else {
-            $rows = $rows->filter(function (object $row): bool {
-                $category = ItemCategory::query()
-                    ->where('name', $row->category_name ?? '')
-                    ->first();
 
-                return $category?->getTemplateSlug() === 'ppe';
-            })->values();
+            $item = Item::query()->with('category')->find($itemId);
+            if ($item === null || $item->category?->getTemplateSlug() !== 'consumables') {
+                continue;
+            }
+
+            $office = Office::query()->find($officeId);
+            if ($office === null) {
+                continue;
+            }
+
+            $source = $this->stockCardFilledSpreadsheet($item, $office, $officeId, $unitCost);
+            $sheet = $source->getSheet(0);
+
+            $titleBase = filled($item->item_code) ? (string) $item->item_code : 'item_'.$item->id;
+            $sheet->setTitle($this->uniqueExcelSheetTitle($titleBase, $usedSheetTitles));
+
+            $merged->addExternalSheet($sheet);
+
+            if (! $removedDefaultSheet) {
+                $merged->removeSheetByIndex(0);
+                $removedDefaultSheet = true;
+            }
+
+            $source->disconnectWorksheets();
+            unset($source);
         }
 
-        if (filled($search)) {
-            $term = mb_strtolower($search);
-            $rows = $rows->filter(fn (object $row): bool => str_contains(mb_strtolower($row->item_name ?? ''), $term)
-                || str_contains(mb_strtolower($row->category_name ?? ''), $term)
-                || str_contains(mb_strtolower($row->office_name ?? ''), $term)
-            )->values();
+        if (! $removedDefaultSheet) {
+            abort(404);
         }
 
-        return $rows->map(fn (object $row): array => [
-            'item_id' => (int) $row->item_id,
-            'office_id' => (int) $row->office_id,
+        $merged->setActiveSheetIndex(0);
+
+        $writer = new Xlsx($merged);
+        $downloadName = OwwaExportFilename::batch('SC');
+
+        return response()->streamDownload(function () use ($writer): void {
+            $writer->save('php://output');
+        }, $downloadName, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         ]);
     }
 
@@ -551,7 +614,9 @@ class OwwaItemReportService
                 continue;
             }
 
-            $source = $this->propertyCardFilledSpreadsheet($item, $office, $officeId);
+            $unitCost = isset($pair['unit_cost']) ? (float) $pair['unit_cost'] : null;
+
+            $source = $this->propertyCardFilledSpreadsheet($item, $office, $officeId, $unitCost);
             $sheet = $source->getSheet(0);
 
             $titleBase = filled($item->item_code) ? (string) $item->item_code : 'item_'.$item->id;
@@ -658,6 +723,7 @@ class OwwaItemReportService
                             $entry['office_id'],
                             $officeHistory,
                             $latestPropertyNumbers->get($entry['item_id']),
+                            $entry['unit_cost'] ?? null,
                         );
                     },
                     $entries,
@@ -674,9 +740,23 @@ class OwwaItemReportService
 
     public function downloadAnnexA4Bulk(Collection $pairs): StreamedResponse
     {
+        $tabs = $this->buildAnnexA4ExportTabs($pairs);
+        abort_if($tabs === [], 404);
+
+        $filename = OwwaExportFilename::batch('AnnexA4');
+
+        return $this->templateExport->downloadAnnexA4Spreadsheet($tabs, $filename);
+    }
+
+    /**
+     * @param  Collection<int, array{item_id: int, office_id: int, unit_cost?: float|null}>  $pairs
+     * @return array<int, array{sheetName: string, header: array<string, string>, entries: array<int, array<string, mixed>>}>
+     */
+    public function buildAnnexA4ExportTabs(Collection $pairs): array
+    {
         $resolvedPairs = $this->resolveSemiExpendableBulkPairs($pairs);
 
-        /** @var array<string, array<int, array{item: Item, office: ?Office, office_id: ?int}>> $grouped */
+        /** @var array<string, array<int, array{item: Item, office: ?Office, office_id: ?int, item_id: int}>> $grouped */
         $grouped = [];
 
         foreach ($resolvedPairs as $pair) {
@@ -726,13 +806,11 @@ class OwwaItemReportService
 
         usort($tabs, fn (array $a, array $b): int => strcmp($a['sheetName'], $b['sheetName']));
 
-        $filename = OwwaExportFilename::batch('AnnexA4');
-
-        return $this->templateExport->downloadAnnexA4Spreadsheet($tabs, $filename);
+        return $tabs;
     }
 
     /**
-     * @return Collection<int, array{item_id: int, office_id: int, item: Item, office: ?Office}>
+     * @return Collection<int, array{item_id: int, office_id: int, unit_cost: float|null, item: Item, office: ?Office}>
      */
     protected function resolveSemiExpendableBulkPairs(Collection $pairs): Collection
     {
@@ -749,6 +827,7 @@ class OwwaItemReportService
             $normalized[] = [
                 'item_id' => $itemId,
                 'office_id' => $officeId,
+                'unit_cost' => isset($pair['unit_cost']) ? (float) $pair['unit_cost'] : null,
             ];
         }
 
@@ -774,6 +853,7 @@ class OwwaItemReportService
             $resolved->push([
                 'item_id' => $pair['item_id'],
                 'office_id' => $pair['office_id'],
+                'unit_cost' => $pair['unit_cost'],
                 'item' => $item,
                 'office' => $offices->get($pair['office_id']),
             ]);
@@ -783,41 +863,30 @@ class OwwaItemReportService
     }
 
     /**
-     * @return Collection<int, array{item_id: int, office_id: int}>
+     * @return Collection<int, array{item_id: int, office_id: int, unit_cost: float|null}>
      */
-    public function stockLevelPairsForAnnexA1Bulk(?int $categoryId, ?string $search): Collection
+    public function stockLevelPairsForAnnexA1Bulk(?int $categoryId, ?string $search, string $restockFilter = 'active'): Collection
     {
-        $rows = $this->stockService->getStockLevelsList();
-        $user = auth()->user();
+        $scopedOfficeId = auth()->user()?->office_id ? (int) auth()->user()->office_id : null;
 
-        if ($user && $user->office_id) {
-            $rows = $rows->where('office_id', (int) $user->office_id)->values();
-        }
-
-        if ($categoryId !== null && $categoryId > 0) {
-            $category = ItemCategory::query()->find($categoryId);
-            if ($category !== null) {
-                $rows = $rows->where('category_name', $category->name)->values();
-            }
-        }
-
-        if (filled($search)) {
-            $term = mb_strtolower($search);
-            $rows = $rows->filter(fn (object $row): bool => str_contains(mb_strtolower($row->item_name ?? ''), $term)
-                || str_contains(mb_strtolower($row->category_name ?? ''), $term)
-                || str_contains(mb_strtolower($row->office_name ?? ''), $term)
-            )->values();
-        }
-
-        return $rows->map(fn (object $row): array => [
-            'item_id' => (int) $row->item_id,
-            'office_id' => (int) $row->office_id,
-        ]);
+        return app(StockLevelExportService::class)->resolvePairs(
+            categoryId: $categoryId,
+            search: $search,
+            restockFilter: $restockFilter,
+            scopedOfficeId: $scopedOfficeId,
+        )->map(fn (array $pair): array => [
+            'item_id' => $pair['item_id'],
+            'office_id' => $pair['office_id'],
+            'unit_cost' => $pair['unit_cost'],
+        ])->values();
     }
 
-    public function countStockLevelItemsMissingPropertyClass(?int $categoryId, ?string $search): int
+    public function countStockLevelItemsMissingPropertyClass(?int $categoryId, ?string $search, string $restockFilter = 'active'): int
     {
-        $itemIds = $this->stockLevelPairsForAnnexA1Bulk($categoryId, $search)
+        $scopedOfficeId = auth()->user()?->office_id ? (int) auth()->user()->office_id : null;
+
+        $itemIds = app(StockLevelExportService::class)
+            ->resolvePairs($categoryId, $search, $restockFilter, $scopedOfficeId)
             ->pluck('item_id')
             ->unique()
             ->values();
@@ -989,11 +1058,19 @@ class OwwaItemReportService
             return $fromLines;
         }
 
-        if (filled($session->property_class)) {
+        if ($session->count_type === PhysicalCountSession::TYPE_RPCPPE && filled($session->ppe_type)) {
+            return $session->ppe_type;
+        }
+
+        if ($session->count_type === PhysicalCountSession::TYPE_RPCSP && filled($session->property_class)) {
             return $session->property_class;
         }
 
         if (filled($session->inventory_type_label)) {
+            if ($session->count_type === PhysicalCountSession::TYPE_RPCPPE) {
+                return PpePropertyType::resolveFromInventoryTypeLabel($session->inventory_type_label);
+            }
+
             return ItemPropertyClass::resolveFromInventoryTypeLabel($session->inventory_type_label);
         }
 
@@ -1008,11 +1085,11 @@ class OwwaItemReportService
         }
 
         return match ($formSlug) {
-            'sc' => 'Consumable/Stock Levels & Recording/Appendix 58 - SC.xls',
+            'sc' => 'Consumable/Stock Levels & Recording/Appendix 58 - SC.xlsx',
             'pc' => 'ppe/Accquisition/Appendix 69 - PC.xls',
             'annex_a1' => 'Semi-Expendable/Recording (Stock Levels)/Property-Form-Annex-A.1-Semi-expendable-Property-Card.xlsx',
             'annex_a4' => 'Semi-Expendable/Property-Form-Annex-A.4-Registry-of-Semi-Expendable-Property-Issued.xlsx',
-            default => 'Consumable/Stock Levels & Recording/Appendix 58 - SC.xls',
+            default => 'Consumable/Stock Levels & Recording/Appendix 58 - SC.xlsx',
         };
     }
 
@@ -1345,6 +1422,9 @@ class OwwaItemReportService
         $office = $session->office;
 
         $inventoryType = match (true) {
+            $session->count_type === PhysicalCountSession::TYPE_RPCI && filled($session->inventory_type_label) => (string) $session->inventory_type_label,
+            $session->count_type === PhysicalCountSession::TYPE_RPCI && filled($session->inventory_type) => ConsumableInventoryType::label($session->inventory_type),
+            $propertyClass !== null && $session->count_type === PhysicalCountSession::TYPE_RPCPPE => PpePropertyType::propertyTypeLabel($propertyClass),
             $propertyClass !== null => ItemPropertyClass::propertyTypeLabel($propertyClass),
             filled($session->inventory_type_label) => (string) $session->inventory_type_label,
             default => PhysicalCountPropertyClassResolver::inventoryTypeLabel($session),
@@ -1476,7 +1556,7 @@ class OwwaItemReportService
 
         $parts = array_filter([$item->name, $item->description]);
 
-        return implode(' — ', $parts);
+        return implode(' - ', $parts);
     }
 
     /**

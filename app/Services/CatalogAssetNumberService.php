@@ -7,6 +7,7 @@ use App\Models\Office;
 use App\Models\PropertyNumberBucket;
 use App\Models\UacsObjectCode;
 use App\Support\ItemPropertyClass;
+use App\Support\PpePropertyType;
 use App\Support\SemiExpendableValueCategory;
 use App\Support\SupplyOfficeResolver;
 use Illuminate\Support\Facades\DB;
@@ -31,8 +32,40 @@ class CatalogAssetNumberService
             return;
         }
 
-        if (blank($item->property_class) || blank($item->uacs_object_code_id)) {
+        if (blank($item->uacs_object_code_id)) {
             return;
+        }
+
+        if ($slug === 'semi_expendable') {
+            if (blank($item->property_class)) {
+                $item->loadMissing('uacsObjectCode');
+                $fromUacs = $item->uacsObjectCode?->property_class
+                    ?? UacsObjectCode::query()->whereKey($item->uacs_object_code_id)->value('property_class');
+
+                if (filled($fromUacs)) {
+                    $item->property_class = (string) $fromUacs;
+                }
+            }
+
+            if (blank($item->property_class)) {
+                return;
+            }
+        }
+
+        if ($slug === 'ppe') {
+            if (blank($item->ppe_type)) {
+                $item->loadMissing('uacsObjectCode');
+                $fromUacs = $item->uacsObjectCode?->property_class
+                    ?? UacsObjectCode::query()->whereKey($item->uacs_object_code_id)->value('property_class');
+
+                if (filled($fromUacs)) {
+                    $item->ppe_type = (string) $fromUacs;
+                }
+            }
+
+            if (blank($item->ppe_type)) {
+                return;
+            }
         }
 
         try {
@@ -142,7 +175,7 @@ class CatalogAssetNumberService
     {
         return [
             'acq_year' => now()->format('Y'),
-            'class_code' => ItemPropertyClass::supplyTypeCode($item->property_class),
+            'class_code' => PpePropertyType::supplyTypeCode($item->ppe_type),
             'uacs_code' => $this->resolveUacsCode($item),
             'location' => $this->resolveLocationCode(),
         ];

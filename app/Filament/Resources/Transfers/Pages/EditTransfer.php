@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Transfers\Pages;
 
 use App\Filament\Concerns\HasSystemAdminWizardHeading;
+use App\Filament\Resources\Transfers\Schemas\TransferForm;
 use App\Filament\Resources\Transfers\TransferResource;
 use App\Services\TransferStockValidator;
 use Filament\Actions\ActionGroup;
@@ -23,6 +24,10 @@ class EditTransfer extends EditRecord
     protected function mutateFormDataBeforeSave(array $data): array
     {
         app(TransferStockValidator::class)->validateForUpdate($data, $this->getRecord());
+
+        if (blank($data['property_number'] ?? null) && filled($data['item_id'] ?? null)) {
+            $data['property_number'] = TransferForm::catalogPropertyNumberForItem((int) $data['item_id']);
+        }
 
         return $data;
     }

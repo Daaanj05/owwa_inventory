@@ -4,6 +4,10 @@
 
     $summary = $this->getStockLevelsSummary();
     $rows = $this->getStockLevels();
+    $pagePairKeys = $rows->getCollection()
+        ->map(fn (object $row): string => $this->pairKeyForRow($row))
+        ->values()
+        ->all();
     $total = $summary['total'];
     $totalStockQty = $summary['totalStockQty'];
     $lowCount = $summary['lowCount'];
@@ -17,7 +21,14 @@
 @endphp
 
 <x-filament-panels::page>
-    <div class="owwa-inventory-layout">
+    <div
+        class="owwa-inventory-layout"
+        wire:key="stock-levels-layout-{{ $this->getPage() }}-{{ implode(',', $pagePairKeys) }}"
+        x-data="owwaStockSelection({
+            selected: @entangle('selectedKeys'),
+            pageKeys: @js($pagePairKeys),
+        })"
+    >
         {{-- KPI cards row --}}
         <div class="owwa-kpi-grid owwa-kpi-grid--4">
             <div class="owwa-kpi-card owwa-kpi-card-total">
@@ -73,7 +84,7 @@
                 <input
                     type="text"
                     wire:model.live.debounce.300ms="search"
-                    placeholder="Search items or category…"
+                    placeholder="Search items…"
                     class="owwa-search-bar"
                 />
                 <div class="owwa-pa-view-tabs owwa-stock-restock-tabs" role="tablist" aria-label="Restock status filter">
@@ -97,8 +108,27 @@
                     </button>
                 </div>
             </div>
-            <div class="owwa-toolbar-right">
-                {{ $this->buildExportDownloadsActionGroup() }}
+            <div class="owwa-toolbar-right owwa-stock-levels-toolbar-right">
+                <div class="owwa-stock-selection-controls">
+                    <template x-if="selected.length > 0">
+                        <span class="owwa-selection-badge" title="Selections are kept when you change pages. Select all adds only the rows on the current page.">
+                            <span x-text="selected.length"></span> selected
+                        </span>
+                    </template>
+                    <template x-if="selected.length > 0">
+                        <button
+                            type="button"
+                            class="owwa-selection-clear"
+                            @click="selected = []"
+                        >
+                            Clear
+                        </button>
+                    </template>
+                </div>
+                {{-- Keep Filament ActionGroup outside nested Alpine so dropdown actions stay wired. --}}
+                <div @click.stop>
+                    {{ $this->buildExportDownloadsActionGroup() }}
+                </div>
             </div>
         </div>
 
@@ -106,20 +136,33 @@
         <div class="owwa-data-panel">
             <div class="owwa-data-panel-body">
                 <div class="owwa-table-wrap owwa-table-wrap--scroll owwa-stock-levels-table-wrap">
-                    <table class="owwa-data-table owwa-stock-levels-table">
+                    <table class="owwa-data-table owwa-stock-levels-table {{ $usesTaggedUnits ? 'owwa-stock-levels-table--tagged' : 'owwa-stock-levels-table--simple' }}">
                         <thead>
                             <tr>
+                                <th class="owwa-stock-select" style="width: 40px;">
+                                    <input
+                                        type="checkbox"
+                                        x-ref="selectAll"
+                                        aria-label="Select all rows on this page (keeps selections from other pages)"
+                                        title="Select all on this page. Previous page selections stay selected."
+                                        x-effect="
+                                            const all = pageKeys.length > 0 && pageKeys.every((key) => (selected || []).includes(key));
+                                            const some = pageKeys.some((key) => (selected || []).includes(key));
+                                            $refs.selectAll.checked = all;
+                                            $refs.selectAll.indeterminate = some && ! all;
+                                        "
+                                        @click.prevent="toggleSelectAll()"
+                                    />
+                                </th>
                                 @php
                                     $columns = [
                                         'item_name' => 'Item',
-                                        'category_name' => 'Category',
                                     ];
                                     $columns['unit_cost'] = 'Unit cost';
                                     if ($isSemiExpendable) {
                                         $columns['property_class'] = 'Property class';
                                         $columns['value_type'] = 'Value category';
                                     }
-                                    $columns['restock_status'] = 'Restock';
                                     $columns['stock'] = 'Stock';
                                     if ($usesTaggedUnits) {
                                         $columns['tagged_units'] = 'Accountable tags';
@@ -130,7 +173,7 @@
                                     <th
                                         wire:click="sortByColumn('{{ $col }}')"
                                         style="cursor: pointer; user-select: none;"
-                                        class="{{ in_array($col, ['stock', 'reorder_level']) ? 'owwa-num' : '' }}"
+                                        class="{{ in_array($col, ['unit_cost', 'stock', 'tagged_units', 'reorder_level']) ? 'owwa-num' : '' }}"
                                     >
                                         {{ $label }}
                                         @if($sortBy === $col)
@@ -139,12 +182,21 @@
                                     </th>
                                 @endforeach
                                 <th class="owwa-status">Status</th>
-                                <th class="owwa-stock-actions" style="width: 72px;">Actions</th>
+                                <th class="owwa-stock-actions" aria-label="Actions"></th>
                             </tr>
                         </thead>
                         <tbody>
                             @forelse($rows as $row)
+                                @php($pairKey = $this->pairKeyForRow($row))
                                 <tr class="{{ ($row->is_inactive_for_restock ?? false) ? 'opacity-75' : '' }} {{ ($row->is_low || ($row->tagged_drift ?? false)) ? 'owwa-row-low' : '' }}">
+                                    <td class="owwa-stock-select">
+                                        <input
+                                            type="checkbox"
+                                            aria-label="Select {{ $row->item_name }}"
+                                            :checked="(selected || []).includes(@js($pairKey))"
+                                            @click.prevent="toggleRow(@js($pairKey))"
+                                        />
+                                    </td>
                                     <td class="owwa-cell-primary">
                                         <button
                                             type="button"
@@ -155,7 +207,6 @@
                                             {{ $row->item_name }}
                                         </button>
                                     </td>
-                                    <td class="owwa-cell-muted">{{ $row->category_name }}</td>
                                     <td class="owwa-num owwa-cell-muted">₱{{ number_format((float) ($row->unit_cost ?? 0), 2) }}</td>
                                     @if($isSemiExpendable)
                                         <td class="owwa-cell-muted">
@@ -169,13 +220,6 @@
                                             {{ SemiExpendableValueCategory::labelForValueType($row->value_type ?? 'low') }}
                                         </td>
                                     @endif
-                                    <td class="owwa-cell-muted">
-                                        @if($row->is_inactive_for_restock ?? false)
-                                            <span class="owwa-status-badge owwa-status-low" title="Legacy cost — not restocked">Inactive</span>
-                                        @else
-                                            <span class="owwa-status-badge owwa-status-ok">Active</span>
-                                        @endif
-                                    </td>
                                     <td class="owwa-num {{ $row->is_low ? 'owwa-cell-danger' : 'owwa-cell-primary' }}">{{ number_format($row->stock) }}</td>
                                     @if($usesTaggedUnits)
                                         <td class="owwa-num {{ ($row->tagged_drift ?? false) ? 'owwa-cell-danger' : 'owwa-cell-primary' }}" title="Property tags accountable to this office (warehouse + issued in use). Stock column is warehouse quantity only.">
@@ -184,13 +228,20 @@
                                     @endif
                                     <td class="owwa-num owwa-cell-muted">{{ number_format($row->reorder_level) }}</td>
                                     <td class="owwa-status">
-                                        @if($row->is_low)
+                                        @if($row->is_inactive_for_restock ?? false)
+                                            <span class="owwa-status-badge owwa-status-low">
+                                                {{ $row->restock_status_label ?? 'Inactive' }}
+                                            </span>
+                                        @elseif($row->is_low)
                                             <span class="owwa-status-badge owwa-status-low">Low</span>
+                                        @elseif($row->tagged_drift ?? false)
+                                            <span class="owwa-status-badge owwa-status-low">Tag drift</span>
                                         @else
                                             <span class="owwa-status-badge owwa-status-ok">OK</span>
                                         @endif
                                     </td>
                                     <td class="owwa-stock-actions">
+                                        <div class="owwa-stock-actions-trigger">
                                         <x-filament::dropdown
                                             placement="bottom-end"
                                             shift
@@ -243,11 +294,12 @@
                                                 @endif
                                             </x-filament::dropdown.list>
                                         </x-filament::dropdown>
+                                        </div>
                                     </td>
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="{{ ($isSemiExpendable ? 8 : 6) + ($usesTaggedUnits ? 1 : 0) + 1 }}">
+                                    <td colspan="{{ ($isSemiExpendable ? 6 : 4) + ($usesTaggedUnits ? 1 : 0) + 3 }}">
                                         <div class="owwa-empty">
                                             <svg class="owwa-empty-icon" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
                                                 <path stroke-linecap="round" stroke-linejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" />
@@ -266,6 +318,40 @@
 
         {{ $rows->links('vendor.pagination.owwa') }}
     </div>
+
+    @once
+        <script>
+            window.owwaStockSelection = function (config) {
+                return {
+                    selected: config.selected,
+                    pageKeys: Array.isArray(config.pageKeys) ? config.pageKeys : [],
+                    isSelected(key) {
+                        return Array.isArray(this.selected) && this.selected.includes(key);
+                    },
+                    allOnPageSelected() {
+                        return this.pageKeys.length > 0
+                            && this.pageKeys.every((key) => this.isSelected(key));
+                    },
+                    toggleRow(key) {
+                        if (this.isSelected(key)) {
+                            this.selected = this.selected.filter((item) => item !== key);
+                            return;
+                        }
+
+                        this.selected = [...this.selected, key];
+                    },
+                    toggleSelectAll() {
+                        if (this.allOnPageSelected()) {
+                            this.selected = this.selected.filter((item) => ! this.pageKeys.includes(item));
+                            return;
+                        }
+
+                        this.selected = [...new Set([...this.selected, ...this.pageKeys])];
+                    },
+                };
+            };
+        </script>
+    @endonce
 
     <x-filament-actions::modals />
 </x-filament-panels::page>

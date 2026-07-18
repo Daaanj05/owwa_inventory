@@ -45,6 +45,34 @@ class InventoryCategoryOptions
         return in_array($slug, ['ppe', 'semi_expendable'], true);
     }
 
+    public static function isProcurementAnalyticsSlug(string $slug): bool
+    {
+        return in_array($slug, ['consumables', 'semi_expendable'], true);
+    }
+
+    /**
+     * Categories in scope for Procurement Analytics (excludes PPE).
+     *
+     * @return Collection<int, ItemCategory>
+     */
+    public static function procurementAnalyticsCategories(): Collection
+    {
+        return self::sortedActiveCategories()
+            ->filter(fn (ItemCategory $category): bool => self::isProcurementAnalyticsSlug($category->getTemplateSlug()))
+            ->values();
+    }
+
+    /**
+     * @return Collection<int, int>
+     */
+    public static function procurementAnalyticsCategoryIds(): Collection
+    {
+        return self::procurementAnalyticsCategories()
+            ->pluck('id')
+            ->map(fn ($id): int => (int) $id)
+            ->values();
+    }
+
     /**
      * @return Collection<int, int>
      */
@@ -87,5 +115,14 @@ class InventoryCategoryOptions
             'ppe' => 3,
             default => 10,
         };
+    }
+
+    public static function sortRankForCategory(?ItemCategory $category): int
+    {
+        if ($category === null) {
+            return 99;
+        }
+
+        return self::navigationWeight($category->getTemplateSlug());
     }
 }

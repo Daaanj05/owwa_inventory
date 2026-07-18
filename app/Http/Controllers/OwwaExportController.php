@@ -8,15 +8,19 @@ use App\Models\Acquisition;
 use App\Models\AcquisitionPaperwork;
 use App\Models\Disposal;
 use App\Models\Distribution;
+use App\Models\InspectionAcceptanceReport;
 use App\Models\Issuance;
 use App\Models\Item;
 use App\Models\PhysicalCountSession;
+use App\Models\PurchaseOrder;
 use App\Models\Requisition;
 use App\Models\Transfer;
 use App\Models\User;
+use App\Services\AcquisitionPaperworkPdfExportService;
 use App\Services\OwwaItemReportService;
 use App\Services\OwwaTemplateExportService;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Auth;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -27,6 +31,7 @@ class OwwaExportController extends Controller
     public function __construct(
         protected OwwaTemplateExportService $owwaExport,
         protected OwwaItemReportService $itemReport,
+        protected AcquisitionPaperworkPdfExportService $acquisitionPdfExport,
     ) {}
 
     public function acquisition(Request $request, Acquisition $acquisition): StreamedResponse
@@ -176,9 +181,28 @@ class OwwaExportController extends Controller
         return $this->owwaExport->downloadAcquisitionPaperworkPr($acquisitionPaperwork);
     }
 
+    public function acquisitionPaperworkPrPdf(AcquisitionPaperwork $acquisitionPaperwork): Response
+    {
+        $this->logExportActivity(
+            'Exported acquisition paperwork PR PDF '.$acquisitionPaperwork->pr_number,
+            $acquisitionPaperwork,
+        );
+
+        return $this->acquisitionPdfExport->downloadPrPdf($acquisitionPaperwork);
+    }
+
     public function acquisitionPaperworkPo(AcquisitionPaperwork $acquisitionPaperwork): StreamedResponse
     {
-        $acquisitionPaperwork->load(['office', 'department', 'itemCategory', 'lines.item']);
+        $acquisitionPaperwork->load(['office', 'department', 'itemCategory', 'lines.item', 'purchaseOrder.orderedLines.item']);
+
+        if ($acquisitionPaperwork->purchaseOrder) {
+            $this->logExportActivity(
+                'Exported purchase order '.$acquisitionPaperwork->purchaseOrder->number,
+                $acquisitionPaperwork->purchaseOrder,
+            );
+
+            return $this->acquisitionPdfExport->downloadPoExcel($acquisitionPaperwork->purchaseOrder);
+        }
 
         $this->logExportActivity(
             'Exported acquisition paperwork PO '.$acquisitionPaperwork->po_number,
@@ -190,7 +214,20 @@ class OwwaExportController extends Controller
 
     public function acquisitionPaperworkIar(AcquisitionPaperwork $acquisitionPaperwork): StreamedResponse
     {
-        $acquisitionPaperwork->load(['office', 'department', 'itemCategory', 'lines.item']);
+        $acquisitionPaperwork->load([
+            'office',
+            'department',
+            'itemCategory',
+            'lines.item',
+            'purchaseOrder.inspectionAcceptanceReport.lines.item',
+        ]);
+
+        if ($acquisitionPaperwork->purchaseOrder?->inspectionAcceptanceReport) {
+            $iar = $acquisitionPaperwork->purchaseOrder->inspectionAcceptanceReport;
+            $this->logExportActivity('Exported IAR '.$iar->number, $iar);
+
+            return $this->acquisitionPdfExport->downloadIarExcel($iar);
+        }
 
         $this->logExportActivity(
             'Exported acquisition paperwork IAR '.$acquisitionPaperwork->iar_number,
@@ -198,6 +235,40 @@ class OwwaExportController extends Controller
         );
 
         return $this->owwaExport->downloadAcquisitionPaperworkIar($acquisitionPaperwork);
+    }
+
+    public function purchaseOrderExcel(PurchaseOrder $purchaseOrder): StreamedResponse
+    {
+        $this->logExportActivity('Exported purchase order Excel '.$purchaseOrder->number, $purchaseOrder);
+
+        return $this->acquisitionPdfExport->downloadPoExcel($purchaseOrder);
+    }
+
+    public function purchaseOrderPdf(PurchaseOrder $purchaseOrder): Response
+    {
+        $this->logExportActivity('Exported purchase order PDF '.$purchaseOrder->number, $purchaseOrder);
+
+        return $this->acquisitionPdfExport->downloadPoPdf($purchaseOrder);
+    }
+
+    public function inspectionAcceptanceReportExcel(InspectionAcceptanceReport $inspectionAcceptanceReport): StreamedResponse
+    {
+        $this->logExportActivity(
+            'Exported IAR Excel '.$inspectionAcceptanceReport->number,
+            $inspectionAcceptanceReport,
+        );
+
+        return $this->acquisitionPdfExport->downloadIarExcel($inspectionAcceptanceReport);
+    }
+
+    public function inspectionAcceptanceReportPdf(InspectionAcceptanceReport $inspectionAcceptanceReport): Response
+    {
+        $this->logExportActivity(
+            'Exported IAR PDF '.$inspectionAcceptanceReport->number,
+            $inspectionAcceptanceReport,
+        );
+
+        return $this->acquisitionPdfExport->downloadIarPdf($inspectionAcceptanceReport);
     }
 
     /** @deprecated */

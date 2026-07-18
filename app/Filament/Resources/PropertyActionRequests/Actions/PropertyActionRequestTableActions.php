@@ -3,15 +3,20 @@
 namespace App\Filament\Resources\PropertyActionRequests\Actions;
 
 use App\Filament\Concerns\SwitchesUcSentTab;
+use App\Filament\Resources\Disposals\DisposalResource;
 use App\Filament\Resources\PropertyActionRequests\PropertyActionRequestResource;
+use App\Filament\Resources\Transfers\TransferResource;
 use App\Filament\Support\OwwaFormModalDefaults;
 use App\Models\PropertyActionRequest;
 use App\Models\User;
 use App\Services\PropertyActionRequestWorkflowService;
 use Filament\Actions\Action;
 use Filament\Facades\Filament;
+use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
+use Filament\Schemas\Components\Utilities\Get;
 
 class PropertyActionRequestTableActions
 {
@@ -29,7 +34,9 @@ class PropertyActionRequestTableActions
             self::ucRejectAction(),
             self::scApproveAction(),
             self::scRejectAction(),
-            self::scExecuteAction(),
+            self::scReceiveAndRouteAction(),
+            self::openDisposalAction(),
+            self::openTransferAction(),
         ];
     }
 
@@ -154,11 +161,12 @@ class PropertyActionRequestTableActions
     public static function scApproveAction(): Action
     {
         return Action::make('scApprove')
-            ->label('SC approve')
+            ->label('Approve')
             ->icon('heroicon-o-check-badge')
             ->color('success')
             ->requiresConfirmation()
-            ->modalDescription('Approve this property return in the system.')
+            ->modalHeading('Approve property return')
+            ->modalDescription('Approve in the system while the item is still in transit. You will Receive & route after the physical item arrives.')
             ->visible(fn (PropertyActionRequest $record): bool => ($user = Filament::auth()->user()) instanceof User
                 && $user->isSupplyCustodian()
                 && $record->status === PropertyActionRequest::STATUS_PENDING_SC)
@@ -169,7 +177,10 @@ class PropertyActionRequestTableActions
                 }
 
                 app(PropertyActionRequestWorkflowService::class)->approveBySupplyCustodian($record, $user);
-                Notification::make()->title('Request approved')->success()->send();
+                Notification::make()
+                    ->title('Approved — awaiting physical item')
+                    ->success()
+                    ->send();
             });
     }
 
@@ -202,24 +213,105 @@ class PropertyActionRequestTableActions
             });
     }
 
-    public static function scExecuteAction(): Action
+    public static function scReceiveAndRouteAction(): Action
     {
-        return Action::make('scExecute')
-            ->label('Execute')
-            ->icon('heroicon-o-play')
+        return Action::make('scReceiveAndRoute')
+            ->label('Receive & route')
+            ->icon('heroicon-o-inbox-arrow-down')
             ->color('primary')
-            ->requiresConfirmation()
+            ->modalHeading('Receive item and route outcome')
+            ->modalDescription('Confirm physical receipt, then choose Dispose, Transfer, or Return to stock.')
+            ->schema([
+                Select::make('outcome')
+                    ->label('Outcome')
+                    ->options([
+                        PropertyActionRequest::OUTCOME_DISPOSE => 'Dispose',
+                        PropertyActionRequest::OUTCOME_TRANSFER => 'Transfer',
+                        PropertyActionRequest::OUTCOME_RETURN_TO_STOCK => 'Return to stock',
+                    ])
+                    ->required()
+                    ->live()
+                    ->default(fn (PropertyActionRequest $record): string => $record->suggestedReceiveOutcome()),
+                TextInput::make('new_estimated_useful_life')
+                    ->label('New estimated useful life')
+                    ->placeholder('e.g. 3 years')
+                    ->helperText('Optional. Resets catalog EUL for reissue after return to stock.')
+                    ->visible(function (Get $get, PropertyActionRequest $record): bool {
+                        if ($get('outcome') !== PropertyActionRequest::OUTCOME_RETURN_TO_STOCK) {
+                            return false;
+                        }
+
+                        $record->loadMissing('lines.issuance.item.category');
+
+                        return $record->lines->contains(function ($line): bool {
+                            $slug = $line->issuance?->item?->category?->getTemplateSlug();
+
+                            return $slug === 'semi_expendable';
+                        });
+                    }),
+                Textarea::make('receipt_remarks')
+                    ->label('Receipt remarks')
+                    ->rows(2),
+            ])
             ->visible(fn (PropertyActionRequest $record): bool => ($user = Filament::auth()->user()) instanceof User
                 && $user->isSupplyCustodian()
                 && $record->status === PropertyActionRequest::STATUS_APPROVED)
-            ->action(function (PropertyActionRequest $record): void {
+            ->action(function (PropertyActionRequest $record, array $data): void {
                 $user = Filament::auth()->user();
                 if (! $user instanceof User) {
                     return;
                 }
 
-                app(PropertyActionRequestWorkflowService::class)->execute($record, $user);
-                Notification::make()->title('Request executed')->success()->send();
+                app(PropertyActionRequestWorkflowService::class)->receiveAndRoute(
+                    $record,
+                    $user,
+                    (string) ($data['outcome'] ?? $record->suggestedReceiveOutcome()),
+                    isset($data['new_estimated_useful_life']) ? (string) $data['new_estimated_useful_life'] : null,
+                    isset($data['receipt_remarks']) ? (string) $data['receipt_remarks'] : null,
+                );
+                Notification::make()->title('Item received and routed')->success()->send();
             });
+    }
+
+    /** @deprecated Use scReceiveAndRouteAction() */
+    public static function scExecuteAction(): Action
+    {
+        return self::scReceiveAndRouteAction();
+    }
+
+    public static function openDisposalAction(): Action
+    {
+        return Action::make('openDisposal')
+            ->label('Open Disposal')
+            ->icon('heroicon-o-arrow-top-right-on-square')
+            ->color('gray')
+            ->url(function (PropertyActionRequest $record): ?string {
+                $disposalId = $record->linkedDisposalId();
+
+                return $disposalId
+                    ? DisposalResource::getUrl('view', ['record' => $disposalId])
+                    : null;
+            })
+            ->visible(fn (PropertyActionRequest $record): bool => $record->status === PropertyActionRequest::STATUS_EXECUTED
+                && $record->linkedDisposalId() !== null)
+            ->openUrlInNewTab();
+    }
+
+    public static function openTransferAction(): Action
+    {
+        return Action::make('openTransfer')
+            ->label('Open Transfer')
+            ->icon('heroicon-o-arrow-top-right-on-square')
+            ->color('gray')
+            ->url(function (PropertyActionRequest $record): ?string {
+                $transferId = $record->linkedTransferId();
+
+                return $transferId
+                    ? TransferResource::getUrl('view', ['record' => $transferId])
+                    : null;
+            })
+            ->visible(fn (PropertyActionRequest $record): bool => $record->status === PropertyActionRequest::STATUS_EXECUTED
+                && $record->linkedTransferId() !== null)
+            ->openUrlInNewTab();
     }
 }

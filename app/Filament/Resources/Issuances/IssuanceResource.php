@@ -10,6 +10,7 @@ use App\Filament\Resources\Issuances\Schemas\IssuanceForm;
 use App\Filament\Resources\Issuances\Tables\IssuancesTable;
 use App\Models\Issuance;
 use App\Models\User;
+use App\Support\IssuanceDistributionVisibility;
 use App\Support\OwwaReferenceLabels;
 use App\Support\SemiExpendableUsefulLife;
 use BackedEnum;
@@ -17,6 +18,7 @@ use Filament\Facades\Filament;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\View as SchemaView;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
@@ -60,7 +62,27 @@ class IssuanceResource extends Resource
             $query->whereRaw('1 = 0');
         }
 
-        return $query->with(['batch', 'item.category']);
+        return $query
+            ->where(function (Builder $batchQuery): void {
+                $batchQuery
+                    ->whereNull('issuance_batch_id')
+                    ->orWhereRaw(
+                        'issuances.id = (
+                            select min(batch_lines.id)
+                            from issuances as batch_lines
+                            where batch_lines.issuance_batch_id = issuances.issuance_batch_id
+                        )'
+                    );
+            })
+            ->with([
+                'batch.lines.item.category',
+                'batch.lines.office',
+                'batch.lines.department',
+                'batch.lines.issuedBy',
+                'batch.lines.issuedTo',
+                'batch.lines.requisition',
+                'item.category',
+            ]);
     }
 
     public static function form(Schema $schema): Schema
@@ -141,32 +163,40 @@ class IssuanceResource extends Resource
     public static function modalDetailSections(): array
     {
         return [
-            Section::make('Transaction Details')
+            Section::make('Issued items')
+                ->description('All item lines covered by this '.strtolower(OwwaReferenceLabels::issuanceControl()).'.')
                 ->schema([
-                    TextEntry::make('requisition.reference_code')
-                        ->label(OwwaReferenceLabels::RIS)
-                        ->placeholder('—')
-                        ->helperText(fn (Issuance $record): ?string => $record->requisition_id
-                            ? null
-                            : 'Legacy record without a linked requisition.'),
-                    TextEntry::make('office.name')->label('Office'),
-                    TextEntry::make('department.name')->label('Department')->placeholder('—'),
-                    TextEntry::make('unit_cost')->label('Unit cost (₱ per measurement unit)')->money('PHP'),
+                    SchemaView::make('filament.resources.issuances.partials.batch-items-table')
+                        ->viewData(fn (Issuance $record): array => [
+                            'lines' => $record->batchLines(),
+                        ]),
                 ])
-                ->columns(2)
                 ->columnSpanFull(),
             Section::make('Assignment')
                 ->schema([
-                    TextEntry::make('issuedTo.name')->label('Issued to')->placeholder('—'),
+                    TextEntry::make('issuedTo.name')->label('Unit Consolidator')->placeholder('—'),
+                    TextEntry::make('distribution_status')
+                        ->label('Distribution status')
+                        ->state(fn (Issuance $record): string => IssuanceDistributionVisibility::forIssuance($record)['distribution_status_label']),
                     TextEntry::make('asset_identifier')
                         ->label(fn (Issuance $record): string => OwwaReferenceLabels::assetIdentifierLabel(
                             $record->item?->category?->getTemplateSlug()
                         ))
                         ->state(fn (Issuance $record): ?string => OwwaReferenceLabels::assetIdentifierForIssuance($record))
-                        ->placeholder('—'),
+                        ->placeholder('—')
+                        ->visible(fn (Issuance $record): bool => $record->batchLines()->count() === 1),
                     TextEntry::make('remarks')->label('Remarks')->placeholder('—')->columnSpanFull(),
                 ])
                 ->columns(2)
+                ->columnSpanFull(),
+            Section::make('Employee distributions')
+                ->description('Employees who received stock from the Unit Consolidator for this RIS.')
+                ->schema([
+                    SchemaView::make('filament.resources.issuances.partials.distribution-summary')
+                        ->viewData(fn (Issuance $record): array => [
+                            'record' => $record,
+                        ]),
+                ])
                 ->columnSpanFull(),
             Section::make('Useful life')
                 ->schema([
@@ -185,7 +215,8 @@ class IssuanceResource extends Resource
                 ])
                 ->columns(3)
                 ->columnSpanFull()
-                ->visible(fn (Issuance $record): bool => $record->item?->category?->getTemplateSlug() === 'semi_expendable'),
+                ->visible(fn (Issuance $record): bool => $record->item?->category?->getTemplateSlug() === 'semi_expendable'
+                    && $record->batchLines()->count() === 1),
         ];
     }
 

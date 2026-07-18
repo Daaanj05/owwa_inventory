@@ -34,7 +34,9 @@ class PhysicalCountSession extends Model
         'item_category_id',
         'count_date',
         'inventory_type_label',
+        'inventory_type',
         'property_class',
+        'ppe_type',
         'fund_cluster',
         'accountable_officer_name',
         'accountable_officer_designation',
@@ -107,7 +109,17 @@ class PhysicalCountSession extends Model
 
     public function supportsQrScanning(): bool
     {
+        return in_array($this->count_type, [self::TYPE_RPCI, self::TYPE_RPCPPE, self::TYPE_RPCSP], true);
+    }
+
+    public function supportsUnitQrScanning(): bool
+    {
         return in_array($this->count_type, [self::TYPE_RPCPPE, self::TYPE_RPCSP], true);
+    }
+
+    public function supportsStockQrScanning(): bool
+    {
+        return $this->count_type === self::TYPE_RPCI;
     }
 
     public function expectedUnits(): int

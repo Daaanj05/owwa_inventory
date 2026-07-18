@@ -40,14 +40,16 @@ class OwwaFormModalDefaults
         return self::formatModelLabel($label);
     }
 
-    public static function apply(Action $action, string $width = self::WIDTH_STANDARD): Action
+    public static function apply(Action $action, string $width = self::WIDTH_STANDARD, string $extraWindowClass = ''): Action
     {
+        $windowClass = trim(self::MODAL_WINDOW_CLASS.' '.$extraWindowClass);
+
         return $action
             ->modal()
             ->modalWidth($width)
             ->closeModalByClickingAway(false)
             ->closeModalByEscaping(false)
-            ->extraModalWindowAttributes(['class' => self::MODAL_WINDOW_CLASS]);
+            ->extraModalWindowAttributes(['class' => $windowClass]);
     }
 
     public static function createAction(

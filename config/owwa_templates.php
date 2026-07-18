@@ -81,31 +81,31 @@ return [
     'disposal' => [
         'consumables' => [
             'default' => [
-                'file' => 'Consumable/Disposal/Appendix 65 - WMR.xls',
+                'file' => 'Consumable/Disposal/Appendix 65 - WMR.xlsx',
                 'label' => 'Appendix 65 - WMR (Waste Materials Report)',
             ],
             'wmr' => [
-                'file' => 'Consumable/Disposal/Appendix 65 - WMR.xls',
+                'file' => 'Consumable/Disposal/Appendix 65 - WMR.xlsx',
                 'label' => 'Appendix 65 - WMR',
             ],
         ],
         'ppe' => [
             'default' => [
-                'file' => 'ppe/Disposal/Appendix 74 - IIRUP.xls',
+                'file' => 'ppe/Disposal/Appendix 74 - IIRUP.xlsx',
                 'label' => 'Appendix 74 - IIRUP (Unserviceable Property)',
             ],
             'iirup' => [
-                'file' => 'ppe/Disposal/Appendix 74 - IIRUP.xls',
+                'file' => 'ppe/Disposal/Appendix 74 - IIRUP.xlsx',
                 'label' => 'Appendix 74 - IIRUP',
             ],
         ],
         'semi_expendable' => [
             'default' => [
-                'file' => 'Semi-Expendable/Disposal/Appendix 74 - IIRUP.xls',
+                'file' => 'Semi-Expendable/Disposal/Appendix 74 - IIRUP.xlsx',
                 'label' => 'Appendix 74 - IIRUP (Unserviceable Property)',
             ],
             'iirup' => [
-                'file' => 'Semi-Expendable/Disposal/Appendix 74 - IIRUP.xls',
+                'file' => 'Semi-Expendable/Disposal/Appendix 74 - IIRUP.xlsx',
                 'label' => 'Appendix 74 - IIRUP',
             ],
         ],
@@ -125,7 +125,7 @@ return [
     'acquisition' => [
         'consumables' => [
             'default' => [
-                'file' => 'Consumable/Stock Levels & Recording/Appendix 58 - SC.xls',
+                'file' => 'Consumable/Stock Levels & Recording/Appendix 58 - SC.xlsx',
                 'label' => 'Appendix 58 - Stock Card (receipt entry)',
             ],
         ],
@@ -196,7 +196,7 @@ return [
     'item_report' => [
         'consumables' => [
             'sc' => [
-                'file' => 'Consumable/Stock Levels & Recording/Appendix 58 - SC.xls',
+                'file' => 'Consumable/Stock Levels & Recording/Appendix 58 - SC.xlsx',
                 'label' => 'Appendix 58 - Stock Card',
                 'sheet_name' => 'SC',
             ],

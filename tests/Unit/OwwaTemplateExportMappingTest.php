@@ -63,11 +63,10 @@ class OwwaTemplateExportMappingTest extends TestCase
 
         $this->assertArrayHasKey('F9', $values);
         $this->assertStringContainsString('2026-01-0013', (string) $values['F9']);
-        $this->assertStringNotContainsString('RIS No.', (string) ($values['G6'] ?? ''));
+        $this->assertArrayNotHasKey('G6', $values);
         $this->assertArrayNotHasKey('G7', $values);
 
         $this->assertStringContainsString('OWWA Regional Office IV-A', (string) $values['A6']);
-        $this->assertStringContainsString('01', (string) $values['G6']);
         $this->assertStringContainsString('Operations', (string) $values['A8']);
         $this->assertStringContainsString('OPS', (string) $values['F8']);
         $this->assertStringContainsString('OWWA Regional Office IV-A', (string) $values['A9']);
@@ -79,7 +78,7 @@ class OwwaTemplateExportMappingTest extends TestCase
         $this->assertSame('John Approver', $values['D37']);
     }
 
-    public function test_ptr_detail_row_starts_at_row_seventeen(): void
+    public function test_ptr_detail_row_starts_at_row_eighteen(): void
     {
         $fromOffice = new Office(['name' => 'From Office', 'fund_cluster' => '01']);
         $toOffice = new Office(['name' => 'To Office']);
@@ -94,6 +93,7 @@ class OwwaTemplateExportMappingTest extends TestCase
             'quantity' => 1,
             'condition' => 'Serviceable',
             'transfer_date' => now(),
+            'transfer_type' => 'donation',
         ]);
         $transfer->setRelation('item', $item);
         $transfer->setRelation('fromOffice', $fromOffice);
@@ -105,16 +105,71 @@ class OwwaTemplateExportMappingTest extends TestCase
             'ppe/Transfer/Appendix 76 - PTR.xls'
         );
 
-        $this->assertArrayHasKey('A17', $values);
-        $this->assertArrayNotHasKey('A18', $values);
-        $this->assertSame('PPE-001', $values['B17']);
+        $this->assertArrayHasKey('A18', $values);
+        $this->assertArrayNotHasKey('A17', $values);
+        $this->assertSame('PPE-001', $values['B18']);
+        $this->assertSame('Serviceable', $values['I18']);
+        $this->assertSame('X', $values['B13']);
+        $this->assertArrayNotHasKey('C13', $values);
+    }
+
+    public function test_ptr_transfer_type_marks_use_checkbox_cells(): void
+    {
+        $fromOffice = new Office(['name' => 'From Office']);
+        $toOffice = new Office(['name' => 'To Office']);
+        $item = new Item(['item_code' => 'SE-001', 'name' => 'Chair']);
+
+        $cases = [
+            'relocate' => 'E13',
+            'reassignment' => 'B14',
+            'others' => 'E14',
+            'return' => 'E14',
+        ];
+
+        foreach ($cases as $transferType => $markCell) {
+            $transfer = new Transfer([
+                'reference_code' => '2026-01-0100',
+                'property_number' => 'SE-001',
+                'quantity' => 1,
+                'condition' => 'Good',
+                'transfer_date' => now(),
+                'transfer_type' => $transferType,
+                'transfer_type_other' => $transferType === 'others' ? 'Special case' : null,
+            ]);
+            $transfer->setRelation('item', $item);
+            $transfer->setRelation('fromOffice', $fromOffice);
+            $transfer->setRelation('toOffice', $toOffice);
+            $transfer->setRelation('recordedBy', null);
+
+            $values = app(OwwaTemplateExportService::class)->cellValuesForTransfer(
+                $transfer,
+                'Semi-Expendable/Transfer/Appendix 76 - PTR.xls'
+            );
+
+            $this->assertSame('X', $values[$markCell], "Expected mark for {$transferType} at {$markCell}");
+            $this->assertArrayNotHasKey('C13', $values);
+            $this->assertArrayNotHasKey('F13', $values);
+            $this->assertArrayNotHasKey('C14', $values);
+
+            if ($transferType === 'others') {
+                $this->assertStringContainsString('Special case', (string) $values['F14']);
+            }
+
+            if ($transferType === 'return') {
+                $this->assertStringContainsString('Return to stock', (string) $values['F14']);
+            }
+        }
     }
 
     public function test_cell_map_config_defines_ris_and_ptr_forms(): void
     {
         $this->assertSame('F9', OwwaCellMapping::form('RIS')['header']['ris_no']['cell']);
         $this->assertSame(12, OwwaCellMapping::detailRowBase('RIS'));
-        $this->assertSame(17, OwwaCellMapping::detailRowBase('PTR'));
+        $this->assertSame(18, OwwaCellMapping::detailRowBase('PTR'));
+        $this->assertSame('B13', OwwaCellMapping::form('PTR')['transfer_type_marks']['donation']);
+        $this->assertSame('E13', OwwaCellMapping::form('PTR')['transfer_type_marks']['relocate']);
+        $this->assertSame('B14', OwwaCellMapping::form('PTR')['transfer_type_marks']['reassignment']);
+        $this->assertSame('E14', OwwaCellMapping::form('PTR')['transfer_type_marks']['others']);
     }
 
     public function test_rsmi_linked_issuance_uses_separate_serial_and_ris_numbers(): void
@@ -225,7 +280,49 @@ class OwwaTemplateExportMappingTest extends TestCase
         $this->assertArrayHasKey('H52', $values);
     }
 
-    public function test_rsmi_export_leaves_custodian_signature_line_blank_for_template_placeholder(): void
+    public function test_rsmi_export_writes_custodian_name_on_signature_underscore_line(): void
+    {
+        $office = new Office(['name' => 'Regional Office', 'fund_cluster' => '01']);
+        $item = new Item(['item_code' => 'CON-001', 'name' => 'Paper', 'unit' => 'ream']);
+        $issuedBy = new User(['name' => 'Supply Custodian']);
+
+        $issuance = new Issuance([
+            'reference_code' => '2026-01-0012',
+            'quantity' => 2,
+            'issuance_date' => now(),
+            'custodian_printed_name' => 'Supply Custodian',
+            'accounting_staff_printed_name' => 'Accounting Staff',
+        ]);
+        $issuance->setRelation('requisition', null);
+        $issuance->setRelation('office', $office);
+        $issuance->setRelation('department', null);
+        $issuance->setRelation('item', $item);
+        $issuance->setRelation('issuedBy', $issuedBy);
+        $issuance->setRelation('batch', null);
+
+        $template = 'Consumable/Issuances/Appendix 64 - RSMI.xls';
+        $service = app(OwwaTemplateExportService::class);
+        $values = $service->cellValuesForIssuance($issuance, $template);
+
+        $this->assertSame('Supply Custodian', $values['A52']);
+        $this->assertSame('Accounting Staff', $values['F52']);
+        $this->assertArrayHasKey('H52', $values);
+
+        if (! is_readable(storage_path('app/templates/'.$template))) {
+            return;
+        }
+
+        $sheet = $service->renderFilledSpreadsheet($template, $values)->getActiveSheet();
+        $this->assertSame('Supply Custodian', $sheet->getCell('A52')->getValue());
+        $this->assertSame('Accounting Staff', $sheet->getCell('F52')->getValue());
+        $this->assertSame('Signature over Printed Name of Designated Accounting Staff', $sheet->getCell('F53')->getValue());
+        $this->assertSame('Date', $sheet->getCell('H53')->getValue());
+        $this->assertSame(\PhpOffice\PhpSpreadsheet\Style\Font::UNDERLINE_SINGLE, $sheet->getStyle('A52')->getFont()->getUnderline());
+        $this->assertSame(\PhpOffice\PhpSpreadsheet\Style\Font::UNDERLINE_SINGLE, $sheet->getStyle('F52')->getFont()->getUnderline());
+        $this->assertSame(\PhpOffice\PhpSpreadsheet\Style\Font::UNDERLINE_SINGLE, $sheet->getStyle('H52')->getFont()->getUnderline());
+    }
+
+    public function test_rsmi_export_preserves_template_underscore_lengths_when_names_blank(): void
     {
         $office = new Office(['name' => 'Regional Office', 'fund_cluster' => '01']);
         $item = new Item(['item_code' => 'CON-001', 'name' => 'Paper', 'unit' => 'ream']);
@@ -234,12 +331,14 @@ class OwwaTemplateExportMappingTest extends TestCase
             'reference_code' => '2026-01-0012',
             'quantity' => 2,
             'issuance_date' => now(),
-            'custodian_printed_name' => 'Supply Custodian',
+            'custodian_printed_name' => null,
         ]);
         $issuance->setRelation('requisition', null);
         $issuance->setRelation('office', $office);
         $issuance->setRelation('department', null);
         $issuance->setRelation('item', $item);
+        $issuance->setRelation('issuedBy', null);
+        $issuance->setRelation('batch', null);
 
         $values = app(OwwaTemplateExportService::class)->cellValuesForIssuance(
             $issuance,

@@ -27,6 +27,8 @@ class InventoryDemoReset
             'item_stock_buckets',
             'property_number_buckets',
             'distributions',
+            'acquisition_paperwork_line_requisition_item',
+            'acquisition_paperwork_requisition',
             'requisition_items',
             'requisitions',
             'disposals',

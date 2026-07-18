@@ -18,7 +18,7 @@ class OllamaClient
         // Use 127.0.0.1 instead of localhost so PHP/HTTP can connect reliably on Windows
         $this->baseUrl = preg_replace('#^https?://localhost(?=:\d+|/|$)#i', 'http://127.0.0.1', $url);
         $this->embedModel = config('services.ollama.embed_model', 'nomic-embed-text');
-        $this->chatModel = config('services.ollama.chat_model', 'deepseek-r1:7b');
+        $this->chatModel = config('services.ollama.chat_model', 'qwen2.5:3b');
     }
 
     /**

@@ -61,15 +61,15 @@ class OwwaWrappedRowHeightEstimationTest extends TestCase
         $this->assertLessThanOrEqual($baseHeight * OwwaExportStandards::maxWrapLines(), $height);
     }
 
-    public function test_narrow_reference_column_outside_wrap_set_does_not_expand_row(): void
+    public function test_qty_column_outside_wrap_set_does_not_expand_row(): void
     {
-        $sheet = $this->worksheetWithCell('B12', '2026-01-0401', 6.0);
+        $sheet = $this->worksheetWithCell('F12', '123456789012345', 6.0);
         $baseHeight = 15.0;
 
         $height = OwwaSpreadsheetLayoutHelper::estimateWrappedRowHeight(
             $sheet,
             12,
-            ['D', 'G', 'I', 'K', 'O'],
+            ['B', 'C', 'D', 'G', 'I', 'K', 'O'],
             $baseHeight,
         );
 
@@ -153,23 +153,33 @@ class OwwaWrappedRowHeightEstimationTest extends TestCase
         $this->assertSame(12, OwwaExportStandards::charsPerLineForColumnWidth(10.0));
     }
 
-    public function test_annex_a4_min_wrap_lines_for_expansion_is_three(): void
-    {
-        $ledger = config('owwa_cell_maps.ANNEX_A4.ledger');
-
-        $this->assertSame(3, OwwaExportStandards::minWrapLinesForExpansion($ledger));
-    }
-
-    public function test_annex_a4_wrap_text_columns_override_excludes_reference_columns(): void
+    public function test_annex_a4_wrap_text_columns_include_reference_and_property_number(): void
     {
         $ledger = config('owwa_cell_maps.ANNEX_A4.ledger');
 
         $columns = OwwaExportStandards::resolveWrapTextColumns($ledger);
 
-        $this->assertSame(['D', 'G', 'I', 'K', 'O'], $columns);
-        $this->assertNotContains('B', $columns);
-        $this->assertNotContains('C', $columns);
-        $this->assertNotContains('E', $columns);
+        $this->assertSame(['B', 'C', 'D', 'G', 'I', 'K', 'O'], $columns);
+        $this->assertContains('B', $columns);
+        $this->assertContains('C', $columns);
+    }
+
+    public function test_annex_a4_min_wrap_lines_for_expansion_is_two(): void
+    {
+        $ledger = config('owwa_cell_maps.ANNEX_A4.ledger');
+
+        $this->assertSame(2, OwwaExportStandards::minWrapLinesForExpansion($ledger));
+    }
+
+    public function test_sc_and_pc_wrap_text_columns_expand_long_text(): void
+    {
+        $sc = config('owwa_cell_maps.SC.ledger');
+        $pc = config('owwa_cell_maps.PC.ledger');
+
+        $this->assertSame(['B', 'E', 'G'], OwwaExportStandards::resolveWrapTextColumns($sc));
+        $this->assertSame(['C', 'F', 'J'], OwwaExportStandards::resolveWrapTextColumns($pc));
+        $this->assertTrue(OwwaExportStandards::uniformDataRowHeight($sc));
+        $this->assertTrue(OwwaExportStandards::uniformDataRowHeight($pc));
     }
 
     public function test_annex_a1_property_number_expands_in_template_column_g_width(): void
@@ -198,14 +208,14 @@ class OwwaWrappedRowHeightEstimationTest extends TestCase
         );
     }
 
-    public function test_annex_a1_wrap_text_columns_override_excludes_reference_columns(): void
+    public function test_annex_a1_wrap_text_columns_include_reference_column(): void
     {
         $ledger = config('owwa_cell_maps.ANNEX_A1.ledger');
 
         $columns = OwwaExportStandards::resolveWrapTextColumns($ledger);
 
-        $this->assertSame(['G', 'I', 'L'], $columns);
-        $this->assertNotContains('B', $columns);
+        $this->assertSame(['B', 'G', 'I', 'L'], $columns);
+        $this->assertContains('B', $columns);
     }
 
     public function test_annex_a1_min_wrap_lines_for_expansion_is_two(): void

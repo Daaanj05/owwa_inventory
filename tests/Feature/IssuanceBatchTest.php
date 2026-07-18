@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Filament\Resources\Issuances\IssuanceResource;
 use App\Models\Issuance;
 use App\Models\IssuanceBatch;
 use App\Models\Item;
@@ -42,6 +43,25 @@ class IssuanceBatchTest extends TestCase
         $this->assertNotNull($control);
         $this->assertSame($control, $issuances->last()->controlNumber());
         $this->assertSame(1, IssuanceBatch::query()->count());
+    }
+
+    public function test_issuances_resource_lists_one_transaction_row_per_batch(): void
+    {
+        [$requisition, $custodian, $lineA, $lineB] = $this->seedConsumableRequisitionWithTwoLines(quantityA: 2, quantityB: 3);
+
+        app(RequisitionFulfillmentService::class)->issueLines($requisition, $custodian, [
+            ['requisition_item_id' => $lineA->id, 'quantity_to_issue' => 2],
+            ['requisition_item_id' => $lineB->id, 'quantity_to_issue' => 3],
+        ], now()->toDateString());
+
+        $categoryId = $lineA->item()->value('item_category_id');
+        session(['active_item_category_id' => $categoryId]);
+
+        $resourceRows = IssuanceResource::getEloquentQuery()->get();
+
+        $this->assertCount(1, $resourceRows);
+        $this->assertCount(2, $resourceRows->first()->batchLines());
+        $this->assertSame(5, (int) $resourceRows->first()->batchLines()->sum('quantity'));
     }
 
     public function test_mixed_category_requisition_creates_separate_batches(): void

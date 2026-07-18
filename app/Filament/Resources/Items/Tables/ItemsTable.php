@@ -100,13 +100,17 @@ class ItemsTable
      */
     public static function columns(): array
     {
+        $isPpeCategory = self::activeCategorySlug() === 'ppe';
+
         $columns = [
             TextColumn::make('name')
                 ->searchable()
                 ->sortable()
                 ->weight(\Filament\Support\Enums\FontWeight::Medium)
-                ->wrap()
-                ->grow(),
+                ->tooltip(fn (?string $state): ?string => filled($state) ? $state : null)
+                ->extraAttributes(['class' => 'owwa-item-name-column'])
+                ->width($isPpeCategory ? '16rem' : null)
+                ->grow(! $isPpeCategory),
             TextColumn::make('catalog_identifier')
                 ->label(fn (): string => app(CatalogAssetNumberService::class)
                     ->catalogIdentifierLabel(self::activeCategorySlug()))
@@ -119,12 +123,34 @@ class ItemsTable
                     });
                 })
                 ->placeholder('—')
+                ->width($isPpeCategory ? '18rem' : null)
+                ->extraAttributes(['class' => 'owwa-item-identifier-column'])
                 ->grow(false),
             TextColumn::make('unit')
                 ->label('Measurement unit')
                 ->searchable()
+                ->extraAttributes(['class' => 'owwa-item-unit-column'])
                 ->grow(false),
         ];
+
+        if (self::isActiveConsumablesCategory()) {
+            $columns[] = TextColumn::make('base_name')
+                ->label('Base item')
+                ->searchable()
+                ->placeholder('—')
+                ->tooltip(fn (?string $state): ?string => filled($state) ? $state : null)
+                ->width('18rem')
+                ->extraAttributes(['class' => 'owwa-item-base-column'])
+                ->grow(false);
+
+            $columns[] = TextColumn::make('sub_item')
+                ->label('Sub-item')
+                ->searchable()
+                ->placeholder('—')
+                ->tooltip(fn (?string $state): ?string => filled($state) ? $state : null)
+                ->extraAttributes(['class' => 'owwa-item-sub-column'])
+                ->grow(false);
+        }
 
         if (self::isActiveSemiExpendableCategory()) {
             $columns[] = TextColumn::make('value_type')
@@ -136,10 +162,11 @@ class ItemsTable
         }
 
         $columns[] = TextColumn::make('reorder_level')
-            ->label('Reorder at')
+            ->label('Reorder point')
             ->numeric()
             ->sortable()
             ->width('5rem')
+            ->extraAttributes(['class' => 'owwa-item-reorder-column'])
             ->grow(false);
 
         return $columns;
@@ -168,6 +195,11 @@ class ItemsTable
     public static function isActiveSemiExpendableCategory(): bool
     {
         return self::activeCategorySlug() === 'semi_expendable';
+    }
+
+    public static function isActiveConsumablesCategory(): bool
+    {
+        return self::activeCategorySlug() === 'consumables';
     }
 
     public static function activeCategorySlug(): ?string

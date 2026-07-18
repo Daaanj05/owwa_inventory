@@ -26,11 +26,14 @@ class RequisitionIssuanceFormSchema
     public static function defaultFormState(Requisition $record, bool $remainderOnly = false): array
     {
         $defaults = OfficeSignatoryDefaults::forIssuance((int) $record->office_id);
+        $record->loadMissing(['requestedBy.office', 'requestedBy.department']);
 
         return [
             'issuance_date' => now()->toDateString(),
             'custodian_printed_name' => $defaults['custodian_printed_name'],
             'custodian_designation' => $defaults['custodian_designation'],
+            'issued_to_designation' => $record->requestedBy?->department?->name
+                ?? $record->requestedBy?->office?->name,
             'accounting_staff_printed_name' => $defaults['accounting_staff_printed_name'],
             'lines' => self::defaultLines($record, $remainderOnly),
         ];

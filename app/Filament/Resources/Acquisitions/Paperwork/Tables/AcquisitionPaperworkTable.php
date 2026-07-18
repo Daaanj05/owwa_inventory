@@ -64,17 +64,12 @@ class AcquisitionPaperworkTable
             ->emptyStateHeading('No acquisition paperwork yet')
             ->emptyStateDescription('Start PR / PO / IAR paperwork to fill and export OWWA forms.')
             ->recordActions([
-                tap(
-                    ConfiguresOwwaViewAction::make(
-                        schema: AcquisitionPaperworkModalSchema::components(),
-                        footerActions: AcquisitionPaperworkActions::viewModalFooterActions(),
-                        modalWidth: '5xl',
-                        extraModalClass: 'owwa-acquisition-paperwork-modal',
-                        modalHeading: 'View acquisition',
-                    ),
-                    fn (\Filament\Actions\ViewAction $action) => $action->registerModalActions(
-                        AcquisitionPaperworkActions::hiddenPhaseViewActionsForStepper(),
-                    ),
+                ConfiguresOwwaViewAction::make(
+                    schema: AcquisitionPaperworkModalSchema::components(),
+                    footerActions: AcquisitionPaperworkActions::viewModalFooterActions(),
+                    modalWidth: '5xl',
+                    extraModalClass: 'owwa-acquisition-paperwork-modal',
+                    modalHeading: 'View purchase request',
                 ),
             ])
             ->recordUrl(null)

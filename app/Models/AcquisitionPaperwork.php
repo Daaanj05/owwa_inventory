@@ -3,10 +3,13 @@
 namespace App\Models;
 
 use App\Models\Concerns\LogsUserActivity;
+use App\Services\ReferenceCodeService;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class AcquisitionPaperwork extends Model
 {
@@ -59,6 +62,7 @@ class AcquisitionPaperwork extends Model
         'po_submitted_at',
         'iar_submitted_at',
         'received_at',
+        'archived_at',
     ];
 
     protected function casts(): array
@@ -76,6 +80,7 @@ class AcquisitionPaperwork extends Model
             'po_submitted_at' => 'datetime',
             'iar_submitted_at' => 'datetime',
             'received_at' => 'datetime',
+            'archived_at' => 'datetime',
         ];
     }
 
@@ -87,12 +92,7 @@ class AcquisitionPaperwork extends Model
             }
 
             if (blank($paperwork->reference_code)) {
-                $paperwork->reference_code = 'AP-'.now()->format('Ymd').'-'.str_pad(
-                    (string) (static::query()->whereDate('created_at', now()->toDateString())->count() + 1),
-                    4,
-                    '0',
-                    STR_PAD_LEFT
-                );
+                $paperwork->reference_code = app(ReferenceCodeService::class)->forAcquisitionPaperwork();
             }
 
             if (blank($paperwork->recorded_by) && auth()->id()) {
@@ -136,9 +136,42 @@ class AcquisitionPaperwork extends Model
         return $this->hasMany(AcquisitionPaperworkLine::class);
     }
 
+    public function requisitions(): BelongsToMany
+    {
+        return $this->belongsToMany(Requisition::class, 'acquisition_paperwork_requisition')
+            ->withTimestamps();
+    }
+
     public function acquisitions(): HasMany
     {
         return $this->hasMany(Acquisition::class);
+    }
+
+    public function purchaseOrder(): HasOne
+    {
+        return $this->hasOne(PurchaseOrder::class);
+    }
+
+    public function isArchived(): bool
+    {
+        return $this->archived_at !== null;
+    }
+
+    public function isPrEditable(): bool
+    {
+        return $this->pr_status === self::STATUS_DRAFT && ! $this->isArchived() && ! $this->isReceived();
+    }
+
+    public function isPrPendingApproval(): bool
+    {
+        return $this->pr_status === self::STATUS_PENDING_APPROVAL;
+    }
+
+    public function canCreatePurchaseOrder(): bool
+    {
+        return $this->isPrApproved()
+            && ! $this->isArchived()
+            && ! $this->purchaseOrder()->exists();
     }
 
     public function isPrApproved(): bool
@@ -148,46 +181,55 @@ class AcquisitionPaperwork extends Model
 
     public function isPoApproved(): bool
     {
-        return $this->po_status === self::STATUS_APPROVED;
+        return $this->purchaseOrder?->isApproved()
+            ?? ($this->po_status === self::STATUS_APPROVED);
     }
 
     public function isIarApproved(): bool
     {
-        return $this->iar_status === self::STATUS_APPROVED;
+        return $this->purchaseOrder?->inspectionAcceptanceReport?->isApproved()
+            ?? ($this->iar_status === self::STATUS_APPROVED);
     }
 
     public function isReceived(): bool
     {
-        return $this->received_at !== null;
+        return $this->received_at !== null
+            || ($this->purchaseOrder?->inspectionAcceptanceReport?->isReceived() ?? false);
     }
 
     public function workflowStatusLabel(): string
     {
+        if ($this->isArchived()) {
+            return 'Archived';
+        }
+
         if ($this->isReceived()) {
             return 'Received';
         }
 
-        if ($this->iar_status === self::STATUS_PENDING_APPROVAL) {
+        $iar = $this->purchaseOrder?->inspectionAcceptanceReport;
+        if ($iar?->isPendingApproval()) {
             return 'IAR pending approval';
         }
 
-        if ($this->isIarApproved()) {
+        if ($iar?->isApproved()) {
             return 'Ready for custodian receipt';
         }
 
-        if ($this->iar_status === self::STATUS_DRAFT && $this->isPoApproved()) {
+        if ($iar?->isDraft()) {
             return 'IAR in progress';
         }
 
-        if ($this->po_status === self::STATUS_PENDING_APPROVAL) {
+        $po = $this->purchaseOrder;
+        if ($po?->isPendingApproval()) {
             return 'PO pending approval';
         }
 
-        if ($this->isPoApproved()) {
+        if ($po?->isApproved()) {
             return 'PO approved';
         }
 
-        if ($this->po_status === self::STATUS_DRAFT && $this->isPrApproved()) {
+        if ($po?->isDraft()) {
             return 'PO in progress';
         }
 
@@ -196,7 +238,7 @@ class AcquisitionPaperwork extends Model
         }
 
         if ($this->isPrApproved()) {
-            return 'PR approved';
+            return 'PR approved — ready for PO';
         }
 
         return 'PR in progress';
@@ -242,6 +284,51 @@ class AcquisitionPaperwork extends Model
     }
 
     /**
+     * Compact one-line label for selected value in Pickers.
+     */
+    public function purchaseOrderPickerSummary(): string
+    {
+        $number = $this->pr_number ?: $this->reference_code ?: 'PR';
+        $purpose = filled($this->purpose) ? (string) str($this->purpose)->limit(50) : 'No purpose';
+
+        return trim("{$number} — {$purpose}");
+    }
+
+    /**
+     * Rich HTML option label for the Create PO → Choose PR select.
+     */
+    public function purchaseOrderPickerOptionHtml(): string
+    {
+        $number = e((string) ($this->pr_number ?: $this->reference_code ?: 'PR'));
+        $purpose = filled($this->purpose)
+            ? e((string) str($this->purpose)->limit(90))
+            : 'No purpose';
+        $date = e($this->pr_date?->format('M d, Y') ?? 'No date');
+        $office = e((string) (
+            $this->requestingOffice?->name
+            ?? $this->office?->name
+            ?? 'No office'
+        ));
+
+        $lineCount = $this->relationLoaded('lines')
+            ? $this->lines->count()
+            : $this->lines()->count();
+        $total = $this->relationLoaded('lines')
+            ? (float) $this->lines->sum(fn (AcquisitionPaperworkLine $line): float => (float) ($line->amount ?? 0))
+            : $this->totalAmount();
+        $linesLabel = $lineCount === 1 ? '1 line' : "{$lineCount} lines";
+        $totalLabel = $total > 0 ? '₱'.number_format($total, 2) : 'No amount';
+
+        return <<<HTML
+<div class="owwa-doc-picker-option">
+    <span class="owwa-doc-picker-option__title">{$number}</span>
+    <span class="owwa-doc-picker-option__purpose">{$purpose}</span>
+    <span class="owwa-doc-picker-option__meta">{$date} · {$office} · {$linesLabel} · {$totalLabel}</span>
+</div>
+HTML;
+    }
+
+    /**
      * @return array<int, string>
      */
     public function missingPrFields(): array
@@ -254,20 +341,16 @@ class AcquisitionPaperwork extends Model
             }
         }
 
+        if (filled($this->purpose) && mb_strlen(trim((string) $this->purpose)) < 8) {
+            $missing[] = 'purpose (at least 8 characters)';
+        }
+
         if (blank($this->requesting_office_id)) {
             $missing[] = 'office / section';
         }
 
         if ($this->lines()->count() === 0) {
             $missing[] = 'at least one line item';
-        }
-
-        $linesWithoutCost = $this->lines()->where(function ($query): void {
-            $query->whereNull('unit_cost')->orWhere('unit_cost', '<=', 0);
-        })->count();
-
-        if ($linesWithoutCost > 0) {
-            $missing[] = 'unit cost on all lines';
         }
 
         return $missing;

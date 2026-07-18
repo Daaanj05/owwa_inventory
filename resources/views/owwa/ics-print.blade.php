@@ -42,6 +42,7 @@
                 <th>Total Cost</th>
                 <th>Description</th>
                 <th>Inventory Item No.</th>
+                <th>Estimated Useful Life</th>
             </tr>
         </thead>
         <tbody>
@@ -52,6 +53,7 @@
                 <td>{{ $issuance->amount ?? '—' }}</td>
                 <td>{{ $issuance->item?->name }}</td>
                 <td>{{ $issuance->property_number ?? $issuance->item?->item_code ?? '—' }}</td>
+                <td>{{ $issuance->estimated_useful_life ?? $issuance->item?->estimated_useful_life ?? '—' }}</td>
             </tr>
         </tbody>
     </table>

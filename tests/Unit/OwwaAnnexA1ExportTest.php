@@ -12,7 +12,6 @@ use App\Support\AnnexA1BlockLayout;
 use App\Support\ItemPropertyClass;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use PhpOffice\PhpSpreadsheet\RichText\RichText;
-use PhpOffice\PhpSpreadsheet\Style\Border;
 use PhpOffice\PhpSpreadsheet\Style\Font;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\Support\CreatesSemiExpendableAnnexA4Fixtures;
@@ -409,7 +408,7 @@ class OwwaAnnexA1ExportTest extends TestCase
     }
 
     #[DataProvider('propertyClassSheetProvider')]
-    public function test_single_item_tab_clears_ghost_rows_below_last_block(
+    public function test_single_item_tab_collapses_leftover_template_rows_below_last_block(
         string $propertyClass,
         string $expectedSheetName,
     ): void {
@@ -443,10 +442,63 @@ class OwwaAnnexA1ExportTest extends TestCase
         $ghostRow = $lastUsedRow + 5;
 
         $this->assertNull($sheet->getCell('A'.$ghostRow)->getValue());
+        $this->assertFalse(
+            $sheet->getRowDimension($ghostRow)->getVisible(),
+            "Row {$ghostRow} should be collapsed on {$expectedSheetName}",
+        );
         $this->assertSame(
-            Border::BORDER_NONE,
-            $sheet->getStyle('A'.$ghostRow)->getBorders()->getTop()->getBorderStyle(),
-            "Row {$ghostRow} should not retain template borders on {$expectedSheetName}",
+            0.0,
+            (float) $sheet->getRowDimension($ghostRow)->getRowHeight(),
+            "Row {$ghostRow} should have zero height on {$expectedSheetName}",
+        );
+    }
+
+    public function test_data_row_expands_height_for_wrapped_reference_text(): void
+    {
+        if (! extension_loaded('zip')) {
+            $this->markTestSkipped('The zip extension is required to read OWWA .xlsx templates.');
+        }
+
+        $longReference = str_repeat('REQ-DEMO-SEM-CATALOG-', 4);
+
+        $spreadsheet = app(OwwaTemplateExportService::class)->buildAnnexA1Spreadsheet(
+            [
+                [
+                    'sheetName' => 'MACHINERY AND EQUIPMENT',
+                    'blocks' => [
+                        [
+                            'header' => [
+                                'entity_name' => 'OWWA Regional Office IV-A',
+                                'fund_cluster' => '01',
+                                'property_type' => 'MACHINERY AND EQUIPMENT',
+                                'property_number' => 'SEM-ME-001',
+                                'description' => 'Basketball - Sports equipment',
+                            ],
+                            'transactions' => [
+                                [
+                                    'date' => '2026-07-10',
+                                    'reference' => $longReference,
+                                    'receipt_qty' => 1,
+                                    'unit_cost' => 4500,
+                                    'balance' => 1,
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+            ],
+        );
+
+        $sheet = $spreadsheet->getSheetByName('MACHINERY AND EQUIPMENT');
+        $this->assertNotNull($sheet);
+
+        $dataRowHeight = $sheet->getRowDimension(15)->getRowHeight();
+        $blankRowHeight = $sheet->getRowDimension(16)->getRowHeight();
+
+        $this->assertTrue($sheet->getStyle('B15')->getAlignment()->getWrapText());
+        $this->assertTrue(
+            $dataRowHeight > $blankRowHeight,
+            'Wrapped reference row should be taller than the blank padding row beneath it',
         );
     }
 

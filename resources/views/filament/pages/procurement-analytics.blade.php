@@ -8,6 +8,15 @@
     $activePreset = $this->getActivePeriodPreset();
     $allAtRiskCount = $this->getAtRiskPreviewCount();
     $stockoutCount = $this->getStockoutPreviewCount();
+    $hasSummaryOutput = $loading || filled($recommendation);
+    $hasAiNarrative = filled($recommendation)
+        && $recommendation !== '__OLLAMA_UNAVAILABLE__'
+        && ! str_starts_with($recommendation, 'Cannot connect')
+        && ! str_starts_with($recommendation, 'An error occurred')
+        && ! str_starts_with($recommendation, 'The request took too long');
+    $showAiOffline = ! $this->isOllamaAvailable()
+        || $recommendation === '__OLLAMA_UNAVAILABLE__';
+    $recommendationTableRows = $this->getRecommendationTableRows();
 @endphp
 
 <x-filament-panels::page>
@@ -34,7 +43,7 @@
         <div class="owwa-pa-filter owwa-pa-filter--right">
             <label for="pa-category" class="owwa-pa-filter-label">Category</label>
             <select id="pa-category" wire:model.live="categoryId" class="owwa-pa-filter-select">
-                <option value="">All categories</option>
+                <option value="">All (excl. PPE)</option>
                 @foreach($this->getItemCategories() as $cat)
                     <option value="{{ $cat->id }}">{{ $cat->name }}</option>
                 @endforeach
@@ -76,92 +85,46 @@
         'stockoutCount' => $stockoutCount,
     ])
 
+    @if($this->shouldShowEulPanel())
+        <div class="mt-4" wire:key="pa-eul-{{ $rangeKey }}-{{ $categoryId }}">
+            @include('filament.partials.semi-expendable-eul-preview', [
+                'rows' => $this->getEulReviewRows(),
+            ])
+        </div>
+    @endif
+
     {{-- Procurement summary + optional AI recommendation --}}
     <div
-        class="owwa-pa-card fi-section rounded-xl bg-white shadow-sm ring-1 ring-gray-950/5 dark:bg-gray-900 dark:ring-white/10"
+        class="owwa-pa-card owwa-pa-card--summary fi-section rounded-xl bg-white shadow-sm ring-1 ring-gray-950/5 dark:bg-gray-900 dark:ring-white/10"
         @if($processingRunId) wire:poll.5s="syncProcessingRun" @endif
     >
         <div class="fi-section-header-ctn px-5 py-3 border-b border-gray-200 dark:border-white/10">
-            <div class="owwa-pa-ai-header">
-                <div>
-                    <h2 class="fi-section-header-heading">Procurement summary</h2>
-                    <p class="fi-section-header-description mt-1">
-                        Click <strong>Generate recommendation</strong> to build a reorder summary from the table above.
-                        The AI narrative runs in the background via the operation device worker.
-                        Runs are saved under
-                        <a href="{{ AiProcurementRunResource::getUrl('index') }}" class="owwa-pa-section-desc-link">AI procurement runs</a>.
-                    </p>
+            <div class="owwa-pa-summary-intro">
+                <h2 class="fi-section-header-heading">Procurement summary</h2>
+                <p class="fi-section-header-description mt-1">
+                    Build a reorder recommendation from the at-risk table above.
+                    Runs are saved under
+                    <a href="{{ AiProcurementRunResource::getUrl('index') }}" class="owwa-pa-section-desc-link">AI procurement runs</a>.
+                </p>
+                <div class="owwa-pa-summary-status" aria-live="polite">
+                    <span class="owwa-pa-summary-status-scope">{{ $this->getFilterSummary() }}</span>
+                    @if($lastGenerated = $this->getLastGeneratedLabel())
+                        <span class="owwa-pa-summary-status-sep" aria-hidden="true">·</span>
+                        <span class="owwa-pa-summary-status-generated">Last generated {{ $lastGenerated }}</span>
+                    @endif
+                    @if($showAiOffline)
+                        <span class="owwa-pa-summary-status-pill owwa-pa-summary-status-pill--offline">AI offline</span>
+                    @endif
                 </div>
-                <button
-                    type="button"
-                    wire:click="generateAiRecommendation"
-                    wire:loading.attr="disabled"
-                    wire:target="generateAiRecommendation"
-                    class="owwa-pa-generate-btn owwa-pa-generate-btn--secondary"
-                    @disabled($loading)
-                >
-                    <span wire:loading.remove wire:target="generateAiRecommendation">Generate recommendation</span>
-                    <span wire:loading wire:target="generateAiRecommendation">Generating…</span>
-                </button>
             </div>
         </div>
         <div class="px-5 py-3 owwa-pa-summary-body">
-            @if($loading || filled($actionSummary) || filled($recommendation))
-                <span class="owwa-pa-chip owwa-pa-chip--inline">{{ $this->getFilterSummary() }}</span>
-
-                @if(filled($actionSummary))
-                    <div class="owwa-pa-action-panel">
-                        <p class="owwa-pa-action-headline">{{ $actionSummary['headline'] }}</p>
-
-                        @if(! empty($actionSummary['priority_actions']))
-                            <div class="owwa-pa-action-group">
-                                <h3 class="owwa-pa-action-group-title">High priority</h3>
-                                <ul class="owwa-pa-action-list">
-                                    @foreach($actionSummary['priority_actions'] as $action)
-                                        <li>
-                                            <strong>{{ $action['item'] }}</strong>
-                                            — stock {{ number_format($action['stock']) }}
-                                            @if($action['suggested'] !== null)
-                                                · order {{ number_format($action['suggested']) }}
-                                            @endif
-                                            @if($action['stock_url'])
-                                                · <a href="{{ $action['stock_url'] }}" class="owwa-pa-inline-link">Stock</a>
-                                            @endif
-                                        </li>
-                                    @endforeach
-                                </ul>
-                            </div>
-                        @endif
-
-                        @if(! empty($actionSummary['reorder_suggestions']))
-                            <div class="owwa-pa-action-group">
-                                <h3 class="owwa-pa-action-group-title">Medium priority reorders</h3>
-                                <ul class="owwa-pa-action-list">
-                                    @foreach($actionSummary['reorder_suggestions'] as $action)
-                                        <li>
-                                            <strong>{{ $action['item'] }}</strong>
-                                            — suggested {{ number_format($action['suggested']) }}
-                                            @if($action['stock_url'])
-                                                · <a href="{{ $action['stock_url'] }}" class="owwa-pa-inline-link">Stock</a>
-                                            @endif
-                                        </li>
-                                    @endforeach
-                                </ul>
-                            </div>
-                        @endif
-
-                        @if(empty($actionSummary['priority_actions']) && empty($actionSummary['reorder_suggestions']) && $actionSummary['headline'] !== 'No at-risk pairs in this filter')
-                            <p class="owwa-pa-action-empty">Review the at-risk table for details on each item.</p>
-                        @endif
-                    </div>
-                @endif
-
+            @if($hasSummaryOutput)
                 @if($loading)
-                    <div class="owwa-pr-ai-loading owwa-pr-ai-loading--inset" role="status" aria-live="polite">
+                    <div class="owwa-pr-ai-loading owwa-pr-ai-loading--inset owwa-pr-ai-loading--accent" role="status" aria-live="polite">
                         <div class="owwa-pr-ai-spinner" aria-hidden="true"></div>
                         <div>
                             <p class="owwa-pr-ai-loading-title">Generating recommendation…</p>
-                            <p class="owwa-pr-ai-loading-sub">Queued for the device worker.</p>
                             @if($lastAiRunId)
                                 <p class="owwa-pr-ai-loading-sub">
                                     <a href="{{ AiProcurementRunResource::getUrl('view', ['record' => $lastAiRunId]) }}" class="owwa-pa-inline-link">View run #{{ $lastAiRunId }}</a>
@@ -169,38 +132,61 @@
                             @endif
                         </div>
                     </div>
-                @elseif($recommendation === '__OLLAMA_UNAVAILABLE__')
-                    <p class="owwa-pa-ai-unavailable">
-                        AI recommendation unavailable (Ollama not running). The summary above uses deterministic data from the at-risk table.
-                    </p>
-                @elseif(filled($recommendation) && ! str_starts_with($recommendation, 'Cannot connect') && ! str_starts_with($recommendation, 'An error occurred') && ! str_starts_with($recommendation, 'The request took too long'))
-                    <div class="owwa-pa-ai-recommendation">
-                        <div class="owwa-pa-ai-recommendation-head">
-                            <h3 class="owwa-pa-ai-recommendation-title">
-                                <span class="owwa-pa-ai-recommendation-icon" aria-hidden="true">✦</span>
-                                AI recommendation
-                            </h3>
-                            @if($lastAiRunId)
-                                <a href="{{ AiProcurementRunResource::getUrl('view', ['record' => $lastAiRunId]) }}" class="owwa-pa-ai-recommendation-meta-link">
-                                    View saved run #{{ $lastAiRunId }} →
-                                </a>
-                            @endif
-                        </div>
-                        <div class="owwa-pa-ai-recommendation-body">
-                            {!! Str::markdown($this->formatAiNarrativeMarkdown($recommendation)) !!}
-                        </div>
-                        <p class="owwa-pr-ai-foot">AI-generated text can be inaccurate. Validate against the at-risk table.</p>
-                    </div>
-                @elseif(filled($recommendation))
-                    <div class="owwa-pa-callout owwa-pa-callout--info" role="alert">
-                        <p class="owwa-pa-callout-body">{{ $recommendation }}</p>
+                @else
+                    <div class="owwa-pa-ai-recommendation owwa-pr-ai-result">
+                        @if($hasAiNarrative)
+                            <div class="owwa-pa-ai-recommendation-head">
+                                <span class="owwa-pr-ai-pill">AI-generated</span>
+                                @if($lastAiRunId)
+                                    <a href="{{ AiProcurementRunResource::getUrl('view', ['record' => $lastAiRunId]) }}" class="owwa-pa-ai-recommendation-meta-link">
+                                        View saved run #{{ $lastAiRunId }} →
+                                    </a>
+                                @endif
+                            </div>
+                            <div class="owwa-pr-ai-narrative owwa-pa-ai-narrative-body">
+                                {!! Str::markdown($this->formatAiNarrativeMarkdown($recommendation)) !!}
+                            </div>
+                        @elseif($recommendation === '__OLLAMA_UNAVAILABLE__')
+                            <p class="owwa-pa-ai-unavailable">
+                                AI recommendation unavailable. Review the at-risk table above.
+                            </p>
+                        @elseif(filled($recommendation))
+                            <div class="owwa-pa-callout owwa-pa-callout--info" role="alert">
+                                <p class="owwa-pa-callout-body">{{ $recommendation }}</p>
+                            </div>
+                        @endif
+
+                        @include('filament.partials.procurement-recommendation-items-table', [
+                            'rows' => $recommendationTableRows,
+                        ])
                     </div>
                 @endif
             @else
                 <div class="owwa-pr-ai-idle">
-                    <p class="owwa-pr-ai-idle-text">Generate a summary from the current at-risk table to see reorder priorities and an optional AI narrative.</p>
+                    <p class="owwa-pr-ai-idle-text">Generate a recommendation from the current at-risk table.</p>
                 </div>
             @endif
         </div>
+        <div class="owwa-pa-summary-footer px-5 py-3 border-t border-gray-200 dark:border-white/10">
+            <button
+                type="button"
+                wire:click="generateAiRecommendation"
+                wire:loading.attr="disabled"
+                wire:target="generateAiRecommendation"
+                class="owwa-pa-generate-btn owwa-pa-generate-btn--footer"
+                @disabled($loading)
+            >
+                <span wire:loading.remove wire:target="generateAiRecommendation">Generate recommendation</span>
+                <span wire:loading wire:target="generateAiRecommendation">Generating…</span>
+            </button>
+            <p class="owwa-pa-generate-hint">Uses current at-risk table</p>
+        </div>
     </div>
+
+    @include('filament.partials.busy-process-guard', [
+        'busy' => $loading || filled($processingRunId),
+        'title' => 'Generating recommendation…',
+        'message' => 'AI narrative and reorder items are being prepared. This can take a short while.',
+        'leaveMessage' => 'Recommendation generation is still in progress. Are you sure you want to leave this page?',
+    ])
 </x-filament-panels::page>

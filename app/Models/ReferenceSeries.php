@@ -51,6 +51,8 @@ class ReferenceSeries extends Model
 
     public const TYPE_PROPERTY_ACTION_REQUEST = 'property_action_request';
 
+    public const TYPE_ACQUISITION_PAPERWORK = 'acquisition_paperwork';
+
     public const TYPE_PROCUREMENT_PR = 'procurement_pr';
 
     public const TYPE_PROCUREMENT_PO = 'procurement_po';
@@ -128,6 +130,11 @@ class ReferenceSeries extends Model
     public static function typeForPropertyActionRequest(): string
     {
         return self::TYPE_PROPERTY_ACTION_REQUEST;
+    }
+
+    public static function typeForAcquisitionPaperwork(): string
+    {
+        return self::TYPE_ACQUISITION_PAPERWORK;
     }
 
     public static function typeForProcurementPr(): string

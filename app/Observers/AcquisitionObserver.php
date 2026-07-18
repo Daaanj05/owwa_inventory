@@ -49,24 +49,26 @@ class AcquisitionObserver
             ? $acquisition->item
             : ($acquisition->item_id ? Item::with('category')->find($acquisition->item_id) : null);
 
-        if ($item?->category?->getTemplateSlug() !== 'semi_expendable' || $acquisition->unit_cost === null) {
+        if ($item === null || (int) ($acquisition->quantity ?? 0) <= 0) {
             return;
         }
 
-        $bucketCount = \App\Models\ItemStockBucket::query()
-            ->where('item_id', $item->id)
-            ->count();
+        if ($item->category?->getTemplateSlug() === 'semi_expendable' && $acquisition->unit_cost !== null) {
+            $bucketCount = \App\Models\ItemStockBucket::query()
+                ->where('item_id', $item->id)
+                ->count();
 
-        if ($bucketCount <= 1) {
-            $item->update([
-                'value_type' => SemiExpendableValueCategory::valueTypeForUnitCost((float) $acquisition->unit_cost),
-            ]);
+            if ($bucketCount <= 1) {
+                $item->update([
+                    'value_type' => SemiExpendableValueCategory::valueTypeForUnitCost((float) $acquisition->unit_cost),
+                ]);
+            }
         }
 
         StockPositionRestockFlag::reactivateOnAcquisition(
             (int) $item->id,
             (int) $acquisition->office_id,
-            (float) $acquisition->unit_cost,
+            $acquisition->unit_cost !== null ? (float) $acquisition->unit_cost : null,
         );
     }
 

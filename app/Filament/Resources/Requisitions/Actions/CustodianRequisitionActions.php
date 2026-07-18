@@ -2,14 +2,17 @@
 
 namespace App\Filament\Resources\Requisitions\Actions;
 
+use App\Filament\Resources\Acquisitions\AcquisitionResource;
 use App\Filament\Resources\Requisitions\Schemas\RequisitionInfolistSchema;
 use App\Filament\Resources\Requisitions\Schemas\RequisitionIssuanceFormSchema;
 use App\Models\Requisition;
 use App\Models\User;
 use App\Services\RequisitionFulfillmentService;
+use App\Services\RequisitionPurchaseRequestService;
 use App\Support\RequisitionLineDisplay;
 use App\Support\RequisitionStatus;
 use Filament\Actions\Action;
+use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Notifications\Notification;
 use Illuminate\Support\Facades\Auth;
@@ -118,6 +121,47 @@ class CustodianRequisitionActions
                     ->title('Requisition rejected')
                     ->danger()
                     ->send();
+            });
+    }
+
+    public static function createPurchaseRequestAction(): Action
+    {
+        return Action::make('createPurchaseRequest')
+            ->label('Create PR')
+            ->icon('heroicon-o-document-plus')
+            ->color('primary')
+            ->modalHeading('Create purchase request')
+            ->modalDescription('Only remaining lines whose current regional stock is exactly zero will be copied.')
+            ->form(fn (Requisition $record): array => [
+                Select::make('category_id')
+                    ->label('Item category')
+                    ->options(app(RequisitionPurchaseRequestService::class)->eligibleCategoryOptions($record))
+                    ->default(fn (): ?int => app(RequisitionPurchaseRequestService::class)->eligibleCategoryIds($record)[0] ?? null)
+                    ->required()
+                    ->visible(fn (): bool => count(app(RequisitionPurchaseRequestService::class)->eligibleCategoryIds($record)) > 1),
+            ])
+            ->visible(function (Requisition $record): bool {
+                $user = Auth::user();
+
+                return $user instanceof User
+                    && $user->isSupplyCustodian()
+                    && app(RequisitionPurchaseRequestService::class)->canCreatePurchaseRequest($record);
+            })
+            ->action(function (Requisition $record, array $data, Action $action): void {
+                $service = app(RequisitionPurchaseRequestService::class);
+                $eligibleCategoryIds = $service->eligibleCategoryIds($record);
+                $categoryId = (int) ($data['category_id'] ?? ($eligibleCategoryIds[0] ?? 0));
+
+                if (! in_array($categoryId, $eligibleCategoryIds, true)) {
+                    throw \Illuminate\Validation\ValidationException::withMessages([
+                        'category_id' => 'This category no longer has eligible zero-stock lines.',
+                    ]);
+                }
+
+                $action->redirect(AcquisitionResource::getUrl('index', [
+                    'category' => $categoryId,
+                    'create_from_requisition' => $record->id,
+                ]));
             });
     }
 

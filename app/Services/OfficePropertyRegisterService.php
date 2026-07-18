@@ -5,8 +5,10 @@ namespace App\Services;
 use App\Models\Distribution;
 use App\Models\Issuance;
 use App\Models\Item;
+use App\Models\Transfer;
 use App\Models\User;
 use App\Support\InventoryCategoryOptions;
+use App\Support\OwwaReferenceLabels;
 use App\Support\SemiExpendableUsefulLife;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -380,6 +382,122 @@ class OfficePropertyRegisterService
             ->filter(fn (\App\Models\ItemCategory $category): bool => InventoryCategoryOptions::isPropertyCategorySlug($category->getTemplateSlug()))
             ->pluck('name')
             ->all();
+    }
+
+    public function paginateTransfersForUser(
+        User $user,
+        int $categoryId,
+        string $direction = 'all',
+        ?string $search = null,
+        int $perPage = 10,
+    ): LengthAwarePaginator {
+        $officeId = (int) ($user->office_id ?? 0);
+
+        if ($officeId <= 0 || ! $user->isUnitConsolidator()) {
+            return new Paginator([], 0, $perPage, 1);
+        }
+
+        $query = Transfer::query()
+            ->with(['item.category', 'fromOffice', 'toOffice'])
+            ->where(function (Builder $scope) use ($officeId): void {
+                $scope->where('from_office_id', $officeId)
+                    ->orWhere('to_office_id', $officeId);
+            })
+            ->when(
+                $categoryId > 0,
+                fn (Builder $q): Builder => $q->whereHas(
+                    'item',
+                    fn (Builder $itemQuery): Builder => $itemQuery->where('item_category_id', $categoryId),
+                ),
+            );
+
+        if ($direction === 'incoming') {
+            $query->where('to_office_id', $officeId);
+        } elseif ($direction === 'outgoing') {
+            $query->where('from_office_id', $officeId);
+        }
+
+        if (filled($search)) {
+            $term = '%'.trim($search).'%';
+            $query->where(function (Builder $scope) use ($term): void {
+                $scope->where('reference_code', 'like', $term)
+                    ->orWhere('property_number', 'like', $term)
+                    ->orWhereHas('item', fn (Builder $itemQuery): Builder => $itemQuery->where('name', 'like', $term))
+                    ->orWhereHas('fromOffice', fn (Builder $officeQuery): Builder => $officeQuery->where('name', 'like', $term))
+                    ->orWhereHas('toOffice', fn (Builder $officeQuery): Builder => $officeQuery->where('name', 'like', $term));
+            });
+        }
+
+        return $query
+            ->orderByDesc('transfer_date')
+            ->orderByDesc('id')
+            ->paginate($perPage)
+            ->through(function (Transfer $transfer) use ($officeId): object {
+                $directionLabel = (int) $transfer->to_office_id === $officeId
+                    ? 'Incoming'
+                    : 'Outgoing';
+
+                return (object) [
+                    'id' => $transfer->id,
+                    'reference_code' => $transfer->reference_code,
+                    'transfer_date' => $transfer->transfer_date,
+                    'item_name' => $transfer->item?->name ?? '—',
+                    'quantity' => (int) $transfer->quantity,
+                    'from_office_name' => $transfer->fromOffice?->name ?? '—',
+                    'to_office_name' => $transfer->toOffice?->name ?? '—',
+                    'direction' => $directionLabel,
+                    'property_number' => $transfer->property_number,
+                ];
+            });
+    }
+
+    /**
+     * @return array<string, mixed>
+     *
+     * @throws AuthorizationException
+     */
+    public function presentTransferForUser(User $user, int $transferId): array
+    {
+        $officeId = (int) ($user->office_id ?? 0);
+
+        if ($officeId <= 0 || ! $user->isUnitConsolidator()) {
+            throw new AuthorizationException;
+        }
+
+        $transfer = Transfer::query()
+            ->with(['item.category', 'fromOffice', 'toOffice'])
+            ->whereKey($transferId)
+            ->where(function (Builder $scope) use ($officeId): void {
+                $scope->where('from_office_id', $officeId)
+                    ->orWhere('to_office_id', $officeId);
+            })
+            ->first();
+
+        if ($transfer === null) {
+            throw new AuthorizationException;
+        }
+
+        $direction = (int) $transfer->to_office_id === $officeId ? 'Incoming' : 'Outgoing';
+        $identifierLabel = OwwaReferenceLabels::assetIdentifierLabel(
+            $transfer->item?->category?->getTemplateSlug()
+        );
+        $identifier = OwwaReferenceLabels::assetIdentifierForTransfer($transfer);
+
+        return [
+            'reference_code' => $transfer->reference_code,
+            'direction' => $direction,
+            'item_name' => $transfer->item?->name ?? '—',
+            'quantity' => (int) $transfer->quantity,
+            'transfer_date' => $transfer->transfer_date?->format('M d, Y') ?? '—',
+            'from_office_name' => $transfer->fromOffice?->name ?? '—',
+            'to_office_name' => $transfer->toOffice?->name ?? '—',
+            'identifier_label' => $identifierLabel,
+            'identifier' => filled($identifier) ? $identifier : '—',
+            'condition' => filled($transfer->condition) ? $transfer->condition : '—',
+            'remarks' => filled($transfer->remarks) ? $transfer->remarks : '—',
+            'from_accountable_officer' => filled($transfer->from_accountable_officer) ? $transfer->from_accountable_officer : '—',
+            'to_accountable_officer' => filled($transfer->to_accountable_officer) ? $transfer->to_accountable_officer : '—',
+        ];
     }
 
     protected function applyOfficeScope(Builder $query, User $user): void

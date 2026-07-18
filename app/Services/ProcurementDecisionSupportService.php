@@ -6,6 +6,7 @@ use App\Models\Acquisition;
 use App\Models\Issuance;
 use App\Models\Item;
 use App\Models\Office;
+use App\Support\InventoryCategoryOptions;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -46,6 +47,9 @@ class ProcurementDecisionSupportService
      *   priority:string
      * }>
      */
+    /**
+     * @param  array<int>  $categoryIds  When non-empty (and categoryId is null), limit items to these categories.
+     */
     public function getAtRiskRows(
         Carbon $from,
         Carbon $to,
@@ -55,8 +59,10 @@ class ProcurementDecisionSupportService
         int $forecastHorizonMonths = 3,
         int $targetCoverMonths = 3,
         int $limit = 12,
+        array $categoryIds = [],
     ): Collection {
         $to = min($to->copy()->endOfMonth(), now()->endOfMonth());
+        $resolvedCategoryIds = $this->resolveCategoryIds($categoryId, $categoryIds);
 
         $forecastFrom = $to->copy()->subMonths(self::FORECAST_LOOKBACK_MONTHS - 1)->startOfMonth();
 
@@ -77,7 +83,8 @@ class ProcurementDecisionSupportService
 
         $itemIds = $issuances->pluck('item_id')->unique()->values()->all();
         $items = Item::query()
-            ->when($categoryId !== null, fn ($q) => $q->where('item_category_id', $categoryId))
+            ->with('category:id,name')
+            ->when($resolvedCategoryIds !== [], fn ($q) => $q->whereIn('item_category_id', $resolvedCategoryIds))
             ->whereIn('id', $itemIds)
             ->get(['id', 'name', 'reorder_level', 'item_category_id'])
             ->keyBy('id');
@@ -158,7 +165,7 @@ class ProcurementDecisionSupportService
         $rows = $this->appendLowStockWithoutRecentUsage(
             $rows,
             $seenKeys,
-            $categoryId,
+            $resolvedCategoryIds,
             $officeIds,
             $latestUnitCosts,
         );
@@ -170,7 +177,8 @@ class ProcurementDecisionSupportService
                     'Medium' => 1,
                     default => 2,
                 },
-                fn ($r) => $r->months_cover ?? 999,
+                fn ($r) => (int) ($r->category_sort_rank ?? 99),
+                fn ($r) => strtolower((string) ($r->item_name ?? '')),
             ])
             ->values()
             ->take($limit);
@@ -188,11 +196,15 @@ class ProcurementDecisionSupportService
      *   generated_at:string
      * }
      */
+    /**
+     * @param  array<int>  $categoryIds
+     */
     public function getCoverageSummary(
         Carbon $from,
         Carbon $to,
         ?int $categoryId = null,
         array $officeIds = [],
+        array $categoryIds = [],
     ): array {
         $rows = $this->getAtRiskRows(
             from: $from,
@@ -203,6 +215,7 @@ class ProcurementDecisionSupportService
             forecastHorizonMonths: 3,
             targetCoverMonths: 3,
             limit: 5000,
+            categoryIds: $categoryIds,
         );
 
         $pairs = $rows->count();
@@ -234,6 +247,9 @@ class ProcurementDecisionSupportService
     /**
      * @return Collection<int, object{item_name:string, office_name:string, months_cover:float, projected_stockout_date:string, priority:string}>
      */
+    /**
+     * @param  array<int>  $categoryIds
+     */
     public function getProjectedStockouts(
         Carbon $from,
         Carbon $to,
@@ -241,6 +257,7 @@ class ProcurementDecisionSupportService
         array $officeIds = [],
         int $withinMonths = 2,
         int $limit = 10,
+        array $categoryIds = [],
     ): Collection {
         $rows = $this->getAtRiskRows(
             from: $from,
@@ -251,6 +268,7 @@ class ProcurementDecisionSupportService
             forecastHorizonMonths: 3,
             targetCoverMonths: 3,
             limit: 5000,
+            categoryIds: $categoryIds,
         );
 
         $cutoff = (float) max(0.1, $withinMonths);
@@ -343,12 +361,13 @@ class ProcurementDecisionSupportService
 
     /**
      * @param  array<string, true>  $seenKeys
+     * @param  array<int>  $categoryIds
      * @param  array<int, float>  $latestUnitCosts
      */
     protected function appendLowStockWithoutRecentUsage(
         Collection $rows,
         array $seenKeys,
-        ?int $categoryId,
+        array $categoryIds,
         array $officeIds,
         array $latestUnitCosts,
     ): Collection {
@@ -358,8 +377,9 @@ class ProcurementDecisionSupportService
 
         $items = Item::query()
             ->active()
+            ->with('category:id,name')
             ->where('reorder_level', '>', 0)
-            ->when($categoryId !== null, fn ($q) => $q->where('item_category_id', $categoryId))
+            ->when($categoryIds !== [], fn ($q) => $q->whereIn('item_category_id', $categoryIds))
             ->get(['id', 'name', 'reorder_level', 'item_category_id']);
 
         $offices = Office::query()
@@ -428,6 +448,8 @@ class ProcurementDecisionSupportService
             'item_name' => (string) $item->name,
             'office_name' => (string) $office->name,
             'item_category_id' => (int) $item->item_category_id,
+            'category_name' => (string) ($item->category?->name ?? '—'),
+            'category_sort_rank' => InventoryCategoryOptions::sortRankForCategory($item->category),
             'current_stock' => $currentStock,
             'legacy_on_hand' => $legacyOnHand,
             'has_legacy_stock' => $legacyOnHand > 0,
@@ -440,6 +462,24 @@ class ProcurementDecisionSupportService
             'has_recent_usage' => $hasRecentUsage,
             'priority' => $priority,
         ];
+    }
+
+    /**
+     * @param  array<int>  $categoryIds
+     * @return array<int>
+     */
+    protected function resolveCategoryIds(?int $categoryId, array $categoryIds): array
+    {
+        if ($categoryId !== null) {
+            return [$categoryId];
+        }
+
+        return collect($categoryIds)
+            ->filter(fn ($id): bool => filled($id) && is_numeric($id))
+            ->map(fn ($id): int => (int) $id)
+            ->unique()
+            ->values()
+            ->all();
     }
 
     protected function resolveSuggestedReorderQty(

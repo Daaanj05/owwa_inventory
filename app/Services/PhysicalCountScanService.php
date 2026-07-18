@@ -7,9 +7,12 @@ use App\Models\Issuance;
 use App\Models\PhysicalCountLine;
 use App\Models\PhysicalCountScanEvent;
 use App\Models\PhysicalCountSession;
+use App\Support\ConsumableStockQrPayload;
 use App\Support\InventoryUnitQrPayload;
+use App\Support\ItemPropertyClass;
 use App\Support\PhysicalCountScanOutcome;
 use App\Support\PhysicalCountScanResult;
+use App\Support\PpePropertyType;
 use Illuminate\Support\Facades\DB;
 
 class PhysicalCountScanService
@@ -32,6 +35,28 @@ class PhysicalCountScanService
 
     public function resolve(PhysicalCountSession $session, string $rawCode, ?int $userId = null): PhysicalCountScanResult
     {
+        if (ConsumableStockQrPayload::resolve($rawCode) !== null) {
+            return $this->recordEvent(
+                $session,
+                '',
+                PhysicalCountScanOutcome::NotFound,
+                null,
+                $userId,
+                'That QR is a stock / shelf label. Use property-tag QR for PPE and semi-expendable counts.',
+            );
+        }
+
+        if (! $session->supportsUnitQrScanning()) {
+            return $this->recordEvent(
+                $session,
+                '',
+                PhysicalCountScanOutcome::NotFound,
+                null,
+                $userId,
+                'Property-tag scanning is only available for PPE and semi-expendable sessions.',
+            );
+        }
+
         $payload = InventoryUnitQrPayload::resolve($rawCode);
         $propertyNumber = $payload?->propertyNumber ?? $this->normalizePropertyNumber($rawCode);
 
@@ -174,6 +199,16 @@ class PhysicalCountScanService
             return false;
         }
 
+        if ($session->count_type === PhysicalCountSession::TYPE_RPCPPE && filled($session->ppe_type)) {
+            return PpePropertyType::resolveForExport($unit->item?->ppe_type)
+                === PpePropertyType::resolveForExport($session->ppe_type);
+        }
+
+        if ($session->count_type === PhysicalCountSession::TYPE_RPCSP && filled($session->property_class)) {
+            return ItemPropertyClass::resolveForExport($unit->item?->property_class)
+                === ItemPropertyClass::resolveForExport($session->property_class);
+        }
+
         return true;
     }
 
@@ -187,6 +222,16 @@ class PhysicalCountScanService
 
         if ($session->item_category_id && $issuance->item?->item_category_id !== $session->item_category_id) {
             return false;
+        }
+
+        if ($session->count_type === PhysicalCountSession::TYPE_RPCPPE && filled($session->ppe_type)) {
+            return PpePropertyType::resolveForExport($issuance->item?->ppe_type)
+                === PpePropertyType::resolveForExport($session->ppe_type);
+        }
+
+        if ($session->count_type === PhysicalCountSession::TYPE_RPCSP && filled($session->property_class)) {
+            return ItemPropertyClass::resolveForExport($issuance->item?->property_class)
+                === ItemPropertyClass::resolveForExport($session->property_class);
         }
 
         return true;

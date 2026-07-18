@@ -15,7 +15,13 @@ class PhysicalCountPropertyClassResolver
         $session->loadMissing('lines.item');
 
         return $session->lines
-            ->map(fn ($line): string => ItemPropertyClass::resolveForExport($line->item?->property_class))
+            ->map(function ($line) use ($session): string {
+                if ($session->count_type === PhysicalCountSession::TYPE_RPCPPE) {
+                    return PpePropertyType::resolveForExport($line->item?->ppe_type);
+                }
+
+                return ItemPropertyClass::resolveForExport($line->item?->property_class);
+            })
             ->unique()
             ->values();
     }
@@ -29,10 +35,20 @@ class PhysicalCountPropertyClassResolver
 
     public static function inventoryTypeLabel(PhysicalCountSession $session): string
     {
+        if ($session->count_type === PhysicalCountSession::TYPE_RPCI) {
+            if (filled($session->inventory_type_label)) {
+                return (string) $session->inventory_type_label;
+            }
+
+            return ConsumableInventoryType::label($session->inventory_type);
+        }
+
         $primary = self::primaryClass($session);
 
         if ($primary !== null) {
-            return ItemPropertyClass::propertyTypeLabel($primary);
+            return $session->count_type === PhysicalCountSession::TYPE_RPCPPE
+                ? PpePropertyType::propertyTypeLabel($primary)
+                : ItemPropertyClass::propertyTypeLabel($primary);
         }
 
         if (self::classesForSession($session)->count() > 1) {
@@ -49,6 +65,18 @@ class PhysicalCountPropertyClassResolver
 
     public static function displayPropertyClassText(PhysicalCountSession $session): string
     {
+        if ($session->count_type === PhysicalCountSession::TYPE_RPCPPE) {
+            if (filled($session->ppe_type)) {
+                return PpePropertyType::options()[$session->ppe_type]
+                    ?? PpePropertyType::propertyTypeLabel($session->ppe_type);
+            }
+        }
+
+        if ($session->count_type === PhysicalCountSession::TYPE_RPCSP && filled($session->property_class)) {
+            return ItemPropertyClass::options()[$session->property_class]
+                ?? (string) $session->property_class;
+        }
+
         $classes = self::classesForSession($session);
 
         if ($classes->isEmpty()) {
@@ -61,13 +89,25 @@ class PhysicalCountPropertyClassResolver
 
         $class = (string) $classes->first();
 
+        if ($session->count_type === PhysicalCountSession::TYPE_RPCPPE) {
+            return PpePropertyType::options()[$class] ?? $class;
+        }
+
         return ItemPropertyClass::options()[$class] ?? $class;
     }
 
     public static function displayInventoryTypeText(PhysicalCountSession $session): string
     {
         if ($session->count_type === PhysicalCountSession::TYPE_RPCI) {
-            return (string) ($session->inventory_type_label ?? '');
+            if (filled($session->inventory_type_label)) {
+                return (string) $session->inventory_type_label;
+            }
+
+            return ConsumableInventoryType::label($session->inventory_type);
+        }
+
+        if ($session->count_type === PhysicalCountSession::TYPE_RPCPPE && filled($session->ppe_type)) {
+            return PpePropertyType::propertyTypeLabel($session->ppe_type);
         }
 
         $classes = self::classesForSession($session);
@@ -82,7 +122,11 @@ class PhysicalCountPropertyClassResolver
             return 'Multiple property classes (one tab per class on export)';
         }
 
-        return ItemPropertyClass::propertyTypeLabel((string) $classes->first());
+        $class = (string) $classes->first();
+
+        return $session->count_type === PhysicalCountSession::TYPE_RPCPPE
+            ? PpePropertyType::propertyTypeLabel($class)
+            : ItemPropertyClass::propertyTypeLabel($class);
     }
 
     public static function syncSession(PhysicalCountSession $session): PhysicalCountSession
@@ -95,10 +139,19 @@ class PhysicalCountPropertyClassResolver
         $primary = self::primaryClass($session);
 
         if ($primary !== null) {
-            $session->update([
-                'property_class' => $session->count_type === PhysicalCountSession::TYPE_RPCSP ? $primary : $session->property_class,
-                'inventory_type_label' => ItemPropertyClass::propertyTypeLabel($primary),
-            ]);
+            if ($session->count_type === PhysicalCountSession::TYPE_RPCSP) {
+                $session->update([
+                    'property_class' => $primary,
+                    'ppe_type' => null,
+                    'inventory_type_label' => ItemPropertyClass::propertyTypeLabel($primary),
+                ]);
+            } else {
+                $session->update([
+                    'ppe_type' => $primary,
+                    'property_class' => null,
+                    'inventory_type_label' => PpePropertyType::propertyTypeLabel($primary),
+                ]);
+            }
 
             return $session->fresh();
         }
@@ -106,6 +159,7 @@ class PhysicalCountPropertyClassResolver
         if (self::classesForSession($session)->count() > 1) {
             $session->update([
                 'property_class' => null,
+                'ppe_type' => null,
                 'inventory_type_label' => null,
             ]);
 

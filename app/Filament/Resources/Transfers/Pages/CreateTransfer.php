@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Transfers\Pages;
 
 use App\Filament\Concerns\HasSystemAdminWizardHeading;
+use App\Filament\Resources\Transfers\Schemas\TransferForm;
 use App\Filament\Resources\Transfers\TransferResource;
 use App\Services\TransferStockValidator;
 use App\Support\OfficeSignatoryDefaults;
@@ -21,6 +22,10 @@ class CreateTransfer extends CreateRecord
     protected function mutateFormDataBeforeCreate(array $data): array
     {
         app(TransferStockValidator::class)->validateForCreate($data);
+
+        if (blank($data['property_number'] ?? null) && filled($data['item_id'] ?? null)) {
+            $data['property_number'] = TransferForm::catalogPropertyNumberForItem((int) $data['item_id']);
+        }
 
         return OfficeSignatoryDefaults::mergeNonBlank(
             OfficeSignatoryDefaults::forTransfer(

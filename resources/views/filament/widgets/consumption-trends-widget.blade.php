@@ -56,7 +56,7 @@
 
         {{-- KPI row --}}
         <div class="owwa-kpi-row">
-            <div class="owwa-kpi owwa-kpi-accent">
+            <div class="owwa-kpi">
                 <span class="owwa-kpi-label">Total Consumption</span>
                 <span class="owwa-kpi-value">
                     {{ number_format($summary['total']) }}
@@ -71,7 +71,7 @@
                     {{ $hasData ? ($summary['top_office_name'] ?? '—') : '—' }}
                 </span>
                 <span class="owwa-kpi-meta">
-                    {{ $summary['top_office_quantity'] > 0
+                    {{ ($summary['top_office_quantity'] ?? 0) > 0
                         ? number_format($summary['top_office_quantity']) . ' units consumed'
                         : 'No issuances recorded' }}
                 </span>
@@ -104,7 +104,7 @@
                 <p class="owwa-empty-state-text">
                     Consumption is based on <strong>issuance records</strong> (items issued out to offices). No issuances for your scope in the selected period, or issuances may not have an office set.
                     @if($this->getShowOfficeStats())
-                    Adjust the date range or add issuances under <strong>Inventory → Issuances</strong> (ensure Office is set).
+                    Adjust the date range or item filters, or add issuances under <strong>Inventory → Issuances</strong>.
                     @else
                     Adjust the date range or add issuances via <strong>Inventory → Issuances</strong> and set the office so they appear here.
                     @endif

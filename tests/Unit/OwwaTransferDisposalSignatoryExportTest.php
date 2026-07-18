@@ -58,6 +58,19 @@ class OwwaTransferDisposalSignatoryExportTest extends TestCase
         $this->assertSame('Regional Director', $values[$signatures['approved_designation']]);
         $this->assertSame('Releaser Name', $values[$signatures['released_name']]);
         $this->assertSame('Receiver Name', $values[$signatures['received_name']]);
+
+        $spreadsheet = app(OwwaTemplateExportService::class)->renderFilledSpreadsheet(
+            'ppe/Transfer/Appendix 76 - PTR.xls',
+            $values,
+        );
+
+        try {
+            $sheet = $spreadsheet->getActiveSheet();
+            $this->assertTrue($sheet->getStyle('B53')->getAlignment()->getWrapText());
+            $this->assertGreaterThan(13.8, (float) $sheet->getRowDimension(53)->getRowHeight());
+        } finally {
+            $spreadsheet->disconnectWorksheets();
+        }
     }
 
     public function test_wmr_signatory_cells_use_configured_map(): void
@@ -69,6 +82,11 @@ class OwwaTransferDisposalSignatoryExportTest extends TestCase
             'quantity' => 5,
             'disposal_date' => now(),
             'place_of_storage' => 'Warehouse A',
+            'disposal_mode' => 'sold_public',
+            'wmr_inspection_item_no' => 1,
+            'official_receipt_no' => 'OR-100',
+            'sale_date' => now(),
+            'sale_amount' => 500,
             'custodian_printed_name' => 'Prepared Person',
             'approved_by_printed_name' => 'Approver Person',
             'inspection_officer_printed_name' => 'Inspector Person',
@@ -79,7 +97,7 @@ class OwwaTransferDisposalSignatoryExportTest extends TestCase
 
         $values = app(OwwaTemplateExportService::class)->cellValuesForDisposal(
             $disposal,
-            'Consumable/Disposal/Appendix 65 - WMR.xls'
+            'Consumable/Disposal/Appendix 65 - WMR.xlsx'
         );
 
         $signatures = OwwaCellMapping::form('WMR')['signatures'];
@@ -88,6 +106,15 @@ class OwwaTransferDisposalSignatoryExportTest extends TestCase
         $this->assertSame('Approver Person', $values[$signatures['approved_by']]);
         $this->assertSame('Inspector Person', $values[$signatures['inspected_by']]);
         $this->assertSame('Witness Person', $values[$signatures['witness']]);
+        $this->assertSame('1', $values['C34']);
+        $this->assertSame(500.0, $values['I23']);
+
+        $sheet = app(OwwaTemplateExportService::class)
+            ->renderFilledSpreadsheet('Consumable/Disposal/Appendix 65 - WMR.xlsx', $values)
+            ->getActiveSheet();
+
+        $this->assertSame('1', (string) $sheet->getCell('C34')->getValue());
+        $this->assertSame(500.0, (float) $sheet->getCell('I23')->getValue());
     }
 
     public function test_iirup_signatory_cells_use_configured_map(): void
@@ -96,10 +123,21 @@ class OwwaTransferDisposalSignatoryExportTest extends TestCase
         $item = new Item(['item_code' => 'PPE-002', 'name' => 'Desktop PC']);
 
         $disposal = new Disposal([
-            'quantity' => 1,
+            'quantity' => 2,
+            'disposal_date' => now(),
             'reason' => 'Beyond repair',
+            'acquisition_cost' => 1000,
+            'accumulated_depreciation' => 500,
+            'accumulated_impairment_losses' => 100,
+            'appraised_value' => 800,
+            'iirup_disposal_mode' => 'sale',
+            'iirup_disposal_amount' => 750,
+            'official_receipt_no' => 'OR-200',
+            'sale_amount' => 750,
             'custodian_printed_name' => 'Custodian A',
+            'accountable_officer_designation' => 'Property Officer',
             'approved_by_printed_name' => 'Approver A',
+            'authorized_official_designation' => 'Regional Director',
             'inspection_officer_printed_name' => 'Inspector A',
             'witness_printed_name' => 'Witness A',
         ]);
@@ -109,7 +147,7 @@ class OwwaTransferDisposalSignatoryExportTest extends TestCase
 
         $values = app(OwwaTemplateExportService::class)->cellValuesForDisposal(
             $disposal,
-            'ppe/Disposal/Appendix 74 - IIRUP.xls'
+            'ppe/Disposal/Appendix 74 - IIRUP.xlsx'
         );
 
         $signatures = OwwaCellMapping::form('IIRUP')['signatures'];
@@ -118,6 +156,25 @@ class OwwaTransferDisposalSignatoryExportTest extends TestCase
         $this->assertSame('Approver A', $values[$signatures['approved_by']]);
         $this->assertSame('Inspector A', $values[$signatures['inspection_officer']]);
         $this->assertSame('Witness A', $values[$signatures['witness']]);
+        $this->assertSame('Property Officer', $values[$signatures['accountable_designation']]);
+        $this->assertSame('Regional Director', $values[$signatures['authorized_designation']]);
+        $this->assertSame(1000.0, $values['F15']);
+        $this->assertSame(2000.0, $values['G15']);
+        $this->assertSame(500.0, $values['H15']);
+        $this->assertSame(100.0, $values['I15']);
+        $this->assertSame(1400.0, $values['J15']);
+        $this->assertSame(750.0, $values['L15']);
+        $this->assertSame(750.0, $values['P15']);
+        $this->assertSame(800.0, $values['Q15']);
+        $this->assertSame('OR-200', $values['R15']);
+        $this->assertSame(750.0, $values['S15']);
+
+        $sheet = app(OwwaTemplateExportService::class)
+            ->renderFilledSpreadsheet('ppe/Disposal/Appendix 74 - IIRUP.xlsx', $values)
+            ->getActiveSheet();
+
+        $this->assertSame(1400.0, (float) $sheet->getCell('J15')->getValue());
+        $this->assertSame('Regional Director', (string) $sheet->getCell('H42')->getValue());
     }
 
     public function test_rlsddp_signatory_cells_use_configured_map(): void

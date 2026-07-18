@@ -42,4 +42,18 @@ class ReferenceCodeMonthFormatTest extends TestCase
 
         Carbon::setTestNow();
     }
+
+    public function test_acquisition_paperwork_reference_uses_ap_year_series_format(): void
+    {
+        Carbon::setTestNow('2026-07-17 10:00:00');
+
+        $this->seed(ReferenceSeriesSeeder::class);
+
+        $service = app(ReferenceCodeService::class);
+
+        $this->assertSame('AP-2026-0001', $service->forAcquisitionPaperwork());
+        $this->assertSame('AP-2026-0002', $service->forAcquisitionPaperwork());
+
+        Carbon::setTestNow();
+    }
 }

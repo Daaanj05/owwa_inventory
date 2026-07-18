@@ -23,6 +23,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $schedule->command('password-reset-requests:prune')->daily();
         $schedule->command('inventory:send-plan-reminders')->dailyAt('08:00');
         $schedule->command('inventory:eul-reminders')->dailyAt('08:30');
+        $schedule->command('inventory:mark-stale-zero-stock-inactive')->daily();
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->render(function (\Illuminate\Routing\Exceptions\InvalidSignatureException $exception, \Illuminate\Http\Request $request) {

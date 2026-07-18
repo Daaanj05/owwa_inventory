@@ -234,7 +234,18 @@ final class OwwaListExportActions
             'redirect_url' => $redirectUrl,
         ]);
 
-        $livewire->redirect($redirectUrl);
+        if ($exportLayout === 'individual') {
+            $livewire->redirect($redirectUrl);
+
+            return;
+        }
+
+        \App\Support\OwwaExportBusyDispatcher::start(
+            $livewire,
+            $redirectUrl,
+            'Preparing Excel export…',
+            'Building your OWWA workbook. Large selections can take a little while.',
+        );
     }
 
     /**

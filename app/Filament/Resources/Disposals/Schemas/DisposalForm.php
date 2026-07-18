@@ -7,12 +7,15 @@ use App\Models\InventoryUnit;
 use App\Models\Item;
 use App\Models\ItemCategory;
 use App\Services\DisposalInventoryUnitService;
+use App\Services\InventoryStockService;
 use App\Support\CustodianOfficeScope;
 use App\Support\OwwaReferenceLabels;
+use App\Support\SupplyOfficeResolver;
 use Closure;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Hidden;
+use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
@@ -52,7 +55,11 @@ class DisposalForm
                     ->dehydrated(),
 
                 Hidden::make('par_issuance_id')
-                    ->dehydrated(),
+                    ->default(null)
+                    ->dehydrated(fn (): bool => self::activeCategorySlug() !== 'consumables')
+                    ->dehydrateStateUsing(fn (mixed $state): ?int => self::activeCategorySlug() === 'consumables'
+                        ? null
+                        : (filled($state) ? (int) $state : null)),
 
                 Section::make('Record disposal')
                     ->columnSpanFull()
@@ -64,7 +71,9 @@ class DisposalForm
                             ->visible(fn (string $operation): bool => $operation === 'edit')
                             ->columnSpanFull(),
                         DatePicker::make('disposal_date')
-                            ->label('Disposal date')
+                            ->label(fn (): string => self::activeCategorySlug() === 'consumables'
+                                ? 'Report preparation date'
+                                : 'As at (report date)')
                             ->required()
                             ->default(now()),
                         Select::make('item_category_filter')
@@ -108,7 +117,32 @@ class DisposalForm
                             ->label('Quantity')
                             ->required()
                             ->numeric()
-                            ->minValue(1),
+                            ->minValue(1)
+                            ->helperText(fn (): ?string => self::activeCategorySlug() === 'consumables'
+                                ? 'WMR applies only to remaining stock at the regional Supply Custodian warehouse. Once issued to an office/UC, consumables are treated as consumed and cannot be written off here.'
+                                : null)
+                            ->rules([
+                                fn (Get $get): Closure => function (string $attribute, mixed $value, Closure $fail) use ($get): void {
+                                    if (self::activeCategorySlug() !== 'consumables') {
+                                        return;
+                                    }
+
+                                    $itemId = self::intOrNull($get('item_id'));
+                                    $officeId = self::intOrNull($get('office_id'))
+                                        ?? app(SupplyOfficeResolver::class)->resolve();
+
+                                    if ($itemId === null || $officeId === null) {
+                                        return;
+                                    }
+
+                                    $available = app(InventoryStockService::class)->getStock($itemId, $officeId);
+                                    $qty = (int) $value;
+
+                                    if ($qty > $available) {
+                                        $fail("Quantity exceeds regional warehouse stock on hand ({$available}).");
+                                    }
+                                },
+                            ]),
                         TextInput::make('reason')
                             ->label('Reason')
                             ->placeholder('Why this item was disposed')
@@ -200,15 +234,41 @@ class DisposalForm
                                 ? 'Auto-filled from inventory.'
                                 : (OwwaReferenceLabels::propertyNumberHelperText(self::itemCategorySlug($get)) ?: 'Enter the inventory item or property number.')),
                         TextInput::make('acquisition_cost')
-                            ->label('Acquisition cost')
+                            ->label(fn (): string => self::isIirupCategory() ? 'Unit cost' : 'Acquisition cost')
                             ->numeric()
                             ->prefix('₱')
                             ->minValue(0)
+                            ->required(fn (): bool => self::isIirupCategory())
                             ->disabled(fn (Get $get): bool => (bool) $get('inventory_auto_synced') || filled($get('inventory_unit_id')))
                             ->dehydrated()
                             ->helperText(fn (Get $get): string => (bool) $get('inventory_auto_synced') || filled($get('inventory_unit_id'))
                                 ? 'Auto-filled from inventory.'
-                                : 'Enter acquisition cost if not available from records.'),
+                                : (self::isIirupCategory()
+                                    ? 'Required by IIRUP. Total cost is computed as quantity × unit cost.'
+                                    : 'Enter acquisition cost if not available from records.')),
+                        TextInput::make('accumulated_depreciation')
+                            ->label('Accumulated depreciation')
+                            ->numeric()
+                            ->prefix('₱')
+                            ->minValue(0)
+                            ->default(0)
+                            ->required(fn (): bool => self::isIirupCategory())
+                            ->visible(fn (): bool => self::isIirupCategory()),
+                        TextInput::make('accumulated_impairment_losses')
+                            ->label('Accumulated impairment losses')
+                            ->numeric()
+                            ->prefix('₱')
+                            ->minValue(0)
+                            ->default(0)
+                            ->required(fn (): bool => self::isIirupCategory())
+                            ->visible(fn (): bool => self::isIirupCategory()),
+                        TextInput::make('appraised_value')
+                            ->label('Appraised value')
+                            ->numeric()
+                            ->prefix('₱')
+                            ->minValue(0)
+                            ->required(fn (): bool => self::isIirupCategory())
+                            ->visible(fn (): bool => self::isIirupCategory()),
                         Textarea::make('remarks')
                             ->label('Remarks')
                             ->columnSpanFull()
@@ -225,6 +285,7 @@ class DisposalForm
                         TextInput::make('place_of_storage')
                             ->label('Place of storage')
                             ->maxLength(255)
+                            ->required(fn (): bool => self::activeCategorySlug() === 'consumables')
                             ->visible(fn (): bool => self::activeCategorySlug() === 'consumables'),
                         Select::make('disposal_mode')
                             ->label('Disposal mode')
@@ -235,6 +296,8 @@ class DisposalForm
                                 'transferred_without_cost' => 'Transferred without cost',
                             ])
                             ->placeholder('Select mode')
+                            ->required(fn (): bool => self::activeCategorySlug() === 'consumables')
+                            ->live()
                             ->visible(fn (): bool => self::activeCategorySlug() === 'consumables'),
                         TextInput::make('wmr_inspection_item_no')
                             ->label('Inspection item number')
@@ -250,36 +313,59 @@ class DisposalForm
                                 'destruction' => 'Destruction',
                                 'others' => 'Others',
                             ])
-                            ->visible(fn (): bool => in_array(self::activeCategorySlug(), ['ppe', 'semi_expendable'], true)),
+                            ->required(fn (): bool => self::isIirupCategory())
+                            ->live()
+                            ->visible(fn (): bool => self::isIirupCategory()),
+                        TextInput::make('iirup_disposal_amount')
+                            ->label('Disposal amount')
+                            ->helperText('Amount under the selected disposal mode (Sale, Transfer, Destruction, or Others).')
+                            ->numeric()
+                            ->prefix('₱')
+                            ->minValue(0)
+                            ->required(fn (): bool => self::isIirupCategory())
+                            ->visible(fn (): bool => self::isIirupCategory()),
+                        TextInput::make('iirup_other_mode')
+                            ->label('Specify other disposal mode')
+                            ->maxLength(255)
+                            ->required(fn (Get $get): bool => $get('iirup_disposal_mode') === 'others')
+                            ->visible(fn (Get $get): bool => self::isIirupCategory()
+                                && $get('iirup_disposal_mode') === 'others'),
                         TextInput::make('accountable_officer_designation')
                             ->label('Accountable officer designation')
                             ->maxLength(255)
-                            ->visible(fn (): bool => in_array(self::activeCategorySlug(), ['ppe', 'semi_expendable'], true)),
+                            ->required(fn (): bool => self::isIirupCategory())
+                            ->visible(fn (): bool => self::isIirupCategory()),
                         TextInput::make('accountable_officer_station')
                             ->label('Station / office')
                             ->maxLength(255)
-                            ->visible(fn (): bool => in_array(self::activeCategorySlug(), ['ppe', 'semi_expendable'], true)),
+                            ->required(fn (): bool => self::isIirupCategory())
+                            ->visible(fn (): bool => self::isIirupCategory()),
                     ])
                     ->columns(2),
 
                 Section::make('Sale details')
                     ->columnSpanFull()
+                    ->visible(fn (Get $get): bool => ($get('disposal_mode') === 'sold_private'
+                            || $get('disposal_mode') === 'sold_public')
+                        || (self::isIirupCategory() && $get('iirup_disposal_mode') === 'sale'))
                     ->schema([
                         TextInput::make('official_receipt_no')
                             ->label('Official receipt number')
                             ->maxLength(255)
+                            ->required()
                             ->placeholder('—'),
                         DatePicker::make('sale_date')
-                            ->label('Date of sale'),
+                            ->label('Official receipt date')
+                            ->required(fn (): bool => self::activeCategorySlug() === 'consumables')
+                            ->visible(fn (): bool => self::activeCategorySlug() === 'consumables'),
                         TextInput::make('sale_amount')
-                            ->label('Sale amount')
+                            ->label('Official receipt amount')
                             ->numeric()
                             ->prefix('₱')
-                            ->minValue(0),
+                            ->minValue(0)
+                            ->required(),
                     ])
-                    ->columns(2)
-                    ->collapsible()
-                    ->collapsed(),
+                    ->columns(2),
 
                 Section::make('Signatories')
                     ->columnSpanFull()
@@ -287,36 +373,57 @@ class DisposalForm
                     ->schema([
                         TextInput::make('custodian_printed_name')
                             ->label(fn (): string => match (self::activeCategorySlug()) {
-                                'consumables' => 'Prepared by (custodian)',
-                                default => 'Custodian / accountable officer',
+                                'consumables' => 'Certified correct — Supply / Property Custodian',
+                                default => 'Requested by — Accountable Officer',
                             })
                             ->maxLength(255)
+                            ->required()
                             ->placeholder('Full name'),
                         TextInput::make('approved_by_printed_name')
-                            ->label('Approved by')
+                            ->label(fn (): string => self::activeCategorySlug() === 'consumables'
+                                ? 'Disposal approved — Head / Authorized Representative'
+                                : 'Approved by — Authorized Official')
                             ->maxLength(255)
-                            ->placeholder('Full name')
-                            ->visible(fn (): bool => self::activeCategorySlug() === 'consumables'),
+                            ->required()
+                            ->placeholder('Full name'),
+                        TextInput::make('authorized_official_designation')
+                            ->label('Designation of authorized official')
+                            ->maxLength(255)
+                            ->required(fn (): bool => self::isIirupCategory())
+                            ->visible(fn (): bool => self::isIirupCategory()),
                         TextInput::make('inspection_officer_printed_name')
-                            ->label('Inspection officer')
+                            ->label('Certified correct — Inspection Officer')
                             ->maxLength(255)
+                            ->required()
                             ->placeholder('Full name'),
                         TextInput::make('witness_printed_name')
-                            ->label('Witness')
+                            ->label('Witness to disposal')
                             ->maxLength(255)
+                            ->required()
                             ->placeholder('Full name'),
                     ])
-                    ->columns(2)
-                    ->collapsible()
-                    ->collapsed(),
+                    ->columns(2),
             ]);
     }
 
     /**
-     * @return array<int, Hidden|Select>
+     * @return array<int, Hidden|Select|Placeholder>
      */
     protected static function officeFields(callable $afterStateUpdated): array
     {
+        // Consumable WMR: regional SC warehouse only (issued office stock is already consumed).
+        if (self::activeCategorySlug() === 'consumables') {
+            return [
+                Hidden::make('office_id')
+                    ->default(fn (): ?int => app(SupplyOfficeResolver::class)->resolve())
+                    ->dehydrated(),
+                Placeholder::make('regional_office_display')
+                    ->label('Office')
+                    ->content(fn (): string => app(SupplyOfficeResolver::class)->resolveOfficeName()
+                        ?? 'Regional supply office'),
+            ];
+        }
+
         if (CustodianOfficeScope::hasFixedInventoryOffice()) {
             return [
                 Hidden::make('office_id')
@@ -372,16 +479,18 @@ class DisposalForm
 
     protected static function showAssetDetails(Get $get): bool
     {
-        if (self::usesPropertyTracking($get) && $get('disposal_type') === 'unserviceable') {
-            return true;
-        }
-
-        return ! self::usesPropertyTracking($get);
+        return self::usesPropertyTracking($get)
+            && $get('disposal_type') === 'unserviceable';
     }
 
     protected static function usesPropertyTracking(Get $get): bool
     {
         return OwwaReferenceLabels::usesPropertyNumber(self::itemCategorySlug($get));
+    }
+
+    protected static function isIirupCategory(): bool
+    {
+        return in_array(self::activeCategorySlug(), ['ppe', 'semi_expendable'], true);
     }
 
     protected static function requiresInventoryUnit(Get $get): bool
@@ -399,6 +508,11 @@ class DisposalForm
             self::intOrNull($get('item_id')),
             self::intOrNull($get('office_id')),
         )->count() > 1;
+    }
+
+    public static function resolvedCategorySlug(): ?string
+    {
+        return self::activeCategorySlug();
     }
 
     protected static function activeCategorySlug(): ?string

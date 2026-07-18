@@ -221,9 +221,9 @@ class ProcurementAnalyticsPageTest extends TestCase
 
         Livewire::actingAs($custodian)
             ->test(ProcurementAnalytics::class)
-            ->assertSet('actionSummary', null)
-            ->assertSee('Generate a summary from the current at-risk table')
-            ->assertDontSee('High priority');
+            ->assertSet('recommendation', null)
+            ->assertSee('Generate a recommendation from the current at-risk table')
+            ->assertDontSee('AI recommendation unavailable');
     }
 
     public function test_procurement_summary_shown_after_generate(): void
@@ -249,8 +249,6 @@ class ProcurementAnalyticsPageTest extends TestCase
         Livewire::actingAs($custodian)
             ->test(ProcurementAnalytics::class)
             ->call('generateAiRecommendation')
-            ->assertSet('actionSummary.headline', fn (?string $headline): bool => filled($headline) && str_contains($headline, 'at-risk'))
-            ->assertSee('High priority')
             ->assertSee('AI recommendation unavailable')
             ->assertSet('processingRunId', null);
     }
@@ -421,13 +419,116 @@ class ProcurementAnalyticsPageTest extends TestCase
             ->test(ProcurementAnalytics::class)
             ->call('generateAiRecommendation');
 
-        $this->assertNotNull($component->get('actionSummary'));
+        $this->assertNotNull($component->get('lastAiRunId'));
 
         $component
             ->set('categoryId', (string) $category->id)
-            ->assertSet('actionSummary', null)
-            ->assertSee('Generate a summary from the current at-risk table')
-            ->assertDontSee('High priority');
+            ->assertSet('recommendation', null)
+            ->assertSee('Generate a recommendation from the current at-risk table')
+            ->assertDontSee('AI recommendation unavailable');
+    }
+
+    public function test_default_scope_excludes_ppe_and_category_dropdown_omits_ppe(): void
+    {
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+
+        $office = Office::factory()->create();
+        $consumables = ItemCategory::factory()->create(['name' => 'Consumables']);
+        $ppe = ItemCategory::query()->firstOrCreate(
+            ['name' => 'PPE'],
+            ['description' => 'Property, plant and equipment'],
+        );
+
+        $consumableItem = Item::factory()->create(['item_category_id' => $consumables->id, 'reorder_level' => 2]);
+        $ppeItem = Item::factory()->create(['item_category_id' => $ppe->id, 'reorder_level' => 2]);
+
+        $this->seedMonthlyIssuances($consumableItem->id, $office->id, 10, 6);
+        $this->seedMonthlyIssuances($ppeItem->id, $office->id, 10, 6);
+        $this->createAcquisition($consumableItem->id, $office->id, 5 + 60);
+        $this->createAcquisition($ppeItem->id, $office->id, 5 + 60);
+
+        $custodian = User::factory()->create([
+            'role' => User::ROLE_SUPPLY_CUSTODIAN,
+            'office_id' => $office->id,
+        ]);
+
+        $component = Livewire::actingAs($custodian)->test(ProcurementAnalytics::class);
+
+        $categories = $component->instance()->getItemCategories();
+        $this->assertTrue($categories->contains('id', $consumables->id));
+        $this->assertFalse($categories->contains('id', $ppe->id));
+        $component->assertSee('All (excl. PPE)');
+
+        $itemIds = $component->instance()->queryAtRiskRows()->pluck('item_id')->all();
+        $this->assertContains($consumableItem->id, $itemIds);
+        $this->assertNotContains($ppeItem->id, $itemIds);
+
+        $component->set('categoryId', (string) $ppe->id);
+        $this->assertSame('', $component->get('categoryId'));
+    }
+
+    public function test_eul_panel_lists_nearing_semi_expendable_and_hides_for_consumables_filter(): void
+    {
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+
+        $office = Office::factory()->create();
+        $consumables = ItemCategory::factory()->create(['name' => 'Consumables']);
+        $semi = ItemCategory::factory()->create(['name' => 'Semi-Expendable']);
+
+        $semiItem = Item::factory()->create([
+            'item_category_id' => $semi->id,
+            'name' => 'Office Chair',
+            'estimated_useful_life' => '5 years',
+        ]);
+        $consumableItem = Item::factory()->create([
+            'item_category_id' => $consumables->id,
+            'name' => 'Bond Paper',
+        ]);
+
+        $issuedTo = User::factory()->create(['office_id' => $office->id]);
+
+        DB::table('issuances')->insert([
+            'reference_code' => 'ISS-EUL-SEMI-'.uniqid(),
+            'item_id' => $semiItem->id,
+            'office_id' => $office->id,
+            'quantity' => 1,
+            'issuance_date' => now()->subYears(4)->toDateString(),
+            'estimated_useful_life' => '5 years',
+            'eul_expires_at' => now()->addDays(30)->toDateString(),
+            'property_number' => 'SEMI-001',
+            'issued_to' => $issuedTo->id,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        DB::table('issuances')->insert([
+            'reference_code' => 'ISS-EUL-CONS-'.uniqid(),
+            'item_id' => $consumableItem->id,
+            'office_id' => $office->id,
+            'quantity' => 5,
+            'issuance_date' => now()->subMonth()->toDateString(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $custodian = User::factory()->create([
+            'role' => User::ROLE_SUPPLY_CUSTODIAN,
+            'office_id' => $office->id,
+        ]);
+
+        $component = Livewire::actingAs($custodian)->test(ProcurementAnalytics::class);
+
+        $this->assertTrue($component->instance()->shouldShowEulPanel());
+        $eulRows = $component->instance()->getEulReviewRows();
+        $this->assertCount(1, $eulRows);
+        $this->assertSame('Office Chair', $eulRows->first()->item_name);
+        $this->assertSame('nearing', $eulRows->first()->status);
+        $component->assertSee('Useful life — semi-expendable');
+        $component->assertSee('Office Chair');
+
+        $component->set('categoryId', (string) $consumables->id);
+        $this->assertFalse($component->instance()->shouldShowEulPanel());
+        $this->assertTrue($component->instance()->getEulReviewRows()->isEmpty());
     }
 
     protected function seedMonthlyIssuances(int $itemId, int $officeId, int $monthlyQty, int $months): void

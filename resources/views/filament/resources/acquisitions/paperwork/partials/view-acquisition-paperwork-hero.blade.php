@@ -53,18 +53,4 @@
         'title' => 'Workflow',
         'hint' => 'Click a completed step to review earlier forms. Use Save & submit for export when the current phase is ready.',
     ])
-
-    @if ($custodyReceipts->isNotEmpty())
-        <div class="owwa-pc-scan-card">
-            <h3 class="owwa-pc-recent-title">Custodian receipts</h3>
-            <ul class="owwa-pc-recent-list">
-                @foreach ($custodyReceipts as $receipt)
-                    <li>
-                        <span class="owwa-pc-recent-ref">{{ $receipt->reference_code }}</span>
-                        <span class="owwa-pc-line-meta">{{ $receipt->item?->name }} — {{ $receipt->quantity }} @ {{ number_format((float) $receipt->unit_cost, 2) }}</span>
-                    </li>
-                @endforeach
-            </ul>
-        </div>
-    @endif
 </div>

@@ -7,9 +7,12 @@ use App\Models\AcquisitionPaperwork;
 use App\Models\Item;
 use App\Models\ItemCategory;
 use App\Models\ReferenceSeries;
+use App\Models\Requisition;
 use App\Services\ReferenceCodeService;
+use App\Services\RequisitionPurchaseRequestService;
 use App\Support\AcquisitionPaperworkViewPresenter;
-use App\Support\OwwaReferenceLabels;
+use Filament\Actions\Action;
+use Filament\Facades\Filament;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Placeholder;
@@ -18,10 +21,13 @@ use Filament\Forms\Components\Repeater\TableColumn;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\ViewField;
+use Filament\Schemas\Components\Actions as SchemaActions;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Get;
-use Filament\Schemas\Components\View as SchemaView;
+use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
+use Filament\Support\Enums\Width;
 use Filament\Support\Icons\Heroicon;
 use Illuminate\Support\HtmlString;
 
@@ -34,35 +40,19 @@ class AcquisitionPaperworkForm
         return $schema
             ->columns(1)
             ->components([
-                SchemaView::make('filament.resources.acquisitions.paperwork.partials.view-acquisition-paperwork-hero')
-                    ->visible(fn (string $operation): bool => $operation === 'edit')
-                    ->viewData(fn (?AcquisitionPaperwork $record): array => $record
-                        ? AcquisitionPaperworkViewPresenter::forPaperwork($record)
-                        : []),
-                SchemaView::make('filament.resources.acquisitions.partials.acquisition-workflow-stepper')
-                    ->visible(fn (string $operation): bool => $operation === 'create')
-                    ->viewData(fn (?AcquisitionPaperwork $record): array => [
-                        'workflowSteps' => AcquisitionPaperworkViewPresenter::workflowStepsForForm($record),
-                        'clickable' => false,
-                        'compact' => true,
-                    ]),
                 Placeholder::make('phase_pending_notice')
                     ->label('')
-                    ->content('Awaiting offline approval. Review the form using the workflow step above, then use Record offline approval below.')
+                    ->content('Awaiting offline approval. Review the form, then use Record Offline Approval below.')
                     ->visible(fn (string $operation, ?AcquisitionPaperwork $record): bool => $operation === 'edit'
                         && AcquisitionPaperworkViewPresenter::isCurrentPhasePending($record))
                     ->columnSpanFull(),
-                Section::make('Acquisition paperwork')
-                    ->description('Fill details, then save and submit for export. After offline sign-off, record approval.')
+                Section::make('Purchase request')
+                    ->description('Fill PR details, then save and submit for export. After offline sign-off, record approval.')
                     ->columns(2)
                     ->visible(fn (string $operation, ?AcquisitionPaperwork $record): bool => ($operation === 'create'
                             || AcquisitionPaperworkViewPresenter::currentEditPhase($record) === AcquisitionPaperwork::PHASE_PR)
                         && ! AcquisitionPaperworkViewPresenter::isCurrentPhasePending($record))
                     ->schema([
-                        TextInput::make('reference_code')
-                            ->label(OwwaReferenceLabels::acquisitionPaperwork())
-                            ->disabled()
-                            ->visible(fn (string $operation): bool => $operation !== 'create'),
                         Placeholder::make('item_category_display')
                             ->label('Item category')
                             ->content(function (?AcquisitionPaperwork $record): string {
@@ -95,43 +85,19 @@ class AcquisitionPaperworkForm
                         ? 'Fill PR header and line items, then save and submit for export.'
                         : 'PR submitted — awaiting approval.')
                     ->visible(fn (string $operation, ?AcquisitionPaperwork $record): bool => ($operation === 'create'
-                            || AcquisitionPaperworkViewPresenter::currentEditPhase($record) === AcquisitionPaperwork::PHASE_PR)
-                        && ! ($record?->isPrApproved() ?? false)
+                            || ! ($record?->isPrApproved() ?? false))
                         && ! AcquisitionPaperworkViewPresenter::isCurrentPhasePending($record))
                     ->columns(2)
                     ->schema(self::prHeaderFields()),
                 Section::make('Line items')
-                    ->description(fn (?AcquisitionPaperwork $record): string => match (true) {
-                        $record?->isPrApproved() && $record->po_status === AcquisitionPaperwork::STATUS_DRAFT => 'Confirm unit costs on each line before submitting PO.',
-                        self::isPrEditable($record) => 'Add items, quantities, and unit costs for this purchase request.',
-                        default => 'Line items for this acquisition.',
-                    })
+                    ->description('Add items and quantities for this purchase request. Unit costs are entered when the purchase order is prepared.')
                     ->visible(fn (string $operation, ?AcquisitionPaperwork $record): bool => ($operation === 'create'
-                            || AcquisitionPaperworkViewPresenter::currentEditPhase($record) === AcquisitionPaperwork::PHASE_PR
-                            || (AcquisitionPaperworkViewPresenter::currentEditPhase($record) === AcquisitionPaperwork::PHASE_PO
-                                && $record?->po_status === AcquisitionPaperwork::STATUS_DRAFT))
+                            || ! ($record?->isPrApproved() ?? false))
                         && ! AcquisitionPaperworkViewPresenter::isCurrentPhasePending($record))
                     ->columns(2)
                     ->schema([
                         self::prLineItemsRepeater($scopeActive)->columnSpanFull(),
                     ]),
-                Section::make('Purchase order')
-                    ->description('Fill supplier and delivery details, then save and submit for export.')
-                    ->visible(fn (string $operation, ?AcquisitionPaperwork $record): bool => $operation !== 'create'
-                        && AcquisitionPaperworkViewPresenter::currentEditPhase($record) === AcquisitionPaperwork::PHASE_PO
-                        && ! ($record?->isPoApproved() ?? false)
-                        && ! AcquisitionPaperworkViewPresenter::isCurrentPhasePending($record))
-                    ->disabled(fn (?AcquisitionPaperwork $record): bool => ! self::isPoEditable($record))
-                    ->columns(2)
-                    ->schema(self::poFields()),
-                Section::make('Inspection & acceptance')
-                    ->description('Record inspection signatories, then save and submit for export.')
-                    ->visible(fn (string $operation, ?AcquisitionPaperwork $record): bool => $operation !== 'create'
-                        && AcquisitionPaperworkViewPresenter::currentEditPhase($record) === AcquisitionPaperwork::PHASE_IAR
-                        && ! ($record?->isIarApproved() ?? false)
-                        && ! AcquisitionPaperworkViewPresenter::isCurrentPhasePending($record))
-                    ->disabled(fn (?AcquisitionPaperwork $record): bool => ! self::isIarEditable($record))
-                    ->schema(self::iarFields()),
             ]);
     }
 
@@ -181,12 +147,10 @@ class AcquisitionPaperworkForm
 
     protected static function canEditLineUnitCost(?AcquisitionPaperwork $record): bool
     {
-        return self::isPrEditable($record) || (
-            $record !== null
+        return $record !== null
             && $record->isPrApproved()
             && $record->po_status === AcquisitionPaperwork::STATUS_DRAFT
-            && ! self::isReceived($record)
-        );
+            && ! self::isReceived($record);
     }
 
     protected static function isPrEditableFromGet(Get $get): bool
@@ -211,12 +175,18 @@ class AcquisitionPaperworkForm
             return false;
         }
 
-        if (self::isPrEditableFromGet($get)) {
-            return true;
-        }
-
         return self::isPrApprovedFromGet($get)
             && ($get('../../po_status') ?? AcquisitionPaperwork::STATUS_DRAFT) === AcquisitionPaperwork::STATUS_DRAFT;
+    }
+
+    protected static function showsLineCostFields(?AcquisitionPaperwork $record): bool
+    {
+        return false;
+    }
+
+    protected static function showsLineCostFieldsFromGet(Get $get): bool
+    {
+        return false;
     }
 
     /**
@@ -227,11 +197,9 @@ class AcquisitionPaperworkForm
         return [
             Placeholder::make('pr_number_preview')
                 ->label('PR No.')
-                ->content(fn (?AcquisitionPaperwork $record): string => filled($record?->pr_number)
-                    ? (string) $record->pr_number
-                    : 'Next: '.app(ReferenceCodeService::class)->previewNext(ReferenceSeries::typeForAcquisitionPaperworkPr()))
-                ->hintIcon(Heroicon::QuestionMarkCircle, 'Assigned automatically when you complete the PR phase.')
-                ->visible(fn (string $operation): bool => $operation !== 'create')
+                ->content(fn (?AcquisitionPaperwork $record): string => (string) ($record?->pr_number ?: '—'))
+                ->hintIcon(Heroicon::QuestionMarkCircle, 'Assigned automatically when offline approval is recorded.')
+                ->visible(fn (?AcquisitionPaperwork $record): bool => filled($record?->pr_number))
                 ->columnSpanFull(),
             Placeholder::make('pr_date_display')
                 ->label('PR date')
@@ -244,10 +212,174 @@ class AcquisitionPaperworkForm
             Hidden::make('pr_date')
                 ->default(fn (): string => now()->toDateString())
                 ->dehydrated(),
+            Placeholder::make('linked_requisitions_summary')
+                ->label('Linked requisitions')
+                ->content(function (Get $get): HtmlString {
+                    $ids = collect($get('requisitions') ?? [])
+                        ->map(fn (mixed $id): int => (int) $id)
+                        ->filter()
+                        ->unique()
+                        ->values()
+                        ->all();
+
+                    if ($ids === []) {
+                        return new HtmlString(
+                            '<span class="text-sm text-gray-500">None selected. Open See Requisitions to link zero-stock requests.</span>'
+                        );
+                    }
+
+                    $labels = Requisition::query()
+                        ->whereKey($ids)
+                        ->orderBy('reference_code')
+                        ->pluck('reference_code')
+                        ->filter()
+                        ->map(fn (mixed $code): string => e((string) $code))
+                        ->all();
+
+                    return new HtmlString(
+                        '<div class="owwa-linked-req-summary">'
+                        .implode('', array_map(
+                            static fn (string $label): string => '<span class="owwa-linked-req-chip">'.$label.'</span>',
+                            $labels,
+                        ))
+                        .'</div>'
+                    );
+                })
+                ->visible(fn (): bool => Filament::auth()->user()?->isSupplyCustodian() ?? false)
+                ->columnSpanFull(),
+            SchemaActions::make([
+                Action::make('seeRequisitions')
+                    ->label('See Requisitions')
+                    ->icon(Heroicon::OutlinedQueueList)
+                    ->color('gray')
+                    ->modalHeading('Zero-stock requisitions')
+                    ->modalDescription('Select unit-consolidator requisitions with zero regional stock. Linking fills the PR items and requested quantities.')
+                    ->modalWidth(Width::FiveExtraLarge)
+                    ->modalSubmitActionLabel('Link selected')
+                    ->fillForm(fn (Get $get): array => [
+                        'selected_requisitions' => collect($get('requisitions') ?? [])
+                            ->map(fn (mixed $id): int => (int) $id)
+                            ->filter()
+                            ->values()
+                            ->all(),
+                    ])
+                    ->schema(function (Get $get, ?AcquisitionPaperwork $record): array {
+                        $rows = app(RequisitionPurchaseRequestService::class)
+                            ->zeroStockRequisitionPickerRows(
+                                (int) $get('item_category_id'),
+                                collect($get('requisitions') ?? [])->all(),
+                            );
+
+                        return [
+                            ViewField::make('selected_requisitions')
+                                ->hiddenLabel()
+                                ->default([])
+                                ->view('filament.resources.acquisitions.paperwork.partials.zero-stock-requisitions-picker')
+                                ->viewData([
+                                    'rows' => $rows,
+                                ]),
+                        ];
+                    })
+                    ->action(function (array $data, Set $schemaSet, Get $schemaGet, ?AcquisitionPaperwork $record): void {
+                        $ids = collect($data['selected_requisitions'] ?? [])
+                            ->map(fn (mixed $id): int => (int) $id)
+                            ->filter()
+                            ->unique()
+                            ->values()
+                            ->all();
+
+                        $schemaSet('requisitions', $ids);
+
+                        if ($ids === []) {
+                            $schemaSet('lines', [[
+                                'item_id' => null,
+                                'description' => null,
+                                'unit' => null,
+                                'quantity' => 1,
+                            ]]);
+
+                            return;
+                        }
+
+                        $schemaSet(
+                            'lines',
+                            app(RequisitionPurchaseRequestService::class)->buildLinkedLinePayload(
+                                $ids,
+                                (int) $schemaGet('item_category_id'),
+                                $record?->id,
+                            ),
+                        );
+                    })
+                    ->disabled(fn (?AcquisitionPaperwork $record): bool => ! self::isPrEditable($record)),
+            ])
+                ->visible(fn (): bool => Filament::auth()->user()?->isSupplyCustodian() ?? false)
+                ->columnSpanFull(),
+            Select::make('requisitions')
+                ->label('Linked requisitions')
+                ->relationship(
+                    name: 'requisitions',
+                    titleAttribute: 'reference_code',
+                    modifyQueryUsing: function ($query, ?AcquisitionPaperwork $record) {
+                        $existingIds = $record?->requisitions()->pluck('requisitions.id')->all() ?? [];
+
+                        return $query->where(function ($eligibleQuery) use ($existingIds): void {
+                            $eligibleQuery
+                                ->where(function ($candidateQuery): void {
+                                    $candidateQuery
+                                        ->whereIn('status', [Requisition::STATUS_PENDING, Requisition::STATUS_ACCEPTED])
+                                        ->whereHas('requestedBy', fn ($userQuery) => $userQuery->where('role', \App\Models\User::ROLE_UNIT_CONSOLIDATOR));
+                                })
+                                ->when($existingIds !== [], fn ($candidateQuery) => $candidateQuery->orWhereIn('id', $existingIds));
+                        });
+                    },
+                )
+                ->multiple()
+                ->searchable()
+                ->preload()
+                ->getOptionLabelFromRecordUsing(function (Requisition $record): string {
+                    return (string) ($record->reference_code ?: "REQ #{$record->id}");
+                })
+                ->getSearchResultsUsing(fn (string $search): array => app(RequisitionPurchaseRequestService::class)->eligibleRequisitionOptions($search))
+                ->live()
+                ->afterStateUpdated(function (?array $state, ?array $old, Set $set, Get $get, ?AcquisitionPaperwork $record): void {
+                    $ids = collect($state ?? [])
+                        ->map(fn (mixed $id): int => (int) $id)
+                        ->filter()
+                        ->unique()
+                        ->values()
+                        ->all();
+
+                    if ($ids === []) {
+                        if (($old ?? []) !== []) {
+                            $set('lines', [[
+                                'item_id' => null,
+                                'description' => null,
+                                'unit' => null,
+                                'quantity' => 1,
+                            ]]);
+                        }
+
+                        return;
+                    }
+
+                    $set('lines', app(RequisitionPurchaseRequestService::class)->buildLinkedLinePayload(
+                        $ids,
+                        (int) $get('item_category_id'),
+                        $record?->id,
+                    ));
+                })
+                ->hidden()
+                ->dehydratedWhenHidden()
+                ->saveRelationshipsWhenHidden()
+                ->dehydrated(fn (): bool => Filament::auth()->user()?->isSupplyCustodian() ?? false)
+                ->disabled(fn (?AcquisitionPaperwork $record): bool => ! self::isPrEditable($record))
+                ->columnSpanFull(),
             Textarea::make('purpose')
                 ->label('Purpose')
                 ->required()
+                ->minLength(8)
                 ->rows(3)
+                ->helperText('Enter at least 8 characters.')
                 ->disabled(fn (?AcquisitionPaperwork $record): bool => ! self::isPrEditable($record))
                 ->columnSpanFull(),
             TextInput::make('requested_by_name')
@@ -274,19 +406,31 @@ class AcquisitionPaperworkForm
             ->hintIcon(Heroicon::QuestionMarkCircle, 'Pick the catalog item by name. Stock No. / Inventory item no. / Property No. fills from the Items register and is used on PR/PO/IAR Column A.')
             ->addable(fn (?AcquisitionPaperwork $record): bool => self::isPrEditable($record))
             ->deletable(fn (?AcquisitionPaperwork $record): bool => self::isPrEditable($record))
-            ->table(fn (Get $get): array => [
-                TableColumn::make('Item')
-                    ->markAsRequired()
-                    ->width('18%'),
-                TableColumn::make(self::lineIdentifierColumnLabel((int) $get('item_category_id')))
-                    ->wrapHeader()
-                    ->width('14%'),
-                TableColumn::make('Description')->width('16%'),
-                TableColumn::make('Unit')->width('9%'),
-                TableColumn::make('Qty')->markAsRequired()->width('7%'),
-                TableColumn::make('Unit cost')->width('14%'),
-                TableColumn::make('Total')->width('12%'),
-            ])
+            ->table(function (Get $get, ?AcquisitionPaperwork $record): array {
+                $showsCosts = self::showsLineCostFields($record)
+                    || self::showsLineCostFieldsFromGet($get);
+
+                $columns = [
+                    TableColumn::make('Item')
+                        ->markAsRequired()
+                        ->width($showsCosts ? '18%' : '30%'),
+                    TableColumn::make(self::lineIdentifierColumnLabel((int) $get('item_category_id')))
+                        ->wrapHeader()
+                        ->width($showsCosts ? '14%' : '17%'),
+                    TableColumn::make('Description')->width($showsCosts ? '16%' : '31%'),
+                    TableColumn::make('Unit')->width($showsCosts ? '9%' : '9%'),
+                    TableColumn::make(filled($get('requisitions')) ? 'Requested qty' : 'Qty')
+                        ->markAsRequired()
+                        ->width($showsCosts ? '7%' : '10%'),
+                ];
+
+                if ($showsCosts) {
+                    $columns[] = TableColumn::make('Unit cost')->markAsRequired()->width('14%');
+                    $columns[] = TableColumn::make('Total')->width('12%');
+                }
+
+                return $columns;
+            })
             ->compact()
             ->schema([
                 Select::make('item_id')
@@ -330,7 +474,9 @@ class AcquisitionPaperworkForm
                     ->getOptionLabelUsing(fn ($value): ?string => Item::query()->whereKey($value)->value('name'))
                     ->required()
                     ->live()
-                    ->disabled(fn (Get $get): bool => ! self::isPrEditableFromGet($get))
+                    ->disabled(fn (Get $get): bool => ! self::isPrEditableFromGet($get)
+                        || filled($get('../../requisitions')))
+                    ->dehydrated()
                     ->afterStateUpdated(function ($state, callable $set): void {
                         if (blank($state)) {
                             $set('description', null);
@@ -398,14 +544,17 @@ class AcquisitionPaperworkForm
                         'class' => 'owwa-acquisition-line-qty',
                         'inputmode' => 'numeric',
                     ])
-                    ->disabled(fn (Get $get): bool => ! self::isPrEditableFromGet($get)),
+                    ->disabled(fn (Get $get): bool => ! self::isPrEditableFromGet($get)
+                        || filled($get('../../requisitions')))
+                    ->dehydrated(),
                 TextInput::make('unit_cost')
                     ->label('Unit cost')
                     ->hiddenLabel()
                     ->numeric()
                     ->prefix('₱')
-                    ->required(fn (Get $get): bool => self::isPrEditableFromGet($get) || self::canEditLineUnitCostFromGet($get))
+                    ->required()
                     ->live(onBlur: true)
+                    ->visible(fn (Get $get): bool => self::showsLineCostFieldsFromGet($get))
                     ->extraInputAttributes([
                         'class' => 'owwa-acquisition-line-unit-cost',
                         'inputmode' => 'decimal',
@@ -413,6 +562,7 @@ class AcquisitionPaperworkForm
                     ->disabled(fn (Get $get): bool => ! self::canEditLineUnitCostFromGet($get)),
                 Placeholder::make('line_total_preview')
                     ->hiddenLabel()
+                    ->visible(fn (Get $get): bool => self::showsLineCostFieldsFromGet($get))
                     ->extraAttributes(['class' => 'owwa-acquisition-line-total'])
                     ->content(function (Get $get): string {
                         $quantity = (int) ($get('quantity') ?? 0);

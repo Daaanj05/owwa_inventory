@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Issuances\Tables;
 
+use App\Filament\Concerns\OwwaListExportActions;
 use App\Filament\Resources\Issuances\Actions\IssuanceViewActions;
 use App\Filament\Resources\Issuances\IssuanceResource;
 use App\Filament\Support\ConfiguresOwwaViewAction;
@@ -16,6 +17,7 @@ use Filament\Actions\RestoreBulkAction;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Collection;
 
 class IssuancesTable
 {
@@ -53,33 +55,65 @@ class IssuancesTable
                     ->toggleable(),
                 TextColumn::make('item.item_code')
                     ->label(OwwaReferenceLabels::STOCK_NO)
-                    ->searchable()
-                    ->sortable()
+                    ->state(function (Issuance $record): string {
+                        $lines = $record->batchLines();
+
+                        if ($lines->count() === 1) {
+                            return '1 Stock No.';
+                        }
+
+                        return $lines->count().' Stock No.';
+                    })
+                    ->searchable(query: fn (Builder $query, string $search): Builder => $query->where(
+                        fn (Builder $itemQuery): Builder => $itemQuery
+                            ->whereHas('item', fn (Builder $query): Builder => $query->where('item_code', 'like', "%{$search}%"))
+                            ->orWhereHas('batch.lines.item', fn (Builder $query): Builder => $query->where('item_code', 'like', "%{$search}%")),
+                    ))
                     ->toggleable(),
                 TextColumn::make('item.name')
                     ->label('Item')
-                    ->searchable()
-                    ->sortable()
+                    ->state(function (Issuance $record): string {
+                        $lines = $record->batchLines();
+
+                        $count = $lines->count();
+
+                        return $count.' '.($count === 1 ? 'Item' : 'Items');
+                    })
+                    ->searchable(query: fn (Builder $query, string $search): Builder => $query->where(
+                        fn (Builder $itemQuery): Builder => $itemQuery
+                            ->whereHas('item', fn (Builder $query): Builder => $query->where('name', 'like', "%{$search}%"))
+                            ->orWhereHas('batch.lines.item', fn (Builder $query): Builder => $query->where('name', 'like', "%{$search}%")),
+                    ))
                     ->limit(35),
                 TextColumn::make('issuance_date')
                     ->label('Date')
                     ->date('M d, Y')
                     ->sortable(),
-                TextColumn::make('quantity')
-                    ->label('Qty')
-                    ->numeric()
-                    ->sortable()
-                    ->alignEnd(),
                 TextColumn::make('unit_cost')
                     ->label('Unit cost (₱ per UOM)')
+                    ->state(function (Issuance $record): ?float {
+                        $costs = $record->batchLines()
+                            ->pluck('unit_cost')
+                            ->filter(fn (mixed $cost): bool => $cost !== null)
+                            ->map(fn (mixed $cost): float => (float) $cost)
+                            ->unique()
+                            ->values();
+
+                        return $costs->count() === 1 ? $costs->first() : null;
+                    })
+                    ->placeholder('Varies')
                     ->money('PHP')
-                    ->sortable()
                     ->alignEnd()
                     ->toggleable(isToggledHiddenByDefault: false),
                 TextColumn::make('amount')
                     ->label('Amount')
+                    ->state(fn (Issuance $record): float => (float) $record->batchLines()->sum(
+                        fn (Issuance $line): float => (float) (
+                            $line->amount
+                            ?? ((float) ($line->unit_cost ?? 0) * (int) $line->quantity)
+                        ),
+                    ))
                     ->money('PHP')
-                    ->sortable()
                     ->alignEnd()
                     ->toggleable(isToggledHiddenByDefault: false),
                 TextColumn::make('department.name')
@@ -107,9 +141,7 @@ class IssuancesTable
                         IssuanceResource::modalDetailSections(),
                     ),
                     [
-                        IssuanceViewActions::editAction(),
                         IssuanceViewActions::exportOwwaAction(),
-                        IssuanceViewActions::extendUsefulLifeAction(),
                         IssuanceViewActions::printQrLabelAction(),
                         IssuanceViewActions::printViewAction(),
                     ],
@@ -119,11 +151,32 @@ class IssuancesTable
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
+                    OwwaListExportActions::bulkAction('owwa.export.bulk.issuances')
+                        ->label('Export Issuances')
+                        ->visible(fn (): bool => ($table->getLivewire()->activeTab ?? 'active') === 'active'),
                     DeleteBulkAction::make()
                         ->label('Archive selected')
-                        ->visible(fn (): bool => in_array($table->getLivewire()->activeTab ?? 'active', ['active', 'all'], true)),
+                        ->action(function (Collection $records): void {
+                            $records->each(function (Issuance $record): void {
+                                $record->batchLines()->each->delete();
+                            });
+                        })
+                        ->visible(fn (): bool => ($table->getLivewire()->activeTab ?? 'active') === 'active'),
                     RestoreBulkAction::make()
-                        ->visible(fn (): bool => in_array($table->getLivewire()->activeTab ?? 'active', ['archived', 'all'], true)),
+                        ->action(function (Collection $records): void {
+                            $records->each(function (Issuance $record): void {
+                                if ($record->issuance_batch_id === null) {
+                                    $record->restore();
+
+                                    return;
+                                }
+
+                                Issuance::onlyTrashed()
+                                    ->where('issuance_batch_id', $record->issuance_batch_id)
+                                    ->restore();
+                            });
+                        })
+                        ->visible(fn (): bool => ($table->getLivewire()->activeTab ?? 'active') === 'archived'),
                 ]),
             ])
             ->recordUrl(null)

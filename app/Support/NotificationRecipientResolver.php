@@ -59,13 +59,19 @@ class NotificationRecipientResolver
      */
     public function eulReminderRecipients(Issuance $issuance): Collection
     {
-        $issuance->loadMissing(['issuedTo']);
+        $issuance->loadMissing(['issuedTo', 'office', 'department']);
 
         $recipients = $this->supplyCustodiansForRegionalOffice();
 
         if ($issuance->office_id) {
             $officeCustodians = $this->supplyCustodiansForOffice((int) $issuance->office_id);
             $recipients = $recipients->merge($officeCustodians);
+
+            $unitConsolidators = IssuanceDistributionVisibility::unitConsolidatorsForOffice(
+                (int) $issuance->office_id,
+                $issuance->department_id ? (int) $issuance->department_id : null,
+            );
+            $recipients = $recipients->merge($unitConsolidators);
         }
 
         if ($issuance->issued_to) {

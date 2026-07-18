@@ -4,6 +4,8 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class AcquisitionPaperworkLine extends Model
 {
@@ -46,6 +48,19 @@ class AcquisitionPaperworkLine extends Model
     public function item(): BelongsTo
     {
         return $this->belongsTo(Item::class);
+    }
+
+    public function requisitionItems(): BelongsToMany
+    {
+        return $this->belongsToMany(
+            RequisitionItem::class,
+            'acquisition_paperwork_line_requisition_item',
+        )->withPivot('quantity')->withTimestamps();
+    }
+
+    public function purchaseOrderLines(): HasMany
+    {
+        return $this->hasMany(PurchaseOrderLine::class);
     }
 
     public function stockNumber(): string

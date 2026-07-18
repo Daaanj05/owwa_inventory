@@ -7,7 +7,9 @@ use App\Filament\Forms\Components\StyledDatalistInput;
 use App\Models\Item;
 use App\Models\ItemCategory;
 use App\Services\ReferenceCodeService;
+use App\Support\ConsumableInventoryType;
 use App\Support\ItemPropertyClass;
+use App\Support\PpePropertyType;
 use App\Support\SemiExpendableUsefulLife;
 use App\Support\SemiExpendableValueCategory;
 use Filament\Facades\Filament;
@@ -30,6 +32,8 @@ class ItemForm
             ->columns(1)
             ->components([
                 Section::make()
+                    ->heading(null)
+                    ->compact()
                     ->columnSpanFull()
                     ->columns(2)
                     ->schema([
@@ -118,11 +122,18 @@ class ItemForm
                             ->numeric()
                             ->minValue(0)
                             ->visible(fn (Get $get): bool => self::isConsumablesCategory($get('item_category_id'))),
+                        Select::make('inventory_type')
+                            ->label('Inventory type')
+                            ->options(ConsumableInventoryType::options())
+                            ->required(fn (Get $get): bool => self::isConsumablesCategory($get('item_category_id')))
+                            ->searchable()
+                            ->helperText('Printed on Appendix 66 RPCI as Type of Inventory Item.')
+                            ->visible(fn (Get $get): bool => self::isConsumablesCategory($get('item_category_id')))
+                            ->dehydrated(fn (Get $get): bool => self::isConsumablesCategory($get('item_category_id'))),
                         Select::make('property_class')
                             ->label('Property class')
                             ->options(ItemPropertyClass::options())
-                            ->required(fn (Get $get): bool => self::isSemiExpendableCategory($get('item_category_id'))
-                                || self::isPpeCategory($get('item_category_id')))
+                            ->required(fn (Get $get): bool => self::isSemiExpendableCategory($get('item_category_id')))
                             ->searchable()
                             ->live()
                             ->afterStateUpdated(function ($state, Set $set, Get $get): void {
@@ -137,9 +148,17 @@ class ItemForm
                                     }
                                 }
                             })
-                            ->helperText('Category code in Inventory item no. / Property No. (IT, FF, OE, …).')
-                            ->visible(fn (Get $get): bool => self::isSemiExpendableCategory($get('item_category_id'))
-                                || self::isPpeCategory($get('item_category_id'))),
+                            ->helperText('Category code in Inventory item no. (IT, FF, OE, …).')
+                            ->visible(fn (Get $get): bool => self::isSemiExpendableCategory($get('item_category_id')))
+                            ->dehydrated(fn (Get $get): bool => self::isSemiExpendableCategory($get('item_category_id'))),
+                        Select::make('ppe_type')
+                            ->label('Type of PPE')
+                            ->options(PpePropertyType::options())
+                            ->required(fn (Get $get): bool => self::isPpeCategory($get('item_category_id')))
+                            ->searchable()
+                            ->helperText('Printed on Appendix 73 RPCPPE as Type of Property, Plant and Equipment.')
+                            ->visible(fn (Get $get): bool => self::isPpeCategory($get('item_category_id')))
+                            ->dehydrated(fn (Get $get): bool => self::isPpeCategory($get('item_category_id'))),
                         Select::make('uacs_object_code_id')
                             ->label('UACS object code')
                             ->relationship(
@@ -152,7 +171,9 @@ class ItemForm
                             ->preload()
                             ->required(fn (Get $get): bool => self::isSemiExpendableCategory($get('item_category_id'))
                                 || self::isPpeCategory($get('item_category_id')))
-                            ->helperText('CODE NUMBER segment (GL / UACS). Maintained under System Admin → UACS object codes.')
+                            ->helperText(fn (Get $get): string => self::isPpeCategory($get('item_category_id'))
+                                ? 'CODE NUMBER segment (GL / UACS).'
+                                : 'CODE NUMBER segment (GL / UACS). Maintained under System Admin → UACS object codes.')
                             ->visible(fn (Get $get): bool => self::isSemiExpendableCategory($get('item_category_id'))
                                 || self::isPpeCategory($get('item_category_id'))),
                         TextInput::make('semi_expendable_property_number')
@@ -161,14 +182,16 @@ class ItemForm
                             ->dehydrated(false)
                             ->placeholder('Assigned automatically on save')
                             ->helperText('Catalog Inventory item no. (TEMP-… until first acquisition cost finalizes SPLV/SPHV).')
-                            ->visible(fn (Get $get): bool => self::isSemiExpendableCategory($get('item_category_id'))),
+                            ->visible(fn (string $operation, Get $get): bool => $operation !== 'create'
+                                && self::isSemiExpendableCategory($get('item_category_id'))),
                         TextInput::make('ppe_property_number')
                             ->label('Property No.')
                             ->disabled()
                             ->dehydrated(false)
                             ->placeholder('Assigned automatically on save')
                             ->helperText('One Property No. per catalog PPE item.')
-                            ->visible(fn (Get $get): bool => self::isPpeCategory($get('item_category_id'))),
+                            ->visible(fn (string $operation, Get $get): bool => $operation !== 'create'
+                                && self::isPpeCategory($get('item_category_id'))),
                         TextInput::make('estimated_useful_life')
                             ->label('Estimated useful life')
                             ->placeholder('e.g. 5 yrs')
@@ -190,7 +213,7 @@ class ItemForm
                             }),
                         Textarea::make('description')
                             ->columnSpanFull()
-                            ->rows(3)
+                            ->rows(2)
                             ->helperText(fn (Get $get): ?string => self::isPpeCategory($get('item_category_id'))
                                 ? 'Include brand, size, color, manufacturer serial or asset tag if any (maps to Description on PAR/PC export).'
                                 : null),

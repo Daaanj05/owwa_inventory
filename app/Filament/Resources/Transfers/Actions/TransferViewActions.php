@@ -6,10 +6,11 @@ use App\Filament\Resources\Transfers\TransferResource;
 use App\Filament\Support\OwwaFormModalDefaults;
 use App\Models\Transfer;
 use App\Services\OwwaTemplateExportService;
+use App\Support\OwwaExportBusyDispatcher;
 use Filament\Actions\Action;
 use Filament\Actions\EditAction;
 use Filament\Forms\Components\Select;
-use Illuminate\Support\Facades\Redirect;
+use Livewire\Component as LivewireComponent;
 
 class TransferViewActions
 {
@@ -34,13 +35,19 @@ class TransferViewActions
                     })
                     ->helperText('The form is auto-selected based on the item category. Change only if needed.'),
             ])
-            ->action(function (Transfer $record, array $data) {
+            ->action(function (Transfer $record, array $data, Action $action): void {
                 $url = route('owwa.export.transfer', $record);
                 if (! empty($data['form'])) {
                     $url .= '?form='.urlencode($data['form']);
                 }
 
-                return Redirect::away($url);
+                $livewire = $action->getLivewire();
+                OwwaExportBusyDispatcher::start(
+                    $livewire instanceof LivewireComponent ? $livewire : null,
+                    $url,
+                    'Preparing Excel export…',
+                    'Building your OWWA form…',
+                );
             });
     }
 

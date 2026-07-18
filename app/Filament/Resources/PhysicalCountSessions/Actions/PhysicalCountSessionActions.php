@@ -7,12 +7,13 @@ use App\Filament\Support\OwwaFormModalDefaults;
 use App\Models\PhysicalCountSession;
 use App\Services\PhysicalCountCompletionService;
 use App\Services\PhysicalCountPreloadService;
+use App\Support\OwwaExportBusyDispatcher;
 use App\Support\PhysicalCountPropertyClassResolver;
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\EditAction;
 use Filament\Notifications\Notification;
-use Illuminate\Support\Facades\Redirect;
+use Livewire\Component as LivewireComponent;
 
 class PhysicalCountSessionActions
 {
@@ -32,7 +33,7 @@ class PhysicalCountSessionActions
             ->label('Load expected assets')
             ->icon('heroicon-o-arrow-down-tray')
             ->color('success')
-            ->visible(fn (PhysicalCountSession $record): bool => $record->supportsQrScanning() && ! $record->hasBookListLoaded() && ! $record->isArchived())
+            ->visible(fn (PhysicalCountSession $record): bool => $record->supportsUnitQrScanning() && ! $record->hasBookListLoaded() && ! $record->isArchived())
             ->requiresConfirmation()
             ->modalHeading('Load expected assets from custody records?')
             ->modalDescription('Loads all property tags accountable to the regional office — warehouse stock and items issued for use. Excludes assets at satellite offices. Unscanned units appear as shortages.')
@@ -44,6 +45,33 @@ class PhysicalCountSessionActions
                 Notification::make()
                     ->title('Expected assets loaded')
                     ->body("Created {$result['created']}, updated {$result['updated']}, skipped {$result['skipped']}. Book list loaded — shortages and overages are now visible.")
+                    ->success()
+                    ->send();
+
+                if ($afterSuccess !== null) {
+                    $afterSuccess($record, $action);
+                }
+            });
+    }
+
+    public static function preloadStockLinesAction(?callable $afterSuccess = null): Action
+    {
+        return Action::make('preloadStockLines')
+            ->label('Load stock lines')
+            ->icon('heroicon-o-arrow-down-tray')
+            ->color('success')
+            ->visible(fn (PhysicalCountSession $record): bool => $record->supportsStockQrScanning() && ! $record->hasBookListLoaded() && ! $record->isArchived())
+            ->requiresConfirmation()
+            ->modalHeading('Load stock lines from Stock Card balances?')
+            ->modalDescription('Loads consumable items with stock activity for this office and inventory type. Counted quantities stay at zero until you enter them or scan stock QR labels.')
+            ->action(function (PhysicalCountSession $record, Action $action) use ($afterSuccess): void {
+                $result = app(PhysicalCountPreloadService::class)->preloadFromStockBalances($record);
+
+                $record->refresh()->load(['lines.item']);
+
+                Notification::make()
+                    ->title('Stock lines loaded')
+                    ->body("Created {$result['created']}, updated {$result['updated']}, skipped {$result['skipped']}.")
                     ->success()
                     ->send();
 
@@ -90,7 +118,7 @@ class PhysicalCountSessionActions
         return Action::make('printQrLabels')
             ->label('Print QR labels')
             ->icon('heroicon-o-qr-code')
-            ->visible(fn (PhysicalCountSession $record): bool => $record->supportsQrScanning())
+            ->visible(fn (PhysicalCountSession $record): bool => $record->supportsUnitQrScanning())
             ->url(fn (PhysicalCountSession $record): string => route('owwa.qr-labels.physical-count', $record))
             ->openUrlInNewTab();
     }
@@ -102,7 +130,15 @@ class PhysicalCountSessionActions
             ->icon('heroicon-o-document-arrow-down')
             ->color('gray')
             ->visible(fn (PhysicalCountSession $record): bool => $record->isComplete())
-            ->action(fn (PhysicalCountSession $record) => Redirect::away(route('owwa.export.physical-count', $record)));
+            ->action(function (PhysicalCountSession $record, Action $action): void {
+                $livewire = $action->getLivewire();
+                OwwaExportBusyDispatcher::start(
+                    $livewire instanceof LivewireComponent ? $livewire : null,
+                    route('owwa.export.physical-count', $record),
+                    'Preparing Excel export…',
+                    'Building your OWWA form…',
+                );
+            });
     }
 
     public static function editAction(): EditAction
@@ -122,6 +158,7 @@ class PhysicalCountSessionActions
         return [
             self::scanWithPhoneAction(),
             self::preloadExpectedAssetsAction(),
+            self::preloadStockLinesAction(),
             self::markCompleteAction(),
             ActionGroup::make([
                 self::editAction(),

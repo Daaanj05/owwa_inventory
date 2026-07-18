@@ -664,6 +664,16 @@ class OwwaSpreadsheetLayoutHelper
                 $sheet->getStyle($coordinate)->getNumberFormat()->setFormatCode($formatCode);
             }
         }
+
+        // Avoid Excel "###" overflow when peso-formatted amounts are wider than the template column.
+        foreach ($monetaryColumns as $column) {
+            $dimension = $sheet->getColumnDimension($column);
+            $currentWidth = (float) $dimension->getWidth();
+
+            if ($currentWidth <= 0 || $currentWidth < 12.0) {
+                $dimension->setWidth(12.0);
+            }
+        }
     }
 
     public static function applyBlockEndBorder(

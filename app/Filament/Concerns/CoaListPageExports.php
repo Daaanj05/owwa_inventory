@@ -6,6 +6,8 @@ use Filament\Actions\Action;
 
 trait CoaListPageExports
 {
+    use StartsOwwaExportBusy;
+
     protected function coaExportReportAction(
         string $name,
         string $routeName,

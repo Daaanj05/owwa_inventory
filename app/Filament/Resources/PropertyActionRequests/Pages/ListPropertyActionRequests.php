@@ -143,6 +143,7 @@ class ListPropertyActionRequests extends ListRecords
                     'lines' => [[
                         'issuance_id' => $issuance->id,
                         'inventory_unit_id' => $issuance->inventoryUnit?->id,
+                        'quantity' => max(1, (int) ($issuance->quantity ?? 1)),
                     ]],
                 ]);
             })

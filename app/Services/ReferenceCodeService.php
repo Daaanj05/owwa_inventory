@@ -53,6 +53,11 @@ class ReferenceCodeService
         return $this->nextCode(ReferenceSeries::typeForPropertyActionRequest());
     }
 
+    public function forAcquisitionPaperwork(): string
+    {
+        return $this->nextCode(ReferenceSeries::typeForAcquisitionPaperwork());
+    }
+
     public function forProcurementPr(): string
     {
         return $this->forAcquisitionPaperworkPr();

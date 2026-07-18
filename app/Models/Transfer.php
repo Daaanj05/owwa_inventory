@@ -13,7 +13,7 @@ class Transfer extends Model
     use HasFactory, LogsUserActivity, SoftDeletes;
 
     protected $fillable = [
-        'reference_code', 'item_id', 'from_office_id', 'to_office_id',
+        'reference_code', 'item_id', 'inventory_unit_id', 'from_office_id', 'to_office_id',
         'quantity', 'unit_cost', 'transfer_date', 'transfer_type', 'transfer_type_other',
         'reason_for_transfer', 'from_accountable_officer', 'to_accountable_officer',
         'remarks', 'property_number', 'condition',
@@ -35,6 +35,11 @@ class Transfer extends Model
         return $this->belongsTo(Item::class);
     }
 
+    public function inventoryUnit(): BelongsTo
+    {
+        return $this->belongsTo(InventoryUnit::class);
+    }
+
     public function fromOffice(): BelongsTo
     {
         return $this->belongsTo(Office::class, 'from_office_id');
@@ -48,5 +53,48 @@ class Transfer extends Model
     public function recordedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'recorded_by');
+    }
+
+    protected static function booted(): void
+    {
+        static::saved(function (Transfer $transfer): void {
+            $transfer->rememberSignatoryNames();
+        });
+    }
+
+    public function rememberSignatoryNames(): void
+    {
+        ProcurementSignatoryName::remember(
+            ProcurementSignatoryName::ROLE_TRANSFER_FROM_ACCOUNTABLE,
+            $this->from_accountable_officer,
+        );
+        ProcurementSignatoryName::remember(
+            ProcurementSignatoryName::ROLE_TRANSFER_TO_ACCOUNTABLE,
+            $this->to_accountable_officer,
+        );
+        ProcurementSignatoryName::remember(
+            ProcurementSignatoryName::ROLE_TRANSFER_APPROVED,
+            $this->approved_by_printed_name,
+        );
+        ProcurementSignatoryName::remember(
+            ProcurementSignatoryName::ROLE_TRANSFER_APPROVED_DESIGNATION,
+            $this->approved_by_designation,
+        );
+        ProcurementSignatoryName::remember(
+            ProcurementSignatoryName::ROLE_TRANSFER_RELEASED,
+            $this->released_by_printed_name,
+        );
+        ProcurementSignatoryName::remember(
+            ProcurementSignatoryName::ROLE_TRANSFER_RELEASED_DESIGNATION,
+            $this->released_by_designation,
+        );
+        ProcurementSignatoryName::remember(
+            ProcurementSignatoryName::ROLE_TRANSFER_RECEIVED,
+            $this->received_by_printed_name,
+        );
+        ProcurementSignatoryName::remember(
+            ProcurementSignatoryName::ROLE_TRANSFER_RECEIVED_DESIGNATION,
+            $this->received_by_designation,
+        );
     }
 }

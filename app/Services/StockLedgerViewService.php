@@ -23,9 +23,12 @@ class StockLedgerViewService
      *     exportForm: string,
      *     exportLabel: string,
      *     exportUrl: string,
+     *     exportPdfLabel: string,
+     *     exportPdfUrl: string,
      *     header: array<string, string|null>,
      *     columns: array<string, string>,
-     *     rows: array<int, array<string, mixed>>
+     *     rows: array<int, array<string, mixed>>,
+     *     unit_cost: float|null
      * }
      */
     public function present(Item $item, Office $office, ?float $unitCost = null): array
@@ -45,11 +48,25 @@ class StockLedgerViewService
             $exportUrl .= '&unit_cost='.urlencode(UnitCostKey::normalize($unitCost));
         }
 
+        $pairKey = app(StockLevelExportService::class)->encodePairKey(
+            (int) $item->id,
+            (int) $office->id,
+            $unitCost,
+        );
+
+        $exportPdfUrl = route('owwa.export.bulk.stock-cards', array_filter([
+            'category' => $item->item_category_id,
+            'format' => 'pdf',
+            'pairs' => $pairKey,
+        ]));
+
         return [
             'title' => $config['title'],
             'exportForm' => $config['exportForm'],
             'exportLabel' => $config['exportLabel'],
             'exportUrl' => $exportUrl,
+            'exportPdfLabel' => $config['exportPdfLabel'],
+            'exportPdfUrl' => $exportPdfUrl,
             'header' => $this->buildHeader($item, $office, $slug, $unitCost),
             'columns' => $config['columns'],
             'rows' => $rows,
@@ -85,6 +102,7 @@ class StockLedgerViewService
      *     title: string,
      *     exportForm: string,
      *     exportLabel: string,
+     *     exportPdfLabel: string,
      *     columns: array<string, string>
      * }
      */
@@ -105,19 +123,22 @@ class StockLedgerViewService
             'ppe' => [
                 'title' => 'Property Card (Appendix 69)',
                 'exportForm' => 'pc',
-                'exportLabel' => 'Export Property Card (XLS)',
+                'exportLabel' => 'Export Property Card (Excel)',
+                'exportPdfLabel' => 'Export Property Card (PDF)',
                 'columns' => $propertyColumns,
             ],
             'semi_expendable' => [
                 'title' => 'Semi-Expendable Property Card (Annex A.1)',
                 'exportForm' => 'annex_a1',
-                'exportLabel' => 'Export Annex A.1 Property Card (XLS)',
+                'exportLabel' => 'Export Annex A.1 (Excel)',
+                'exportPdfLabel' => 'Export Annex A.1 (PDF)',
                 'columns' => $propertyColumns,
             ],
             default => [
                 'title' => 'Stock Card (Appendix 58)',
                 'exportForm' => 'sc',
-                'exportLabel' => 'Export Stock Card (XLS)',
+                'exportLabel' => 'Export Stock Card (Excel)',
+                'exportPdfLabel' => 'Export Stock Card (PDF)',
                 'columns' => [
                     'date' => 'Date',
                     'reference' => 'Reference',
@@ -194,7 +215,7 @@ class StockLedgerViewService
      */
     protected function mapRow(array $txn, Item $item, string $slug): array
     {
-        $row = [
+        return [
             'date' => $txn['date'] ?? '',
             'reference' => $txn['reference'] ?? '',
             'type_label' => $this->typeLabel((string) ($txn['type'] ?? '')),
@@ -205,9 +226,14 @@ class StockLedgerViewService
             'balance' => $txn['balance'] ?? 0,
             'remarks' => $txn['remarks'] ?? null,
             'days_to_consume' => $slug === 'consumables' ? ($item->days_to_consume ?? null) : null,
+            'unit_cost' => isset($txn['unit_cost']) && $txn['unit_cost'] !== null && $txn['unit_cost'] !== ''
+                ? (float) $txn['unit_cost']
+                : null,
+            'amount' => isset($txn['amount']) && $txn['amount'] !== null && $txn['amount'] !== ''
+                ? (float) $txn['amount']
+                : null,
+            'property_number' => $txn['property_number'] ?? $txn['item_code'] ?? null,
         ];
-
-        return $row;
     }
 
     protected function typeLabel(string $type): string

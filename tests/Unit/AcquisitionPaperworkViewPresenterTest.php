@@ -90,7 +90,7 @@ class AcquisitionPaperworkViewPresenterTest extends TestCase
 
         $this->assertSame(75, AcquisitionPaperworkViewPresenter::progressPercent($paperwork));
         $this->assertSame('done', AcquisitionPaperworkViewPresenter::workflowSteps($paperwork)[2]['state']);
-        $this->assertNotNull($paperwork->iar_number);
+        $this->assertNotNull($paperwork->purchaseOrder?->inspectionAcceptanceReport?->number ?? $paperwork->iar_number);
     }
 
     public function test_progress_percent_reaches_one_hundred_when_received(): void
@@ -113,6 +113,31 @@ class AcquisitionPaperworkViewPresenterTest extends TestCase
         $this->assertTrue($paperwork->isReceived());
         $this->assertSame('done', AcquisitionPaperworkViewPresenter::workflowSteps($paperwork)[3]['state']);
         $this->assertSame('Received', AcquisitionPaperworkViewPresenter::workflowSteps($paperwork)[3]['statusLabel']);
+    }
+
+    public function test_item_rows_pair_lines_with_receipts_when_received(): void
+    {
+        $paperwork = $this->completeThroughIar($this->createPaperworkWithLine([
+            'purpose' => 'Test acquisition',
+            'pr_date' => now(),
+            'supplier' => 'ABC Trading',
+            'po_date' => now(),
+            'iar_date' => now(),
+            'inspection_officer_name' => 'Inspector',
+            'custodian_name' => 'Custodian',
+        ]));
+
+        $paperwork->lines()->update(['unit_cost' => 50]);
+        app(AcquisitionPaperworkCompletionService::class)->recordCustodyReceipts($paperwork->fresh());
+
+        $view = AcquisitionPaperworkViewPresenter::forPaperwork($paperwork->fresh(['lines.item', 'acquisitions']));
+        $rows = $view['itemRows'];
+
+        $this->assertTrue($view['showReceipts']);
+        $this->assertCount(1, $rows);
+        $this->assertSame(5, $rows[0]['quantity']);
+        $this->assertNotNull($rows[0]['receipt_ref']);
+        $this->assertNotNull($rows[0]['receipt_date']);
     }
 
     /**
@@ -148,13 +173,44 @@ class AcquisitionPaperworkViewPresenterTest extends TestCase
     protected function completeThroughIar(AcquisitionPaperwork $paperwork): AcquisitionPaperwork
     {
         $service = app(AcquisitionPaperworkCompletionService::class);
-
-        $paperwork->lines()->update(['unit_cost' => 50]);
-
         $service->completePr($paperwork->fresh());
-        $service->completePo($paperwork->fresh());
-        $service->completeIar($paperwork->fresh());
 
-        return $paperwork->fresh();
+        $poService = app(\App\Services\PurchaseOrderWorkflowService::class);
+        $po = $poService->createFromApprovedPr($paperwork->fresh());
+        $po->update([
+            'supplier_name' => 'ABC Trading',
+            'supplier_address' => '123 Main St',
+            'mode_of_procurement' => 'Shopping',
+            'place_of_delivery' => 'OWWA RO',
+            'technical_specifications' => 'N/A',
+            'po_date' => now()->toDateString(),
+        ]);
+        $po->lines()->update([
+            'is_ordered' => true,
+            'po_quantity' => 5,
+            'unit_cost' => 50,
+            'amount' => 250,
+        ]);
+        $poService->submit($po->fresh(['lines']));
+        $poService->approve($po->fresh());
+
+        $iarService = app(\App\Services\InspectionAcceptanceReportWorkflowService::class);
+        $iar = $iarService->createFromApprovedPo($po->fresh());
+        $iar->update([
+            'invoice_number' => 'INV100',
+            'invoice_date' => now()->addDay()->toDateString(),
+            'date_inspected' => now()->addDay()->toDateString(),
+            'date_received' => now()->addDays(2)->toDateString(),
+            'inspection_officer_name' => 'Inspector',
+            'custodian_name' => 'Custodian',
+            'iar_date' => now()->toDateString(),
+        ]);
+        $iarService->submit($iar->fresh(['lines']));
+        $iarService->approve($iar->fresh());
+
+        return $paperwork->fresh([
+            'lines.item',
+            'purchaseOrder.inspectionAcceptanceReport',
+        ]);
     }
 }

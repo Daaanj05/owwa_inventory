@@ -53,6 +53,9 @@ class CoverageOverviewWidget extends StatsOverviewWidget
             $to,
             $categoryId,
             $officeIds,
+            categoryIds: $categoryId === null
+                ? \App\Support\InventoryCategoryOptions::procurementAnalyticsCategoryIds()->all()
+                : [],
         );
 
         return [

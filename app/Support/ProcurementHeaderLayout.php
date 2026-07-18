@@ -41,17 +41,16 @@ class ProcurementHeaderLayout
     public static function applyOfficeSectionHeader(array &$values, array $headerMap, string $officeName): void
     {
         $spec = (array) ($headerMap['office_section'] ?? []);
-        $cell = (string) ($spec['cell'] ?? 'A7');
-        $label = (string) ($spec['label'] ?? 'Office/Section : ');
-        $maxChars = (int) ($spec['max_first_line_chars'] ?? 28);
-        $continuationCell = (string) ($spec['continuation_cell'] ?? '');
+        $cell = (string) ($spec['cell'] ?? 'A8');
+        $label = (string) ($spec['label'] ?? '');
+        $name = preg_replace('/\s+/u', ' ', trim($officeName)) ?? '';
 
-        [$first, $rest] = self::splitOfficeSection($officeName, $maxChars);
-        $values[$cell] = $label.$first;
-
-        if ($rest !== '' && $continuationCell !== '') {
-            $values[$continuationCell] = $rest;
+        if ($name === '') {
+            return;
         }
+
+        // Prefer writing the office/section value only (template already carries the label on A7).
+        $values[$cell] = $label !== '' ? $label.$name : $name;
     }
 
     /**

@@ -8,6 +8,7 @@ use App\Models\ItemCategory;
 use App\Models\Office;
 use App\Services\AnalyticsDateRangeService;
 use App\Support\CustodianOfficeScope;
+use App\Support\InventoryCategoryOptions;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Select;
@@ -37,6 +38,16 @@ trait ConfiguresConsumptionFilters
     {
         $this->mountHasFiltersSchema();
 
+        // Native selects with a disabled empty option only stay on "All …"
+        // when the bound state is "" (null lets the browser paint the first enabled option).
+        $this->filters['item_category_ids'] = $this->normalizeEmptySelectValue($this->filters['item_category_ids'] ?? null);
+        $this->filters['base_names'] = $this->normalizeEmptySelectValue($this->filters['base_names'] ?? null);
+
+        if (property_exists($this, 'deferredFilters') && is_array($this->deferredFilters)) {
+            $this->deferredFilters['item_category_ids'] = $this->filters['item_category_ids'];
+            $this->deferredFilters['base_names'] = $this->filters['base_names'];
+        }
+
         $officeIds = $this->normalizeIds($this->filters['office_ids'] ?? null);
         if ($officeIds !== []) {
             return;
@@ -54,6 +65,21 @@ trait ConfiguresConsumptionFilters
         }
     }
 
+    protected function normalizeEmptySelectValue(mixed $value): string
+    {
+        if ($value === null || $value === '' || $value === []) {
+            return '';
+        }
+
+        if (is_array($value)) {
+            $first = reset($value);
+
+            return $first === false || $first === null ? '' : (string) $first;
+        }
+
+        return (string) $value;
+    }
+
     /**
      * @return array<int, \Filament\Schemas\Components\Component|\Filament\Forms\Components\Component>
      */
@@ -62,10 +88,8 @@ trait ConfiguresConsumptionFilters
         $dateRange = app(AnalyticsDateRangeService::class)->currentYearRange();
         $defaultOfficeIds = array_map(strval(...), $this->defaultConsumptionOfficeIds());
         $officeOptions = $this->consumptionOfficeOptions();
-        $categoryOptions = ItemCategory::query()
-            ->orderBy('name')
-            ->pluck('name', 'id')
-            ->mapWithKeys(fn ($name, $id): array => [(string) $id => (string) $name])
+        $categoryOptions = InventoryCategoryOptions::procurementAnalyticsCategories()
+            ->mapWithKeys(fn (ItemCategory $category): array => [(string) $category->id => (string) $category->name])
             ->all();
 
         $components = [
@@ -101,29 +125,31 @@ trait ConfiguresConsumptionFilters
                     ->all()),
             Select::make('item_category_ids')
                 ->label('Category')
-                ->multiple()
-                ->options($categoryOptions)
-                ->placeholder('All categories')
+                ->options(['' => 'All categories'] + $categoryOptions)
+                ->default('')
+                ->selectablePlaceholder(false)
+                ->disableOptionWhen(fn ($value): bool => blank($value))
+                ->native()
                 ->live()
                 ->afterStateUpdated(function (Set $set): void {
-                    $set('base_names', []);
-                    $set('item_ids', []);
+                    $set('base_names', '');
+                    $set('item_ids', '');
                 }),
             Select::make('base_names')
                 ->label('Base item')
-                ->multiple()
+                ->native()
+                ->default('')
                 ->key(fn (): string => 'base_names_'.$this->filterOptionsKey('item_category_ids'))
-                ->placeholder(fn (): string => $this->filterIdList('item_category_ids') !== []
-                    ? 'All base items'
-                    : 'Select category first')
+                ->selectablePlaceholder(false)
+                ->disableOptionWhen(fn ($value): bool => blank($value))
                 ->disabled(fn (): bool => $this->filterIdList('item_category_ids') === [])
                 ->options(function (): array {
                     $categoryIds = $this->filterIdList('item_category_ids');
                     if ($categoryIds === []) {
-                        return [];
+                        return ['' => 'Select category first'];
                     }
 
-                    return Item::query()
+                    return ['' => 'All base items'] + Item::query()
                         ->active()
                         ->whereIn('item_category_id', $categoryIds)
                         ->orderByRaw('COALESCE(base_name, name)')
@@ -138,24 +164,21 @@ trait ConfiguresConsumptionFilters
                         ->all();
                 })
                 ->live()
-                ->afterStateUpdated(fn (Set $set): mixed => $set('item_ids', [])),
+                ->afterStateUpdated(fn (Set $set): mixed => $set('item_ids', '')),
             Select::make('item_ids')
-                ->label('Items / Sub-items')
-                ->multiple()
+                ->label('Sub-Items')
+                ->native()
+                ->default('')
                 ->columnSpanFull()
                 ->key(fn (): string => 'item_ids_'.$this->filterOptionsKey('base_names').'_'.$this->filterOptionsKey('item_category_ids'))
-                ->placeholder(fn (): string => $this->filterStringList('base_names') !== []
-                    ? 'All items'
-                    : 'Select base item first')
-                ->disabled(fn (): bool => $this->filterStringList('base_names') === [])
                 ->options(function (): array {
                     $categoryIds = $this->filterIdList('item_category_ids');
                     $baseNames = $this->filterStringList('base_names');
                     if ($categoryIds === [] || $baseNames === []) {
-                        return [];
+                        return ['' => 'Select base item first'];
                     }
 
-                    return Item::query()
+                    return ['' => 'All sub-items'] + Item::query()
                         ->active()
                         ->whereIn('item_category_id', $categoryIds)
                         ->where(function ($query) use ($baseNames): void {
@@ -168,20 +191,21 @@ trait ConfiguresConsumptionFilters
                         ->get(['id', 'name', 'sub_item'])
                         ->mapWithKeys(fn (Item $item): array => [
                             (string) $item->id => filled($item->sub_item)
-                                ? (string) $item->sub_item.' — '.$item->name
+                                ? (string) $item->sub_item
                                 : (string) $item->name,
                         ])
                         ->all();
                 })
-                ->getOptionLabelsUsing(fn (array $values): array => Item::query()
-                    ->whereIn('id', $values)
-                    ->get(['id', 'name', 'sub_item'])
-                    ->mapWithKeys(fn (Item $item): array => [
-                        (string) $item->id => filled($item->sub_item)
-                            ? (string) $item->sub_item.' — '.$item->name
-                            : (string) $item->name,
-                    ])
-                    ->all()),
+                ->selectablePlaceholder(false)
+                ->disableOptionWhen(fn ($value): bool => blank($value))
+                ->disabled(fn (): bool => $this->filterStringList('base_names') === [])
+                ->getOptionLabelUsing(fn ($value): ?string => Item::query()
+                    ->whereKey($value)
+                    ->get(['name', 'sub_item'])
+                    ->map(fn (Item $item): string => filled($item->sub_item)
+                        ? (string) $item->sub_item
+                        : (string) $item->name)
+                    ->first()),
         ];
 
         if ($includeMovingAverage) {
@@ -208,9 +232,16 @@ trait ConfiguresConsumptionFilters
      */
     protected function filterStringList(string $key): array
     {
+        $raw = $this->filters[$key] ?? null;
+        if ($raw === null || $raw === '') {
+            return [];
+        }
+
+        $values = is_array($raw) ? $raw : [$raw];
+
         return array_values(array_filter(array_map(
             static fn ($value): string => trim((string) $value),
-            (array) ($this->filters[$key] ?? []),
+            $values,
         )));
     }
 
@@ -297,7 +328,11 @@ trait ConfiguresConsumptionFilters
      */
     protected function normalizeIds(mixed $values): array
     {
-        return collect(is_array($values) ? $values : [])
+        if ($values === null || $values === '') {
+            return [];
+        }
+
+        return collect(is_array($values) ? $values : [$values])
             ->flatten()
             ->filter(fn ($id): bool => filled($id) && is_numeric($id))
             ->map(fn ($id): int => (int) $id)
@@ -344,6 +379,11 @@ trait ConfiguresConsumptionFilters
         ];
     }
 
+    protected function isConsumptionItemScoped(?array $filters = null): bool
+    {
+        return $this->resolveConsumptionFilters($filters)['item_ids'] !== [];
+    }
+
     /**
      * @param  array<string, mixed>  $filters
      * @return array<int>
@@ -355,8 +395,8 @@ trait ConfiguresConsumptionFilters
             return $itemIds;
         }
 
-        $baseNames = array_values(array_filter((array) ($filters['base_names'] ?? [])));
-        $categoryIds = $this->normalizeIds($filters['item_category_ids'] ?? []);
+        $baseNames = $this->normalizeStringFilterValues($filters['base_names'] ?? null);
+        $categoryIds = $this->normalizeIds($filters['item_category_ids'] ?? null);
 
         if ($baseNames === [] && $categoryIds === []) {
             return [];
@@ -378,5 +418,22 @@ trait ConfiguresConsumptionFilters
         }
 
         return $query->pluck('id')->map(fn ($id): int => (int) $id)->all();
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    protected function normalizeStringFilterValues(mixed $values): array
+    {
+        if ($values === null || $values === '') {
+            return [];
+        }
+
+        $list = is_array($values) ? $values : [$values];
+
+        return array_values(array_filter(array_map(
+            static fn ($value): string => trim((string) $value),
+            $list,
+        )));
     }
 }

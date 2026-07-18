@@ -119,6 +119,31 @@
         <script src="{{ asset('js/physical-count-scanner.js') }}"></script>
 
         <div class="owwa-physical-count-scan-page owwa-pc-scan-container">
+            @if ($showQtyPrompt)
+                <div class="owwa-pc-scan-card">
+                    <h2 class="owwa-pc-scan-title">Enter counted quantity</h2>
+                    <p class="owwa-pc-scan-subtitle">{{ $pendingItemLabel }}</p>
+                    <div class="mt-4 space-y-3">
+                        <input
+                            type="number"
+                            min="0"
+                            step="1"
+                            wire:model="pendingQty"
+                            class="fi-input block w-full rounded-lg border border-gray-300 px-3 py-2 text-base"
+                            inputmode="numeric"
+                            autofocus
+                        />
+                        <div class="owwa-pc-action-stack">
+                            <button type="button" wire:click="confirmPendingQty" class="fi-btn fi-btn-size-md fi-color fi-color-primary w-full justify-center">
+                                Save quantity
+                            </button>
+                            <button type="button" wire:click="cancelPendingQty" class="fi-btn fi-btn-size-md fi-color fi-color-gray w-full justify-center">
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            @else
             <div class="owwa-pc-scan-card">
                 @if ($scanOnly)
                     <div class="owwa-pc-scan-mode-label">Scan mode</div>
@@ -231,6 +256,7 @@
                         @endforeach
                     </ul>
                 </div>
+            @endif
             @endif
         </div>
     @endif

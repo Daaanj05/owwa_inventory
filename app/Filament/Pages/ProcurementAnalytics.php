@@ -7,7 +7,10 @@ use App\Jobs\GenerateAiProcurementRecommendationJob;
 use App\Models\AiProcurementRun;
 use App\Models\ItemCategory;
 use App\Services\AiProcurementRecommendationService;
+use App\Services\OllamaClient;
 use App\Services\ProcurementDecisionSupportService;
+use App\Services\SemiExpendableEulAnalyticsService;
+use App\Support\InventoryCategoryOptions;
 use App\Support\OwwaExportFilename;
 use BackedEnum;
 use Carbon\Carbon;
@@ -59,6 +62,8 @@ class ProcurementAnalytics extends Page
 
     public ?int $lastAiRunId = null;
 
+    protected ?bool $ollamaAvailable = null;
+
     public ?int $processingRunId = null;
 
     /** @var array{headline: string, priority_actions: array<int, array{item: string, stock: int, suggested: int|null, stock_url: string|null}>, reorder_suggestions: array<int, array{item: string, suggested: int, stock_url: string|null}>}|null */
@@ -80,6 +85,15 @@ class ProcurementAnalytics extends Page
 
         if (! in_array($this->atRiskView, ['all', 'stockouts'], true)) {
             $this->atRiskView = 'all';
+        }
+
+        if ($this->categoryId !== '') {
+            $allowedIds = InventoryCategoryOptions::procurementAnalyticsCategoryIds()
+                ->map(fn ($id): string => (string) $id)
+                ->all();
+            if (! in_array($this->categoryId, $allowedIds, true)) {
+                $this->categoryId = '';
+            }
         }
     }
 
@@ -139,6 +153,16 @@ class ProcurementAnalytics extends Page
 
     public function updatedCategoryId(): void
     {
+        if ($this->categoryId !== '') {
+            $allowedIds = InventoryCategoryOptions::procurementAnalyticsCategoryIds()
+                ->map(fn ($id): string => (string) $id)
+                ->all();
+
+            if (! in_array($this->categoryId, $allowedIds, true)) {
+                $this->categoryId = '';
+            }
+        }
+
         $this->clearGeneratedSummary();
     }
 
@@ -226,16 +250,72 @@ class ProcurementAnalytics extends Page
     {
         $parts = [$this->getPeriodContext()['label']];
 
-        if ($this->categoryId !== '') {
-            $parts[] = ItemCategory::find((int) $this->categoryId)?->name ?? 'Category';
-        }
-
         $officeName = Filament::auth()->user()?->office?->name;
         if (filled($officeName)) {
             $parts[] = $officeName;
         }
 
+        if ($this->categoryId !== '') {
+            $parts[] = ItemCategory::find((int) $this->categoryId)?->name ?? 'Category';
+        }
+
         return implode(' · ', $parts);
+    }
+
+    public function getSummaryScopeLabel(): string
+    {
+        if ($this->categoryId !== '') {
+            return ItemCategory::find((int) $this->categoryId)?->name ?? 'Category';
+        }
+
+        return 'All (excl. PPE)';
+    }
+
+    /** @return \Illuminate\Support\Collection<int, \App\Models\AiProcurementItem> */
+    public function getRecommendationTableRows(): Collection
+    {
+        if ($this->lastAiRunId === null) {
+            return collect();
+        }
+
+        $run = AiProcurementRun::query()
+            ->with([
+                'items.item.category:id,name',
+            ])
+            ->find($this->lastAiRunId);
+
+        return ($run?->items ?? collect())
+            ->sortBy([
+                fn ($row) => match ($row->priority) {
+                    'High' => 0,
+                    'Medium' => 1,
+                    default => 2,
+                },
+                fn ($row) => InventoryCategoryOptions::sortRankForCategory($row->item?->category),
+                fn ($row) => strtolower((string) ($row->item_name ?? '')),
+            ])
+            ->values();
+    }
+
+    public function getLastGeneratedLabel(): ?string
+    {
+        if ($this->lastAiRunId === null) {
+            return null;
+        }
+
+        $run = AiProcurementRun::query()->find($this->lastAiRunId);
+        $timestamp = $run?->ran_at ?? $run?->updated_at;
+
+        return $timestamp?->format('M j, Y g:i A');
+    }
+
+    public function isOllamaAvailable(): bool
+    {
+        if ($this->ollamaAvailable === null) {
+            $this->ollamaAvailable = app(OllamaClient::class)->isAvailable();
+        }
+
+        return $this->ollamaAvailable;
     }
 
     public function getTitle(): string
@@ -252,7 +332,7 @@ class ProcurementAnalytics extends Page
 
     public function getSubheading(): ?string
     {
-        return 'Reorder signals from issuances in your selected period and current stock for your office.';
+        return 'Reorder signals for consumables and semi-expendable supplies (PPE excluded). Semi-expendable useful life is shown as replacement review signals.';
     }
 
     public static function getNavigationLabel(): string
@@ -321,7 +401,58 @@ class ProcurementAnalytics extends Page
     /** @return Collection<int, ItemCategory> */
     public function getItemCategories(): Collection
     {
-        return ItemCategory::orderBy('name')->get();
+        return InventoryCategoryOptions::procurementAnalyticsCategories();
+    }
+
+    /**
+     * Resolved category constraint for queries: selected category, or all PA-scoped IDs (excl. PPE).
+     *
+     * @return array{categoryId: int|null, categoryIds: array<int>}
+     */
+    public function resolveProcurementCategoryScope(): array
+    {
+        if ($this->categoryId !== '') {
+            $id = (int) $this->categoryId;
+
+            return [
+                'categoryId' => $id,
+                'categoryIds' => [],
+            ];
+        }
+
+        return [
+            'categoryId' => null,
+            'categoryIds' => InventoryCategoryOptions::procurementAnalyticsCategoryIds()->all(),
+        ];
+    }
+
+    public function shouldShowEulPanel(): bool
+    {
+        if ($this->categoryId === '') {
+            return true;
+        }
+
+        $category = ItemCategory::query()->find((int) $this->categoryId);
+
+        return $category?->getTemplateSlug() === 'semi_expendable';
+    }
+
+    /**
+     * @return Collection<int, object>
+     */
+    public function getEulReviewRows(): Collection
+    {
+        if (! $this->shouldShowEulPanel()) {
+            return collect();
+        }
+
+        $user = Filament::auth()->user();
+        $officeIds = $user?->office_id ? [(int) $user->office_id] : [];
+
+        return app(SemiExpendableEulAnalyticsService::class)->getReviewRows(
+            officeIds: $officeIds,
+            limit: self::AT_RISK_LIMIT,
+        );
     }
 
     /**
@@ -333,18 +464,18 @@ class ProcurementAnalytics extends Page
         $officeIds = $user?->office_id ? [(int) $user->office_id] : [];
 
         ['from' => $from, 'to' => $to] = $this->resolveDateRange();
-
-        $categoryId = $this->categoryId !== '' ? (int) $this->categoryId : null;
+        $scope = $this->resolveProcurementCategoryScope();
 
         return app(ProcurementDecisionSupportService::class)->getAtRiskRows(
             from: $from,
             to: $to,
-            categoryId: $categoryId,
+            categoryId: $scope['categoryId'],
             officeIds: $officeIds,
             movingAverageMonths: 6,
             forecastHorizonMonths: 3,
             targetCoverMonths: 3,
             limit: $limit,
+            categoryIds: $scope['categoryIds'],
         );
     }
 
@@ -464,16 +595,44 @@ class ProcurementAnalytics extends Page
             default => 2,
         };
 
+        $categoryRank = static fn (object $row): int => (int) ($row->category_sort_rank ?? 99);
+        $itemKey = static fn (object $row): string => strtolower((string) ($row->item_name ?? ''));
+
+        $severityTieBreak = static function (object $a, object $b) use ($priorityRank, $categoryRank, $itemKey): int {
+            return [$priorityRank($a), $categoryRank($a), $itemKey($a)]
+                <=> [$priorityRank($b), $categoryRank($b), $itemKey($b)];
+        };
+
         return match ($this->sortColumn) {
-            'cover' => $this->sortDirection === 'desc'
-                ? $rows->sortByDesc(fn ($row) => $row->months_cover ?? -1)
-                : $rows->sortBy(fn ($row) => $row->months_cover ?? 999),
-            'stockout' => $this->sortDirection === 'desc'
-                ? $rows->sortByDesc(fn ($row) => $row->projected_stockout_date ?? '0000-01-01')
-                : $rows->sortBy(fn ($row) => $row->projected_stockout_date ?? '9999-12-31'),
+            'cover' => $rows->sort(function (object $a, object $b) use ($severityTieBreak): int {
+                $coverA = $a->months_cover ?? ($this->sortDirection === 'desc' ? -1 : 999);
+                $coverB = $b->months_cover ?? ($this->sortDirection === 'desc' ? -1 : 999);
+                $coverCmp = $this->sortDirection === 'desc'
+                    ? ($coverB <=> $coverA)
+                    : ($coverA <=> $coverB);
+
+                return $coverCmp !== 0 ? $coverCmp : $severityTieBreak($a, $b);
+            }),
+            'stockout' => $rows->sort(function (object $a, object $b) use ($severityTieBreak): int {
+                $stockoutA = $a->projected_stockout_date ?? ($this->sortDirection === 'desc' ? '0000-01-01' : '9999-12-31');
+                $stockoutB = $b->projected_stockout_date ?? ($this->sortDirection === 'desc' ? '0000-01-01' : '9999-12-31');
+                $stockoutCmp = $this->sortDirection === 'desc'
+                    ? ($stockoutB <=> $stockoutA)
+                    : ($stockoutA <=> $stockoutB);
+
+                return $stockoutCmp !== 0 ? $stockoutCmp : $severityTieBreak($a, $b);
+            }),
             default => $this->sortDirection === 'desc'
-                ? $rows->sortByDesc($priorityRank)
-                : $rows->sortBy($priorityRank),
+                ? $rows->sort(function (object $a, object $b) use ($priorityRank, $severityTieBreak): int {
+                    $priorityCmp = $priorityRank($b) <=> $priorityRank($a);
+
+                    return $priorityCmp !== 0 ? $priorityCmp : $severityTieBreak($a, $b);
+                })
+                : $rows->sortBy([
+                    $priorityRank,
+                    $categoryRank,
+                    $itemKey,
+                ]),
         };
     }
 
@@ -524,10 +683,9 @@ class ProcurementAnalytics extends Page
 
         try {
             $rows = $this->queryAtRiskRows(self::AT_RISK_LIMIT);
-            $this->actionSummary = $this->buildProcurementActionSummary($rows);
 
             ['from' => $from, 'to' => $to] = $this->resolveDateRange();
-            $categoryId = $this->categoryId !== '' ? (int) $this->categoryId : null;
+            $scope = $this->resolveProcurementCategoryScope();
             $officeIds = Filament::auth()->user()?->office_id ? [(int) Filament::auth()->user()->office_id] : [];
 
             $run = app(AiProcurementRecommendationService::class)->createProcessingRun(
@@ -543,8 +701,9 @@ class ProcurementAnalytics extends Page
                 runId: $run->id,
                 periodFrom: $from->toDateString(),
                 periodTo: $to->toDateString(),
-                categoryId: $categoryId,
+                categoryId: $scope['categoryId'],
                 officeIds: $officeIds,
+                categoryIds: $scope['categoryIds'],
             );
 
             if (config('queue.default') === 'sync') {
@@ -645,6 +804,7 @@ class ProcurementAnalytics extends Page
 
             fputcsv($handle, [
                 'Priority',
+                'Category',
                 'Item',
                 'Office',
                 'Stock',
@@ -660,6 +820,7 @@ class ProcurementAnalytics extends Page
             foreach ($rows as $row) {
                 fputcsv($handle, [
                     $row->priority,
+                    $row->category_name ?? '',
                     $row->item_name,
                     $row->office_name,
                     $row->current_stock,

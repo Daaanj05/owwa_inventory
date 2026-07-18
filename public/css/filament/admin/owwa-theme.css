@@ -863,6 +863,49 @@ button[type="submit"].fi-btn:hover {
     max-width: none !important;
 }
 
+.fi-page.owwa-items-list-page .fi-ta-table {
+    width: max-content !important;
+    min-width: 100% !important;
+    max-width: none !important;
+}
+
+.fi-page.owwa-items-list-page .fi-ta-header-cell,
+.fi-page.owwa-items-list-page .fi-ta-cell {
+    white-space: nowrap;
+}
+
+.fi-page.owwa-items-list-page .fi-ta-header-cell,
+.fi-page.owwa-items-list-page .fi-ta-cell {
+    padding-left: 0.9rem !important;
+    padding-right: 0.9rem !important;
+}
+
+.fi-page.owwa-items-list-page .fi-ta-cell .owwa-item-name-column,
+.fi-page.owwa-items-list-page .fi-ta-cell .owwa-item-base-column,
+.fi-page.owwa-items-list-page .fi-ta-cell .owwa-item-sub-column {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap !important;
+}
+
+.fi-page.owwa-items-list-page .fi-ta-cell {
+    padding-top: 0.5rem !important;
+    padding-bottom: 0.5rem !important;
+}
+
+.fi-page.owwa-items-list-page.owwa-icd--property-plant-and-equipment .fi-ta-header-cell:has(.owwa-item-name-column),
+.fi-page.owwa-items-list-page.owwa-icd--property-plant-and-equipment .fi-ta-cell:has(.owwa-item-name-column) {
+    width: 16rem !important;
+    max-width: 16rem !important;
+}
+
+.fi-page.owwa-items-list-page.owwa-icd--property-plant-and-equipment .fi-ta-header-cell:has(.owwa-item-identifier-column),
+.fi-page.owwa-items-list-page.owwa-icd--property-plant-and-equipment .fi-ta-cell:has(.owwa-item-identifier-column) {
+    width: 18rem !important;
+    max-width: 18rem !important;
+    padding-left: 0.5rem !important;
+}
+
 /* Empty state: connects to content-ctn above, bottom rounding */
 .fi-resource-list-records-page .fi-ta-empty-state {
     background: #ffffff !important;
@@ -1081,23 +1124,26 @@ button[type="submit"].fi-btn:hover {
     flex: 1 1 auto;
     display: flex !important;
     flex-direction: column !important;
-    justify-content: center;
-    align-items: center;
+    justify-content: stretch;
+    align-items: stretch;
     min-height: 0;
+    width: 100%;
 }
 
 .fi-page.owwa-dashboard-page .owwa-chart-pie.owwa-dashboard-chart .fi-wi-chart-canvas-ctn {
-    flex: 0 0 auto !important;
+    flex: 1 1 auto !important;
     width: 100% !important;
-    max-width: min(100%, 22rem) !important;
-    height: 14rem !important;
-    min-height: 14rem !important;
-    max-height: 14rem !important;
-    padding: 0.15rem 0.35rem 0.25rem !important;
+    max-width: 100% !important;
+    min-height: 16rem !important;
+    height: 100% !important;
+    max-height: none !important;
+    padding: 0.35rem 0.5rem 0.5rem !important;
 }
 
 .fi-page.owwa-dashboard-page .owwa-chart-pie.owwa-dashboard-chart canvas {
-    max-height: 14rem !important;
+    max-height: none !important;
+    width: 100% !important;
+    height: 100% !important;
 }
 
 .fi-page.owwa-dashboard-page .owwa-dashboard-chart.owwa-chart-compact .fi-section-header {
@@ -2342,16 +2388,27 @@ button[type="submit"].fi-btn:hover {
 .owwa-chart-compact .owwa-kpi {
     padding: 0.45rem 0.6rem !important;
     cursor: default;
+    pointer-events: none;
     transition: none;
+    border-color: #e8eef5 !important;
+    background: #f8fafc !important;
+    box-shadow: none !important;
 }
 
-.owwa-chart-compact .owwa-kpi:hover {
-    box-shadow: none;
-    border-color: #edf2f7;
+.owwa-chart-compact .owwa-kpi::before {
+    display: none !important;
 }
 
+.owwa-chart-compact .owwa-kpi:hover,
 .owwa-chart-compact .owwa-kpi-accent:hover {
-    border-color: #dce8f7;
+    box-shadow: none !important;
+    border-color: #e8eef5 !important;
+    transform: none !important;
+}
+
+.owwa-chart-compact .owwa-kpi-accent {
+    background: #f8fafc !important;
+    border-color: #e8eef5 !important;
 }
 
 .owwa-chart-compact .owwa-kpi-value {
@@ -2370,7 +2427,7 @@ button[type="submit"].fi-btn:hover {
 }
 
 .owwa-chart-compact.owwa-chart-pie .fi-wi-chart-canvas-ctn {
-    padding: 0.25rem !important;
+    padding: 0.35rem 0.5rem 0.5rem !important;
 }
 
 /* Dashboard acquisition tables — tighter label-to-table spacing */
@@ -2989,15 +3046,18 @@ select.owwa-search-bar {
 }
 
 .owwa-inv-category-page .owwa-data-panel-body {
-    overflow: hidden;
+    overflow-x: auto;
+    overflow-y: visible;
 }
 
 .owwa-stock-levels-table-wrap {
     max-width: 100%;
+    overflow-x: auto;
 }
 
 .owwa-stock-levels-table {
     width: max-content;
+    min-width: 100%;
     max-width: none;
     table-layout: auto;
 }
@@ -3007,18 +3067,288 @@ select.owwa-search-bar {
     white-space: nowrap;
 }
 
+.owwa-stock-levels-table th,
+.owwa-stock-levels-table td {
+    padding-left: 0.9rem;
+    padding-right: 0.9rem;
+}
+
+/* Checkbox column (first) — do not inherit Item widths */
+.owwa-stock-levels-table th.owwa-stock-select,
+.owwa-stock-levels-table td.owwa-stock-select {
+    width: 2.5rem;
+    min-width: 2.5rem;
+    max-width: 2.5rem;
+    padding-left: 0.75rem;
+    padding-right: 0.35rem;
+    text-align: center;
+    vertical-align: middle;
+}
+
+.owwa-stock-levels-table .owwa-stock-select input[type='checkbox'] {
+    width: 1rem;
+    height: 1rem;
+    cursor: pointer;
+}
+
+.owwa-selection-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.25rem 0.6rem;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #1e3a5f;
+    background: #e8eef5;
+    border: 1px solid #c5d4e8;
+    white-space: nowrap;
+}
+
+.owwa-selection-clear {
+    appearance: none;
+    border: none;
+    background: transparent;
+    color: #4b6485;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-decoration: underline;
+    cursor: pointer;
+    padding: 0.15rem 0.25rem;
+}
+
+.owwa-selection-clear:hover {
+    color: #1e3a5f;
+}
+
+.owwa-stock-levels-toolbar-right {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    justify-content: flex-end;
+}
+
+.owwa-stock-selection-controls {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.owwa-stock-levels-toolbar-right .fi-dropdown-panel {
+    min-width: 16rem;
+    max-width: 22rem;
+}
+
+.owwa-stock-levels-toolbar-right .fi-dropdown-list-item-label,
+.owwa-stock-levels-toolbar-right .fi-btn-label {
+    white-space: nowrap;
+    overflow: visible;
+    text-overflow: clip;
+    max-width: none;
+}
+
+/* Issuances list: one-row toolbar (search + optional pills + bulk) */
+.fi-page.owwa-issuances-list--consumables .fi-ta-header-toolbar,
+.fi-page.owwa-issuances-list--property .fi-ta-header-toolbar {
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: wrap !important;
+    align-items: center !important;
+    gap: 0.75rem !important;
+    min-height: unset !important;
+    height: auto !important;
+    overflow: visible !important;
+    padding: 0.25rem 0 0.5rem !important;
+    margin: 0 !important;
+}
+
+.fi-page.owwa-issuances-list--consumables .fi-ta-header-toolbar > div:has(.fi-ta-search-field),
+.fi-page.owwa-issuances-list--property .fi-ta-header-toolbar > div:has(.fi-ta-search-field) {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    align-items: center !important;
+    gap: 0.75rem !important;
+    order: 1 !important;
+    width: auto !important;
+    flex: 1 1 auto !important;
+    min-width: 0 !important;
+}
+
+.fi-page.owwa-issuances-list--consumables .fi-ta-search-field,
+.fi-page.owwa-issuances-list--property .fi-ta-search-field {
+    display: block !important;
+    width: 18rem !important;
+    max-width: 100% !important;
+    margin-right: 0 !important;
+}
+
+/* Beat global `.fi-ta-search-field { margin-right: auto }` so view pills sit beside search */
+.fi-page.owwa-issuances-list--consumables .fi-ta-ctn .fi-ta-header-toolbar > div:has(.fi-ta-search-field) .fi-ta-search-field,
+.fi-page.owwa-issuances-list--consumables .fi-ta-ctn .fi-ta-header-toolbar > :nth-child(2) .fi-ta-search-field {
+    flex: 0 0 auto !important;
+    width: 18rem !important;
+    max-width: 100% !important;
+    margin-right: 0 !important;
+}
+
+.fi-page.owwa-issuances-list--consumables .fi-ta-ctn .fi-ta-header-toolbar > div:has(.fi-ta-search-field) .owwa-issuances-view-tabs {
+    flex: 0 0 auto !important;
+    margin-left: 0 !important;
+    margin-right: auto !important;
+}
+
+.fi-page.owwa-issuances-list--consumables .owwa-issuances-view-tabs {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    flex-shrink: 0;
+}
+
+.fi-page.owwa-issuances-list--consumables .owwa-issuances-view-tabs.is-disabled {
+    opacity: 0.45;
+    pointer-events: none;
+}
+
+.fi-page.owwa-issuances-list--consumables .owwa-issuances-view-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 1.25rem;
+    margin-left: 0.35rem;
+    padding: 0.05rem 0.35rem;
+    border-radius: 999px;
+    background: #dbeafe;
+    color: #1e3a5f;
+    font-size: 0.7rem;
+    font-weight: 700;
+    line-height: 1.1;
+}
+
+.fi-page.owwa-issuances-list--consumables .fi-ta-actions,
+.fi-page.owwa-issuances-list--property .fi-ta-actions,
+.fi-page.owwa-issuances-list--consumables .fi-ta-header-toolbar .fi-ta-actions,
+.fi-page.owwa-issuances-list--property .fi-ta-header-toolbar .fi-ta-actions {
+    order: 2 !important;
+    margin-left: auto !important;
+    justify-content: flex-end !important;
+    width: auto !important;
+    flex: 0 0 auto !important;
+}
+
+.fi-page.owwa-issuances-list--consumables .fi-ta-selection-indicator,
+.fi-page.owwa-issuances-list--property .fi-ta-selection-indicator {
+    width: 100%;
+}
+
+.fi-page.owwa-issuances-list--consumables .fi-ta-selection-indicator .fi-ac,
+.fi-page.owwa-issuances-list--property .fi-ta-selection-indicator .fi-ac,
+.fi-page.owwa-issuances-list--consumables .fi-ta-selection-indicator .fi-btn-group,
+.fi-page.owwa-issuances-list--property .fi-ta-selection-indicator .fi-btn-group,
+.fi-page.owwa-issuances-list--consumables .fi-ta-selection-indicator > div:last-child,
+.fi-page.owwa-issuances-list--property .fi-ta-selection-indicator > div:last-child {
+    margin-left: auto;
+}
+
+.fi-page.owwa-issuances-list--consumables .fi-sc-component,
+.fi-page.owwa-issuances-list--consumables .fi-sc > .fi-grid,
+.fi-page.owwa-issuances-list--consumables .fi-page-content > .fi-sc,
+.fi-page.owwa-issuances-list--property .fi-sc-component,
+.fi-page.owwa-issuances-list--property .fi-sc > .fi-grid,
+.fi-page.owwa-issuances-list--property .fi-page-content > .fi-sc {
+    row-gap: 0.5rem !important;
+    gap: 0.5rem !important;
+}
+
+/* Item is 2nd column after checkbox */
 .owwa-stock-levels-table td.owwa-cell-primary,
-.owwa-stock-levels-table th:first-child {
-    min-width: 9rem;
+.owwa-stock-levels-table th:nth-child(2) {
+    min-width: 16rem;
     max-width: 16rem;
+}
+
+.owwa-stock-levels-table--simple {
+    width: max-content;
+    min-width: 0;
+    table-layout: fixed;
+}
+
+.owwa-stock-levels-table--simple td.owwa-cell-primary,
+.owwa-stock-levels-table--simple th:nth-child(2) {
+    min-width: 14rem;
+    max-width: 22rem;
+    width: 22rem;
+}
+
+.owwa-stock-levels-table--simple th:nth-child(3),
+.owwa-stock-levels-table--simple td:nth-child(3) {
+    min-width: 7rem;
+    width: 7rem;
+}
+
+.owwa-stock-levels-table--simple th:nth-child(4),
+.owwa-stock-levels-table--simple td:nth-child(4),
+.owwa-stock-levels-table--simple th:nth-child(5),
+.owwa-stock-levels-table--simple td:nth-child(5) {
+    min-width: 5.5rem;
+    width: 5.5rem;
+}
+
+.owwa-stock-levels-table--simple th:nth-child(6),
+.owwa-stock-levels-table--simple td:nth-child(6) {
+    min-width: 5rem;
+    width: 5rem;
+}
+
+.owwa-stock-levels-table--tagged td.owwa-cell-primary,
+.owwa-stock-levels-table--tagged th:nth-child(2) {
+    min-width: 18rem;
+    max-width: 18rem;
+}
+
+.owwa-stock-levels-table--tagged th:nth-child(3),
+.owwa-stock-levels-table--tagged td:nth-child(3) {
+    min-width: 7rem;
+    width: 7rem;
+}
+
+.owwa-stock-levels-table--tagged th:nth-child(4),
+.owwa-stock-levels-table--tagged td:nth-child(4) {
+    min-width: 11.5rem;
+    width: 11.5rem;
+}
+
+.owwa-stock-levels-table--tagged th:nth-child(5),
+.owwa-stock-levels-table--tagged td:nth-child(5) {
+    min-width: 10rem;
+    width: 10rem;
+}
+
+.owwa-stock-levels-table--tagged th:nth-child(6),
+.owwa-stock-levels-table--tagged td:nth-child(6),
+.owwa-stock-levels-table--tagged th:nth-child(7),
+.owwa-stock-levels-table--tagged td:nth-child(7),
+.owwa-stock-levels-table--tagged th:nth-child(8),
+.owwa-stock-levels-table--tagged td:nth-child(8) {
+    min-width: 5.5rem;
+    width: 5.5rem;
+}
+
+.owwa-stock-levels-table--tagged th:nth-child(7),
+.owwa-stock-levels-table--tagged td:nth-child(7) {
+    min-width: 7rem;
+    width: 7rem;
 }
 
 .owwa-stock-levels-table td.owwa-cell-primary button {
     display: block;
-    max-width: 16rem;
+    max-width: 100%;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+.owwa-stock-levels-table--simple td.owwa-cell-primary button {
+    max-width: 20rem;
 }
 
 /* Stock levels: scoped selects — solid fill + border (Filament can reset native selects) */
@@ -3135,6 +3465,23 @@ select.owwa-search-bar {
 
 .owwa-data-panel-body {
     overflow: hidden;
+}
+
+.owwa-acquisition-items-table-wrap {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+}
+
+.owwa-acquisition-items-table th:nth-child(1),
+.owwa-acquisition-items-table td:nth-child(1) {
+    white-space: nowrap;
+    width: 7.5rem;
+}
+
+.owwa-acquisition-items-table th:nth-child(2),
+.owwa-acquisition-items-table td:nth-child(2) {
+    min-width: 12rem;
 }
 
 .owwa-table-wrap {
@@ -3267,6 +3614,26 @@ select.owwa-search-bar {
     color: #64748b;
 }
 
+.owwa-pa-eul-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.15rem 0.5rem;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    line-height: 1.2;
+}
+
+.owwa-pa-eul-badge--expired {
+    background: #fef2f2;
+    color: #b91c1c;
+}
+
+.owwa-pa-eul-badge--nearing {
+    background: #fffbeb;
+    color: #b45309;
+}
+
 .owwa-pa-summary-body {
     display: flex;
     flex-direction: column;
@@ -3319,6 +3686,208 @@ select.owwa-search-bar {
     color: #1e6fbe;
 }
 
+.owwa-pa-generate-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0.35rem;
+    flex-shrink: 0;
+}
+
+.owwa-pa-generate-hint {
+    margin: 0;
+    font-size: 0.6875rem;
+    color: #64748b;
+}
+
+.owwa-pa-summary-footer {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.35rem;
+}
+
+.owwa-pa-generate-btn--footer {
+    min-width: 12rem;
+}
+
+.owwa-pa-ai-recommendation-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.85rem 1rem 0;
+}
+
+.owwa-pa-ai-recommendation .owwa-pa-ai-unavailable,
+.owwa-pa-ai-recommendation .owwa-pa-callout {
+    margin: 0.85rem 1rem 0;
+}
+
+.owwa-pa-summary-table-wrap {
+    margin-top: 0.75rem;
+    border-top: 1px solid #e2e8f0;
+}
+
+.owwa-pa-summary-table {
+    width: 100%;
+    table-layout: fixed;
+    border-collapse: collapse;
+    font-size: 0.8125rem;
+}
+
+.owwa-pa-summary-table th,
+.owwa-pa-summary-table td {
+    width: calc(100% / 6);
+    padding: 0.55rem 0.65rem;
+    border-bottom: 1px solid #f1f5f9;
+    text-align: center;
+    vertical-align: middle;
+    line-height: 1.4;
+    color: #334155;
+}
+
+.owwa-pa-summary-table th {
+    font-size: 0.6875rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #64748b;
+    background: #f8fafc;
+}
+
+.owwa-pa-summary-table td:nth-child(2),
+.owwa-pa-summary-table td:nth-child(3) {
+    text-align: left;
+    word-break: break-word;
+}
+
+.owwa-pa-summary-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.owwa-status-medium {
+    background: #fff7ed;
+    color: #9a3412;
+    border: 1px solid #fed7aa;
+}
+
+.owwa-pa-summary-intro {
+    min-width: 0;
+    flex: 1;
+}
+
+.owwa-pa-summary-status {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.35rem 0.5rem;
+    margin-top: 0.55rem;
+    font-size: 0.75rem;
+    line-height: 1.45;
+    color: #64748b;
+}
+
+.owwa-pa-summary-status-sep {
+    color: #cbd5e1;
+}
+
+.owwa-pa-summary-status-pill {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.15rem 0.5rem;
+    border-radius: 999px;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    line-height: 1.2;
+}
+
+.owwa-pa-summary-status-pill--offline {
+    background: #fffbeb;
+    color: #b45309;
+    border: 1px solid #fde68a;
+}
+
+.owwa-pa-system-summary-label {
+    margin: 0 0 0.35rem;
+    font-size: 0.6875rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #64748b;
+}
+
+.owwa-pa-ai-narrative-details {
+    margin-top: 0.75rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.75rem;
+    background: #fff;
+    overflow: hidden;
+}
+
+.owwa-pa-ai-narrative-summary {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.35rem 0.75rem;
+    padding: 0.75rem 1rem;
+    cursor: pointer;
+    list-style: none;
+    background: #f8fafc;
+    border-bottom: 1px solid transparent;
+}
+
+.owwa-pa-ai-narrative-details[open] .owwa-pa-ai-narrative-summary {
+    border-bottom-color: #e2e8f0;
+}
+
+.owwa-pa-ai-narrative-summary::-webkit-details-marker {
+    display: none;
+}
+
+.owwa-pa-ai-narrative-summary-title {
+    font-size: 0.8125rem;
+    font-weight: 700;
+    color: #334155;
+}
+
+.owwa-pa-ai-narrative-summary-hint {
+    font-size: 0.75rem;
+    color: #64748b;
+}
+
+.owwa-pa-ai-narrative-details .owwa-pa-ai-recommendation {
+    margin-top: 0;
+    border: none;
+    border-radius: 0;
+}
+
+.owwa-pa-ai-recommendation-head-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.5rem 0.75rem;
+    width: 100%;
+}
+
+.owwa-pa-ai-recommendation .owwa-pr-ai-result-head {
+    justify-content: flex-end;
+}
+
+.owwa-pa-ai-narrative-body {
+    font-size: 0.9375rem;
+    line-height: 1.65;
+}
+
+.owwa-pa-ai-narrative-body > p:first-child::before {
+    content: '\201C';
+    color: #93c5fd;
+    font-size: 1.125rem;
+    font-weight: 700;
+    margin-right: 0.15rem;
+}
+
 .owwa-pa-ai-insight {
     border-radius: 0.75rem;
     border: 1px solid #e2e8f0;
@@ -3342,11 +3911,22 @@ select.owwa-search-bar {
 }
 
 .owwa-pa-ai-recommendation {
-    margin-top: 0.75rem;
+    margin-top: 0;
     border-radius: 0.75rem;
     border: 1px solid #e2e8f0;
-    background: #fff;
+    border-left: 3px solid #2563eb;
+    background: linear-gradient(135deg, #f8fbff 0%, #ffffff 60%);
     overflow: hidden;
+}
+
+.owwa-pa-ai-recommendation .owwa-pa-summary-table-wrap {
+    padding: 0 1rem 0.85rem;
+    border-top: 1px solid #e2e8f0;
+    margin-top: 0;
+}
+
+.owwa-pa-ai-recommendation .owwa-pa-ai-narrative-body {
+    padding-top: 0.5rem;
 }
 
 .owwa-pa-ai-recommendation-head {
@@ -3416,6 +3996,11 @@ select.owwa-search-bar {
 
 .owwa-pr-ai-loading--inset {
     margin-top: 0.25rem;
+}
+
+.owwa-pr-ai-loading--accent {
+    border-left: 3px solid #2563eb;
+    background: linear-gradient(135deg, #f8fbff 0%, #f8fafc 100%);
 }
 
 .owwa-pa-filter-chips {
@@ -5281,6 +5866,10 @@ button.owwa-pagination-page:hover {
     pointer-events: none;
 }
 
+.owwa-pa-card--summary::before {
+    background: #1e6fbe;
+}
+
 .owwa-pa-card > * {
     position: relative;
     z-index: 2;
@@ -5378,6 +5967,93 @@ button.owwa-pagination-page:hover {
 
 @keyframes owwa-pr-spin {
     to { transform: rotate(360deg); }
+}
+
+/* Busy export / AI generation overlay — above Filament modals */
+.owwa-busy-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 200;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1.25rem;
+    background: rgba(15, 23, 42, 0.45);
+    backdrop-filter: blur(2px);
+}
+
+.owwa-busy-dialog {
+    width: min(100%, 26rem);
+    border-radius: 1rem;
+    background: #fff !important;
+    color: #0f172a;
+    border: 1px solid #e2e8f0;
+    box-shadow: 0 20px 40px rgba(15, 23, 42, 0.18);
+    padding: 1.5rem 1.35rem;
+    text-align: center;
+}
+
+.owwa-busy-spinner {
+    width: 2.25rem;
+    height: 2.25rem;
+    margin: 0 auto 0.85rem;
+    border: 3px solid #e2e8f0;
+    border-top-color: #1e3a5f;
+    border-radius: 50%;
+    animation: owwa-pr-spin 0.85s linear infinite;
+}
+
+.owwa-busy-title {
+    margin: 0 0 0.35rem;
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: #0f172a;
+}
+
+.owwa-busy-message {
+    margin: 0;
+    font-size: 0.875rem;
+    color: #475569;
+    line-height: 1.45;
+}
+
+.owwa-busy-dismiss {
+    margin-top: 1rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 2.25rem;
+    padding: 0.4rem 0.9rem;
+    border-radius: 0.55rem;
+    border: 1px solid #cbd5e1;
+    background: #f8fafc;
+    color: #0f172a;
+    font-size: 0.875rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.owwa-busy-dismiss:hover {
+    background: #f1f5f9;
+}
+
+.owwa-busy-hint {
+    margin: 0.75rem 0 0;
+    font-size: 0.75rem;
+    color: #64748b;
+}
+
+body.owwa-busy-active {
+    cursor: progress;
+}
+
+body.owwa-busy-active .fi-sidebar-nav-item,
+body.owwa-busy-active .fi-topbar a {
+    pointer-events: auto;
+}
+
+[x-cloak] {
+    display: none !important;
 }
 
 .owwa-pr-ai-loading-title {
@@ -5687,6 +6363,22 @@ button.owwa-pagination-page:hover {
     padding-right: 1.75rem;
 }
 
+/* Tighten gap between modal title and first form fields (e.g. Item create) */
+.fi-modal-window.owwa-view-record-modal .fi-modal-header {
+    padding-top: 0.75rem !important;
+    padding-bottom: 0.15rem !important;
+}
+
+.fi-modal-window.owwa-view-record-modal .fi-modal-content {
+    padding-top: 0.25rem !important;
+    padding-bottom: 0.35rem !important;
+}
+
+.fi-modal-window.owwa-view-record-modal .fi-section-header:not(:has(.fi-section-header-heading)),
+.fi-modal-window.owwa-view-record-modal .fi-section-header:has(.fi-section-header-heading:empty) {
+    display: none !important;
+}
+
 @media (min-width: 640px) {
     .fi-modal-window.owwa-view-record-modal .fi-modal-header,
     .fi-modal-window.owwa-view-record-modal .fi-modal-content,
@@ -5696,13 +6388,79 @@ button.owwa-pagination-page:hover {
     }
 }
 
-.fi-modal-window.owwa-view-record-modal .fi-modal-footer {
-    padding-top: 0.75rem;
-    padding-bottom: 0.85rem;
+/* Rich PR / PO picker option rows inside Selects */
+.owwa-doc-picker-option {
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+    padding: 0.15rem 0;
+    line-height: 1.25;
+    text-align: left;
 }
 
-/* Avoid modal body growing and leaving a tall empty band above Close */
+.owwa-doc-picker-option__title {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #0f172a;
+}
+
+.owwa-doc-picker-option__purpose {
+    font-size: 0.8125rem;
+    font-weight: 400;
+    color: #334155;
+}
+
+.owwa-doc-picker-option__meta {
+    font-size: 0.75rem;
+    font-weight: 400;
+    color: #64748b;
+}
+
+.dark .owwa-doc-picker-option__title {
+    color: #f1f5f9;
+}
+
+.dark .owwa-doc-picker-option__purpose {
+    color: #cbd5e1;
+}
+
+.dark .owwa-doc-picker-option__meta {
+    color: #94a3b8;
+}
+
+/* Choose PR / Choose PO — keep option lists scrollable inside the modal */
+.fi-modal-window-ctn:has(.owwa-doc-picker-modal) {
+    overflow: visible !important;
+}
+
+.fi-modal-window.owwa-doc-picker-modal {
+    overflow: visible !important;
+}
+
+.fi-modal-window.owwa-doc-picker-modal .fi-modal-content {
+    overflow: visible !important;
+}
+
+.owwa-doc-picker-select .fi-select-input .fi-dropdown-panel,
+.fi-modal-window.owwa-doc-picker-modal .fi-select-input .fi-dropdown-panel {
+    max-height: min(22rem, 55vh) !important;
+    overflow-y: auto !important;
+    overscroll-behavior: contain;
+}
+
+.fi-modal-window.owwa-view-record-modal .fi-modal-footer {
+    padding-top: 0.45rem;
+    padding-bottom: 0.65rem;
+}
+
+/*
+ * Bottom whitespace under Description was from content flex-growing to fill the
+ * tall record-modal shell while the sticky footer stayed at the bottom.
+ * Keep content hug its fields; do not stretch empty space above the buttons.
+ */
+.fi-modal-window.owwa-view-record-modal.owwa-record-modal .fi-modal-content,
 .fi-modal-window.owwa-view-record-modal .fi-modal-content {
+    flex: 0 1 auto !important;
     flex-grow: 0 !important;
 }
 
@@ -6672,6 +7430,11 @@ button.owwa-pagination-page:hover {
     min-height: 0;
 }
 
+/* Compact create/edit forms: do not stretch empty space above sticky footer */
+.fi-modal-window.owwa-record-modal.owwa-view-record-modal:not(.owwa-acquisition-paperwork-modal):not(.owwa-requisition-employee-modal) .fi-modal-content {
+    flex: 0 1 auto !important;
+}
+
 .fi-modal-window.owwa-record-modal .fi-modal-footer,
 .fi-modal-window.owwa-physical-count-modal .fi-modal-footer {
     position: sticky;
@@ -6832,6 +7595,148 @@ button.owwa-pagination-page:hover {
     width: 100%;
 }
 
+.fi-modal-window.owwa-record-modal .owwa-linked-requisitions {
+    max-width: 42rem;
+}
+
+.fi-modal-window.owwa-record-modal .owwa-linked-requisitions .fi-select-input {
+    min-height: 2.25rem;
+}
+
+.fi-modal-window.owwa-record-modal .owwa-linked-requisitions [class*='badge'],
+.fi-modal-window.owwa-record-modal .owwa-linked-requisitions [class*='tag'] {
+    max-width: 12rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.owwa-linked-req-summary {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+}
+
+.owwa-linked-req-chip {
+    display: inline-flex;
+    align-items: center;
+    border: 1px solid #cbd5e1;
+    border-radius: 999px;
+    background: #f8fafc;
+    color: #334155;
+    font-size: 0.8125rem;
+    line-height: 1.25;
+    padding: 0.2rem 0.65rem;
+}
+
+.owwa-zero-stock-req-picker {
+    width: 100%;
+}
+
+.owwa-zero-stock-req-empty {
+    margin: 0;
+    color: #64748b;
+    font-size: 0.875rem;
+}
+
+.owwa-zero-stock-req-table-wrap {
+    overflow-x: auto;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.5rem;
+}
+
+.owwa-zero-stock-req-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.875rem;
+}
+
+.owwa-zero-stock-req-table th,
+.owwa-zero-stock-req-table td {
+    padding: 0.65rem 0.75rem;
+    border-bottom: 1px solid #e2e8f0;
+    text-align: left;
+    vertical-align: middle;
+}
+
+.owwa-zero-stock-req-table thead th {
+    background: #f8fafc;
+    color: #475569;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.owwa-zero-stock-req-row {
+    cursor: pointer;
+}
+
+.owwa-zero-stock-req-row:hover {
+    background: #f8fafc;
+}
+
+.owwa-zero-stock-req-row.is-selected {
+    background: #eff6ff;
+}
+
+.owwa-zero-stock-req-check {
+    width: 2.25rem;
+}
+
+.owwa-zero-stock-req-num {
+    text-align: right !important;
+    white-space: nowrap;
+}
+
+.owwa-zero-stock-req-checkbox {
+    width: 1rem;
+    height: 1rem;
+}
+
+.owwa-issuance-batch-table-wrap {
+    overflow-x: auto;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.625rem;
+}
+
+.owwa-issuance-batch-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.875rem;
+}
+
+.owwa-issuance-batch-table th,
+.owwa-issuance-batch-table td {
+    padding: 0.65rem 0.75rem;
+    border-bottom: 1px solid #e2e8f0;
+    text-align: left;
+    vertical-align: top;
+}
+
+.owwa-issuance-batch-table thead th,
+.owwa-issuance-batch-table tfoot th {
+    background: #f8fafc;
+    color: #475569;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.owwa-issuance-batch-table tbody tr:last-child td,
+.owwa-issuance-batch-table tfoot tr:last-child th {
+    border-bottom: 0;
+}
+
+.owwa-issuance-batch-num {
+    text-align: right !important;
+    white-space: nowrap;
+}
+
+.owwa-issuance-batch-meta {
+    display: block;
+    margin-top: 0.15rem;
+    color: #64748b;
+    font-size: 0.75rem;
+}
+
 .fi-modal-window.owwa-record-modal .owwa-acquisition-lines-repeater > table > thead > tr > th,
 .fi-modal-window.owwa-record-modal .owwa-acquisition-lines-repeater > table > tbody > tr > td {
     vertical-align: top;
@@ -6959,8 +7864,17 @@ button.owwa-pagination-page:hover {
 }
 
 .fi-modal-window.owwa-record-modal .fi-fo-table-repeater .fi-fo-table-repeater-actions {
-    justify-content: center;
+    justify-content: flex-end;
     overflow: visible;
+}
+
+.fi-modal-window.owwa-record-modal .owwa-acquisition-lines-repeater > table > thead > tr > th:has(.fi-fo-table-repeater-actions),
+.fi-modal-window.owwa-record-modal .owwa-acquisition-lines-repeater > table > tbody > tr > td:has(.fi-fo-table-repeater-actions),
+.fi-modal-window.owwa-record-modal .owwa-acquisition-lines-repeater > table .fi-fo-table-repeater-empty-header-cell {
+    width: 3rem !important;
+    min-width: 3rem !important;
+    max-width: 3rem !important;
+    padding-inline: 0.25rem !important;
 }
 
 .fi-modal-window.owwa-record-modal .fi-fo-table-repeater > table > thead > tr > th {
@@ -7092,6 +8006,53 @@ button.owwa-pagination-page:hover {
 /* Requisition create/edit modal — hide Category/Item select clear (X) button */
 .fi-modal-window.owwa-record-modal .owwa-requisition-items-repeater .fi-select-input-value-remove-btn {
     display: none !important;
+}
+
+/* Acquisition PR/PO/IAR line items — hide Item select clear (X) button */
+.fi-modal-window.owwa-record-modal .owwa-acquisition-lines-repeater .fi-select-input-value-remove-btn {
+    display: none !important;
+}
+
+.owwa-acquisition-doc-tabs-wrap {
+    margin: 0.15rem 0 0.65rem;
+    padding: 0 0.15rem;
+}
+
+.owwa-acquisition-doc-tabs {
+    margin-top: 0;
+}
+
+.owwa-acquisition-doc-tab {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
+}
+
+.owwa-acquisition-doc-tab.is-active {
+    color: #1e6fbe;
+    border-color: #93c5fd;
+    background: #eff6ff;
+}
+
+.owwa-acquisition-docs-table .fi-ta-actions-header-cell {
+    width: 3rem;
+    min-width: 3rem;
+    max-width: 3.5rem;
+    padding-inline: 0.35rem !important;
+}
+
+.owwa-acquisition-docs-table .fi-ta-row > .fi-ta-cell:has(.fi-ta-actions) {
+    width: 3rem;
+    min-width: 3rem;
+    max-width: 3.5rem;
+    padding-inline: 0.35rem !important;
+    white-space: nowrap;
+}
+
+.owwa-acquisition-docs-table .fi-ta-actions {
+    gap: 0.15rem;
+    justify-content: flex-end;
 }
 
 /* Requisition create modal — Request Items section */
@@ -7992,6 +8953,38 @@ button.owwa-pagination-page:hover {
 
 .owwa-stock-actions {
     white-space: nowrap;
+    text-align: right;
+}
+
+.owwa-data-table.owwa-stock-levels-table {
+    width: max-content;
+    min-width: 100%;
+    max-width: none;
+    table-layout: auto;
+}
+
+.owwa-stock-levels-table th.owwa-stock-actions,
+.owwa-stock-levels-table td.owwa-stock-actions {
+    width: 3.5rem;
+    min-width: 3.5rem;
+    max-width: 3.5rem;
+    padding-left: 0.25rem;
+    padding-right: 0.5rem;
+    text-align: right;
+    white-space: nowrap;
+}
+
+.owwa-stock-levels-table th.owwa-status,
+.owwa-stock-levels-table td.owwa-status {
+    width: 5.5rem;
+    min-width: 5.5rem;
+    max-width: 5.5rem;
+}
+
+.owwa-stock-actions-trigger {
+    display: flex;
+    justify-content: flex-end;
+    width: 100%;
 }
 
 @media (max-width: 767px) {
@@ -8832,6 +9825,7 @@ button.owwa-pagination-page:hover {
     color: #6b7280;
     line-height: 1.35;
     display: -webkit-box;
+    line-clamp: 2;
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
     overflow: hidden;

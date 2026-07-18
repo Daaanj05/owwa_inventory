@@ -32,6 +32,7 @@ class AiProcurementRecommendationService
 
     /**
      * @param  array<int>  $officeIds
+     * @param  array<int>  $categoryIds
      */
     public function processRun(
         int $runId,
@@ -39,6 +40,7 @@ class AiProcurementRecommendationService
         string $periodTo,
         ?int $categoryId,
         array $officeIds,
+        array $categoryIds = [],
     ): void {
         $run = AiProcurementRun::query()->findOrFail($runId);
 
@@ -50,6 +52,10 @@ class AiProcurementRecommendationService
             $from = Carbon::parse($periodFrom)->startOfDay();
             $to = Carbon::parse($periodTo)->endOfDay();
 
+            if ($categoryId === null && $categoryIds === []) {
+                $categoryIds = \App\Support\InventoryCategoryOptions::procurementAnalyticsCategoryIds()->all();
+            }
+
             $rows = $this->decisionSupport->getAtRiskRows(
                 from: $from,
                 to: $to,
@@ -59,9 +65,12 @@ class AiProcurementRecommendationService
                 forecastHorizonMonths: 3,
                 targetCoverMonths: 3,
                 limit: self::AT_RISK_LIMIT,
+                categoryIds: $categoryIds,
             );
 
-            $categoryName = $categoryId ? (ItemCategory::find($categoryId)?->name ?? null) : null;
+            $categoryName = $categoryId
+                ? (ItemCategory::find($categoryId)?->name ?? null)
+                : 'Consumables & Semi-Expendable (excl. PPE)';
             $high = $rows->where('priority', 'High')->count();
             $medium = $rows->where('priority', 'Medium')->count();
             $pairs = $rows->count();

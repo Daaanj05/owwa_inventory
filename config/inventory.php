@@ -62,6 +62,22 @@ return [
         'medical_equipment' => 'MD',
     ],
 
+    // PPE Type of PPE (Appendix 73) — separate from semi catalog_class_codes.
+    'ppe_class_codes' => [
+        'land' => 'LA',
+        'land_improvements' => 'LI',
+        'infrastructure_assets' => 'IA',
+        'buildings_other_structures' => 'BS',
+        'machinery_equipment' => 'ME',
+        'heavy_equipment' => 'HE',
+        'technical_scientific_equipment' => 'TS',
+        'office_equipment' => 'OE',
+        'transportation_equipment' => 'TE',
+        'motor_vehicle' => 'MV',
+        'furniture_fixtures_books' => 'FF',
+        'other_ppe' => 'OP',
+    ],
+
     // Legacy key aliases — prefer catalog_class_codes + UacsObjectCode.
     'semi_supply_type_codes' => [
         'information_technology' => 'IT',

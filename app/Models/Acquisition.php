@@ -17,6 +17,8 @@ class Acquisition extends Model
         'reference_code', 'item_id', 'office_id', 'quantity', 'unit_cost',
         'acquisition_date', 'source', 'remarks', 'recorded_by',
         'acquisition_paperwork_id', 'acquisition_paperwork_line_id',
+        'purchase_order_id', 'purchase_order_line_id',
+        'inspection_acceptance_report_id', 'inspection_acceptance_report_line_id',
     ];
 
     protected function casts(): array
@@ -55,5 +57,25 @@ class Acquisition extends Model
     public function acquisitionPaperworkLine(): BelongsTo
     {
         return $this->belongsTo(AcquisitionPaperworkLine::class);
+    }
+
+    public function purchaseOrder(): BelongsTo
+    {
+        return $this->belongsTo(PurchaseOrder::class);
+    }
+
+    public function purchaseOrderLine(): BelongsTo
+    {
+        return $this->belongsTo(PurchaseOrderLine::class);
+    }
+
+    public function inspectionAcceptanceReport(): BelongsTo
+    {
+        return $this->belongsTo(InspectionAcceptanceReport::class);
+    }
+
+    public function inspectionAcceptanceReportLine(): BelongsTo
+    {
+        return $this->belongsTo(InspectionAcceptanceReportLine::class);
     }
 }

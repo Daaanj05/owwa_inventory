@@ -61,6 +61,9 @@ return [
         'detail' => [
             'start_row' => 12,
             'end_row' => 32,
+            'template_detail_rows' => 21,
+            'expand_insert_before_row' => 33,
+            'max_rows' => 200,
             'recap_start_row' => 36,
             'recap_end_row' => 51,
             'style_row' => 12,
@@ -96,6 +99,11 @@ return [
         ],
         'signature_line_row' => 52,
         'signature_line_columns' => ['A', 'F', 'H'],
+        'signature_line_placeholders' => [
+            'A' => '_____________________________________________',
+            'F' => '__________________________',
+            'H' => '______________',
+        ],
     ],
 
     'PAR' => [
@@ -107,7 +115,9 @@ return [
         ],
         'detail' => [
             'start_row' => 11,
-            'max_rows' => 30,
+            'template_detail_rows' => 30,
+            'expand_insert_before_row' => 44,
+            'max_rows' => 200,
             'style_row' => 11,
             'highest_column' => 'F',
             'columns' => [
@@ -127,6 +137,14 @@ return [
                 'F' => 'amount',
             ],
         ],
+        'signatures' => [
+            'received_by_name' => 'A45',
+            'issued_by_name' => 'D45',
+            'received_by_position' => 'A47',
+            'issued_by_position' => 'D47',
+            'received_by_date' => 'A49',
+            'issued_by_date' => 'D49',
+        ],
     ],
 
     'ICS' => [
@@ -138,17 +156,19 @@ return [
         ],
         'detail' => [
             'start_row' => 12,
-            'max_rows' => 30,
+            'template_detail_rows' => 30,
+            'expand_insert_before_row' => 44,
+            'max_rows' => 200,
             'style_row' => 12,
-            'highest_column' => 'G',
+            'highest_column' => 'H',
             'columns' => [
                 'quantity' => 'A',
                 'unit' => 'B',
                 'unit_cost' => 'C',
                 'total_cost' => 'D',
                 'description' => 'E',
-                'inventory_item_no' => 'F',
-                'estimated_useful_life' => 'G',
+                'inventory_item_no' => 'G',
+                'estimated_useful_life' => 'H',
             ],
             'column_types' => [
                 'A' => 'qty',
@@ -156,9 +176,17 @@ return [
                 'C' => 'unit_cost',
                 'D' => 'amount',
                 'E' => 'text',
-                'F' => 'text',
                 'G' => 'text',
+                'H' => 'text',
             ],
+        ],
+        'signatures' => [
+            'received_from_name' => 'A46',
+            'received_by_name' => 'F46',
+            'received_from_position' => 'A48',
+            'received_by_position' => 'F48',
+            'received_from_date' => 'A50',
+            'received_by_date' => 'F50',
         ],
     ],
 
@@ -173,7 +201,7 @@ return [
             'date' => ['cell' => 'H9', 'label' => 'Date :  '],
         ],
         'detail' => [
-            'start_row' => 17,
+            'start_row' => 18,
             'columns' => [
                 'date_acquired' => 'A',
                 'property_no' => 'B',
@@ -182,12 +210,14 @@ return [
                 'condition' => 'I',
             ],
         ],
+        // Checkbox cells left of the printed labels (C13/F13/C14/F14).
         'transfer_type_marks' => [
-            'donation' => 'C13',
-            'relocate' => 'F13',
-            'reassignment' => 'C14',
-            'others' => 'F14',
+            'donation' => 'B13',
+            'relocate' => 'E13',
+            'reassignment' => 'B14',
+            'others' => 'E14',
         ],
+        'transfer_type_others_label' => 'F14',
         'signatures' => [
             'reason' => 'A43',
             'approved_name' => 'B53',
@@ -246,6 +276,9 @@ return [
                 'I' => 'right',
                 'J' => 'left',
             ],
+            'wrap_text_columns' => ['C', 'F', 'J'],
+            'min_wrap_lines_for_expansion' => 2,
+            'uniform_data_row_height' => true,
         ],
     ],
 
@@ -312,7 +345,7 @@ return [
                 'K' => 'right',
                 'L' => 'left',
             ],
-            'wrap_text_columns' => ['G', 'I', 'L'],
+            'wrap_text_columns' => ['B', 'G', 'I', 'L'],
             'min_wrap_lines_for_expansion' => 2,
             'uniform_data_row_height' => true,
         ],
@@ -369,15 +402,15 @@ return [
                 'N' => 'amount',
                 'O' => 'text',
             ],
-            'wrap_text_columns' => ['D', 'G', 'I', 'K', 'O'],
-            'min_wrap_lines_for_expansion' => 3,
+            'wrap_text_columns' => ['B', 'C', 'D', 'G', 'I', 'K', 'O'],
+            'min_wrap_lines_for_expansion' => 2,
             'uniform_data_row_height' => true,
             'min_sample_clear_rows' => 30,
         ],
     ],
 
     'SC' => [
-        'template' => 'Consumable/Stock Levels & Recording/Appendix 58 - SC.xls',
+        'template' => 'Consumable/Stock Levels & Recording/Appendix 58 - SC.xlsx',
         'header' => [
             'entity_name' => ['cell' => 'A6', 'label' => 'Entity Name: '],
             'fund_cluster' => ['cell' => 'F6', 'label' => 'Fund Cluster: '],
@@ -412,11 +445,14 @@ return [
                 'F' => 'balance',
                 'G' => 'text',
             ],
+            'wrap_text_columns' => ['B', 'E', 'G'],
+            'min_wrap_lines_for_expansion' => 2,
+            'uniform_data_row_height' => true,
         ],
     ],
 
     'WMR' => [
-        'template' => 'Consumable/Disposal/Appendix 65 - WMR.xls',
+        'template' => 'Consumable/Disposal/Appendix 65 - WMR.xlsx',
         'header' => [
             'entity_name' => ['cell' => 'A7', 'label' => 'Entity Name : '],
             'fund_cluster' => ['cell' => 'G7', 'label' => 'Fund Cluster : '],
@@ -434,12 +470,13 @@ return [
                 'sale_date' => 'H',
                 'sale_amount' => 'I',
             ],
+            'total_cell' => 'I23',
         ],
         'disposal_mode_marks' => [
-            'destroyed' => 'B32',
-            'sold_private' => 'B33',
-            'sold_public' => 'B34',
-            'transferred_without_cost' => 'B35',
+            'destroyed' => 'C32',
+            'sold_private' => 'C33',
+            'sold_public' => 'C34',
+            'transferred_without_cost' => 'C35',
         ],
         'signatures' => [
             'prepared_by' => 'B25',
@@ -499,8 +536,9 @@ return [
     ],
 
     'IIRUP' => [
-        'template' => 'ppe/Disposal/Appendix 74 - IIRUP.xls',
+        'template' => 'ppe/Disposal/Appendix 74 - IIRUP.xlsx',
         'header' => [
+            'as_at' => ['cell' => 'B4', 'label' => 'As at '],
             'entity_name' => ['cell' => 'B6', 'label' => 'Entity Name: '],
             'fund_cluster' => ['cell' => 'P6', 'label' => 'Fund Cluster: '],
             'accountable_officer' => ['cell' => 'B7', 'label' => ''],
@@ -514,7 +552,16 @@ return [
                 'description' => 'C',
                 'property_no' => 'D',
                 'quantity' => 'E',
+                'unit_cost' => 'F',
+                'total_cost' => 'G',
+                'accumulated_depreciation' => 'H',
+                'accumulated_impairment_losses' => 'I',
+                'carrying_amount' => 'J',
                 'remarks' => 'K',
+                'disposal_total' => 'P',
+                'appraised_value' => 'Q',
+                'official_receipt_no' => 'R',
+                'sale_amount' => 'S',
             ],
         ],
         'disposal_mode_columns' => [
@@ -528,11 +575,13 @@ return [
             'approved_by' => 'H40',
             'inspection_officer' => 'L40',
             'witness' => 'Q40',
+            'accountable_designation' => 'C42',
+            'authorized_designation' => 'H42',
         ],
     ],
 
     'IIRUSP' => [
-        'template' => 'ppe/Disposal/Appendix 74 - IIRUP.xls',
+        'template' => 'ppe/Disposal/Appendix 74 - IIRUP.xlsx',
         'header' => [
             'entity_name' => ['cell' => 'B9', 'label' => 'Entity Name: '],
             'fund_cluster' => ['cell' => 'P9', 'label' => 'Fund Cluster: '],
@@ -798,11 +847,10 @@ return [
             'entity_name' => ['cell' => 'A6', 'label' => 'Entity Name: '],
             'fund_cluster' => ['cell' => 'D6', 'label' => 'Fund Cluster: '],
             'office_section' => [
-                'cell' => 'A7',
-                'label' => 'Office/Section : ',
-                'continuation_cell' => 'A8',
-                'max_first_line_chars' => 14,
-                'wrap_rows' => [7, 8],
+                // Template keeps "Office/Section :" on A7; value goes on A8 only.
+                'cell' => 'A8',
+                'label' => '',
+                'wrap_rows' => [8],
                 'wrap_column' => 'A',
             ],
             'pr_no' => ['cell' => 'C7', 'label' => 'PR No.: '],

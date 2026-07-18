@@ -16,7 +16,7 @@ class ProcurementAgent extends Agent
         $url = rtrim(config('services.ollama.url', 'http://localhost:11434'), '/');
         // Use 127.0.0.1 so PHP can connect to Ollama reliably on Windows
         $url = preg_replace('#^https?://localhost(?=:\d+|/|$)#i', 'http://127.0.0.1', $url).'/api';
-        $model = config('services.ollama.chat_model', 'deepseek-r1:7b');
+        $model = config('services.ollama.chat_model', 'qwen2.5:3b');
 
         return new Ollama(
             url: $url,

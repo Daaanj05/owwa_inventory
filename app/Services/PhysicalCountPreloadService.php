@@ -6,7 +6,9 @@ use App\Models\InventoryUnit;
 use App\Models\Issuance;
 use App\Models\PhysicalCountLine;
 use App\Models\PhysicalCountSession;
+use App\Support\ItemPropertyClass;
 use App\Support\PhysicalCountPropertyClassResolver;
+use App\Support\PpePropertyType;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 
@@ -17,8 +19,8 @@ class PhysicalCountPreloadService
      */
     public function preloadFromCustodyRecords(PhysicalCountSession $session): array
     {
-        if (! $session->supportsQrScanning()) {
-            throw new InvalidArgumentException('QR preload is only available for PPE and semi-expendable physical count sessions.');
+        if (! $session->supportsUnitQrScanning()) {
+            throw new InvalidArgumentException('Custody preload is only available for PPE and semi-expendable physical count sessions.');
         }
 
         $session->loadMissing(['office', 'itemCategory']);
@@ -34,6 +36,91 @@ class PhysicalCountPreloadService
         $this->syncPropertyClassFields($session->fresh());
 
         return $result;
+    }
+
+    /**
+     * Load RPCI lines from Stock Card balances for the session office + inventory type.
+     *
+     * @return array{created: int, updated: int, skipped: int}
+     */
+    public function preloadFromStockBalances(PhysicalCountSession $session): array
+    {
+        if (! $session->supportsStockQrScanning()) {
+            throw new InvalidArgumentException('Stock preload is only available for consumable (RPCI) physical count sessions.');
+        }
+
+        $session->loadMissing(['office', 'itemCategory']);
+        $created = 0;
+        $updated = 0;
+        $skipped = 0;
+        $stockService = app(InventoryStockService::class);
+
+        DB::transaction(function () use ($session, $stockService, &$created, &$updated, &$skipped): void {
+            $query = \App\Models\Item::query()
+                ->active()
+                ->whereHas('category', function ($categoryQuery): void {
+                    $categoryQuery->whereNull('archived_at');
+                })
+                ->orderBy('name');
+
+            if ($session->item_category_id) {
+                $query->where('item_category_id', $session->item_category_id);
+            }
+
+            if (filled($session->inventory_type)) {
+                $query->where('inventory_type', $session->inventory_type);
+            }
+
+            foreach ($query->get() as $item) {
+                if ($item->category?->getTemplateSlug() !== 'consumables') {
+                    $skipped++;
+
+                    continue;
+                }
+
+                if (! $stockService->hasInventoryActivity((int) $item->id, (int) $session->office_id)) {
+                    $skipped++;
+
+                    continue;
+                }
+
+                $balance = max(0, $stockService->getStock((int) $item->id, (int) $session->office_id));
+                $existing = PhysicalCountLine::query()
+                    ->where('physical_count_session_id', $session->id)
+                    ->where('item_id', $item->id)
+                    ->lockForUpdate()
+                    ->first();
+
+                if ($existing !== null) {
+                    $existing->update([
+                        'article' => $item->name,
+                        'description' => $item->description,
+                        'stock_number' => $item->item_code,
+                        'unit_of_measure' => $item->unit,
+                        'balance_per_card' => $balance,
+                    ]);
+                    $updated++;
+
+                    continue;
+                }
+
+                PhysicalCountLine::query()->create([
+                    'physical_count_session_id' => $session->id,
+                    'item_id' => $item->id,
+                    'article' => $item->name,
+                    'description' => $item->description,
+                    'stock_number' => $item->item_code,
+                    'unit_of_measure' => $item->unit,
+                    'balance_per_card' => $balance,
+                    'on_hand_count' => 0,
+                ]);
+                $created++;
+            }
+        });
+
+        $session->update(['book_list_loaded' => true]);
+
+        return compact('created', 'updated', 'skipped');
     }
 
     /**
@@ -154,8 +241,22 @@ class PhysicalCountPreloadService
                 })
                 ->orderBy('property_number')
                 ->get()
-                ->filter(function (InventoryUnit $unit) use ($categorySlug): bool {
-                    return $unit->item?->category?->getTemplateSlug() === $categorySlug;
+                ->filter(function (InventoryUnit $unit) use ($categorySlug, $session): bool {
+                    if ($unit->item?->category?->getTemplateSlug() !== $categorySlug) {
+                        return false;
+                    }
+
+                    if ($session->count_type === PhysicalCountSession::TYPE_RPCPPE && filled($session->ppe_type)) {
+                        return PpePropertyType::resolveForExport($unit->item?->ppe_type)
+                            === PpePropertyType::resolveForExport($session->ppe_type);
+                    }
+
+                    if ($session->count_type === PhysicalCountSession::TYPE_RPCSP && filled($session->property_class)) {
+                        return ItemPropertyClass::resolveForExport($unit->item?->property_class)
+                            === ItemPropertyClass::resolveForExport($session->property_class);
+                    }
+
+                    return true;
                 });
 
             if ($session->count_type === PhysicalCountSession::TYPE_RPCSP) {

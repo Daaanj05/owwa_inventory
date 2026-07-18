@@ -4,9 +4,10 @@ namespace App\Filament\Resources\Requisitions\Actions;
 
 use App\Models\Requisition;
 use App\Models\User;
+use App\Support\OwwaExportBusyDispatcher;
 use Filament\Actions\Action;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Redirect;
+use Livewire\Component as LivewireComponent;
 
 class RequisitionExportActions
 {
@@ -17,8 +18,14 @@ class RequisitionExportActions
             ->icon('heroicon-o-document-arrow-down')
             ->color('gray')
             ->visible(fn (Requisition $record): bool => self::userCanExportRis() && $record->canExportRis())
-            ->action(function (Requisition $record) {
-                return Redirect::away(route('owwa.export.requisition', $record));
+            ->action(function (Requisition $record, Action $action): void {
+                $livewire = $action->getLivewire();
+                OwwaExportBusyDispatcher::start(
+                    $livewire instanceof LivewireComponent ? $livewire : null,
+                    route('owwa.export.requisition', $record),
+                    'Preparing Excel export…',
+                    'Building your OWWA form…',
+                );
             });
     }
 

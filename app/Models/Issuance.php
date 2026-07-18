@@ -89,6 +89,21 @@ class Issuance extends Model
             return collect([$this]);
         }
 
+        if ($this->trashed()) {
+            return self::onlyTrashed()
+                ->where('issuance_batch_id', $this->issuance_batch_id)
+                ->with([
+                    'item',
+                    'office',
+                    'department',
+                    'issuedBy',
+                    'issuedTo',
+                    'requisition',
+                ])
+                ->orderBy('id')
+                ->get();
+        }
+
         $this->loadMissing([
             'batch.lines.item',
             'batch.lines.office',

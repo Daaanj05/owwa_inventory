@@ -143,6 +143,7 @@ class DemoDataSeeder extends Seeder
             ['base_name' => 'Ballpoint Pen', 'sub_item' => 'Black', 'unit' => 'piece', 'item_code' => 'CON-011', 'reorder_level' => 50],
             ['base_name' => 'Ballpoint Pen', 'sub_item' => 'Red', 'unit' => 'piece', 'item_code' => 'CON-012', 'reorder_level' => 50],
             ['base_name' => 'Folder', 'sub_item' => 'Short', 'unit' => 'piece', 'item_code' => 'CON-013', 'reorder_level' => 30],
+            ['base_name' => 'Folder', 'sub_item' => 'Short (Zero-Stock Demo)', 'unit' => 'piece', 'item_code' => 'CON-014', 'reorder_level' => 30],
         ];
 
         foreach ($consumableItems as $ci) {

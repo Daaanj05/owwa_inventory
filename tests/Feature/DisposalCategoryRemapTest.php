@@ -44,7 +44,7 @@ class DisposalCategoryRemapTest extends TestCase
 
         $path = app(OwwaTemplateExportService::class)->getDisposalTemplatePath($disposal);
 
-        $this->assertSame('Semi-Expendable/Disposal/Appendix 74 - IIRUP.xls', $path);
+        $this->assertSame('Semi-Expendable/Disposal/Appendix 74 - IIRUP.xlsx', $path);
         $this->assertSame('iirup', app(OwwaTemplateExportService::class)->resolveDisposalFormSlug($disposal));
     }
 

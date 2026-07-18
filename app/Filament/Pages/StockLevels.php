@@ -2,6 +2,7 @@
 
 namespace App\Filament\Pages;
 
+use App\Filament\Concerns\StartsOwwaExportBusy;
 use App\Filament\Concerns\SyncsActiveItemCategory;
 use App\Filament\Resources\Transfers\TransferResource;
 use App\Models\InventoryUnit;
@@ -12,11 +13,14 @@ use App\Models\StockPositionRestockFlag;
 use App\Services\InventoryStockService;
 use App\Services\OwwaItemReportService;
 use App\Services\StockLedgerViewService;
+use App\Services\StockLevelExportService;
 use App\Support\UnitCostKey;
 use BackedEnum;
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
 use Filament\Facades\Filament;
+use Filament\Forms\Components\Placeholder;
+use Filament\Forms\Components\Radio;
 use Filament\Pages\Page;
 use Filament\Support\Enums\Width;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -31,6 +35,7 @@ use UnitEnum;
 
 class StockLevels extends Page
 {
+    use StartsOwwaExportBusy;
     use SyncsActiveItemCategory;
     use WithPagination;
 
@@ -71,6 +76,9 @@ class StockLevels extends Page
     public string $restockFilter = 'active';
 
     public ?ItemCategory $categoryRecord = null;
+
+    /** @var array<int, string> */
+    public array $selectedKeys = [];
 
     public function mount(): void
     {
@@ -125,6 +133,8 @@ class StockLevels extends Page
 
     public function buildExportDownloadsActionGroup(): ActionGroup
     {
+        $slug = $this->categoryRecord?->getTemplateSlug() ?? 'consumables';
+
         $actions = [
             Action::make('coaStockLevel')
                 ->label('Summary PDF')
@@ -132,39 +142,37 @@ class StockLevels extends Page
                 ->color('gray')
                 ->url(route('reports.coa.stock-level'))
                 ->openUrlInNewTab(false),
+            $this->makeStockCardsExportAction(
+                name: 'exportStockCardsExcel',
+                label: match ($slug) {
+                    'ppe' => 'Property cards (Excel)',
+                    'semi_expendable' => 'Annex A.1 (Excel)',
+                    default => 'Stock cards (Excel)',
+                },
+                format: 'xlsx',
+            ),
+            $this->makeStockCardsExportAction(
+                name: 'exportStockCardsPdf',
+                label: match ($slug) {
+                    'ppe' => 'Property cards (PDF)',
+                    'semi_expendable' => 'Annex A.1 (PDF)',
+                    default => 'Stock cards (PDF)',
+                },
+                format: 'pdf',
+            ),
         ];
 
         if ($this->categoryRecord?->getTemplateSlug() === 'semi_expendable') {
-            $actions[] = Action::make('exportAnnexA1')
-                ->label('Export Annex A.1 property cards (XLS)')
-                ->icon('heroicon-o-document-arrow-down')
-                ->color('gray')
-                ->url(route('owwa.export.bulk.annex-a1', array_filter([
-                    'category' => $this->category,
-                    'search' => filled($this->search) ? $this->search : null,
-                ])))
-                ->openUrlInNewTab(false);
-
-            $actions[] = Action::make('exportAnnexA4')
-                ->label('Export Annex A.4 registry (XLS)')
-                ->icon('heroicon-o-document-arrow-down')
-                ->color('gray')
-                ->url(route('owwa.export.bulk.annex-a4', array_filter([
-                    'category' => $this->category,
-                    'search' => filled($this->search) ? $this->search : null,
-                ])))
-                ->openUrlInNewTab(false);
-        }
-
-        if ($this->categoryRecord?->getTemplateSlug() === 'ppe') {
-            $actions[] = Action::make('exportPropertyCards')
-                ->label('Export Property Cards (XLS)')
-                ->icon('heroicon-o-document-arrow-down')
-                ->color('gray')
-                ->url(route('owwa.export.bulk.property-cards', array_filter([
-                    'category' => $this->category,
-                    'search' => filled($this->search) ? $this->search : null,
-                ])));
+            $actions[] = $this->makeAnnexA4ExportAction(
+                name: 'exportAnnexA4Excel',
+                label: 'Annex A.4 (Excel)',
+                format: 'xlsx',
+            );
+            $actions[] = $this->makeAnnexA4ExportAction(
+                name: 'exportAnnexA4Pdf',
+                label: 'Annex A.4 (PDF)',
+                format: 'pdf',
+            );
         }
 
         return ActionGroup::make($actions)
@@ -172,7 +180,227 @@ class StockLevels extends Page
             ->icon('heroicon-o-document-arrow-down')
             ->color('gray')
             ->button()
+            ->dropdownWidth(Width::MaxContent)
             ->livewire($this);
+    }
+
+    /**
+     * Filament resolves {name}Action() with zero arguments when mounting group actions.
+     */
+    public function exportAnnexA4ExcelAction(): Action
+    {
+        return $this->makeAnnexA4ExportAction(
+            name: 'exportAnnexA4Excel',
+            label: 'Annex A.4 (Excel)',
+            format: 'xlsx',
+        );
+    }
+
+    public function exportAnnexA4PdfAction(): Action
+    {
+        return $this->makeAnnexA4ExportAction(
+            name: 'exportAnnexA4Pdf',
+            label: 'Annex A.4 (PDF)',
+            format: 'pdf',
+        );
+    }
+
+    protected function makeAnnexA4ExportAction(string $name, string $label, string $format): Action
+    {
+        return Action::make($name)
+            ->label($label)
+            ->icon('heroicon-o-document-arrow-down')
+            ->color('gray')
+            ->action(function () use ($format): void {
+                $url = route('owwa.export.bulk.annex-a4', array_filter([
+                    'category' => $this->category,
+                    'search' => filled($this->search) ? $this->search : null,
+                    'restock_filter' => $this->restockFilter !== 'active' ? $this->restockFilter : null,
+                    'format' => $format === 'pdf' ? 'pdf' : null,
+                ]));
+
+                $this->startOwwaExportDownload(
+                    $url,
+                    $format === 'pdf' ? 'Preparing PDF export…' : 'Preparing Excel export…',
+                    $format === 'pdf'
+                        ? 'Building Annex A.4 registry pages…'
+                        : 'Building Annex A.4 registry workbook…',
+                );
+            });
+    }
+
+    public function exportStockCardsExcelAction(): Action
+    {
+        $slug = $this->categoryRecord?->getTemplateSlug() ?? 'consumables';
+
+        return $this->makeStockCardsExportAction(
+            name: 'exportStockCardsExcel',
+            label: match ($slug) {
+                'ppe' => 'Property cards (Excel)',
+                'semi_expendable' => 'Annex A.1 (Excel)',
+                default => 'Stock cards (Excel)',
+            },
+            format: 'xlsx',
+        );
+    }
+
+    public function exportStockCardsPdfAction(): Action
+    {
+        $slug = $this->categoryRecord?->getTemplateSlug() ?? 'consumables';
+
+        return $this->makeStockCardsExportAction(
+            name: 'exportStockCardsPdf',
+            label: match ($slug) {
+                'ppe' => 'Property cards (PDF)',
+                'semi_expendable' => 'Annex A.1 (PDF)',
+                default => 'Stock cards (PDF)',
+            },
+            format: 'pdf',
+        );
+    }
+
+    protected function makeStockCardsExportAction(string $name, string $label, string $format): Action
+    {
+        return Action::make($name)
+            ->label($label)
+            ->icon('heroicon-o-document-arrow-down')
+            ->color('gray')
+            ->modalHeading($label)
+            ->modalSubmitActionLabel('Download')
+            ->form([
+                Placeholder::make('selection_hint')
+                    ->label('')
+                    ->content(fn (): string => $this->selectedKeys === []
+                        ? 'No rows selected. Choose “All filtered rows” or select rows from the table first. Selections are kept across pages.'
+                        : count($this->selectedKeys).' row(s) selected across page(s).')
+                    ->columnSpanFull(),
+                Radio::make('export_scope')
+                    ->label('Rows to export')
+                    ->options([
+                        'selected' => 'Selected rows only',
+                        'all' => 'All filtered rows',
+                    ])
+                    ->default($this->selectedKeys !== [] ? 'selected' : 'all')
+                    ->required()
+                    ->live(),
+            ])
+            ->action(function (array $data, Action $action) use ($format): void {
+                $scope = (string) ($data['export_scope'] ?? 'all');
+
+                if ($scope === 'selected' && $this->selectedKeys === []) {
+                    \Filament\Notifications\Notification::make()
+                        ->title('No rows selected')
+                        ->body('Select at least one row from the table, or export all filtered rows.')
+                        ->warning()
+                        ->send();
+
+                    $action->halt();
+
+                    return;
+                }
+
+                $url = $this->buildStockCardsExportUrl($scope, $format);
+                $this->startOwwaExportDownload(
+                    $url,
+                    $format === 'pdf' ? 'Preparing PDF export…' : 'Preparing Excel export…',
+                    $format === 'pdf'
+                        ? 'Building OWWA form pages. Large selections can take a little while.'
+                        : 'Building your workbook. Large selections can take a little while.',
+                );
+            });
+    }
+
+    public function buildStockCardsExportUrl(string $scope, string $format): string
+    {
+        $params = array_filter([
+            'category' => $this->category,
+            'search' => filled($this->search) ? $this->search : null,
+            'restock_filter' => $this->restockFilter !== 'active' ? $this->restockFilter : null,
+            'format' => $format === 'pdf' ? 'pdf' : null,
+            'pairs' => $scope === 'selected' ? implode(',', $this->selectedKeys) : null,
+        ], fn (mixed $value): bool => filled($value));
+
+        return route('owwa.export.bulk.stock-cards', $params);
+    }
+
+    public function pairKeyForRow(object $row): string
+    {
+        return app(StockLevelExportService::class)->encodePairKey(
+            (int) $row->item_id,
+            (int) $row->office_id,
+            isset($row->unit_cost) ? (float) $row->unit_cost : null,
+        );
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    public function currentPagePairKeys(): array
+    {
+        return $this->getStockLevels()
+            ->getCollection()
+            ->map(fn (object $row): string => $this->pairKeyForRow($row))
+            ->values()
+            ->all();
+    }
+
+    public function toggleRowSelection(string $key): void
+    {
+        if (in_array($key, $this->selectedKeys, true)) {
+            $this->selectedKeys = array_values(array_filter(
+                $this->selectedKeys,
+                fn (string $selected): bool => $selected !== $key,
+            ));
+
+            return;
+        }
+
+        $this->selectedKeys[] = $key;
+    }
+
+    public function toggleSelectAllOnPage(): void
+    {
+        $pageKeys = $this->currentPagePairKeys();
+
+        $allSelected = $pageKeys !== []
+            && collect($pageKeys)->every(fn (string $key): bool => in_array($key, $this->selectedKeys, true));
+
+        if ($allSelected) {
+            $this->selectedKeys = array_values(array_filter(
+                $this->selectedKeys,
+                fn (string $key): bool => ! in_array($key, $pageKeys, true),
+            ));
+
+            return;
+        }
+
+        $this->selectedKeys = array_values(array_unique([
+            ...$this->selectedKeys,
+            ...$pageKeys,
+        ]));
+    }
+
+    public function isRowSelected(string $key): bool
+    {
+        return in_array($key, $this->selectedKeys, true);
+    }
+
+    public function isAllOnPageSelected(): bool
+    {
+        $pageKeys = $this->currentPagePairKeys();
+
+        return $pageKeys !== []
+            && collect($pageKeys)->every(fn (string $key): bool => in_array($key, $this->selectedKeys, true));
+    }
+
+    public function getSelectedCount(): int
+    {
+        return count($this->selectedKeys);
+    }
+
+    public function clearSelection(): void
+    {
+        $this->selectedKeys = [];
     }
 
     public function getMissingPropertyClassCount(): int
@@ -217,6 +445,7 @@ class StockLevels extends Page
     public function updatedSearch(): void
     {
         $this->resetPage();
+        $this->selectedKeys = [];
     }
 
     public function setRestockFilter(string $filter): void
@@ -227,6 +456,7 @@ class StockLevels extends Page
 
         $this->restockFilter = $filter;
         $this->resetPage();
+        $this->selectedKeys = [];
     }
 
     public function sortByColumn(string $column): void
@@ -270,7 +500,6 @@ class StockLevels extends Page
         if (filled($this->search)) {
             $term = mb_strtolower($this->search);
             $rows = $rows->filter(fn (object $r): bool => str_contains(mb_strtolower($r->item_name ?? ''), $term)
-                || str_contains(mb_strtolower($r->category_name ?? ''), $term)
                 || str_contains(mb_strtolower($r->office_name ?? ''), $term)
             )->values();
         }
@@ -438,7 +667,17 @@ class StockLevels extends Page
             abort(403);
         }
 
-        StockPositionRestockFlag::markActive($itemId, $officeId, (float) $unitCost);
+        $stock = app(\App\Services\InventoryStockService::class)
+            ->getStockForUnitCost($itemId, $officeId, (float) $unitCost);
+        $flag = StockPositionRestockFlag::findForPosition($itemId, $officeId, (float) $unitCost);
+        $snooze = $stock <= 0 && $flag?->inactive_source === StockPositionRestockFlag::SOURCE_AUTOMATIC;
+
+        StockPositionRestockFlag::markActive(
+            $itemId,
+            $officeId,
+            (float) $unitCost,
+            snoozeAutomaticIfStillZero: $snooze,
+        );
 
         \Filament\Notifications\Notification::make()
             ->title('Marked active for restock')
@@ -484,15 +723,44 @@ class StockLevels extends Page
             )->render()))
             ->extraModalFooterActions(function (): array {
                 $ledger = $this->resolveMountedLedger();
-
-                return [
-                    Action::make('exportLedger')
+                $actions = [
+                    Action::make('exportLedgerExcel')
                         ->label($ledger['exportLabel'])
                         ->icon('heroicon-o-document-arrow-down')
                         ->color('gray')
-                        ->url($ledger['exportUrl'])
-                        ->openUrlInNewTab(false),
+                        ->action(function () use ($ledger): void {
+                            $this->startOwwaExportDownload(
+                                $ledger['exportUrl'],
+                                'Preparing Excel export…',
+                                'Building your '.$ledger['title'].' workbook…',
+                            );
+                        }),
+                    Action::make('exportLedgerPdf')
+                        ->label($ledger['exportPdfLabel'])
+                        ->icon('heroicon-o-document-arrow-down')
+                        ->color('gray')
+                        ->action(function () use ($ledger): void {
+                            $this->startOwwaExportDownload(
+                                $ledger['exportPdfUrl'],
+                                'Preparing PDF export…',
+                                'Building your '.$ledger['title'].' PDF…',
+                            );
+                        }),
                 ];
+
+                $arguments = $this->getMountedAction()?->getArguments() ?? [];
+                $item = Item::query()->with('category')->find((int) ($arguments['itemId'] ?? 0));
+                $officeId = (int) ($arguments['officeId'] ?? 0);
+
+                if ($item?->category?->getTemplateSlug() === 'consumables' && $officeId > 0) {
+                    $actions[] = Action::make('printStockQrLabel')
+                        ->label('Print stock QR')
+                        ->icon('heroicon-o-qr-code')
+                        ->url(route('owwa.qr-labels.stock', ['item' => $item->id, 'office' => $officeId]))
+                        ->openUrlInNewTab();
+                }
+
+                return $actions;
             });
     }
 
@@ -502,6 +770,8 @@ class StockLevels extends Page
      *     exportForm: string,
      *     exportLabel: string,
      *     exportUrl: string,
+     *     exportPdfLabel: string,
+     *     exportPdfUrl: string,
      *     header: array<string, string|null>,
      *     columns: array<string, string>,
      *     rows: array<int, array<string, mixed>>
