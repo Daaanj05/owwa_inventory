@@ -6,6 +6,7 @@ use App\Models\Acquisition;
 use App\Models\Item;
 use App\Models\StockPositionRestockFlag;
 use App\Services\AcquisitionUnitService;
+use App\Services\InventoryStockService;
 use App\Services\ReferenceCodeService;
 use App\Support\PpeValueCategory;
 use App\Support\SemiExpendableValueCategory;
@@ -45,6 +46,8 @@ class AcquisitionObserver
 
     public function saved(Acquisition $acquisition): void
     {
+        app(InventoryStockService::class)->forgetMovementTotalsCache();
+
         $item = $acquisition->relationLoaded('item')
             ? $acquisition->item
             : ($acquisition->item_id ? Item::with('category')->find($acquisition->item_id) : null);
@@ -70,6 +73,16 @@ class AcquisitionObserver
             (int) $acquisition->office_id,
             $acquisition->unit_cost !== null ? (float) $acquisition->unit_cost : null,
         );
+    }
+
+    public function deleted(Acquisition $acquisition): void
+    {
+        app(InventoryStockService::class)->forgetMovementTotalsCache();
+    }
+
+    public function restored(Acquisition $acquisition): void
+    {
+        app(InventoryStockService::class)->forgetMovementTotalsCache();
     }
 
     public function created(Acquisition $acquisition): void

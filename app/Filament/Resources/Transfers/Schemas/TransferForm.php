@@ -10,6 +10,7 @@ use App\Models\ProcurementSignatoryName;
 use App\Services\InventoryStockService;
 use App\Services\TransferItemOptionsService;
 use App\Support\CustodianOfficeScope;
+use App\Support\InventoryCategoryOptions;
 use App\Support\OwwaReferenceLabels;
 use App\Support\RequisitionNotificationRecipients;
 use Filament\Facades\Filament;
@@ -111,11 +112,7 @@ class TransferForm
                             ->columnSpanFull(),
                         Select::make('item_category_filter')
                             ->label('Category')
-                            ->options(fn (): array => cache()->remember(
-                                'item_categories.options',
-                                3600,
-                                fn (): array => ItemCategory::query()->orderBy('name')->pluck('name', 'id')->toArray()
-                            ))
+                            ->options(fn (): array => InventoryCategoryOptions::allActiveCategoryOptions())
                             ->placeholder('All categories')
                             ->default(fn (): ?int => self::activeCategoryFilter())
                             ->disabled(fn (): bool => self::isCategoryScoped())

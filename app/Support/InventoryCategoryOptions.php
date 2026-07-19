@@ -4,9 +4,16 @@ namespace App\Support;
 
 use App\Models\ItemCategory;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Cache;
 
 class InventoryCategoryOptions
 {
+    public const CACHE_KEY = 'inventory.categories.active.sorted';
+
+    public const LEGACY_OPTIONS_CACHE_KEY = 'item_categories.options';
+
+    public const CACHE_TTL_SECONDS = 3600;
+
     /**
      * @return array<int, string>
      */
@@ -78,9 +85,7 @@ class InventoryCategoryOptions
      */
     public static function categoryIdsForSlug(string $slug): Collection
     {
-        return ItemCategory::query()
-            ->whereNull('archived_at')
-            ->get()
+        return self::sortedActiveCategories()
             ->filter(fn (ItemCategory $category): bool => $category->getTemplateSlug() === $slug)
             ->pluck('id')
             ->values();
@@ -90,6 +95,29 @@ class InventoryCategoryOptions
      * @return Collection<int, ItemCategory>
      */
     public static function sortedActiveCategories(): Collection
+    {
+        /** @var array<int, array<string, mixed>> $rows */
+        $rows = Cache::remember(self::CACHE_KEY, self::CACHE_TTL_SECONDS, function (): array {
+            return self::querySortedActiveCategories()
+                ->map(fn (ItemCategory $category): array => $category->getAttributes())
+                ->all();
+        });
+
+        return collect($rows)
+            ->map(fn (array $attributes): ItemCategory => (new ItemCategory)->newFromBuilder($attributes))
+            ->values();
+    }
+
+    public static function forgetCache(): void
+    {
+        Cache::forget(self::CACHE_KEY);
+        Cache::forget(self::LEGACY_OPTIONS_CACHE_KEY);
+    }
+
+    /**
+     * @return Collection<int, ItemCategory>
+     */
+    protected static function querySortedActiveCategories(): Collection
     {
         return ItemCategory::query()
             ->whereNull('archived_at')

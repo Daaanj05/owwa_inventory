@@ -9,6 +9,7 @@ use App\Models\ItemCategory;
 use App\Services\DisposalInventoryUnitService;
 use App\Services\InventoryStockService;
 use App\Support\CustodianOfficeScope;
+use App\Support\InventoryCategoryOptions;
 use App\Support\OwwaReferenceLabels;
 use App\Support\SupplyOfficeResolver;
 use Closure;
@@ -78,11 +79,7 @@ class DisposalForm
                             ->default(now()),
                         Select::make('item_category_filter')
                             ->label('Category')
-                            ->options(fn (): array => cache()->remember(
-                                'item_categories.options',
-                                3600,
-                                fn (): array => ItemCategory::query()->orderBy('name')->pluck('name', 'id')->toArray()
-                            ))
+                            ->options(fn (): array => InventoryCategoryOptions::allActiveCategoryOptions())
                             ->placeholder('All categories')
                             ->default(fn (): ?int => self::activeCategoryFilter())
                             ->visible(fn (): bool => ! self::isCategoryScoped())

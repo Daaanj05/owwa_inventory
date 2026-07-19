@@ -7,6 +7,7 @@ use App\Filament\Resources\Requisitions\Pages\ListRequisitions;
 use App\Filament\Resources\Requisitions\Schemas\RequisitionForm;
 use App\Models\Department;
 use App\Models\Item;
+use App\Models\ItemCategory;
 use App\Models\Office;
 use App\Models\Requisition;
 use App\Models\RequisitionItem;
@@ -15,6 +16,7 @@ use App\Models\User;
 use App\Notifications\RequisitionWorkflowDatabaseNotification;
 use App\Services\OwwaTemplateExportService;
 use App\Services\RequisitionCompileService;
+use App\Support\InventoryCategoryOptions;
 use App\Support\OwwaCellMapping;
 use App\Support\RequisitionLineDisplay;
 use Filament\Actions\Testing\TestAction;
@@ -573,6 +575,52 @@ class RequisitionCompileWorkflowTest extends TestCase
             ->assertFormFieldExists('items');
     }
 
+    public function test_employee_create_form_starts_with_one_blank_line_item(): void
+    {
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+
+        $office = Office::factory()->create();
+        $employee = User::factory()->create([
+            'role' => User::ROLE_EMPLOYEE,
+            'office_id' => $office->id,
+        ]);
+
+        $this->actingAs($employee);
+
+        $items = Livewire::test(ListRequisitions::class)
+            ->mountAction(TestAction::make('create')->schemaComponent(true, 'content'))
+            ->get('mountedActions')[0]['data']['items'] ?? [];
+
+        $this->assertCount(1, $items);
+        $line = array_values($items)[0];
+        $this->assertTrue(blank($line['item_id'] ?? null));
+        $this->assertTrue(blank($line['item_category_id'] ?? null));
+    }
+
+    public function test_employee_create_category_options_order_consumables_semi_ppe(): void
+    {
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+
+        ItemCategory::factory()->create(['name' => 'PPE']);
+        ItemCategory::factory()->create(['name' => 'Semi-Expendable']);
+        ItemCategory::factory()->create(['name' => 'Consumables']);
+
+        $office = Office::factory()->create();
+        $employee = User::factory()->create([
+            'role' => User::ROLE_EMPLOYEE,
+            'office_id' => $office->id,
+        ]);
+
+        $this->actingAs($employee);
+
+        $orderedNames = array_values(InventoryCategoryOptions::allActiveCategoryOptions());
+
+        $this->assertSame(
+            ['Consumables', 'Semi-Expendable', 'PPE'],
+            array_values(array_intersect($orderedNames, ['Consumables', 'Semi-Expendable', 'PPE'])),
+        );
+    }
+
     public function test_catalog_request_url_opens_list_with_create_params(): void
     {
         Filament::setCurrentPanel(Filament::getPanel('admin'));
@@ -635,12 +683,15 @@ class RequisitionCompileWorkflowTest extends TestCase
         $source = file_get_contents(app_path('Filament/Resources/Requisitions/Schemas/RequisitionForm.php'));
 
         $this->assertIsString($source);
-        $this->assertStringContainsString('->table([', $source);
+        $this->assertStringContainsString('->table(', $source);
         $this->assertStringContainsString('owwa-requisition-items-repeater', $source);
+        $this->assertStringContainsString("TableColumn::make('Unit')", $source);
+        $this->assertStringContainsString('requestItemUnitPlaceholder', $source);
 
         preg_match('/private static function tableRequestItemFields\(bool \$isUnitConsolidator\): array\s*\{(.*?)\n    \}/s', $source, $matches);
         $tableFieldsBody = $matches[1] ?? '';
 
+        $this->assertStringContainsString('requestItemUnitPlaceholder', $tableFieldsBody);
         $this->assertStringNotContainsString('requestItemRemarksInput', $tableFieldsBody);
         $this->assertStringNotContainsString('stock_available', $tableFieldsBody);
         $this->assertStringNotContainsString('quantity_issued', $tableFieldsBody);
@@ -894,7 +945,7 @@ class RequisitionCompileWorkflowTest extends TestCase
             ->assertSet('mountedActions.0.data.source_requisition_ids', [$acceptedA->id]);
     }
 
-    public function test_employee_save_draft_allows_missing_purpose(): void
+    public function test_employee_create_requires_purpose(): void
     {
         Filament::setCurrentPanel(Filament::getPanel('admin'));
 
@@ -914,6 +965,7 @@ class RequisitionCompileWorkflowTest extends TestCase
         $key = array_key_first($items);
 
         $test->fillForm([
+            'purpose' => null,
             'items' => [
                 $key => [
                     'item_category_id' => $item->item_category_id,
@@ -922,11 +974,11 @@ class RequisitionCompileWorkflowTest extends TestCase
                 ],
             ],
         ])
-            ->callMountedAction();
+            ->callMountedAction()
+            ->assertHasFormErrors(['purpose']);
 
-        $this->assertDatabaseHas(Requisition::class, [
+        $this->assertDatabaseMissing(Requisition::class, [
             'requested_by' => $employee->id,
-            'status' => Requisition::STATUS_DRAFT,
         ]);
     }
 
@@ -1017,7 +1069,7 @@ class RequisitionCompileWorkflowTest extends TestCase
             RequisitionForm::createModalDescription(),
         );
         $this->assertStringContainsString(
-            'Save a draft anytime',
+            'Purpose is required',
             RequisitionForm::createModalDescription(),
         );
         $this->assertStringContainsString(

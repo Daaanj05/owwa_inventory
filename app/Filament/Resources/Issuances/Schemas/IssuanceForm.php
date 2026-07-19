@@ -10,6 +10,7 @@ use App\Models\Requisition;
 use App\Models\User;
 use App\Services\InventoryStockService;
 use App\Services\SemiExpendablePropertyNumberBuilder;
+use App\Support\InventoryCategoryOptions;
 use App\Support\IssuanceSignatoryLabels;
 use App\Support\OwwaReferenceLabels;
 use App\Support\SemiExpendableUsefulLife;
@@ -71,11 +72,7 @@ class IssuanceForm
                             ->columnSpanFull(),
                         Select::make('item_category_filter')
                             ->label('Category')
-                            ->options(fn (): array => cache()->remember(
-                                'item_categories.options',
-                                3600,
-                                fn (): array => ItemCategory::query()->orderBy('name')->pluck('name', 'id')->toArray()
-                            ))
+                            ->options(fn (): array => InventoryCategoryOptions::allActiveCategoryOptions())
                             ->placeholder('All categories')
                             ->default(fn (): mixed => SyncsActiveItemCategory::resolveCategoryIdFromContext())
                             ->live()

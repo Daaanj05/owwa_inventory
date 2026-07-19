@@ -20,6 +20,7 @@ class InventoryStockServiceTest extends TestCase
     {
         parent::setUp();
         $this->service = app(InventoryStockService::class);
+        $this->service->forgetMovementTotalsCache();
     }
 
     public function test_get_stock_returns_zero_when_no_transactions(): void
@@ -183,6 +184,7 @@ class InventoryStockServiceTest extends TestCase
             'created_at' => now(),
             'updated_at' => now(),
         ]);
+        $this->service->forgetMovementTotalsCache();
     }
 
     protected function createIssuance(int $itemId, int $officeId, int $quantity, ?float $unitCost = null): void
@@ -197,6 +199,7 @@ class InventoryStockServiceTest extends TestCase
             'created_at' => now(),
             'updated_at' => now(),
         ]);
+        $this->service->forgetMovementTotalsCache();
     }
 
     protected function createTransfer(int $itemId, int $fromOfficeId, int $toOfficeId, int $quantity, ?float $unitCost = null): void
@@ -212,5 +215,6 @@ class InventoryStockServiceTest extends TestCase
             'created_at' => now(),
             'updated_at' => now(),
         ]);
+        $this->service->forgetMovementTotalsCache();
     }
 }

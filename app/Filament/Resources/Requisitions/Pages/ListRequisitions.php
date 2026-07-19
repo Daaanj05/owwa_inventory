@@ -319,7 +319,15 @@ class ListRequisitions extends ListRecords
                     $user = Filament::auth()->user();
 
                     if (! $user?->isUnitConsolidator()) {
-                        $schema?->fill($catalogPrefill !== [] ? $catalogPrefill : []);
+                        $schema?->fill($catalogPrefill !== [] ? $catalogPrefill : [
+                            'items' => [
+                                [
+                                    'item_category_id' => null,
+                                    'item_id' => null,
+                                    'quantity' => null,
+                                ],
+                            ],
+                        ]);
 
                         return;
                     }

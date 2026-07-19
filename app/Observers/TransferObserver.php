@@ -4,6 +4,7 @@ namespace App\Observers;
 
 use App\Models\StockPositionRestockFlag;
 use App\Models\Transfer;
+use App\Services\InventoryStockService;
 use App\Services\PropertyReturnService;
 use App\Services\ReferenceCodeService;
 use App\Services\TransferInventoryUnitService;
@@ -23,6 +24,7 @@ class TransferObserver
 
     public function created(Transfer $transfer): void
     {
+        app(InventoryStockService::class)->forgetMovementTotalsCache();
         app(PropertyReturnService::class)->processReturnTransfer($transfer);
         app(TransferInventoryUnitService::class)->syncUnitsForTransfer($transfer);
         app(TransferUcNotificationService::class)->notifyDestinationUnitConsolidators($transfer);
@@ -30,6 +32,8 @@ class TransferObserver
 
     public function saved(Transfer $transfer): void
     {
+        app(InventoryStockService::class)->forgetMovementTotalsCache();
+
         if ((int) ($transfer->quantity ?? 0) <= 0 || ! $transfer->to_office_id) {
             return;
         }
@@ -39,5 +43,15 @@ class TransferObserver
             (int) $transfer->to_office_id,
             $transfer->unit_cost !== null ? (float) $transfer->unit_cost : null,
         );
+    }
+
+    public function deleted(Transfer $transfer): void
+    {
+        app(InventoryStockService::class)->forgetMovementTotalsCache();
+    }
+
+    public function restored(Transfer $transfer): void
+    {
+        app(InventoryStockService::class)->forgetMovementTotalsCache();
     }
 }

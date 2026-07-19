@@ -5,6 +5,7 @@ namespace App\Observers;
 use App\Events\IssuanceChanged;
 use App\Models\Issuance;
 use App\Models\Item;
+use App\Services\InventoryStockService;
 use App\Services\IssuanceNotificationService;
 use App\Services\IssuanceUnitAssignmentService;
 use App\Services\ReferenceCodeService;
@@ -74,11 +75,27 @@ class IssuanceObserver
 
     public function created(Issuance $issuance): void
     {
+        app(InventoryStockService::class)->forgetMovementTotalsCache();
         app(IssuanceNotificationService::class)->handleCreated($issuance);
 
         if (filled(config('filament.broadcasting.echo.key'))) {
             IssuanceChanged::dispatch($issuance);
         }
+    }
+
+    public function updated(Issuance $issuance): void
+    {
+        app(InventoryStockService::class)->forgetMovementTotalsCache();
+    }
+
+    public function deleted(Issuance $issuance): void
+    {
+        app(InventoryStockService::class)->forgetMovementTotalsCache();
+    }
+
+    public function restored(Issuance $issuance): void
+    {
+        app(InventoryStockService::class)->forgetMovementTotalsCache();
     }
 
     public function saving(Issuance $issuance): void

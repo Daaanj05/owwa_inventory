@@ -54,5 +54,13 @@ abstract class TestCase extends BaseTestCase
         if (Schema::hasTable('reference_series')) {
             $this->seed(ReferenceSeriesSeeder::class);
         }
+
+        if (class_exists(\App\Services\InventoryStockService::class)) {
+            app(\App\Services\InventoryStockService::class)->forgetMovementTotalsCache();
+        }
+
+        if (class_exists(\App\Support\InventoryCategoryOptions::class)) {
+            \App\Support\InventoryCategoryOptions::forgetCache();
+        }
     }
 }

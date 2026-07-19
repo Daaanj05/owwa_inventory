@@ -4,7 +4,6 @@ namespace App\Filament\Resources\Requisitions\Schemas;
 
 use App\Models\Department;
 use App\Models\Item;
-use App\Models\ItemCategory;
 use App\Models\Office;
 use App\Models\Requisition;
 use App\Models\RequisitionItem;
@@ -12,6 +11,7 @@ use App\Models\User;
 use App\Services\InventoryStockService;
 use App\Services\RequisitionCompileService;
 use App\Services\RequisitionRestockStatusService;
+use App\Support\InventoryCategoryOptions;
 use App\Support\OwwaReferenceLabels;
 use App\Support\SupplyOfficeResolver;
 use Closure;
@@ -41,7 +41,7 @@ class RequisitionForm
         $supplyOfficeName = app(SupplyOfficeResolver::class)->resolveOfficeName() ?? 'regional supply office';
 
         if ($user?->isEmployee()) {
-            return "Available shows how much stock is at {$supplyOfficeName} today. You can submit even when Available is 0 — your Unit Consolidator will review it. Save a draft anytime, or submit when Purpose is filled in.";
+            return "Available shows how much stock is at {$supplyOfficeName} today. You can submit even when Available is 0 — your Unit Consolidator will review it. Purpose is required.";
         }
 
         if ($user?->isUnitConsolidator()) {
@@ -361,7 +361,7 @@ class RequisitionForm
                         self::requestItemsRepeater($isCustodian, $isUnitConsolidator, $isEmployee),
                         Textarea::make('purpose')
                             ->label('Purpose')
-                            ->markAsRequired()
+                            ->required()
                             ->rows(2)
                             ->autosize()
                             ->columnSpanFull()
@@ -597,10 +597,11 @@ class RequisitionForm
     private static function requestItemsTableColumns(bool $isUnitConsolidator, Get $get): array
     {
         return [
-            TableColumn::make('Category')->markAsRequired()->alignment(Alignment::Start)->width('14rem'),
+            TableColumn::make('Category')->markAsRequired()->alignment(Alignment::Start)->width('12rem; min-width: 11rem'),
             TableColumn::make('Item')->markAsRequired()->alignment(Alignment::Start)->width('auto'),
-            TableColumn::make('Available')->alignment(Alignment::End)->width('13rem'),
-            TableColumn::make('Qty')->markAsRequired()->alignment(Alignment::End)->width('3.25rem'),
+            TableColumn::make('Unit')->alignment(Alignment::Start)->width('5rem; min-width: 4.5rem'),
+            TableColumn::make('Available')->alignment(Alignment::End)->width('5.5rem; min-width: 5rem'),
+            TableColumn::make('Qty')->markAsRequired()->alignment(Alignment::End)->width('6.5rem; min-width: 6.5rem'),
         ];
     }
 
@@ -616,10 +617,12 @@ class RequisitionForm
             self::requestItemSelect()
                 ->disabled(fn (Get $get): bool => $isUnitConsolidator && filled($get('../../source_requisition_ids')))
                 ->dehydrated(),
+            self::requestItemUnitPlaceholder(),
             self::requestItemRegionalStockPlaceholder(),
             self::requestItemQuantityInput()
                 ->disabled(fn (Get $get): bool => $isUnitConsolidator && filled($get('../../source_requisition_ids')))
-                ->dehydrated(),
+                ->dehydrated()
+                ->extraInputAttributes(['class' => 'owwa-requisition-line-qty']),
             Hidden::make('requested_total'),
             Hidden::make('allocation_summary'),
             Hidden::make('stock_at_request'),
@@ -665,11 +668,7 @@ class RequisitionForm
     {
         return Select::make('item_category_id')
             ->label('Category')
-            ->options(fn (): array => ItemCategory::query()
-                ->whereNull('archived_at')
-                ->orderBy('name')
-                ->pluck('name', 'id')
-                ->all())
+            ->options(fn (): array => InventoryCategoryOptions::allActiveCategoryOptions())
             ->searchable()
             ->live()
             ->required()
@@ -731,6 +730,24 @@ class RequisitionForm
             ->placeholder(fn (Get $get): string => blank($get('item_category_id'))
                 ? 'Choose a category first'
                 : 'Select an item');
+    }
+
+    private static function requestItemUnitPlaceholder(): Placeholder
+    {
+        return Placeholder::make('unit_display')
+            ->label('Unit')
+            ->hiddenLabel()
+            ->extraAttributes(['class' => 'owwa-requisition-line-unit'])
+            ->content(function (Get $get): string {
+                $itemId = $get('item_id');
+                if (blank($itemId)) {
+                    return '—';
+                }
+
+                $unit = Item::query()->whereKey($itemId)->value('unit');
+
+                return filled($unit) ? (string) $unit : '—';
+            });
     }
 
     private static function requestItemRegionalStockPlaceholder(): Placeholder

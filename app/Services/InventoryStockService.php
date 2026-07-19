@@ -13,6 +13,19 @@ use Illuminate\Support\Facades\DB;
 class InventoryStockService
 {
     /**
+     * Request-scoped movement totals so repeated getStock() calls reuse one aggregation pass.
+     *
+     * @var array{
+     *   acq: array<string, int>,
+     *   inTransfers: array<string, int>,
+     *   issuances: array<string, int>,
+     *   outTransfers: array<string, int>,
+     *   disposals: array<string, int>
+     * }|null
+     */
+    protected static ?array $movementTotalsMaps = null;
+
+    /**
      * Get current stock quantity for an item at an office (sum across all unit-cost buckets).
      */
     public function getStock(int $itemId, int $officeId): int
@@ -28,6 +41,11 @@ class InventoryStockService
         }
 
         return $total;
+    }
+
+    public function forgetMovementTotalsCache(): void
+    {
+        self::$movementTotalsMaps = null;
     }
 
     public function getStockForUnitCost(int $itemId, int $officeId, ?float $unitCost): int
@@ -400,7 +418,7 @@ class InventoryStockService
      */
     protected function getMovementTotalsMaps(): array
     {
-        return [
+        return self::$movementTotalsMaps ??= [
             'acq' => $this->buildMovementMap('acquisitions', 'office_id', 'unit_cost'),
             'inTransfers' => $this->buildMovementMap('transfers', 'to_office_id', 'unit_cost'),
             'issuances' => $this->buildMovementMap('issuances', 'office_id', 'unit_cost'),

@@ -8157,8 +8157,8 @@ body.owwa-busy-active .fi-topbar a {
 
 .fi-modal-window.owwa-record-modal.owwa-requisition-employee-modal .owwa-requisition-items-repeater.fi-fo-table-repeater > table > thead > tr > th:nth-child(1),
 .fi-modal-window.owwa-record-modal.owwa-requisition-employee-modal .owwa-requisition-items-repeater.fi-fo-table-repeater > table > tbody > tr > td:nth-child(1) {
-    width: 14rem;
-    min-width: 14rem;
+    width: 12rem;
+    min-width: 11rem;
 }
 
 .fi-modal-window.owwa-record-modal.owwa-requisition-employee-modal .owwa-requisition-items-repeater.fi-fo-table-repeater > table > tbody > tr > td:nth-child(1) .fi-input-wrp {
@@ -8167,17 +8167,25 @@ body.owwa-busy-active .fi-topbar a {
 
 .fi-modal-window.owwa-record-modal.owwa-requisition-employee-modal .owwa-requisition-items-repeater.fi-fo-table-repeater > table > thead > tr > th:nth-child(3),
 .fi-modal-window.owwa-record-modal.owwa-requisition-employee-modal .owwa-requisition-items-repeater.fi-fo-table-repeater > table > tbody > tr > td:nth-child(3) {
-    width: 3.75rem;
-    min-width: 3.75rem;
+    width: 5rem;
+    min-width: 4.5rem;
 }
 
 .fi-modal-window.owwa-record-modal.owwa-requisition-employee-modal .owwa-requisition-items-repeater.fi-fo-table-repeater > table > thead > tr > th:nth-child(4),
 .fi-modal-window.owwa-record-modal.owwa-requisition-employee-modal .owwa-requisition-items-repeater.fi-fo-table-repeater > table > tbody > tr > td:nth-child(4) {
-    width: 3.25rem;
-    min-width: 3.25rem;
+    width: 5.5rem;
+    min-width: 5rem;
+    text-align: right;
 }
 
-/* Requisition create modal — 4-column line items table */
+.fi-modal-window.owwa-record-modal.owwa-requisition-employee-modal .owwa-requisition-items-repeater.fi-fo-table-repeater > table > thead > tr > th:nth-child(5),
+.fi-modal-window.owwa-record-modal.owwa-requisition-employee-modal .owwa-requisition-items-repeater.fi-fo-table-repeater > table > tbody > tr > td:nth-child(5) {
+    width: 6.5rem;
+    min-width: 6.5rem;
+    text-align: right;
+}
+
+/* Requisition create modal — Category | Item | Unit | Available | Qty */
 .fi-modal-window.owwa-record-modal .owwa-requisition-items-repeater.fi-fo-table-repeater {
     overflow: visible !important;
 }
@@ -8207,16 +8215,43 @@ body.owwa-busy-active .fi-topbar a {
 
 .fi-modal-window.owwa-record-modal .owwa-requisition-items-repeater.fi-fo-table-repeater > table > thead > tr > th:nth-child(3),
 .fi-modal-window.owwa-record-modal .owwa-requisition-items-repeater.fi-fo-table-repeater > table > tbody > tr > td:nth-child(3) {
-    width: 4.5rem;
+    width: 5rem;
     min-width: 4.5rem;
-    text-align: right;
+    white-space: nowrap;
 }
 
 .fi-modal-window.owwa-record-modal .owwa-requisition-items-repeater.fi-fo-table-repeater > table > thead > tr > th:nth-child(4),
 .fi-modal-window.owwa-record-modal .owwa-requisition-items-repeater.fi-fo-table-repeater > table > tbody > tr > td:nth-child(4) {
-    width: 4rem;
-    min-width: 4rem;
+    width: 5.5rem;
+    min-width: 5rem;
     text-align: right;
+}
+
+.fi-modal-window.owwa-record-modal .owwa-requisition-items-repeater.fi-fo-table-repeater > table > thead > tr > th:nth-child(5),
+.fi-modal-window.owwa-record-modal .owwa-requisition-items-repeater.fi-fo-table-repeater > table > tbody > tr > td:nth-child(5) {
+    width: 6.5rem;
+    min-width: 6.5rem;
+    text-align: right;
+    overflow: visible;
+}
+
+.fi-modal-window.owwa-record-modal .owwa-requisition-items-repeater .fi-input-wrp,
+.fi-modal-window.owwa-record-modal .owwa-requisition-items-repeater input {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
+}
+
+.fi-modal-window.owwa-record-modal .owwa-requisition-items-repeater .owwa-requisition-line-qty {
+    padding-inline: 0.35rem !important;
+}
+
+.fi-modal-window.owwa-record-modal .owwa-requisition-items-repeater .owwa-requisition-line-unit {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    padding-inline: 0.15rem;
 }
 
 .fi-modal-window.owwa-record-modal .owwa-requisition-items-repeater.fi-fo-table-repeater > table > tbody > tr > td .fi-fo-table-repeater-empty-header-cell {

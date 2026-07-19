@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\LogsUserActivity;
+use App\Support\InventoryCategoryOptions;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -24,6 +25,16 @@ class ItemCategory extends Model
         return [
             'archived_at' => 'datetime',
         ];
+    }
+
+    protected static function booted(): void
+    {
+        static::saved(function (): void {
+            InventoryCategoryOptions::forgetCache();
+        });
+        static::deleted(function (): void {
+            InventoryCategoryOptions::forgetCache();
+        });
     }
 
     public function items(): HasMany
