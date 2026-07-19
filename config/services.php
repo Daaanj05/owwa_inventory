@@ -42,4 +42,18 @@ return [
         'chat_model' => env('OLLAMA_CHAT_MODEL', 'qwen2.5:3b'),
     ],
 
+    'rag' => [
+        // Shared secret for GET /api/rag/context (Authorization: Bearer …).
+        // Leave empty to deny all requests (fail closed).
+        'context_token' => env('RAG_CONTEXT_TOKEN'),
+    ],
+
+    'libreoffice' => [
+        // Prefer LibreOffice headless for PR/PO/IAR PDF (Excel-like layout).
+        // Falls back to Dompdf when disabled/unavailable.
+        'enabled' => filter_var(env('LIBREOFFICE_PDF', true), FILTER_VALIDATE_BOOLEAN),
+        'binary' => env('LIBREOFFICE_BINARY', 'soffice'),
+        'timeout' => (int) env('LIBREOFFICE_TIMEOUT', 90),
+    ],
+
 ];

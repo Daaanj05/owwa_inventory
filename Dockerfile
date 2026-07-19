@@ -30,6 +30,17 @@ RUN install-php-extensions \
     bcmath \
     opcache
 
+# LibreOffice Calc for Excel-like PDF export (PR/PO/IAR).
+# Keep recommends off — free-tier image size / memory matter on Render.
+# Dompdf remains the runtime fallback if soffice is missing or convert fails.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        libreoffice-calc \
+        fonts-liberation \
+        fonts-dejavu-core \
+    && rm -rf /var/lib/apt/lists/* \
+    && (soffice --version || true)
+
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
 # Keep /var/www/html so existing Render disk mounts for OWWA templates remain valid.
@@ -65,7 +76,11 @@ RUN setcap -r /usr/local/bin/frankenphp \
     && chown -R www-data:www-data storage bootstrap/cache /config /data \
     && mv "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini"
 
-ENV PORT=10000
+ENV PORT=10000 \
+    LIBREOFFICE_PDF=true \
+    LIBREOFFICE_BINARY=soffice \
+    LIBREOFFICE_TIMEOUT=90 \
+    HOME=/tmp
 
 EXPOSE 10000
 

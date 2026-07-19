@@ -12,7 +12,12 @@ php artisan migrate --force
 
 # Seed only on explicit boot flag when the users table is empty (first provision).
 # Never reseed an existing presentation/demo database on every wake/restart.
+# Production also requires ALLOW_PRODUCTION_SEED=true.
 if [ "$SEED_ON_BOOT" = "true" ]; then
+    if [ "$APP_ENV" = "production" ] && [ "$ALLOW_PRODUCTION_SEED" != "true" ]; then
+        echo "ERROR: Refusing SEED_ON_BOOT in production without ALLOW_PRODUCTION_SEED=true."
+        exit 1
+    fi
     user_count="$(php artisan tinker --execute='echo Illuminate\Support\Facades\Schema::hasTable("users") ? (string) App\Models\User::query()->count() : "0";' 2>/dev/null || echo "0")"
     if [ "$user_count" = "0" ]; then
         echo "INFO: Empty database detected; running DatabaseSeeder..."

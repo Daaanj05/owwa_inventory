@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Concerns\AuthorizesOwwaExports;
 use App\Models\Acquisition;
 use App\Models\Disposal;
 use App\Models\Issuance;
@@ -12,8 +13,11 @@ use Illuminate\View\View;
 
 class OwwaPrintController extends Controller
 {
+    use AuthorizesOwwaExports;
+
     public function issuance(Issuance $issuance, Request $request): View
     {
+        $this->authorizeIssuanceExport($issuance);
         $issuance->load(['item', 'item.category', 'office', 'department', 'issuedBy', 'issuedTo', 'requisition']);
 
         $dateAcquired = $this->lookupDateAcquired($issuance->item_id);
@@ -42,6 +46,7 @@ class OwwaPrintController extends Controller
 
     public function transfer(Transfer $transfer): View
     {
+        $this->authorizeTransferExport($transfer);
         $transfer->load(['item', 'fromOffice', 'toOffice', 'recordedBy']);
 
         $dateAcquired = $this->lookupDateAcquired($transfer->item_id);
@@ -57,6 +62,7 @@ class OwwaPrintController extends Controller
 
     public function disposal(Disposal $disposal, Request $request): View
     {
+        $this->authorizeDisposalExport($disposal);
         $disposal->load(['item', 'item.category', 'office', 'parIssuance', 'inventoryUnit']);
 
         $dateAcquired = $this->lookupDateAcquired($disposal->item_id);

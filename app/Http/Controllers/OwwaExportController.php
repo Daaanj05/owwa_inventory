@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Filament\Resources\Requisitions\Actions\RequisitionExportActions;
+use App\Http\Concerns\AuthorizesOwwaExports;
 use App\Http\Concerns\LogsExportActivity;
 use App\Models\Acquisition;
 use App\Models\AcquisitionPaperwork;
@@ -26,6 +27,7 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class OwwaExportController extends Controller
 {
+    use AuthorizesOwwaExports;
     use LogsExportActivity;
 
     public function __construct(
@@ -36,6 +38,7 @@ class OwwaExportController extends Controller
 
     public function acquisition(Request $request, Acquisition $acquisition): StreamedResponse
     {
+        $this->authorizeAcquisitionExport($acquisition);
         $acquisition->load(['item.category', 'office', 'recordedBy']);
 
         $formSlug = $request->query('form');
@@ -54,6 +57,7 @@ class OwwaExportController extends Controller
 
     public function issuance(Request $request, Issuance $issuance): StreamedResponse
     {
+        $this->authorizeIssuanceExport($issuance);
         $issuance->load(['item.category', 'office', 'department', 'issuedBy', 'issuedTo']);
 
         $formSlug = $request->query('form');
@@ -72,6 +76,7 @@ class OwwaExportController extends Controller
 
     public function transfer(Request $request, Transfer $transfer): StreamedResponse
     {
+        $this->authorizeTransferExport($transfer);
         $transfer->load(['item.category', 'fromOffice', 'toOffice', 'recordedBy']);
 
         $formSlug = $request->query('form');
@@ -90,6 +95,7 @@ class OwwaExportController extends Controller
 
     public function disposal(Request $request, Disposal $disposal): StreamedResponse
     {
+        $this->authorizeDisposalExport($disposal);
         $disposal->load(['item.category', 'office', 'recordedBy']);
 
         $formSlug = $request->query('form');
@@ -127,9 +133,14 @@ class OwwaExportController extends Controller
 
     public function item(Request $request, Item $item): StreamedResponse
     {
+        $this->authorizeItemExport($item);
         $item->load('category');
         $formSlug = $request->query('form', '');
         $officeId = $request->query('office_id');
+
+        if ($officeId !== null && $officeId !== '') {
+            $this->assertCustodianOffice((int) $officeId);
+        }
 
         $this->logExportActivity(
             'Exported OWWA item report '.$item->item_code,
@@ -149,6 +160,8 @@ class OwwaExportController extends Controller
 
     public function physicalCount(PhysicalCountSession $physicalCountSession): StreamedResponse
     {
+        $this->authorizePhysicalCountExport($physicalCountSession);
+
         $this->logExportActivity(
             'Exported physical count report '.$physicalCountSession->reference_code,
             $physicalCountSession,
@@ -159,6 +172,7 @@ class OwwaExportController extends Controller
 
     public function distribution(Distribution $distribution): StreamedResponse
     {
+        $this->authorizeDistributionExport($distribution);
         $distribution->load(['item.category', 'office', 'department', 'distributedTo', 'distributedBy']);
 
         $this->logExportActivity(
@@ -171,6 +185,7 @@ class OwwaExportController extends Controller
 
     public function acquisitionPaperworkPr(AcquisitionPaperwork $acquisitionPaperwork): StreamedResponse
     {
+        $this->authorizeAcquisitionPaperworkExport($acquisitionPaperwork);
         $acquisitionPaperwork->load(['office', 'department', 'itemCategory', 'lines.item']);
 
         $this->logExportActivity(
@@ -183,6 +198,8 @@ class OwwaExportController extends Controller
 
     public function acquisitionPaperworkPrPdf(AcquisitionPaperwork $acquisitionPaperwork): Response
     {
+        $this->authorizeAcquisitionPaperworkExport($acquisitionPaperwork);
+
         $this->logExportActivity(
             'Exported acquisition paperwork PR PDF '.$acquisitionPaperwork->pr_number,
             $acquisitionPaperwork,
@@ -193,6 +210,7 @@ class OwwaExportController extends Controller
 
     public function acquisitionPaperworkPo(AcquisitionPaperwork $acquisitionPaperwork): StreamedResponse
     {
+        $this->authorizeAcquisitionPaperworkExport($acquisitionPaperwork);
         $acquisitionPaperwork->load(['office', 'department', 'itemCategory', 'lines.item', 'purchaseOrder.orderedLines.item']);
 
         if ($acquisitionPaperwork->purchaseOrder) {
@@ -214,6 +232,7 @@ class OwwaExportController extends Controller
 
     public function acquisitionPaperworkIar(AcquisitionPaperwork $acquisitionPaperwork): StreamedResponse
     {
+        $this->authorizeAcquisitionPaperworkExport($acquisitionPaperwork);
         $acquisitionPaperwork->load([
             'office',
             'department',
@@ -239,6 +258,7 @@ class OwwaExportController extends Controller
 
     public function purchaseOrderExcel(PurchaseOrder $purchaseOrder): StreamedResponse
     {
+        $this->authorizePurchaseOrderExport($purchaseOrder);
         $this->logExportActivity('Exported purchase order Excel '.$purchaseOrder->number, $purchaseOrder);
 
         return $this->acquisitionPdfExport->downloadPoExcel($purchaseOrder);
@@ -246,6 +266,7 @@ class OwwaExportController extends Controller
 
     public function purchaseOrderPdf(PurchaseOrder $purchaseOrder): Response
     {
+        $this->authorizePurchaseOrderExport($purchaseOrder);
         $this->logExportActivity('Exported purchase order PDF '.$purchaseOrder->number, $purchaseOrder);
 
         return $this->acquisitionPdfExport->downloadPoPdf($purchaseOrder);
@@ -253,6 +274,7 @@ class OwwaExportController extends Controller
 
     public function inspectionAcceptanceReportExcel(InspectionAcceptanceReport $inspectionAcceptanceReport): StreamedResponse
     {
+        $this->authorizeInspectionAcceptanceReportExport($inspectionAcceptanceReport);
         $this->logExportActivity(
             'Exported IAR Excel '.$inspectionAcceptanceReport->number,
             $inspectionAcceptanceReport,
@@ -263,6 +285,7 @@ class OwwaExportController extends Controller
 
     public function inspectionAcceptanceReportPdf(InspectionAcceptanceReport $inspectionAcceptanceReport): Response
     {
+        $this->authorizeInspectionAcceptanceReportExport($inspectionAcceptanceReport);
         $this->logExportActivity(
             'Exported IAR PDF '.$inspectionAcceptanceReport->number,
             $inspectionAcceptanceReport,

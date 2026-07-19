@@ -84,6 +84,10 @@ class ProcurementSpreadsheetBuilder
 
             if (! $isLastPage) {
                 $this->exportService->clearProcurementFooterValues($sheet, $formCode);
+
+                if ($formCode === 'IAR') {
+                    OwwaSpreadsheetLayoutHelper::ensureIarAcceptanceCheckboxes($sheet);
+                }
             }
         }
 

@@ -86,14 +86,6 @@
                     <dd>{{ $asset->stockNumber }}</dd>
                 </div>
                 <div class="row">
-                    <dt>End-user</dt>
-                    <dd>{{ $asset->endUser ?? '—' }}</dd>
-                </div>
-                <div class="row">
-                    <dt>Acquisition Cost</dt>
-                    <dd>{{ $asset->acquisitionCostFormatted ?? '—' }}</dd>
-                </div>
-                <div class="row">
                     <dt>Date Acquired</dt>
                     <dd>{{ $asset->dateAcquiredFormatted ?? '—' }}</dd>
                 </div>

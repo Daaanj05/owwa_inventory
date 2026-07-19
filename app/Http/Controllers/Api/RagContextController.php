@@ -14,7 +14,7 @@ use Illuminate\Http\Request;
  * Returns structured inventory data so an LLM (e.g. Ollama/DeepSeek) can answer
  * questions using real numbers. Use this payload as context when calling the AI.
  *
- * For production, protect with auth (e.g. API token or Sanctum).
+ * Protected by EnsureRagContextToken (RAG_CONTEXT_TOKEN bearer) and throttle.
  */
 class RagContextController extends Controller
 {

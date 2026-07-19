@@ -882,7 +882,7 @@ return [
                 'F' => 'amount',
             ],
             'wrap_text_columns' => ['A', 'B', 'C', 'D', 'E', 'F'],
-            'min_wrap_lines_for_expansion' => 2,
+            'min_wrap_lines_for_expansion' => 1,
             'uniform_data_row_height' => true,
         ],
         'signatures' => [
@@ -904,13 +904,19 @@ return [
             'delivery_term' => ['cell' => 'D13', 'label' => 'Delivery Term : '],
             'date_of_delivery' => ['cell' => 'A14', 'label' => 'Date of Delivery : '],
             'payment_term' => ['cell' => 'D14', 'label' => 'Payment Term : '],
+            // Leave template blanks (underscores) for manual completion — never overwrite.
             'fund_cluster' => ['cell' => 'A45', 'label' => 'Fund Cluster : '],
+            'funds_available' => ['cell' => 'A46', 'label' => 'Funds Available : '],
+            'ors_burs_no' => ['cell' => 'D45', 'label' => 'ORS/BURS No. : '],
+            'ors_burs_date' => ['cell' => 'D46', 'label' => 'Date of the ORS/BURS: '],
             'total_amount_in_words' => ['cell' => 'A32', 'label' => ''],
         ],
         'detail' => [
+            // Rows 16–30: line items. Row 31: total amount in numbers. Row 32: total amount in words.
             'start_row' => 16,
-            'max_rows' => 16,
+            'max_rows' => 15,
             'footer_start_row' => 32,
+            'total_amount_numbers_row_offset' => -1,
             'continuation_sheet_suffix' => ' Cont.',
             'style_row' => 16,
             'highest_column' => 'F',
@@ -938,6 +944,7 @@ return [
             'supplier_signatory' => 'A39',
             'authorized_official' => 'D39',
         ],
+        'accounting_preserve_cells' => ['A45', 'D45', 'A46', 'D46'],
     ],
 
     'IAR' => [
@@ -976,7 +983,7 @@ return [
                 'E' => 'qty',
             ],
             'wrap_text_columns' => ['A', 'B', 'D', 'E'],
-            'min_wrap_lines_for_expansion' => 2,
+            'min_wrap_lines_for_expansion' => 1,
             'uniform_data_row_height' => true,
         ],
         'signatures' => [

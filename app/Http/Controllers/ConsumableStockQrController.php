@@ -6,7 +6,6 @@ use App\Models\Item;
 use App\Models\Office;
 use App\Models\User;
 use App\Services\InventoryQrLabelService;
-use App\Services\InventoryStockService;
 use App\Support\ConsumableStockQrPayload;
 use App\Support\OwwaExportFilename;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -16,18 +15,15 @@ use Symfony\Component\HttpFoundation\Response as SymfonyResponse;
 
 class ConsumableStockQrController extends Controller
 {
-    public function show(Item $item, Office $office, Request $request, InventoryStockService $stock): View
+    public function show(Item $item, Office $office, Request $request): View
     {
         $item->loadMissing('category');
 
         abort_unless($item->category?->getTemplateSlug() === 'consumables', 404);
 
-        $balance = $stock->getStock((int) $item->id, (int) $office->id);
-
         return view('inventory.stock-lookup', [
             'item' => $item,
             'office' => $office,
-            'balance' => $balance,
             'unitCostKey' => $request->query('uck'),
             'payload' => ConsumableStockQrPayload::encode($item, $office, $request->query('uck')),
         ]);

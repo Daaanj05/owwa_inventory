@@ -94,19 +94,42 @@ class AcquisitionPaperworkWorkflowTest extends TestCase
         $this->assertSame($officeName, (string) ($values['A8'] ?? ''));
     }
 
-    public function test_po_export_skips_accounting_header_cells(): void
+    public function test_po_export_preserves_accounting_blank_fields(): void
     {
+        if (! $this->acquisitionPaperworkTemplatesExist()) {
+            $this->markTestSkipped('OWWA acquisition paperwork templates are not installed.');
+        }
+
         $paperwork = $this->createCompletedPaperwork();
+        $service = app(OwwaTemplateExportService::class);
+        $values = $service->cellValuesForAcquisitionPaperworkPo($paperwork);
 
-        $values = app(OwwaTemplateExportService::class)->cellValuesForAcquisitionPaperworkPo($paperwork);
+        foreach (['A45', 'D45', 'A46', 'D46', 'D47'] as $cell) {
+            $this->assertArrayNotHasKey($cell, $values);
+        }
 
-        $this->assertArrayNotHasKey('A45', $values);
-        $this->assertArrayNotHasKey('D45', $values);
-        $this->assertArrayNotHasKey('A46', $values);
-        $this->assertArrayNotHasKey('D46', $values);
-        $this->assertArrayNotHasKey('D47', $values);
-        $startRow = OwwaCellMapping::detailRowBase('PO');
-        $this->assertArrayHasKey('F'.$startRow, $values);
+        $templateFilename = $service->getTemplatePathForCategory('acquisition_paperwork', $paperwork->itemCategory, 'po');
+        $spreadsheet = $service->buildProcurementSpreadsheet($paperwork->fresh(['lines.item', 'itemCategory']), 'po', $templateFilename);
+        $sheet = $spreadsheet->getActiveSheet();
+
+        $this->assertStringContainsString('Fund Cluster', (string) $sheet->getCell('A45')->getValue());
+        $this->assertStringContainsString('ORS/BURS No.', (string) $sheet->getCell('D45')->getValue());
+        $this->assertStringContainsString('Funds Available', (string) $sheet->getCell('A46')->getValue());
+        $this->assertStringContainsString('Date of the ORS/BURS', (string) $sheet->getCell('D46')->getValue());
+        $this->assertStringContainsString('___', (string) $sheet->getCell('A45')->getValue());
+    }
+
+    public function test_po_export_puts_total_amount_in_numbers_on_row_before_words(): void
+    {
+        $paperwork = $this->createPaperworkDraft();
+        $paperwork->lines()->update(['quantity' => 10, 'unit_cost' => 185, 'amount' => 1850]);
+
+        $values = app(OwwaTemplateExportService::class)->cellValuesForAcquisitionPaperworkPo($paperwork->fresh(['lines']));
+
+        $this->assertSame(1850.0, (float) ($values['F31'] ?? 0));
+        $this->assertStringContainsString('one thousand eight hundred fifty', strtolower((string) ($values['A32'] ?? '')));
+        $this->assertArrayNotHasKey('F32', $values);
+        $this->assertArrayNotHasKey('A31', $values);
     }
 
     public function test_pr_export_writes_line_items_into_spreadsheet_cells(): void
@@ -152,6 +175,58 @@ class AcquisitionPaperworkWorkflowTest extends TestCase
         $this->assertGreaterThanOrEqual(15, $sheet->getRowDimension(8)->getRowHeight());
     }
 
+    public function test_iar_export_preserves_acceptance_checkbox_markers(): void
+    {
+        if (! $this->acquisitionPaperworkIarTemplateExists()) {
+            $this->markTestSkipped('OWWA IAR template is not installed.');
+        }
+
+        $paperwork = $this->createPaperworkDraft();
+        $paperwork->update([
+            'supplier' => 'Supplier Co.',
+            'iar_number' => '2026-01-0099',
+            'iar_date' => now(),
+            'iar_data' => [
+                'date_inspected' => now()->toDateString(),
+                'date_received' => now()->toDateString(),
+            ],
+        ]);
+
+        $service = app(OwwaTemplateExportService::class);
+        $templateFilename = $service->getTemplatePathForCategory('acquisition_paperwork', $paperwork->itemCategory, 'iar');
+        $spreadsheet = $service->buildProcurementSpreadsheet(
+            $paperwork->fresh(['lines.item', 'itemCategory', 'office', 'requestingOffice', 'department']),
+            'iar',
+            $templateFilename,
+        );
+        $sheet = $spreadsheet->getActiveSheet();
+
+        $this->assertStringContainsString('☐', (string) $sheet->getCell('C30')->getValue());
+        $this->assertStringContainsString('Complete', (string) $sheet->getCell('C30')->getValue());
+        $this->assertStringContainsString('☐', (string) $sheet->getCell('C32')->getValue());
+        $this->assertStringContainsString('Partial', (string) $sheet->getCell('C32')->getValue());
+    }
+
+    public function test_pr_pdf_export_is_generated_from_spreadsheet(): void
+    {
+        if (! $this->acquisitionPaperworkTemplatesExist()) {
+            $this->markTestSkipped('OWWA acquisition paperwork templates are not installed.');
+        }
+
+        $paperwork = $this->createPaperworkDraft();
+        $paperwork->update([
+            'pr_number' => '2026-01-0021',
+            'pr_status' => AcquisitionPaperwork::STATUS_APPROVED,
+        ]);
+
+        $response = app(\App\Services\AcquisitionPaperworkPdfExportService::class)
+            ->downloadPrPdf($paperwork->fresh(['lines.item', 'itemCategory', 'office', 'requestingOffice', 'department']));
+
+        $this->assertSame(200, $response->getStatusCode());
+        $this->assertSame('application/pdf', $response->headers->get('content-type'));
+        $this->assertStringStartsWith('%PDF', $response->getContent());
+    }
+
     public function test_pr_export_expands_detail_row_height_for_long_description(): void
     {
         if (! $this->acquisitionPaperworkTemplatesExist()) {
@@ -184,6 +259,39 @@ class AcquisitionPaperworkWorkflowTest extends TestCase
         $this->assertTrue($sheet->getStyle('F'.$startRow)->getAlignment()->getWrapText());
         $this->assertGreaterThan(15, $expandedHeight);
         $this->assertSame($expandedHeight, $sheet->getRowDimension($startRow + 1)->getRowHeight());
+    }
+
+    public function test_pr_export_expands_detail_row_height_for_long_stock_no(): void
+    {
+        if (! $this->acquisitionPaperworkTemplatesExist()) {
+            $this->markTestSkipped('OWWA acquisition paperwork templates are not installed.');
+        }
+
+        $paperwork = $this->createPaperworkDraft();
+        $longStockItem = Item::factory()->create([
+            'item_category_id' => $paperwork->item_category_id,
+            'item_code' => 'SPHV-2026-FF-106-02-083-OWWA-IVA',
+        ]);
+        $paperwork->lines()->delete();
+        AcquisitionPaperworkLine::query()->create([
+            'acquisition_paperwork_id' => $paperwork->id,
+            'item_id' => $longStockItem->id,
+            'description' => 'Desk Lamp',
+            'unit' => 'piece',
+            'quantity' => 10,
+            'unit_cost' => 100,
+            'amount' => 1000,
+        ]);
+
+        $paperwork = $paperwork->fresh(['lines.item', 'itemCategory']);
+        $startRow = OwwaCellMapping::detailRowBase('PR');
+        $service = app(OwwaTemplateExportService::class);
+        $templateFilename = $service->getTemplatePathForCategory('acquisition_paperwork', $paperwork->itemCategory, 'pr');
+        $spreadsheet = $service->buildProcurementSpreadsheet($paperwork, 'pr', $templateFilename);
+        $sheet = $spreadsheet->getActiveSheet();
+
+        $this->assertTrue($sheet->getStyle('A'.$startRow)->getAlignment()->getWrapText());
+        $this->assertGreaterThan(15, $sheet->getRowDimension($startRow)->getRowHeight());
     }
 
     public function test_po_export_expands_detail_row_height_for_long_stock_no(): void
@@ -300,6 +408,7 @@ class AcquisitionPaperworkWorkflowTest extends TestCase
         }
 
         $this->assertArrayHasKey('A32', $cellValues);
+        $this->assertArrayHasKey('F31', $cellValues);
         $this->assertStringContainsString('Pesos', (string) ($cellValues['A32'] ?? ''));
         $this->assertStringContainsString('six thousand five hundred', strtolower((string) ($cellValues['A32'] ?? '')));
     }
@@ -312,6 +421,7 @@ class AcquisitionPaperworkWorkflowTest extends TestCase
         $values = app(OwwaTemplateExportService::class)->cellValuesForAcquisitionPaperworkPo($paperwork->fresh(['lines']));
 
         $this->assertStringContainsString('one thousand eight hundred fifty', strtolower((string) ($values['A32'] ?? '')));
+        $this->assertSame(1850.0, (float) ($values['F31'] ?? 0));
         $this->assertNotSame(
             \App\Support\PesoAmountInWords::format(185),
             (string) ($values['A32'] ?? ''),
@@ -354,23 +464,31 @@ class AcquisitionPaperworkWorkflowTest extends TestCase
 
         $this->assertSame(2, $spreadsheet->getSheetCount());
         $this->assertStringContainsString(
-            'Overflow line 16',
+            'Overflow line 15',
             (string) $spreadsheet->getSheet(1)->getCell('C'.($startRow))->getValue(),
         );
         $this->assertStringContainsString(
             'Pesos',
             (string) $spreadsheet->getSheet(1)->getCell('A32')->getValue(),
         );
+        $this->assertNotSame('', (string) $spreadsheet->getSheet(1)->getCell('F31')->getValue());
         $this->assertSame('', (string) $spreadsheet->getSheet(0)->getCell('A32')->getValue());
-        $this->assertSame($maxRows, $this->countFilledPoDetailRows($spreadsheet->getSheet(0), $startRow));
+        $this->assertSame('', (string) $spreadsheet->getSheet(0)->getCell('F31')->getValue());
+        $this->assertStringContainsString('Fund Cluster', (string) $spreadsheet->getSheet(0)->getCell('A45')->getValue());
+        $this->assertStringContainsString('Fund Cluster', (string) $spreadsheet->getSheet(1)->getCell('A45')->getValue());
+        $this->assertSame($maxRows, $this->countFilledPoDetailRows($spreadsheet->getSheet(0), $startRow, $maxRows));
     }
 
-    protected function countFilledPoDetailRows(\PhpOffice\PhpSpreadsheet\Worksheet\Worksheet $sheet, int $startRow): int
-    {
+    protected function countFilledPoDetailRows(
+        \PhpOffice\PhpSpreadsheet\Worksheet\Worksheet $sheet,
+        int $startRow,
+        ?int $maxRows = null,
+    ): int {
+        $limit = $maxRows ?? 30;
         $count = 0;
 
-        for ($offset = 0; $offset < 30; $offset++) {
-            if (filled($sheet->getCell('A'.($startRow + $offset))->getValue())) {
+        for ($offset = 0; $offset < $limit; $offset++) {
+            if (filled($sheet->getCell('C'.($startRow + $offset))->getValue())) {
                 $count++;
             }
         }

@@ -2,18 +2,21 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Concerns\AuthorizesOwwaExports;
 use App\Http\Concerns\LogsExportActivity;
 use App\Models\Acquisition;
 use App\Models\Disposal;
 use App\Models\Issuance;
 use App\Models\Transfer;
 use App\Services\InventoryStockService;
+use App\Support\CustodianOfficeScope;
 use App\Support\OwwaExportFilename;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 
 class CoaReportController extends Controller
 {
+    use AuthorizesOwwaExports;
     use LogsExportActivity;
 
     public function __construct(
@@ -65,6 +68,8 @@ class CoaReportController extends Controller
      */
     public function stockLevelReport(Request $request)
     {
+        $this->authorizeCoaReportAccess();
+
         $categoryId = (int) session('active_item_category_id', 0);
 
         $rows = $this->stock
@@ -94,11 +99,14 @@ class CoaReportController extends Controller
      */
     public function issuanceReport(Request $request)
     {
+        $this->authorizeCoaReportAccess();
+
         $categoryId = (int) session('active_item_category_id', 0);
         $ids = $this->coaReportIdsFromRequest($request);
         $issuances = Issuance::with(['item', 'office', 'issuedTo'])
             ->when($ids !== [], fn ($q) => $q->whereIn('id', $ids))
             ->when($categoryId > 0, fn ($q) => $q->whereHas('item', fn ($iq) => $iq->where('item_category_id', $categoryId)))
+            ->tap(fn ($q) => CustodianOfficeScope::applyOfficeColumn($q))
             ->orderByDesc('issuance_date')
             ->limit(500)
             ->get();
@@ -116,12 +124,15 @@ class CoaReportController extends Controller
 
     public function acquisitionReport(Request $request)
     {
+        $this->authorizeCoaReportAccess();
+
         $categoryId = (int) session('active_item_category_id', 0);
         $ids = $this->coaReportIdsFromRequest($request);
 
         $acquisitions = Acquisition::with(['item', 'office', 'recordedBy'])
             ->when($ids !== [], fn ($q) => $q->whereIn('id', $ids))
             ->when($categoryId > 0, fn ($q) => $q->whereHas('item', fn ($iq) => $iq->where('item_category_id', $categoryId)))
+            ->tap(fn ($q) => CustodianOfficeScope::applyOfficeColumn($q))
             ->orderByDesc('acquisition_date')
             ->limit(500)
             ->get();
@@ -139,12 +150,15 @@ class CoaReportController extends Controller
 
     public function transferReport(Request $request)
     {
+        $this->authorizeCoaReportAccess();
+
         $categoryId = (int) session('active_item_category_id', 0);
         $ids = $this->coaReportIdsFromRequest($request);
 
         $transfers = Transfer::with(['item', 'fromOffice', 'toOffice', 'recordedBy'])
             ->when($ids !== [], fn ($q) => $q->whereIn('id', $ids))
             ->when($categoryId > 0, fn ($q) => $q->whereHas('item', fn ($iq) => $iq->where('item_category_id', $categoryId)))
+            ->tap(fn ($q) => CustodianOfficeScope::applyTransferOfficeScope($q))
             ->orderByDesc('transfer_date')
             ->limit(500)
             ->get();
@@ -162,12 +176,15 @@ class CoaReportController extends Controller
 
     public function disposalReport(Request $request)
     {
+        $this->authorizeCoaReportAccess();
+
         $categoryId = (int) session('active_item_category_id', 0);
         $ids = $this->coaReportIdsFromRequest($request);
 
         $disposals = Disposal::with(['item', 'office', 'recordedBy'])
             ->when($ids !== [], fn ($q) => $q->whereIn('id', $ids))
             ->when($categoryId > 0, fn ($q) => $q->whereHas('item', fn ($iq) => $iq->where('item_category_id', $categoryId)))
+            ->tap(fn ($q) => CustodianOfficeScope::applyOfficeColumn($q))
             ->orderByDesc('disposal_date')
             ->limit(500)
             ->get();

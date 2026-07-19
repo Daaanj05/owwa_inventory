@@ -10,8 +10,6 @@ readonly class PublicAssetCardData
         public string $description,
         public string $unitSection,
         public string $stockNumber,
-        public ?string $endUser,
-        public ?string $acquisitionCostFormatted,
         public ?string $dateAcquiredFormatted,
     ) {}
 }

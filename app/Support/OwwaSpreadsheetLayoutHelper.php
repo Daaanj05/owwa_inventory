@@ -237,6 +237,39 @@ class OwwaSpreadsheetLayoutHelper
         return OwwaExportStandards::ledgerRowHeight();
     }
 
+    /**
+     * Appendix 62 IAR uses Excel form-control checkboxes that PhpSpreadsheet drops.
+     * Re-draw them as printable checkbox glyphs beside Complete / Partial.
+     */
+    public static function ensureIarAcceptanceCheckboxes(Worksheet $sheet): void
+    {
+        $markers = [
+            'C30' => 'Complete',
+            'C32' => 'Partial (pls. specify quantity)',
+        ];
+
+        foreach ($markers as $cell => $label) {
+            $current = trim((string) ($sheet->getCell($cell)->getValue() ?? ''));
+            $hasCheckbox = str_contains($current, '☐')
+                || str_contains($current, '☑')
+                || str_contains($current, '□')
+                || str_contains($current, '■');
+
+            if ($hasCheckbox) {
+                continue;
+            }
+
+            if ($current === '') {
+                $sheet->setCellValue($cell, '☐  '.$label);
+
+                continue;
+            }
+
+            // Keep any existing wording (e.g. trailing spaces / custom text).
+            $sheet->setCellValue($cell, '☐  '.$current);
+        }
+    }
+
     public static function applyBoldLabelPlainValueCell(
         Worksheet $sheet,
         string $cell,

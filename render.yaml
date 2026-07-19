@@ -51,3 +51,14 @@ services:
         value: deepseek-r1:7b
       - key: OWWA_TEMPLATES_STRICT
         value: "true"
+      # Set a strong random value in the Render dashboard (not committed).
+      - key: RAG_CONTEXT_TOKEN
+        sync: false
+      - key: ALLOW_PRODUCTION_SEED
+        value: "false"
+      - key: LIBREOFFICE_PDF
+        value: "true"
+      - key: LIBREOFFICE_BINARY
+        value: soffice
+      - key: LIBREOFFICE_TIMEOUT
+        value: "90"

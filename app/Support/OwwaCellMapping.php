@@ -29,9 +29,9 @@ class OwwaCellMapping
                 continue;
             }
 
-            // Fund Cluster stays on the printed OWWA form as a blank field — never overwrite
-            // the template label/underscores with an empty cell.
-            if ($field === 'fund_cluster') {
+            // Manual accounting blanks stay on the printed OWWA form — never overwrite
+            // Fund Cluster / Funds Available / ORS/BURS labels or underscores.
+            if (in_array($field, ['fund_cluster', 'funds_available', 'ors_burs_no', 'ors_burs_date'], true)) {
                 continue;
             }
 
@@ -52,6 +52,32 @@ class OwwaCellMapping
     public static function detailRowBase(string $formCode): int
     {
         return (int) (self::form($formCode)['detail']['start_row'] ?? 12);
+    }
+
+    /**
+     * Row for "Total amount in words" (footer), after optional detail expansion.
+     */
+    public static function poTotalAmountInWordsRow(int $footerStartRow, int $extraDetailRows = 0): int
+    {
+        return $footerStartRow + max(0, $extraDetailRows);
+    }
+
+    /**
+     * Row for "Total amount in numbers" — always the data row immediately before words.
+     */
+    public static function poTotalAmountInNumbersRow(int $wordsRow): int
+    {
+        return max(1, $wordsRow - 1);
+    }
+
+    /**
+     * @return list<string>
+     */
+    public static function poAccountingPreserveCells(): array
+    {
+        $cells = (array) (self::form('PO')['accounting_preserve_cells'] ?? []);
+
+        return array_values(array_filter($cells, fn ($cell): bool => is_string($cell) && $cell !== ''));
     }
 
     /**

@@ -10,11 +10,18 @@ use App\Models\User;
 use App\Support\DemoSemiItemCatalog;
 use App\Support\SemiExpendableUsefulLife;
 use Illuminate\Database\Seeder;
+use RuntimeException;
 
 class DemoDataSeeder extends Seeder
 {
     public function run(): void
     {
+        if (app()->environment('production') && ! filter_var(env('ALLOW_PRODUCTION_SEED', false), FILTER_VALIDATE_BOOLEAN)) {
+            throw new RuntimeException(
+                'Refusing to run DemoDataSeeder in production without ALLOW_PRODUCTION_SEED=true.',
+            );
+        }
+
         $regional = Office::query()->updateOrCreate(
             ['code' => 'OWWA-IVA'],
             [

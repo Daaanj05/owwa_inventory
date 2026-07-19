@@ -21,7 +21,7 @@ class InventoryUnitPublicLookupService
         }
 
         $unit = InventoryUnit::query()
-            ->with(['item', 'office', 'acquisition', 'issuance.issuedTo', 'issuance.department'])
+            ->with(['item', 'office', 'acquisition', 'issuance.department'])
             ->where('property_number', $propertyNumber)
             ->first();
 
@@ -30,7 +30,7 @@ class InventoryUnitPublicLookupService
         }
 
         $issuance = Issuance::query()
-            ->with(['item', 'office', 'department', 'issuedTo'])
+            ->with(['item', 'office', 'department'])
             ->where('property_number', $propertyNumber)
             ->first();
 
@@ -43,7 +43,6 @@ class InventoryUnitPublicLookupService
 
     protected function fromInventoryUnit(InventoryUnit $unit): PublicAssetCardData
     {
-        $unitCost = $unit->acquisition?->unit_cost ?? $unit->issuance?->unit_cost;
         $issuance = $unit->issuance;
 
         return new PublicAssetCardData(
@@ -52,8 +51,6 @@ class InventoryUnitPublicLookupService
             description: $unit->description ?? $unit->item?->name ?? '—',
             unitSection: $this->unitSectionLabel($unit->office?->name, $issuance?->department?->name),
             stockNumber: filled($unit->stock_number) ? (string) $unit->stock_number : '—',
-            endUser: $this->endUserLabel($issuance),
-            acquisitionCostFormatted: $this->formatCost($unitCost),
             dateAcquiredFormatted: $this->formatDate($unit->acquisition?->acquisition_date ?? $issuance?->issuance_date),
         );
     }
@@ -66,8 +63,6 @@ class InventoryUnitPublicLookupService
             description: $issuance->item?->name ?? '—',
             unitSection: $this->unitSectionLabel($issuance->office?->name, $issuance->department?->name),
             stockNumber: '—',
-            endUser: $this->endUserLabel($issuance),
-            acquisitionCostFormatted: $this->formatCost($issuance->unit_cost),
             dateAcquiredFormatted: $this->formatDate($issuance->issuance_date),
         );
     }
@@ -81,22 +76,6 @@ class InventoryUnitPublicLookupService
         }
 
         return $office;
-    }
-
-    protected function endUserLabel(?Issuance $issuance): ?string
-    {
-        $name = $issuance?->issuedTo?->name;
-
-        return filled($name) ? (string) $name : null;
-    }
-
-    protected function formatCost(mixed $unitCost): ?string
-    {
-        if ($unitCost === null || $unitCost === '') {
-            return null;
-        }
-
-        return '₱'.number_format((float) $unitCost, 2);
     }
 
     protected function formatDate(mixed $date): ?string

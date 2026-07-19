@@ -260,6 +260,8 @@ class OwwaTemplateExportService
                 $this->finalizeDetailSection('IAR', $sheet, $detailCount);
             }
 
+            OwwaSpreadsheetLayoutHelper::ensureIarAcceptanceCheckboxes($sheet);
+
             return;
         }
 
@@ -295,6 +297,20 @@ class OwwaTemplateExportService
         $footerStart = (int) ($detail['footer_start_row'] ?? 0);
 
         if ($footerStart <= 0) {
+            return;
+        }
+
+        // PO: clear only the totals rows so Fund Cluster / ORS/BURS blanks stay intact.
+        if ($formCode === 'PO') {
+            $wordsRow = OwwaCellMapping::poTotalAmountInWordsRow($footerStart);
+            $numbersRow = OwwaCellMapping::poTotalAmountInNumbersRow($wordsRow);
+
+            foreach ([$numbersRow, $wordsRow] as $row) {
+                foreach (range('A', 'F') as $column) {
+                    $sheet->setCellValue($column.$row, null);
+                }
+            }
+
             return;
         }
 
@@ -1206,6 +1222,53 @@ class OwwaTemplateExportService
         }
 
         return $absolutePath;
+    }
+
+    /**
+     * Serialize a spreadsheet to PDF bytes.
+     * Prefers LibreOffice headless (Excel-like layout); falls back to Dompdf.
+     */
+    public function spreadsheetToPdfBinary(Spreadsheet $spreadsheet): string
+    {
+        $xlsxBinary = $this->spreadsheetToXlsxBinary($spreadsheet);
+
+        $libreOfficePdf = app(LibreOfficePdfConverter::class)->convertXlsxBinary($xlsxBinary);
+        if (is_string($libreOfficePdf) && str_starts_with($libreOfficePdf, '%PDF')) {
+            return $libreOfficePdf;
+        }
+
+        return $this->spreadsheetToDompdfBinary($spreadsheet);
+    }
+
+    /**
+     * Dompdf fallback when LibreOffice is unavailable (layout is approximate).
+     */
+    public function spreadsheetToDompdfBinary(Spreadsheet $spreadsheet): string
+    {
+        PhpExtensionGuard::ensureZipArchive();
+
+        $sheetCount = $spreadsheet->getSheetCount();
+        for ($index = 0; $index < $sheetCount; $index++) {
+            $sheet = $spreadsheet->getSheet($index);
+            $setup = $sheet->getPageSetup();
+            $setup->setOrientation(\PhpOffice\PhpSpreadsheet\Worksheet\PageSetup::ORIENTATION_PORTRAIT);
+            $setup->setPaperSize(\PhpOffice\PhpSpreadsheet\Worksheet\PageSetup::PAPERSIZE_LEGAL);
+            $setup->setFitToPage(true);
+            $setup->setFitToWidth(1);
+            $setup->setFitToHeight(0);
+            $sheet->getPageMargins()->setTop(0.4);
+            $sheet->getPageMargins()->setBottom(0.4);
+            $sheet->getPageMargins()->setLeft(0.35);
+            $sheet->getPageMargins()->setRight(0.35);
+        }
+
+        $writer = new \PhpOffice\PhpSpreadsheet\Writer\Pdf\Dompdf($spreadsheet);
+        $writer->setSheetIndex(0);
+
+        ob_start();
+        $writer->save('php://output');
+
+        return ob_get_clean() ?: '';
     }
 
     /**
@@ -3679,6 +3742,9 @@ class OwwaTemplateExportService
             'date_of_delivery' => $poData['date_of_delivery'] ?? '',
             'payment_term' => $poData['payment_term'] ?? '',
             'fund_cluster' => '',
+            'funds_available' => '',
+            'ors_burs_no' => '',
+            'ors_burs_date' => '',
         ]);
 
         $this->applyProcurementDetailRows($values, 'PO', $lines ?? $case->lines, [
@@ -3691,8 +3757,14 @@ class OwwaTemplateExportService
         ]);
 
         if ($includeFooter) {
+            $detail = (array) ($poMap['detail'] ?? []);
+            $footerStartRow = (int) ($detail['footer_start_row'] ?? 32);
+            $amountColumn = (string) (($detail['columns']['amount'] ?? 'F'));
+            $wordsRow = OwwaCellMapping::poTotalAmountInWordsRow($footerStartRow);
+            $numbersRow = OwwaCellMapping::poTotalAmountInNumbersRow($wordsRow);
             $totalAmount = (float) $case->lines->sum('amount');
-            $values['A32'] = PesoAmountInWords::format($totalAmount);
+            $values[OwwaCellMapping::columnCell($amountColumn, $numbersRow)] = $totalAmount;
+            $values['A'.$wordsRow] = PesoAmountInWords::format($totalAmount);
         }
 
         return $values;

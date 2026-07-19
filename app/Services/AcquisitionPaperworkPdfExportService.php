@@ -9,11 +9,10 @@ use App\Support\OwwaCellMapping;
 use App\Support\OwwaExportFilename;
 use App\Support\OwwaSpreadsheetLayoutHelper;
 use App\Support\OwwaTemplateLoader;
-use App\Support\PdfSafeText;
 use App\Support\PesoAmountInWords;
 use App\Support\PhpExtensionGuard;
-use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Response;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class AcquisitionPaperworkPdfExportService
@@ -24,64 +23,76 @@ class AcquisitionPaperworkPdfExportService
 
     public function downloadPrPdf(AcquisitionPaperwork $paperwork): Response
     {
-        $paperwork->loadMissing(['office', 'requestingOffice', 'department', 'itemCategory', 'lines.item.category', 'lines.item.uacsObjectCode']);
-
-        $pdf = Pdf::loadView('owwa.acquisition-pr-pdf', [
-            'paperwork' => $paperwork,
-            'officeName' => app(\App\Support\SupplyOfficeResolver::class)->resolveOfficeName() ?? $paperwork->office?->name,
-            'lines' => $paperwork->lines,
-            'generatedAt' => now(),
-        ])->setPaper('legal', 'portrait');
-
-        return $pdf->download(OwwaExportFilename::transaction('PR', $paperwork->pr_number ?? (string) $paperwork->id, 'pdf'));
-    }
-
-    public function downloadPoPdf(PurchaseOrder $purchaseOrder): Response
-    {
-        $purchaseOrder->loadMissing([
-            'purchaseRequest.office',
-            'purchaseRequest.itemCategory',
-            'orderedLines.item.category',
-            'orderedLines.item.uacsObjectCode',
-        ]);
-
-        $lines = $purchaseOrder->orderedLines;
-        $total = $purchaseOrder->totalAmount();
-
-        $pdf = Pdf::loadView('owwa.acquisition-po-pdf', [
-            'purchaseOrder' => $purchaseOrder,
-            'paperwork' => $purchaseOrder->purchaseRequest,
-            'lines' => $lines,
-            'totalAmount' => $total,
-            'totalAmountInWords' => PesoAmountInWords::format($total),
-            'technicalSpecifications' => PdfSafeText::normalize((string) ($purchaseOrder->technical_specifications ?? 'N/A')),
-            'generatedAt' => now(),
-        ])->setPaper('legal', 'portrait');
-
-        return $pdf->download(OwwaExportFilename::transaction('PO', $purchaseOrder->number ?? (string) $purchaseOrder->id, 'pdf'));
-    }
-
-    public function downloadIarPdf(InspectionAcceptanceReport $iar): Response
-    {
-        $iar->loadMissing([
-            'purchaseOrder.purchaseRequest.office',
-            'purchaseOrder.purchaseRequest.itemCategory',
+        $paperwork->loadMissing([
+            'office',
+            'requestingOffice',
+            'department',
+            'itemCategory',
             'lines.item.category',
             'lines.item.uacsObjectCode',
         ]);
 
-        $pdf = Pdf::loadView('owwa.acquisition-iar-pdf', [
-            'iar' => $iar,
-            'purchaseOrder' => $iar->purchaseOrder,
-            'paperwork' => $iar->purchaseOrder?->purchaseRequest,
-            'lines' => $iar->lines,
-            'generatedAt' => now(),
-        ])->setPaper('legal', 'portrait');
+        $templateFilename = $this->excelExport->getTemplatePathForCategory(
+            'acquisition_paperwork',
+            $paperwork->itemCategory,
+            'pr',
+        );
+        $spreadsheet = $this->excelExport->buildProcurementSpreadsheet($paperwork, 'pr', $templateFilename);
 
-        return $pdf->download(OwwaExportFilename::transaction('IAR', $iar->number ?? (string) $iar->id, 'pdf'));
+        return $this->pdfDownloadResponse(
+            $spreadsheet,
+            OwwaExportFilename::transaction('PR', $paperwork->pr_number ?? (string) $paperwork->id, 'pdf'),
+        );
+    }
+
+    public function downloadPoPdf(PurchaseOrder $purchaseOrder): Response
+    {
+        $spreadsheet = $this->buildPurchaseOrderSpreadsheet($purchaseOrder);
+
+        return $this->pdfDownloadResponse(
+            $spreadsheet,
+            OwwaExportFilename::transaction('PO', $purchaseOrder->number ?? (string) $purchaseOrder->id, 'pdf'),
+        );
+    }
+
+    public function downloadIarPdf(InspectionAcceptanceReport $iar): Response
+    {
+        $paperwork = $this->paperworkFromIar($iar);
+        $templateFilename = $this->excelExport->getTemplatePathForCategory(
+            'acquisition_paperwork',
+            $paperwork->itemCategory,
+            'iar',
+        );
+        $spreadsheet = $this->excelExport->buildProcurementSpreadsheet($paperwork, 'iar', $templateFilename);
+
+        return $this->pdfDownloadResponse(
+            $spreadsheet,
+            OwwaExportFilename::transaction('IAR', $iar->number ?? (string) $iar->id, 'pdf'),
+        );
     }
 
     public function downloadPoExcel(PurchaseOrder $purchaseOrder): StreamedResponse
+    {
+        $spreadsheet = $this->buildPurchaseOrderSpreadsheet($purchaseOrder);
+        $binary = $this->excelExport->spreadsheetToXlsxBinary($spreadsheet);
+        $spreadsheet->disconnectWorksheets();
+        $filename = $this->excelExport->buildOwwaExportFilename('PO', $purchaseOrder->number ?? (string) $purchaseOrder->id);
+
+        return response()->streamDownload(
+            static function () use ($binary): void {
+                echo $binary;
+            },
+            $filename,
+            ['Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'],
+        );
+    }
+
+    public function downloadIarExcel(InspectionAcceptanceReport $iar): StreamedResponse
+    {
+        return $this->excelExport->downloadAcquisitionPaperworkIar($this->paperworkFromIar($iar));
+    }
+
+    protected function buildPurchaseOrderSpreadsheet(PurchaseOrder $purchaseOrder): Spreadsheet
     {
         PhpExtensionGuard::ensureZipArchive();
         $purchaseOrder->loadMissing([
@@ -105,7 +116,7 @@ class AcquisitionPaperworkPdfExportService
 
         $detail = (array) OwwaCellMapping::form('PO')['detail'];
         $startRow = (int) ($detail['start_row'] ?? 16);
-        $maxRows = (int) ($detail['max_rows'] ?? 16);
+        $maxRows = (int) ($detail['max_rows'] ?? 15);
         $footerStartRow = (int) ($detail['footer_start_row'] ?? 32);
         $styleRow = (int) ($detail['style_row'] ?? $startRow);
         $highestColumn = (string) ($detail['highest_column'] ?? 'F');
@@ -113,7 +124,7 @@ class AcquisitionPaperworkPdfExportService
 
         $lines = $purchaseOrder->orderedLines->values();
         $lineCount = $lines->count();
-        // Keep one empty detail row after the last item before the totals/footer.
+        // Keep one empty detail row after the last item for the numeric total.
         $neededDetailRows = max($lineCount + 1, 1);
         $extraRows = max(0, $neededDetailRows - $maxRows);
 
@@ -127,32 +138,29 @@ class AcquisitionPaperworkPdfExportService
             );
         }
 
-        $totalRow = $footerStartRow + $extraRows;
+        $totalRow = OwwaCellMapping::poTotalAmountInWordsRow($footerStartRow, $extraRows);
         $cellValues = $this->poCellValues($purchaseOrder, $lines, $startRow, $columns, $totalRow);
 
         $this->excelExport->applyFilledProcurementSheet($sheet, $templateFilename, $cellValues);
-        $this->clearPoAccountingCells($sheet, $totalRow);
 
-        $binary = $this->excelExport->spreadsheetToXlsxBinary($spreadsheet);
-        $spreadsheet->disconnectWorksheets();
-        $filename = $this->excelExport->buildOwwaExportFilename('PO', $purchaseOrder->number ?? (string) $purchaseOrder->id);
-
-        return response()->streamDownload(
-            static function () use ($binary): void {
-                echo $binary;
-            },
-            $filename,
-            ['Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'],
-        );
+        return $spreadsheet;
     }
 
-    public function downloadIarExcel(InspectionAcceptanceReport $iar): StreamedResponse
+    protected function paperworkFromIar(InspectionAcceptanceReport $iar): AcquisitionPaperwork
     {
-        $iar->loadMissing(['purchaseOrder.purchaseRequest']);
+        $iar->loadMissing([
+            'purchaseOrder.purchaseRequest.office',
+            'purchaseOrder.purchaseRequest.itemCategory',
+            'purchaseOrder.purchaseRequest.requestingOffice',
+            'purchaseOrder.purchaseRequest.department',
+            'lines.item.category',
+            'lines.item.uacsObjectCode',
+            'lines.purchaseRequestLine',
+        ]);
+
         $paperwork = $iar->purchaseOrder?->purchaseRequest;
         abort_if($paperwork === null, 404);
 
-        // Reuse paperwork IAR export path with IAR quantities mirrored onto a temporary view.
         $paperwork->setRelation('lines', $iar->lines->map(function ($line) {
             $proxy = $line->purchaseRequestLine?->replicate() ?? new \App\Models\AcquisitionPaperworkLine;
             $proxy->id = $line->acquisition_paperwork_line_id;
@@ -181,7 +189,18 @@ class AcquisitionPaperworkPdfExportService
         $paperwork->po_number = $iar->purchaseOrder?->number;
         $paperwork->po_date = $iar->purchaseOrder?->po_date;
 
-        return $this->excelExport->downloadAcquisitionPaperworkIar($paperwork);
+        return $paperwork;
+    }
+
+    protected function pdfDownloadResponse(Spreadsheet $spreadsheet, string $filename): Response
+    {
+        $binary = $this->excelExport->spreadsheetToPdfBinary($spreadsheet);
+        $spreadsheet->disconnectWorksheets();
+
+        return response($binary, 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'attachment; filename="'.$filename.'"',
+        ]);
     }
 
     /**
@@ -210,6 +229,9 @@ class AcquisitionPaperworkPdfExportService
             'date_of_delivery' => $purchaseOrder->date_of_delivery?->format('Y-m-d') ?? '',
             'payment_term' => $purchaseOrder->payment_term ?? '',
             'fund_cluster' => '',
+            'funds_available' => '',
+            'ors_burs_no' => '',
+            'ors_burs_date' => '',
         ]);
 
         foreach ($lines->values() as $index => $line) {
@@ -223,21 +245,11 @@ class AcquisitionPaperworkPdfExportService
         }
 
         $totalAmount = (float) $lines->sum('amount');
+        $numbersRow = OwwaCellMapping::poTotalAmountInNumbersRow($totalRow);
+        $amountColumn = $columns['amount'] ?? 'F';
+        $values[OwwaCellMapping::columnCell($amountColumn, $numbersRow)] = $totalAmount;
         $values['A'.$totalRow] = PesoAmountInWords::format($totalAmount);
-        $values['F'.$totalRow] = $totalAmount;
 
         return $values;
-    }
-
-    protected function clearPoAccountingCells(\PhpOffice\PhpSpreadsheet\Worksheet\Worksheet $sheet, int $totalRow): void
-    {
-        foreach (['A45', 'A46', 'D45', 'D46'] as $cell) {
-            // Shift accounting rows when detail rows were inserted before the footer.
-            $row = (int) preg_replace('/\D+/', '', $cell);
-            $column = preg_replace('/\d+/', '', $cell);
-            $shifted = $column.($row + max(0, $totalRow - 32));
-            $sheet->setCellValue($shifted, '');
-            $sheet->setCellValue($cell, '');
-        }
     }
 }

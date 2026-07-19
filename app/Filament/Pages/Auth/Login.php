@@ -10,12 +10,18 @@ use Filament\Facades\Filament;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Components\Component;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Session;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 class Login extends BaseLogin
 {
     protected string $view = 'filament.pages.auth.login';
+
+    private const int MAX_LOGIN_ATTEMPTS = 5;
+
+    private const int LOGIN_DECAY_SECONDS = 60;
 
     public function authenticate(): ?LoginResponse
     {
@@ -28,9 +34,44 @@ class Login extends BaseLogin
             array_filter($this->data ?? [], fn ($value): bool => filled($value)),
         ));
 
+        $this->ensureIsNotRateLimited();
+
         $this->throwIfEmailUnverified();
 
-        return parent::authenticate();
+        try {
+            $response = parent::authenticate();
+        } catch (ValidationException $exception) {
+            RateLimiter::hit($this->throttleKey(), self::LOGIN_DECAY_SECONDS);
+
+            throw $exception;
+        }
+
+        RateLimiter::clear($this->throttleKey());
+
+        return $response;
+    }
+
+    protected function ensureIsNotRateLimited(): void
+    {
+        if (! RateLimiter::tooManyAttempts($this->throttleKey(), self::MAX_LOGIN_ATTEMPTS)) {
+            return;
+        }
+
+        $seconds = RateLimiter::availableIn($this->throttleKey());
+
+        throw ValidationException::withMessages([
+            'data.email' => __('auth.throttle', [
+                'seconds' => $seconds,
+                'minutes' => (int) ceil($seconds / 60),
+            ]),
+        ]);
+    }
+
+    protected function throttleKey(): string
+    {
+        $email = Str::lower((string) ($this->data['email'] ?? ''));
+
+        return 'filament-login:'.sha1($email.'|'.request()->ip());
     }
 
     protected function throwIfEmailUnverified(): void
