@@ -34,7 +34,7 @@ class RequisitionWorkflowNotificationService
                     (int) $requisition->office_id,
                     $requisition->department_id ? (int) $requisition->department_id : null,
                 ),
-                'New employee requisition',
+                $this->newEmployeeRequisitionTitle($requester),
                 $this->bodyFor($requisition),
                 $requisition,
             );
@@ -73,7 +73,7 @@ class RequisitionWorkflowNotificationService
                     (int) $requisition->office_id,
                     $requisition->department_id ? (int) $requisition->department_id : null,
                 ),
-                'New employee requisition',
+                $this->newEmployeeRequisitionTitle($requester),
                 $this->bodyFor($requisition),
                 $requisition,
             );
@@ -299,6 +299,17 @@ class RequisitionWorkflowNotificationService
         MailDelivery::attempt(
             fn (): mixed => $user->notify(new RequisitionRejectedMailNotification($requisition, $title))
         );
+    }
+
+    protected function newEmployeeRequisitionTitle(User $requester): string
+    {
+        $name = trim((string) $requester->name);
+
+        if ($name === '') {
+            return 'New employee requisition';
+        }
+
+        return sprintf('New requisition from %s', $name);
     }
 
     protected function bodyFor(Requisition $requisition, bool $includeRemarks = false): string

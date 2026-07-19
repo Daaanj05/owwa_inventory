@@ -23,12 +23,26 @@ class RequisitionLineDisplay
         $line->loadMissing(['item.category', 'requisition.compiledIntoRequisition.issuances']);
 
         $slug = $line->item?->category?->getTemplateSlug();
-        $propertyNumber = self::latestIssuanceForLine($line)?->property_number;
+        $fromIssuance = self::latestIssuanceForLine($line)?->property_number;
+
+        if (filled($fromIssuance)) {
+            return (string) $fromIssuance;
+        }
+
+        if ($line->item === null) {
+            return null;
+        }
+
+        if (OwwaReferenceLabels::usesPropertyNumber($slug)) {
+            $catalogNumber = $line->item->catalogAssetIdentifier();
+
+            return filled($catalogNumber) ? (string) $catalogNumber : null;
+        }
 
         return OwwaReferenceLabels::assetIdentifierValue(
             $slug,
-            $propertyNumber,
-            $line->item?->item_code,
+            null,
+            $line->item->item_code,
         );
     }
 

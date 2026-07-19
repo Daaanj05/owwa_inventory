@@ -47,7 +47,10 @@ class RequisitionWorkflowNotificationServiceTest extends TestCase
 
         $this->service->handleCreated($requisition);
 
-        Notification::assertSentTo($uc, RequisitionWorkflowDatabaseNotification::class);
+        Notification::assertSentTo($uc, RequisitionWorkflowDatabaseNotification::class, function (RequisitionWorkflowDatabaseNotification $notification) use ($employee): bool {
+            return str_contains($notification->title, (string) $employee->name)
+                && str_starts_with($notification->title, 'New requisition from ');
+        });
         Notification::assertNotSentTo($custodian, RequisitionWorkflowDatabaseNotification::class);
     }
 
