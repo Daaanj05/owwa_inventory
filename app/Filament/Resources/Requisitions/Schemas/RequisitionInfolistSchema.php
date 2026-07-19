@@ -13,6 +13,7 @@ use App\Support\OwwaReferenceLabels;
 use App\Support\RequisitionLineDisplay;
 use App\Support\RequisitionLineFulfillmentState;
 use App\Support\RequisitionStatus;
+use Filament\Facades\Filament;
 use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\RepeatableEntry\TableColumn;
 use Filament\Infolists\Components\TextEntry;
@@ -127,7 +128,8 @@ class RequisitionInfolistSchema
                 ->state(fn (Requisition $record): ?string => $record->hasMixedCategories()
                     ? RequisitionLineDisplay::mixedCategoriesNotice()
                     : null)
-                ->visible(fn (Requisition $record): bool => $record->hasMixedCategories())
+                ->visible(fn (Requisition $record): bool => $record->hasMixedCategories()
+                    && (Filament::auth()->user()?->isSupplyCustodian() ?? false))
                 ->columnSpanFull(),
             TextEntry::make('status')
                 ->label('Status')

@@ -106,7 +106,11 @@ class EmployeeRequisitionDraftTest extends TestCase
         $this->actingAs($employee);
 
         $this->mountEmployeeCreateWithItem($item)
-            ->callMountedAction();
+            ->fillForm([
+                'purpose' => 'Draft office supplies request',
+            ])
+            ->callMountedAction()
+            ->assertHasNoFormErrors();
 
         Notification::assertNotSentTo($uc, RequisitionWorkflowDatabaseNotification::class);
 
@@ -151,6 +155,45 @@ class EmployeeRequisitionDraftTest extends TestCase
         ]);
 
         $this->assertSame('Draft', EmployeeRequisitionStatus::label($requisition));
+    }
+
+    public function test_employee_view_modal_shows_submit_to_consolidator_for_draft(): void
+    {
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+
+        $office = Office::factory()->create();
+        $employee = User::factory()->create([
+            'role' => User::ROLE_EMPLOYEE,
+            'office_id' => $office->id,
+        ]);
+        $item = Item::factory()->create();
+
+        $draft = Requisition::query()->create([
+            'office_id' => $office->id,
+            'requested_by' => $employee->id,
+            'status' => Requisition::STATUS_DRAFT,
+            'purpose' => 'Office supplies',
+        ]);
+        RequisitionItem::query()->create([
+            'requisition_id' => $draft->id,
+            'item_id' => $item->id,
+            'quantity' => 1,
+        ]);
+
+        $this->actingAs($employee);
+
+        Livewire::test(ListRequisitions::class)
+            ->mountAction(TestAction::make('view')->table($draft))
+            ->assertActionVisible(TestAction::make('submitToConsolidatorFromView')->table($draft));
+    }
+
+    public function test_mixed_categories_notice_is_custodian_only(): void
+    {
+        $source = file_get_contents(app_path('Filament/Resources/Requisitions/Schemas/RequisitionInfolistSchema.php'));
+
+        $this->assertIsString($source);
+        $this->assertStringContainsString('mixed_categories_notice', $source);
+        $this->assertStringContainsString('isSupplyCustodian()', $source);
     }
 
     public function test_archive_and_restore_actions_only_apply_to_drafts(): void

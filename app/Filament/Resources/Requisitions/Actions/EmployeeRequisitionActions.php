@@ -104,7 +104,20 @@ class EmployeeRequisitionActions
 
     public static function submitAction(): Action
     {
-        return Action::make('submitToConsolidator')
+        return self::makeSubmitAction('submitToConsolidator');
+    }
+
+    /**
+     * View-modal footer variant (unique action name so it does not collide with the table action group).
+     */
+    public static function submitFromViewAction(): Action
+    {
+        return self::makeSubmitAction('submitToConsolidatorFromView');
+    }
+
+    protected static function makeSubmitAction(string $name): Action
+    {
+        return Action::make($name)
             ->label('Submit to consolidator')
             ->icon('heroicon-o-paper-airplane')
             ->color('success')

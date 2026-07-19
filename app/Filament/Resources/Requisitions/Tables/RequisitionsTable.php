@@ -118,6 +118,7 @@ class RequisitionsTable
                         RequisitionInfolistSchema::modalDetailSections(),
                     ),
                     [
+                        EmployeeRequisitionActions::submitFromViewAction(),
                         RequisitionExportActions::exportRisAction(),
                         RequisitionExportActions::exportRisPdfAction(),
                         CustodianRequisitionActions::createPurchaseRequestAction(),
