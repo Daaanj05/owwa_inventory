@@ -14,16 +14,13 @@ return [
     |
     */
 
-    'broadcasting' => (filled(env('VITE_REVERB_APP_KEY')) || filled(env('REVERB_APP_KEY')))
+    'broadcasting' => (filled(env('VITE_PUSHER_APP_KEY')) || filled(env('PUSHER_APP_KEY')))
         ? [
             'echo' => [
-                'broadcaster' => 'reverb',
-                'key' => env('VITE_REVERB_APP_KEY') ?: env('REVERB_APP_KEY'),
-                'wsHost' => env('VITE_REVERB_HOST') ?: env('REVERB_HOST'),
-                'wsPort' => env('VITE_REVERB_PORT', 80),
-                'wssPort' => env('VITE_REVERB_PORT', 443),
-                'forceTLS' => (env('VITE_REVERB_SCHEME') ?: env('REVERB_SCHEME', 'https')) === 'https',
-                'enabledTransports' => ['ws', 'wss'],
+                'broadcaster' => 'pusher',
+                'key' => env('VITE_PUSHER_APP_KEY') ?: env('PUSHER_APP_KEY'),
+                'cluster' => env('VITE_PUSHER_APP_CLUSTER') ?: env('PUSHER_APP_CLUSTER'),
+                'forceTLS' => true,
                 'authEndpoint' => '/broadcasting/auth',
             ],
         ]

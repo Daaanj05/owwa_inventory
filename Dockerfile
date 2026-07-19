@@ -4,6 +4,12 @@ FROM node:22-alpine AS assets
 
 WORKDIR /app
 
+# Pusher public key/cluster for Vite Echo (available from Render env during Docker build).
+ARG VITE_PUSHER_APP_KEY
+ARG VITE_PUSHER_APP_CLUSTER
+ENV VITE_PUSHER_APP_KEY=$VITE_PUSHER_APP_KEY \
+    VITE_PUSHER_APP_CLUSTER=$VITE_PUSHER_APP_CLUSTER
+
 COPY package.json package-lock.json ./
 RUN npm ci
 

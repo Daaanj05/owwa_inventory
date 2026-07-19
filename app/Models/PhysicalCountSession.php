@@ -80,6 +80,34 @@ class PhysicalCountSession extends Model
                 $session->recorded_by = auth()->id();
             }
         });
+
+        static::saved(function (PhysicalCountSession $session): void {
+            $session->rememberSignatoryNames();
+        });
+    }
+
+    public function rememberSignatoryNames(): void
+    {
+        ProcurementSignatoryName::remember(
+            ProcurementSignatoryName::ROLE_PHYSICAL_COUNT_ACCOUNTABLE,
+            $this->accountable_officer_name,
+        );
+        ProcurementSignatoryName::remember(
+            ProcurementSignatoryName::ROLE_PHYSICAL_COUNT_ACCOUNTABLE_DESIGNATION,
+            $this->accountable_officer_designation,
+        );
+        ProcurementSignatoryName::remember(
+            ProcurementSignatoryName::ROLE_PHYSICAL_COUNT_CERTIFIED,
+            $this->certified_by_printed_name,
+        );
+        ProcurementSignatoryName::remember(
+            ProcurementSignatoryName::ROLE_PHYSICAL_COUNT_APPROVED,
+            $this->approved_by_printed_name,
+        );
+        ProcurementSignatoryName::remember(
+            ProcurementSignatoryName::ROLE_PHYSICAL_COUNT_VERIFIED,
+            $this->verified_by_printed_name,
+        );
     }
 
     public function office(): BelongsTo

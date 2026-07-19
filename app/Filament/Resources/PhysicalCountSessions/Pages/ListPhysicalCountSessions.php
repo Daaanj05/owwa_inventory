@@ -72,6 +72,7 @@ class ListPhysicalCountSessions extends ListRecords
                 ->label('Start count (mobile)')
                 ->icon('heroicon-o-device-phone-mobile')
                 ->color('primary')
+                ->visible(fn (): bool => $this->activeCategorySupportsMobileCount())
                 ->url(fn (): string => PhysicalCountSessionResource::getUrl('start-mobile', [
                     'category' => $this->activeItemCategoryId(),
                 ])),
@@ -156,5 +157,17 @@ class ListPhysicalCountSessions extends ListRecords
                 })
                 ->successRedirectUrl(fn (PhysicalCountSession $record): string => PhysicalCountSessionResource::viewModalUrl($record)),
         ];
+    }
+
+    protected function activeCategorySupportsMobileCount(): bool
+    {
+        $categoryId = $this->activeItemCategoryId();
+        if ($categoryId <= 0) {
+            return true;
+        }
+
+        $slug = ItemCategory::query()->find($categoryId)?->getTemplateSlug();
+
+        return in_array($slug, ['ppe', 'semi_expendable'], true);
     }
 }

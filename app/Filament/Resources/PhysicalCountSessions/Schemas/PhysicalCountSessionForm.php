@@ -8,7 +8,9 @@ use App\Filament\Resources\PhysicalCountSessions\Pages\EditPhysicalCountSession;
 use App\Filament\Resources\PhysicalCountSessions\Pages\ListPhysicalCountSessions;
 use App\Models\Item;
 use App\Models\ItemCategory;
+use App\Models\Office;
 use App\Models\PhysicalCountSession;
+use App\Models\ProcurementSignatoryName;
 use App\Services\InventoryStockService;
 use App\Support\ConsumableInventoryType;
 use App\Support\CustodianOfficeScope;
@@ -29,13 +31,12 @@ use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
 use Filament\Support\Enums\Alignment;
+use Filament\Support\Enums\VerticalAlignment;
 
 class PhysicalCountSessionForm
 {
     public static function configure(Schema $schema): Schema
     {
-        $scopeActive = fn ($query) => $query->active();
-
         return $schema
             ->columns(1)
             ->components([
@@ -121,9 +122,18 @@ class PhysicalCountSessionForm
                             })
                             ->columnSpanFull(),
                         TextInput::make('accountable_officer_name')
-                            ->label('Accountable officer'),
+                            ->label('Accountable officer')
+                            ->maxLength(255)
+                            ->datalist(fn (Get $get): array => self::officerNameSuggestions(
+                                filled($get('office_id')) ? (int) $get('office_id') : null,
+                                ProcurementSignatoryName::ROLE_PHYSICAL_COUNT_ACCOUNTABLE,
+                            )),
                         TextInput::make('accountable_officer_designation')
-                            ->label('Designation'),
+                            ->label('Designation')
+                            ->maxLength(255)
+                            ->datalist(fn (Get $get): array => self::designationSuggestions(
+                                filled($get('office_id')) ? (int) $get('office_id') : null,
+                            )),
                         DatePicker::make('date_of_assumption')
                             ->label('Date of assumption'),
                     ]),
@@ -136,9 +146,27 @@ class PhysicalCountSessionForm
                     ->columnSpanFull()
                     ->columns(2)
                     ->schema([
-                        TextInput::make('certified_by_printed_name')->label('Certified by'),
-                        TextInput::make('approved_by_printed_name')->label('Approved by'),
-                        TextInput::make('verified_by_printed_name')->label('Verified by'),
+                        TextInput::make('certified_by_printed_name')
+                            ->label('Certified by')
+                            ->maxLength(255)
+                            ->datalist(fn (Get $get): array => self::officerNameSuggestions(
+                                filled($get('office_id')) ? (int) $get('office_id') : null,
+                                ProcurementSignatoryName::ROLE_PHYSICAL_COUNT_CERTIFIED,
+                            )),
+                        TextInput::make('approved_by_printed_name')
+                            ->label('Approved by')
+                            ->maxLength(255)
+                            ->datalist(fn (Get $get): array => self::officerNameSuggestions(
+                                filled($get('office_id')) ? (int) $get('office_id') : null,
+                                ProcurementSignatoryName::ROLE_PHYSICAL_COUNT_APPROVED,
+                            )),
+                        TextInput::make('verified_by_printed_name')
+                            ->label('Verified by')
+                            ->maxLength(255)
+                            ->datalist(fn (Get $get): array => self::officerNameSuggestions(
+                                filled($get('office_id')) ? (int) $get('office_id') : null,
+                                ProcurementSignatoryName::ROLE_PHYSICAL_COUNT_VERIFIED,
+                            )),
                     ]),
                 Section::make('QR counting workflow')
                     ->description('Property-tag scanning (PPE and semi-expendable)')
@@ -165,108 +193,201 @@ class PhysicalCountSessionForm
                         Repeater::make('lines')
                             ->relationship('lines')
                             ->label('Items counted')
-                            ->table([
-                                TableColumn::make('Item')->markAsRequired()->width('14rem'),
-                                TableColumn::make('Article')->width('10rem'),
-                                TableColumn::make('Description')->width('12rem'),
-                                TableColumn::make('Stock / property no.')->width('9rem'),
-                                TableColumn::make('Property no.')->width('9rem'),
-                                TableColumn::make('Unit')->width('5rem'),
+                            ->table(fn (Get $get): array => [
+                                TableColumn::make('Article (Item)')
+                                    ->markAsRequired()
+                                    ->verticalAlignment(VerticalAlignment::Center)
+                                    ->width('12rem; min-width: 12rem'),
+                                TableColumn::make('Description')
+                                    ->verticalAlignment(VerticalAlignment::Center)
+                                    ->width('10rem; min-width: 8rem'),
+                                TableColumn::make(self::countLineIdentifierLabel($get('count_type')))
+                                    ->verticalAlignment(VerticalAlignment::Center)
+                                    ->width('8rem; min-width: 8rem'),
+                                TableColumn::make('Unit')
+                                    ->verticalAlignment(VerticalAlignment::Center)
+                                    ->width('6.5rem; min-width: 6.5rem'),
                                 TableColumn::make('Balance per card')
+                                    ->wrapHeader()
                                     ->alignment(Alignment::End)
-                                    ->width('7rem'),
+                                    ->verticalAlignment(VerticalAlignment::Center)
+                                    ->width('6.5rem; min-width: 6.5rem'),
                                 TableColumn::make('On hand per count')
                                     ->markAsRequired()
+                                    ->wrapHeader()
                                     ->alignment(Alignment::End)
-                                    ->width('7rem'),
-                                TableColumn::make('Remarks')->width('10rem'),
+                                    ->verticalAlignment(VerticalAlignment::Center)
+                                    ->width('6.5rem; min-width: 6.5rem'),
+                                TableColumn::make('Remarks')
+                                    ->verticalAlignment(VerticalAlignment::Center)
+                                    ->width('8rem; min-width: 7rem'),
                             ])
-                            ->schema([
-                                Select::make('item_id')
-                                    ->label('Item')
-                                    ->options(function (Get $get): array {
-                                        $categoryId = $get('../../item_category_id');
-                                        $countType = $get('../../count_type');
-                                        $query = Item::query()
-                                            ->active()
-                                            ->orderBy('name');
-                                        if (filled($categoryId)) {
-                                            $query->where('item_category_id', (int) $categoryId);
-                                        }
-
-                                        if ($countType === PhysicalCountSession::TYPE_RPCPPE && filled($get('../../ppe_type'))) {
-                                            $query->where('ppe_type', (string) $get('../../ppe_type'));
-                                        }
-
-                                        if ($countType === PhysicalCountSession::TYPE_RPCSP && filled($get('../../property_class'))) {
-                                            $query->where('property_class', (string) $get('../../property_class'));
-                                        }
-
-                                        return $query->pluck('name', 'id')->all();
-                                    })
-                                    ->searchable()
-                                    ->required()
-                                    ->live()
-                                    ->afterStateUpdated(function ($state, callable $set, Get $get): void {
-                                        if (blank($state)) {
-                                            return;
-                                        }
-                                        $item = Item::query()->find($state);
-                                        if (! $item) {
-                                            return;
-                                        }
-                                        $officeId = $get('../../office_id');
-                                        $set('article', $item->name);
-                                        $set('description', $item->description);
-                                        $set('stock_number', $item->item_code);
-                                        $set('unit_of_measure', $item->unit);
-                                        if ($get('../../count_type') === PhysicalCountSession::TYPE_RPCI
-                                            && filled($item->inventory_type)
-                                            && blank($get('../../inventory_type'))) {
-                                            $set('../../inventory_type', $item->inventory_type);
-                                            $set('../../inventory_type_label', ConsumableInventoryType::label($item->inventory_type));
-                                        }
-                                        if ($officeId) {
-                                            $stock = app(InventoryStockService::class)->getStock((int) $item->id, (int) $officeId);
-                                            $set('balance_per_card', max(0, $stock));
-                                            $set('on_hand_count', 0);
-                                        }
-                                    }),
-                                TextInput::make('article')->label('Article'),
-                                TextInput::make('description')->label('Description'),
-                                TextInput::make('stock_number')->label('Stock / property no.'),
-                                TextInput::make('property_number')
-                                    ->label(fn (Get $get): string => OwwaReferenceLabels::assetIdentifierLabel(
-                                        match ($get('../../count_type')) {
-                                            PhysicalCountSession::TYPE_RPCPPE => 'ppe',
-                                            PhysicalCountSession::TYPE_RPCSP => 'semi_expendable',
-                                            default => null,
-                                        }
-                                    )),
-                                TextInput::make('unit_of_measure')->label('Unit'),
-                                TextInput::make('balance_per_card')
-                                    ->label('Balance per card')
-                                    ->numeric()
-                                    ->default(0),
-                                TextInput::make('on_hand_count')
-                                    ->label('On hand per count')
-                                    ->numeric()
-                                    ->default(0),
-                                TextInput::make('remarks')->label('Remarks'),
-                            ])
-                            ->minItems(function (Get $get, $livewire): int {
-                                if (! ($livewire instanceof EditPhysicalCountSession)
-                                    && in_array($get('count_type'), [PhysicalCountSession::TYPE_RPCPPE, PhysicalCountSession::TYPE_RPCSP], true)) {
-                                    return 0;
-                                }
-
-                                return 1;
-                            })
+                            ->schema(fn (Get $get): array => self::countLineSchema($get('count_type')))
+                            ->defaultItems(0)
+                            ->minItems(0)
                             ->addActionLabel('Add item line')
                             ->compact()
+                            ->extraAttributes([
+                                'class' => 'owwa-pc-count-lines-repeater',
+                                'style' => 'overflow-x: auto;',
+                            ])
                             ->columnSpanFull(),
                     ]),
             ]);
+    }
+
+    /**
+     * @return list<\Filament\Schemas\Components\Component>
+     */
+    protected static function countLineSchema(?string $countType): array
+    {
+        $isConsumable = $countType === PhysicalCountSession::TYPE_RPCI;
+
+        return [
+            Select::make('item_id')
+                ->label('Article (Item)')
+                ->options(function (Get $get): array {
+                    $categoryId = $get('../../item_category_id');
+                    $countType = $get('../../count_type');
+                    $query = Item::query()
+                        ->active()
+                        ->orderBy('name');
+                    if (filled($categoryId)) {
+                        $query->where('item_category_id', (int) $categoryId);
+                    }
+
+                    if ($countType === PhysicalCountSession::TYPE_RPCPPE && filled($get('../../ppe_type'))) {
+                        $query->where('ppe_type', (string) $get('../../ppe_type'));
+                    }
+
+                    if ($countType === PhysicalCountSession::TYPE_RPCSP && filled($get('../../property_class'))) {
+                        $query->where('property_class', (string) $get('../../property_class'));
+                    }
+
+                    return $query->pluck('name', 'id')->all();
+                })
+                ->searchable()
+                ->required()
+                ->live()
+                ->afterStateUpdated(function ($state, callable $set, Get $get): void {
+                    if (blank($state)) {
+                        return;
+                    }
+                    $item = Item::query()->find($state);
+                    if (! $item) {
+                        return;
+                    }
+                    $officeId = $get('../../office_id');
+                    $set('article', $item->name);
+                    $set('description', $item->description);
+                    $set('stock_number', $item->item_code);
+                    $set('unit_of_measure', $item->unit);
+                    if ($get('../../count_type') === PhysicalCountSession::TYPE_RPCI
+                        && filled($item->inventory_type)
+                        && blank($get('../../inventory_type'))) {
+                        $set('../../inventory_type', $item->inventory_type);
+                        $set('../../inventory_type_label', ConsumableInventoryType::label($item->inventory_type));
+                    }
+                    if ($officeId) {
+                        $stock = app(InventoryStockService::class)->getStock((int) $item->id, (int) $officeId);
+                        $set('balance_per_card', max(0, $stock));
+                        $set('on_hand_count', 0);
+                    }
+                }),
+            TextInput::make('description')->label('Description'),
+            $isConsumable
+                ? TextInput::make('stock_number')
+                    ->label(OwwaReferenceLabels::STOCK_NO)
+                    ->disabled()
+                    ->dehydrated()
+                : TextInput::make('property_number')
+                    ->label(self::countLineIdentifierLabel($countType))
+                    ->disabled()
+                    ->dehydrated(),
+            TextInput::make('unit_of_measure')
+                ->label('Unit')
+                ->disabled()
+                ->dehydrated(),
+            TextInput::make('balance_per_card')
+                ->label('Balance per card')
+                ->numeric()
+                ->default(0),
+            TextInput::make('on_hand_count')
+                ->label('On hand per count')
+                ->numeric()
+                ->default(0),
+            TextInput::make('remarks')->label('Remarks'),
+            Hidden::make('article'),
+            $isConsumable
+                ? Hidden::make('property_number')
+                : Hidden::make('stock_number'),
+        ];
+    }
+
+    public static function countLineIdentifierLabel(?string $countType): string
+    {
+        return match ($countType) {
+            PhysicalCountSession::TYPE_RPCPPE => OwwaReferenceLabels::PROPERTY_NO,
+            PhysicalCountSession::TYPE_RPCSP => OwwaReferenceLabels::INVENTORY_ITEM_NO,
+            default => OwwaReferenceLabels::STOCK_NO,
+        };
+    }
+
+    /**
+     * @return list<string>
+     */
+    public static function officerNameSuggestions(?int $officeId, string $rememberRole): array
+    {
+        $names = collect(ProcurementSignatoryName::suggestionsForRole($rememberRole));
+
+        if ($officeId !== null) {
+            $office = Office::query()->find($officeId);
+            if ($office) {
+                $names = $names->merge([
+                    $office->accountable_officer_name,
+                    $office->authorized_officer_name,
+                    $office->supply_custodian_name,
+                    $office->inspection_officer_name,
+                ]);
+            }
+        }
+
+        return $names
+            ->map(fn (mixed $name): string => trim((string) $name))
+            ->filter()
+            ->unique()
+            ->sort()
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @return list<string>
+     */
+    public static function designationSuggestions(?int $officeId): array
+    {
+        $names = collect(ProcurementSignatoryName::suggestionsForRole(
+            ProcurementSignatoryName::ROLE_PHYSICAL_COUNT_ACCOUNTABLE_DESIGNATION,
+        ));
+
+        if ($officeId !== null) {
+            $office = Office::query()->find($officeId);
+            if ($office) {
+                $names = $names->merge([
+                    $office->accountable_officer_designation,
+                    $office->authorized_officer_designation,
+                    $office->supply_custodian_designation,
+                ]);
+            }
+        }
+
+        return $names
+            ->map(fn (mixed $name): string => trim((string) $name))
+            ->filter()
+            ->unique()
+            ->sort()
+            ->values()
+            ->all();
     }
 
     public static function resolveCountTypeForCategoryId(int|string|null $categoryId): string

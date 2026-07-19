@@ -7,7 +7,7 @@
         <table class="owwa-data-table">
             <thead>
                 <tr>
-                    <th>Item</th>
+                    <th>Article (Item)</th>
                     <th class="owwa-num">Tags</th>
                     <th class="owwa-num">Per card (book)</th>
                     <th class="owwa-num">On hand</th>

@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Filament\Resources\PhysicalCountSessions\Pages\ListPhysicalCountSessions;
 use App\Filament\Resources\PhysicalCountSessions\Pages\StartPhysicalCountMobile;
 use App\Models\ItemCategory;
 use App\Models\Office;
@@ -65,5 +66,78 @@ class StartPhysicalCountMobileTest extends TestCase
         $session = PhysicalCountSession::query()->first();
         $this->assertNotNull($session);
         $this->assertSame($home->id, $session->office_id);
+    }
+
+    public function test_consumable_category_is_rejected_for_mobile_start(): void
+    {
+        $office = Office::factory()->create();
+        $ppe = ItemCategory::factory()->create(['name' => 'PPE']);
+        $consumables = ItemCategory::factory()->create(['name' => 'Consumables']);
+        $user = User::factory()->create([
+            'role' => User::ROLE_SUPPLY_CUSTODIAN,
+            'office_id' => $office->id,
+        ]);
+
+        $this->actingAs($user);
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+
+        Livewire::withQueryParams(['category' => $ppe->id])
+            ->test(StartPhysicalCountMobile::class)
+            ->set('itemCategoryId', $consumables->id)
+            ->call('startCount')
+            ->assertHasErrors(['itemCategoryId']);
+
+        $this->assertSame(0, PhysicalCountSession::query()->count());
+    }
+
+    public function test_start_mobile_page_redirects_away_from_consumable_category(): void
+    {
+        $office = Office::factory()->create();
+        $category = ItemCategory::factory()->create(['name' => 'Consumables']);
+        $user = User::factory()->create([
+            'role' => User::ROLE_SUPPLY_CUSTODIAN,
+            'office_id' => $office->id,
+        ]);
+
+        $this->actingAs($user);
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+
+        Livewire::withQueryParams(['category' => $category->id])
+            ->test(StartPhysicalCountMobile::class)
+            ->assertRedirect();
+    }
+
+    public function test_start_mobile_header_action_hidden_for_consumables(): void
+    {
+        $office = Office::factory()->create();
+        $category = ItemCategory::factory()->create(['name' => 'Consumables']);
+        $user = User::factory()->create([
+            'role' => User::ROLE_SUPPLY_CUSTODIAN,
+            'office_id' => $office->id,
+        ]);
+
+        $this->actingAs($user);
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+
+        Livewire::withQueryParams(['category' => $category->id])
+            ->test(ListPhysicalCountSessions::class)
+            ->assertActionHidden('startMobile');
+    }
+
+    public function test_start_mobile_header_action_visible_for_ppe(): void
+    {
+        $office = Office::factory()->create();
+        $category = ItemCategory::factory()->create(['name' => 'PPE']);
+        $user = User::factory()->create([
+            'role' => User::ROLE_SUPPLY_CUSTODIAN,
+            'office_id' => $office->id,
+        ]);
+
+        $this->actingAs($user);
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+
+        Livewire::withQueryParams(['category' => $category->id])
+            ->test(ListPhysicalCountSessions::class)
+            ->assertActionVisible('startMobile');
     }
 }

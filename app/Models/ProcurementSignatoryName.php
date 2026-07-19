@@ -30,6 +30,16 @@ class ProcurementSignatoryName extends Model
 
     public const ROLE_TRANSFER_TO_ACCOUNTABLE = 'transfer_to_accountable';
 
+    public const ROLE_PHYSICAL_COUNT_ACCOUNTABLE = 'physical_count_accountable';
+
+    public const ROLE_PHYSICAL_COUNT_ACCOUNTABLE_DESIGNATION = 'physical_count_accountable_designation';
+
+    public const ROLE_PHYSICAL_COUNT_CERTIFIED = 'physical_count_certified';
+
+    public const ROLE_PHYSICAL_COUNT_APPROVED = 'physical_count_approved';
+
+    public const ROLE_PHYSICAL_COUNT_VERIFIED = 'physical_count_verified';
+
     protected $fillable = [
         'name',
         'role',

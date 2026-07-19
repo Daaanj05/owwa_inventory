@@ -42,7 +42,24 @@ services:
       - key: CACHE_STORE
         value: database
       - key: BROADCAST_CONNECTION
-        value: log
+        value: pusher
+      # Set Pusher Channels keys in the Render Dashboard (do not commit secrets).
+      - key: PUSHER_APP_ID
+        sync: false
+      - key: PUSHER_APP_KEY
+        sync: false
+      - key: PUSHER_APP_SECRET
+        sync: false
+      - key: PUSHER_APP_CLUSTER
+        sync: false
+      - key: PUSHER_SCHEME
+        value: https
+      - key: PUSHER_PORT
+        value: "443"
+      - key: VITE_PUSHER_APP_KEY
+        sync: false
+      - key: VITE_PUSHER_APP_CLUSTER
+        sync: false
       - key: OLLAMA_URL
         value: http://127.0.0.1:11434
       - key: OLLAMA_EMBED_MODEL

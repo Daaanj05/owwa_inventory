@@ -44,6 +44,12 @@ class StartPhysicalCountMobile extends Page
             $slug = ItemCategory::query()->find($categoryId)?->getTemplateSlug();
             if (in_array($slug, ['ppe', 'semi_expendable'], true)) {
                 $this->itemCategoryId = $categoryId;
+            } elseif ($slug === 'consumables') {
+                $this->redirect(PhysicalCountSessionResource::getUrl('index', [
+                    'category' => $categoryId,
+                ]));
+
+                return;
             }
         }
 
@@ -108,7 +114,7 @@ class StartPhysicalCountMobile extends Page
             ->whereNull('archived_at')
             ->orderBy('name')
             ->get()
-            ->filter(fn (ItemCategory $category): bool => in_array($category->getTemplateSlug(), ['consumables', 'ppe', 'semi_expendable'], true))
+            ->filter(fn (ItemCategory $category): bool => in_array($category->getTemplateSlug(), ['ppe', 'semi_expendable'], true))
             ->map(fn (ItemCategory $category): array => [
                 'id' => $category->id,
                 'name' => $category->name,
@@ -140,16 +146,15 @@ class StartPhysicalCountMobile extends Page
         $category = ItemCategory::query()->findOrFail($this->itemCategoryId);
         $slug = $category->getTemplateSlug();
 
-        if (! in_array($slug, ['consumables', 'ppe', 'semi_expendable'], true)) {
-            $this->addError('itemCategoryId', 'Selected category does not support physical counting.');
+        if (! in_array($slug, ['ppe', 'semi_expendable'], true)) {
+            $this->addError('itemCategoryId', 'Mobile scanning is only available for PPE and semi-expendable categories.');
 
             return;
         }
 
         $countType = match ($slug) {
             'ppe' => PhysicalCountSession::TYPE_RPCPPE,
-            'semi_expendable' => PhysicalCountSession::TYPE_RPCSP,
-            default => PhysicalCountSession::TYPE_RPCI,
+            default => PhysicalCountSession::TYPE_RPCSP,
         };
 
         $defaults = OfficeSignatoryDefaults::forPhysicalCountSession($this->officeId);
@@ -162,12 +167,6 @@ class StartPhysicalCountMobile extends Page
             'count_date' => now()->toDateString(),
             ...$defaults,
         ]);
-
-        if ($countType === PhysicalCountSession::TYPE_RPCI) {
-            $this->redirect(PhysicalCountSessionResource::getUrl('edit', ['record' => $session]));
-
-            return;
-        }
 
         $this->redirect(PhysicalCountSessionResource::getUrl('scan', ['record' => $session]));
     }
