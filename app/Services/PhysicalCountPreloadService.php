@@ -45,7 +45,7 @@ class PhysicalCountPreloadService
      */
     public function preloadFromStockBalances(PhysicalCountSession $session): array
     {
-        if (! $session->supportsStockQrScanning()) {
+        if (! $session->isConsumablePhysicalCount()) {
             throw new InvalidArgumentException('Stock preload is only available for consumable (RPCI) physical count sessions.');
         }
 

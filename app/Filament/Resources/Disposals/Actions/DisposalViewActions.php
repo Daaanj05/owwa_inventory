@@ -21,9 +21,19 @@ class DisposalViewActions
 
     public static function exportOwwaAction(): Action
     {
-        return Action::make('exportOwwa')
-            ->label('Export OWWA Form')
-            ->icon('heroicon-o-document-arrow-down')
+        return self::exportAction('exportOwwa', 'Export Excel', false);
+    }
+
+    public static function exportPdfAction(): Action
+    {
+        return self::exportAction('exportOwwaPdf', 'Export PDF', true);
+    }
+
+    protected static function exportAction(string $name, string $label, bool $asPdf): Action
+    {
+        return Action::make($name)
+            ->label($label)
+            ->icon($asPdf ? 'heroicon-o-document-text' : 'heroicon-o-document-arrow-down')
             ->form([
                 Select::make('form')
                     ->label('OWWA form')
@@ -31,18 +41,25 @@ class DisposalViewActions
                     ->default(fn (Disposal $record): string => app(OwwaTemplateExportService::class)->resolveDisposalFormSlug($record))
                     ->helperText('Auto-selected based on disposal type and category.'),
             ])
-            ->action(function (Disposal $record, array $data, Action $action): void {
-                $url = route('owwa.export.disposal', $record);
+            ->action(function (Disposal $record, array $data, Action $action) use ($asPdf): void {
+                $query = [];
                 if (! empty($data['form'])) {
-                    $url .= '?form='.urlencode($data['form']);
+                    $query['form'] = $data['form'];
+                }
+                if ($asPdf) {
+                    $query['format'] = 'pdf';
+                }
+                $url = route('owwa.export.disposal', $record);
+                if ($query !== []) {
+                    $url .= '?'.http_build_query($query);
                 }
 
                 $livewire = $action->getLivewire();
                 OwwaExportBusyDispatcher::start(
                     $livewire instanceof LivewireComponent ? $livewire : null,
                     $url,
-                    'Preparing Excel export…',
-                    'Building your OWWA form…',
+                    $asPdf ? 'Preparing PDF export…' : 'Preparing Excel export…',
+                    $asPdf ? 'Building your OWWA PDF…' : 'Building your OWWA form…',
                 );
             });
     }

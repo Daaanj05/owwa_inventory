@@ -82,6 +82,7 @@ class DisposalsTable
                     [
                         DisposalViewActions::editAction(),
                         DisposalViewActions::exportOwwaAction(),
+                        DisposalViewActions::exportPdfAction(),
                         DisposalViewActions::printViewAction(),
                     ],
                     '3xl',

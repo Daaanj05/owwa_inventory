@@ -63,6 +63,7 @@ class IncidentReportsTable
                     [
                         IncidentReportViewActions::editAction(),
                         IncidentReportViewActions::exportOwwaAction(),
+                        IncidentReportViewActions::exportPdfAction(),
                         IncidentReportViewActions::printViewAction(),
                     ],
                     '3xl',

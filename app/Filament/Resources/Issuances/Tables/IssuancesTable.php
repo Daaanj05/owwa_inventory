@@ -142,6 +142,7 @@ class IssuancesTable
                     ),
                     [
                         IssuanceViewActions::exportOwwaAction(),
+                        IssuanceViewActions::exportPdfAction(),
                         IssuanceViewActions::printQrLabelAction(),
                         IssuanceViewActions::printViewAction(),
                     ],

@@ -14,6 +14,7 @@ use App\Support\ConsumableInventoryType;
 use App\Support\CustodianOfficeScope;
 use App\Support\OfficeSignatoryDefaults;
 use App\Support\OwwaReferenceLabels;
+use App\Support\PhysicalCountPropertyClassResolver;
 use App\Support\PhysicalCountSessionViewPresenter;
 use App\Support\PpePropertyType;
 use Filament\Facades\Filament;
@@ -21,12 +22,13 @@ use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Repeater;
+use Filament\Forms\Components\Repeater\TableColumn;
 use Filament\Forms\Components\Select;
-use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
+use Filament\Support\Enums\Alignment;
 
 class PhysicalCountSessionForm
 {
@@ -91,21 +93,21 @@ class PhysicalCountSessionForm
                             ->label('As at date')
                             ->required()
                             ->default(now()),
-                        Select::make('inventory_type')
-                            ->label('Inventory type')
-                            ->options(ConsumableInventoryType::options())
-                            ->required(fn (Get $get): bool => $get('count_type') === PhysicalCountSession::TYPE_RPCI)
-                            ->searchable()
-                            ->live()
-                            ->helperText('Scopes RPCI lines and prints as Type of Inventory Item on Appendix 66.')
-                            ->visible(fn (Get $get): bool => $get('count_type') === PhysicalCountSession::TYPE_RPCI)
-                            ->dehydrated(fn (Get $get): bool => $get('count_type') === PhysicalCountSession::TYPE_RPCI)
-                            ->afterStateUpdated(function ($state, callable $set): void {
-                                $set('inventory_type_label', ConsumableInventoryType::label($state));
-                            })
-                            ->columnSpanFull(),
+                        Hidden::make('inventory_type')
+                            ->dehydrated(fn (Get $get): bool => $get('count_type') === PhysicalCountSession::TYPE_RPCI),
                         Hidden::make('inventory_type_label')
                             ->dehydrated(),
+                        Placeholder::make('inventory_type_resolved')
+                            ->label('Inventory type')
+                            ->content(function (Get $get, $record): string {
+                                if ($record instanceof PhysicalCountSession) {
+                                    return PhysicalCountPropertyClassResolver::displayInventoryTypeText($record);
+                                }
+
+                                return 'Assigned automatically from counted items after you add or load stock lines.';
+                            })
+                            ->visible(fn (Get $get): bool => $get('count_type') === PhysicalCountSession::TYPE_RPCI)
+                            ->columnSpanFull(),
                         Select::make('ppe_type')
                             ->label('Type of PPE')
                             ->options(PpePropertyType::options())
@@ -139,12 +141,9 @@ class PhysicalCountSessionForm
                         TextInput::make('verified_by_printed_name')->label('Verified by'),
                     ]),
                 Section::make('QR counting workflow')
-                    ->description(fn (Get $get): string => $get('count_type') === PhysicalCountSession::TYPE_RPCI
-                        ? 'Stock QR scanning — scan shelf/stock labels, then enter counted quantity.'
-                        : 'Property-tag scanning (PPE and semi-expendable)')
+                    ->description('Property-tag scanning (PPE and semi-expendable)')
                     ->columnSpanFull()
                     ->visible(fn (Get $get): bool => in_array($get('count_type'), [
-                        PhysicalCountSession::TYPE_RPCI,
                         PhysicalCountSession::TYPE_RPCPPE,
                         PhysicalCountSession::TYPE_RPCSP,
                     ], true))
@@ -157,7 +156,7 @@ class PhysicalCountSessionForm
                 Section::make('Count lines')
                     ->description(fn (Get $get): ?string => match ($get('count_type')) {
                         PhysicalCountSession::TYPE_RPCPPE, PhysicalCountSession::TYPE_RPCSP => 'Shown on edit only for corrections. On create, use Load expected assets after saving.',
-                        PhysicalCountSession::TYPE_RPCI => 'Add lines manually or use Load stock lines / stock QR scan after saving.',
+                        PhysicalCountSession::TYPE_RPCI => 'Use Load stock lines after saving, then enter On hand per count manually for each item.',
                         default => null,
                     })
                     ->columnSpanFull()
@@ -166,6 +165,22 @@ class PhysicalCountSessionForm
                         Repeater::make('lines')
                             ->relationship('lines')
                             ->label('Items counted')
+                            ->table([
+                                TableColumn::make('Item')->markAsRequired()->width('14rem'),
+                                TableColumn::make('Article')->width('10rem'),
+                                TableColumn::make('Description')->width('12rem'),
+                                TableColumn::make('Stock / property no.')->width('9rem'),
+                                TableColumn::make('Property no.')->width('9rem'),
+                                TableColumn::make('Unit')->width('5rem'),
+                                TableColumn::make('Balance per card')
+                                    ->alignment(Alignment::End)
+                                    ->width('7rem'),
+                                TableColumn::make('On hand per count')
+                                    ->markAsRequired()
+                                    ->alignment(Alignment::End)
+                                    ->width('7rem'),
+                                TableColumn::make('Remarks')->width('10rem'),
+                            ])
                             ->schema([
                                 Select::make('item_id')
                                     ->label('Item')
@@ -177,10 +192,6 @@ class PhysicalCountSessionForm
                                             ->orderBy('name');
                                         if (filled($categoryId)) {
                                             $query->where('item_category_id', (int) $categoryId);
-                                        }
-
-                                        if ($countType === PhysicalCountSession::TYPE_RPCI && filled($get('../../inventory_type'))) {
-                                            $query->where('inventory_type', (string) $get('../../inventory_type'));
                                         }
 
                                         if ($countType === PhysicalCountSession::TYPE_RPCPPE && filled($get('../../ppe_type'))) {
@@ -209,6 +220,12 @@ class PhysicalCountSessionForm
                                         $set('description', $item->description);
                                         $set('stock_number', $item->item_code);
                                         $set('unit_of_measure', $item->unit);
+                                        if ($get('../../count_type') === PhysicalCountSession::TYPE_RPCI
+                                            && filled($item->inventory_type)
+                                            && blank($get('../../inventory_type'))) {
+                                            $set('../../inventory_type', $item->inventory_type);
+                                            $set('../../inventory_type_label', ConsumableInventoryType::label($item->inventory_type));
+                                        }
                                         if ($officeId) {
                                             $stock = app(InventoryStockService::class)->getStock((int) $item->id, (int) $officeId);
                                             $set('balance_per_card', max(0, $stock));
@@ -226,20 +243,17 @@ class PhysicalCountSessionForm
                                             default => null,
                                         }
                                     )),
-                                TextInput::make('unit_of_measure')->label('Measurement unit'),
+                                TextInput::make('unit_of_measure')->label('Unit'),
                                 TextInput::make('balance_per_card')
                                     ->label('Balance per card')
                                     ->numeric()
-                                    ->default(0)
-                                    ->helperText('Book balance from stock card / system records.'),
+                                    ->default(0),
                                 TextInput::make('on_hand_count')
                                     ->label('On hand per count')
                                     ->numeric()
-                                    ->default(0)
-                                    ->helperText('Quantity you physically counted (scanner fills this for PPE/semi; stock QR prompts qty for consumables).'),
-                                Textarea::make('remarks')->rows(1),
+                                    ->default(0),
+                                TextInput::make('remarks')->label('Remarks'),
                             ])
-                            ->columns(3)
                             ->minItems(function (Get $get, $livewire): int {
                                 if (! ($livewire instanceof EditPhysicalCountSession)
                                     && in_array($get('count_type'), [PhysicalCountSession::TYPE_RPCPPE, PhysicalCountSession::TYPE_RPCSP], true)) {
@@ -249,6 +263,7 @@ class PhysicalCountSessionForm
                                 return 1;
                             })
                             ->addActionLabel('Add item line')
+                            ->compact()
                             ->columnSpanFull(),
                     ]),
             ]);

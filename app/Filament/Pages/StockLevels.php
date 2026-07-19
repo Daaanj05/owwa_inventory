@@ -748,18 +748,6 @@ class StockLevels extends Page
                         }),
                 ];
 
-                $arguments = $this->getMountedAction()?->getArguments() ?? [];
-                $item = Item::query()->with('category')->find((int) ($arguments['itemId'] ?? 0));
-                $officeId = (int) ($arguments['officeId'] ?? 0);
-
-                if ($item?->category?->getTemplateSlug() === 'consumables' && $officeId > 0) {
-                    $actions[] = Action::make('printStockQrLabel')
-                        ->label('Print stock QR')
-                        ->icon('heroicon-o-qr-code')
-                        ->url(route('owwa.qr-labels.stock', ['item' => $item->id, 'office' => $officeId]))
-                        ->openUrlInNewTab();
-                }
-
                 return $actions;
             });
     }

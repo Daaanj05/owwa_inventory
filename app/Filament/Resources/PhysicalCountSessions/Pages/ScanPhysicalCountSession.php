@@ -6,7 +6,6 @@ use App\Filament\Resources\PhysicalCountSessions\Concerns\HasPhysicalCountWizard
 use App\Filament\Resources\PhysicalCountSessions\PhysicalCountSessionResource;
 use App\Models\PhysicalCountLine;
 use App\Models\PhysicalCountSession;
-use App\Services\ConsumablePhysicalCountScanService;
 use App\Services\PhysicalCountCompletionService;
 use App\Services\PhysicalCountScanService;
 use App\Support\PhysicalCountScanOutcome;
@@ -46,14 +45,6 @@ class ScanPhysicalCountSession extends Page
 
     /** @var array<int, array{time: string, property_number: string, result: string, message: string}> */
     public array $recentScans = [];
-
-    public bool $showQtyPrompt = false;
-
-    public ?int $pendingLineId = null;
-
-    public ?string $pendingItemLabel = null;
-
-    public string $pendingQty = '';
 
     public function mount(int|string $record): void
     {
@@ -101,27 +92,17 @@ class ScanPhysicalCountSession extends Page
         /** @var PhysicalCountSession $session */
         $session = $this->getRecord();
 
-        if ($session->supportsStockQrScanning()) {
-            $result = app(ConsumablePhysicalCountScanService::class)->resolve(
-                $session,
-                $code,
-                auth()->id(),
-            );
-            $displayCode = $result->line?->stock_number ?? 'stock';
-        } else {
-            $scanner = app(PhysicalCountScanService::class);
-            $displayCode = $scanner->normalizePropertyNumber($code);
-            $result = $scanner->resolve(
-                $session,
-                $code,
-                auth()->id(),
-            );
-        }
+        $scanner = app(PhysicalCountScanService::class);
+        $displayCode = $scanner->normalizePropertyNumber($code);
+        $result = $scanner->resolve(
+            $session,
+            $code,
+            auth()->id(),
+        );
 
         $this->lastScanMessage = $result->message;
         $this->lastScanTone = match ($result->outcome) {
             PhysicalCountScanOutcome::Found => 'success',
-            PhysicalCountScanOutcome::NeedsQuantity => 'info',
             PhysicalCountScanOutcome::Overage => 'warning',
             PhysicalCountScanOutcome::Duplicate => 'warning',
             PhysicalCountScanOutcome::NotFound => 'danger',
@@ -135,63 +116,11 @@ class ScanPhysicalCountSession extends Page
         ]);
         $this->recentScans = array_slice($this->recentScans, 0, 10);
 
-        if ($result->needsQuantity() && $result->line !== null) {
-            $this->showQtyPrompt = true;
-            $this->pendingLineId = $result->line->id;
-            $this->pendingItemLabel = (string) ($result->line->article ?? 'Item');
-            $this->pendingQty = (string) max(0, (int) $result->line->on_hand_count);
-        }
-
         $this->dispatch(
             'physical-count-scan-processed',
             propertyNumber: (string) $displayCode,
             outcome: $result->outcome->value,
         );
-    }
-
-    public function confirmPendingQty(): void
-    {
-        if ($this->pendingLineId === null) {
-            return;
-        }
-
-        /** @var PhysicalCountSession $session */
-        $session = $this->getRecord();
-        $line = PhysicalCountLine::query()
-            ->where('physical_count_session_id', $session->id)
-            ->whereKey($this->pendingLineId)
-            ->first();
-
-        if ($line === null) {
-            $this->cancelPendingQty();
-
-            return;
-        }
-
-        $result = app(ConsumablePhysicalCountScanService::class)->applyQuantity(
-            $session,
-            $line,
-            (int) $this->pendingQty,
-            auth()->id(),
-        );
-
-        $this->lastScanMessage = $result->message;
-        $this->lastScanTone = match ($result->outcome) {
-            PhysicalCountScanOutcome::Found => 'success',
-            PhysicalCountScanOutcome::Overage => 'warning',
-            default => 'info',
-        };
-
-        $this->cancelPendingQty();
-        $this->getRecord()->refresh();
-    }
-
-    public function cancelPendingQty(): void
-    {
-        $this->showQtyPrompt = false;
-        $this->pendingLineId = null;
-        $this->pendingItemLabel = null;
-        $this->pendingQty = '';
     }
 
     /**

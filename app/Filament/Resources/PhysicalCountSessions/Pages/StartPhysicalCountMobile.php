@@ -141,7 +141,7 @@ class StartPhysicalCountMobile extends Page
         $slug = $category->getTemplateSlug();
 
         if (! in_array($slug, ['consumables', 'ppe', 'semi_expendable'], true)) {
-            $this->addError('itemCategoryId', 'Selected category does not support QR counting.');
+            $this->addError('itemCategoryId', 'Selected category does not support physical counting.');
 
             return;
         }
@@ -162,6 +162,12 @@ class StartPhysicalCountMobile extends Page
             'count_date' => now()->toDateString(),
             ...$defaults,
         ]);
+
+        if ($countType === PhysicalCountSession::TYPE_RPCI) {
+            $this->redirect(PhysicalCountSessionResource::getUrl('edit', ['record' => $session]));
+
+            return;
+        }
 
         $this->redirect(PhysicalCountSessionResource::getUrl('scan', ['record' => $session]));
     }

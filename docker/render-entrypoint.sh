@@ -36,15 +36,18 @@ mkdir -p bootstrap/cache/filament storage/framework/views storage/app/templates 
 
 # Free tier has no Shell/disk: always refresh templates from the image on boot.
 if [ -d resources/owwa-templates ]; then
-    cp -r resources/owwa-templates/. storage/app/templates/ 2>/dev/null || true
+    php artisan owwa:sync-templates --force --no-interaction 2>/dev/null \
+        || cp -r resources/owwa-templates/. storage/app/templates/ 2>/dev/null \
+        || true
     touch storage/app/templates/.synced
 fi
 
 php artisan app:audit-owwa-templates --json > /tmp/owwa-template-audit.json 2>&1 || true
 if [ -f /tmp/owwa-template-audit.json ]; then
-    missing=$(php -r 'echo count(json_decode(file_get_contents("/tmp/owwa-template-audit.json"), true)["missing_configured_templates"] ?? []);' 2>/dev/null || echo "0")
+    missing=$(php -r '$j=@json_decode(@file_get_contents("/tmp/owwa-template-audit.json"), true); $m=$j["missing_configured_templates"] ?? []; echo is_array($m)?count($m):0;' 2>/dev/null || echo "0")
     if [ "$missing" != "0" ]; then
-        echo "WARN: OWWA template audit reports ${missing} missing configured template(s). Run: php artisan owwa:sync-templates"
+        echo "WARN: OWWA template audit reports ${missing} missing configured template(s):"
+        php -r '$j=@json_decode(@file_get_contents("/tmp/owwa-template-audit.json"), true); foreach (($j["missing_configured_templates"] ?? []) as $path) { echo "  - ".$path.PHP_EOL; }' 2>/dev/null || true
     fi
 fi
 

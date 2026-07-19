@@ -71,6 +71,7 @@ class DistributionsTable
                     ),
                     [
                         DistributionViewActions::exportOwwaAction(),
+                        DistributionViewActions::exportPdfAction(),
                     ],
                     '5xl',
                     modelLabel: DistributionResource::getModelLabel(),

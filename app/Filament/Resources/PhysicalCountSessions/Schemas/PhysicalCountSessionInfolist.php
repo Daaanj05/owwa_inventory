@@ -67,7 +67,7 @@ class PhysicalCountSessionInfolist
     public static function completionChecklistSection(): Section
     {
         return Section::make('Completion checklist')
-            ->visible(fn (PhysicalCountSession $record): bool => $record->supportsQrScanning())
+            ->visible(fn (PhysicalCountSession $record): bool => $record->supportsCompletionWorkflow())
             ->schema([
                 TextEntry::make('missing_for_complete')
                     ->label('Missing for complete')
@@ -86,6 +86,9 @@ class PhysicalCountSessionInfolist
     {
         return Section::make('Count progress')
             ->description(fn (PhysicalCountSession $record): ?string => match (true) {
+                $record->isConsumablePhysicalCount() => $record->hasBookListLoaded()
+                    ? 'Compare manually entered on-hand counts against book balances from stock cards.'
+                    : 'Load stock lines, then enter On hand per count for each item.',
                 ! $record->supportsQrScanning() => null,
                 ! $record->hasBookListLoaded() => 'Scan-first mode — load expected assets on desktop to reconcile against the book list.',
                 default => 'Compare scanned on-hand totals against book balances from inventory unit tags.',
@@ -93,7 +96,9 @@ class PhysicalCountSessionInfolist
             ->columns(2)
             ->schema([
                 TextEntry::make('scan_progress')
-                    ->label('Scan progress')
+                    ->label(fn (PhysicalCountSession $record): string => $record->isConsumablePhysicalCount()
+                        ? 'Count progress'
+                        : 'Scan progress')
                     ->state(function (PhysicalCountSession $record): string {
                         $summary = $record->countSummary();
 
@@ -104,14 +109,17 @@ class PhysicalCountSessionInfolist
                         $expected = $summary['expected'];
 
                         if ($expected === 0) {
-                            return $record->supportsQrScanning()
-                                ? 'No lines yet — scan on mobile or load expected assets'
-                                : 'No count lines';
+                            return match (true) {
+                                $record->isConsumablePhysicalCount() => 'No lines yet — load stock lines or add item lines',
+                                $record->supportsQrScanning() => 'No lines yet — scan on mobile or load expected assets',
+                                default => 'No count lines',
+                            };
                         }
 
                         $percent = (int) round(($summary['scanned'] / $expected) * 100);
+                        $unitLabel = $record->isConsumablePhysicalCount() ? 'lines' : 'units';
 
-                        return "{$summary['scanned']} / {$expected} units ({$percent}%)";
+                        return "{$summary['scanned']} / {$expected} {$unitLabel} ({$percent}%)";
                     })
                     ->color(function (PhysicalCountSession $record): string {
                         $summary = $record->countSummary();
@@ -123,16 +131,20 @@ class PhysicalCountSessionInfolist
                         return $summary['scanned'] >= $summary['expected'] ? 'success' : 'warning';
                     })
                     ->columnSpanFull()
-                    ->visible(fn (PhysicalCountSession $record): bool => $record->supportsQrScanning()),
+                    ->visible(fn (PhysicalCountSession $record): bool => $record->supportsCompletionWorkflow()),
                 TextEntry::make('expected_units')
-                    ->label('Expected (book)')
+                    ->label(fn (PhysicalCountSession $record): string => $record->isConsumablePhysicalCount()
+                        ? 'Expected (book)'
+                        : 'Expected (book)')
                     ->state(fn (PhysicalCountSession $record): int|string => ($record->countSummary()['scan_only'] ?? false)
                         ? '—'
                         : $record->countSummary()['expected']),
                 TextEntry::make('scanned_units')
-                    ->label(fn (PhysicalCountSession $record): string => ($record->countSummary()['scan_only'] ?? false)
-                        ? 'Tags scanned'
-                        : 'Scanned (on hand)')
+                    ->label(fn (PhysicalCountSession $record): string => match (true) {
+                        $record->isConsumablePhysicalCount() => 'Counted (on hand)',
+                        ($record->countSummary()['scan_only'] ?? false) => 'Tags scanned',
+                        default => 'Scanned (on hand)',
+                    })
                     ->state(fn (PhysicalCountSession $record): int => $record->countSummary()['scanned']),
                 TextEntry::make('matched_lines')
                     ->label('Matched')

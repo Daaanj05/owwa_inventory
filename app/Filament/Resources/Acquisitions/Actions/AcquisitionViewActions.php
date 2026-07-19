@@ -21,13 +21,23 @@ class AcquisitionViewActions
 
     public static function exportOwwaAction(): Action
     {
-        return Action::make('exportOwwa')
-            ->label(fn (Acquisition $record): string => match ($record->item?->category?->getTemplateSlug()) {
-                'ppe' => 'Export receipt line (Property Card)',
-                'semi_expendable' => 'Export receipt line (Annex A.1)',
-                default => 'Export Stock Card receipt (Appendix 58)',
+        return self::exportAction('exportOwwa', false);
+    }
+
+    public static function exportPdfAction(): Action
+    {
+        return self::exportAction('exportOwwaPdf', true);
+    }
+
+    protected static function exportAction(string $name, bool $asPdf): Action
+    {
+        return Action::make($name)
+            ->label(fn (Acquisition $record) => match ($record->item?->category?->getTemplateSlug()) {
+                'ppe' => $asPdf ? 'Export Property Card (PDF)' : 'Export receipt line (Property Card)',
+                'semi_expendable' => $asPdf ? 'Export Annex A.1 (PDF)' : 'Export receipt line (Annex A.1)',
+                default => $asPdf ? 'Export Stock Card (PDF)' : 'Export Stock Card receipt (Appendix 58)',
             })
-            ->icon('heroicon-o-document-arrow-down')
+            ->icon($asPdf ? 'heroicon-o-document-text' : 'heroicon-o-document-arrow-down')
             ->form([
                 Select::make('form')
                     ->label('OWWA form')
@@ -43,18 +53,25 @@ class AcquisitionViewActions
                         default => 'Use Acquisitions → PR / PO / IAR paperwork for purchase forms. This export posts one receipt row to the Stock Card (Appendix 58). For the full ledger, open Stock levels and export from the item modal.',
                     }),
             ])
-            ->action(function (Acquisition $record, array $data, Action $action): void {
+            ->action(function (Acquisition $record, array $data, Action $action) use ($asPdf): void {
                 $url = route('owwa.export.acquisition', $record);
+                $query = [];
                 if (! empty($data['form'])) {
-                    $url .= '?form='.urlencode($data['form']);
+                    $query['form'] = $data['form'];
+                }
+                if ($asPdf) {
+                    $query['format'] = 'pdf';
+                }
+                if ($query !== []) {
+                    $url .= '?'.http_build_query($query);
                 }
 
                 $livewire = $action->getLivewire();
                 OwwaExportBusyDispatcher::start(
                     $livewire instanceof LivewireComponent ? $livewire : null,
                     $url,
-                    'Preparing Excel export…',
-                    'Building your OWWA form…',
+                    $asPdf ? 'Preparing PDF export…' : 'Preparing Excel export…',
+                    $asPdf ? 'Building your OWWA PDF…' : 'Building your OWWA form…',
                 );
             });
     }

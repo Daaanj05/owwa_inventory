@@ -25,10 +25,6 @@ Route::get('/assets/{propertyNumber}', [PublicAssetController::class, 'show'])
     ->middleware('throttle:60,1')
     ->name('inventory.assets.show');
 
-Route::get('/stock/{item}/{office}', [\App\Http\Controllers\ConsumableStockQrController::class, 'show'])
-    ->middleware('throttle:60,1')
-    ->name('inventory.stock.show');
-
 Route::middleware(['auth', 'web'])->group(function () {
     Route::get('/email/verify', function () {
         return view('welcome');
@@ -87,7 +83,6 @@ Route::middleware(['auth', 'web'])->group(function () {
     Route::get('reports/owwa/physical-count/{physicalCountSession}/qr-labels', [InventoryQrLabelController::class, 'physicalCountSession'])->name('owwa.qr-labels.physical-count');
     Route::get('reports/owwa/issuance/{issuance}/qr-label', [InventoryQrLabelController::class, 'issuance'])->name('owwa.qr-labels.issuance');
     Route::get('reports/owwa/acquisition-paperwork/{acquisitionPaperwork}/qr-labels', [InventoryQrLabelController::class, 'acquisitionPaperwork'])->name('owwa.qr-labels.acquisition-paperwork');
-    Route::get('reports/owwa/stock/{item}/{office}/qr-label', [\App\Http\Controllers\ConsumableStockQrController::class, 'labels'])->name('owwa.qr-labels.stock');
     Route::get('reports/owwa/issuance/{issuance}/print', [OwwaPrintController::class, 'issuance'])->name('owwa.print.issuance');
     Route::get('reports/owwa/transfer/{transfer}/print', [OwwaPrintController::class, 'transfer'])->name('owwa.print.transfer');
     Route::get('reports/owwa/disposal/{disposal}/print', [OwwaPrintController::class, 'disposal'])->name('owwa.print.disposal');

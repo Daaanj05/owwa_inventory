@@ -21,9 +21,19 @@ class TransferViewActions
 
     public static function exportOwwaAction(): Action
     {
-        return Action::make('exportOwwa')
-            ->label('Export OWWA Form')
-            ->icon('heroicon-o-document-arrow-down')
+        return self::exportAction('exportOwwa', 'Export Excel', false);
+    }
+
+    public static function exportPdfAction(): Action
+    {
+        return self::exportAction('exportOwwaPdf', 'Export PDF', true);
+    }
+
+    protected static function exportAction(string $name, string $label, bool $asPdf): Action
+    {
+        return Action::make($name)
+            ->label($label)
+            ->icon($asPdf ? 'heroicon-o-document-text' : 'heroicon-o-document-arrow-down')
             ->form([
                 Select::make('form')
                     ->label('OWWA form')
@@ -35,18 +45,25 @@ class TransferViewActions
                     })
                     ->helperText('The form is auto-selected based on the item category. Change only if needed.'),
             ])
-            ->action(function (Transfer $record, array $data, Action $action): void {
-                $url = route('owwa.export.transfer', $record);
+            ->action(function (Transfer $record, array $data, Action $action) use ($asPdf): void {
+                $query = [];
                 if (! empty($data['form'])) {
-                    $url .= '?form='.urlencode($data['form']);
+                    $query['form'] = $data['form'];
+                }
+                if ($asPdf) {
+                    $query['format'] = 'pdf';
+                }
+                $url = route('owwa.export.transfer', $record);
+                if ($query !== []) {
+                    $url .= '?'.http_build_query($query);
                 }
 
                 $livewire = $action->getLivewire();
                 OwwaExportBusyDispatcher::start(
                     $livewire instanceof LivewireComponent ? $livewire : null,
                     $url,
-                    'Preparing Excel export…',
-                    'Building your OWWA form…',
+                    $asPdf ? 'Preparing PDF export…' : 'Preparing Excel export…',
+                    $asPdf ? 'Building your OWWA PDF…' : 'Building your OWWA form…',
                 );
             });
     }

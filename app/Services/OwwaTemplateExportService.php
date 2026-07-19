@@ -26,6 +26,7 @@ use App\Support\ProcurementSpreadsheetBuilder;
 use App\Support\PropertyCardLayout;
 use App\Support\PtrSignatureLayout;
 use App\Support\RsmiSignatureLayout;
+use Illuminate\Http\Response;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
@@ -76,6 +77,50 @@ class OwwaTemplateExportService
                 'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
             ]
         );
+    }
+
+    /**
+     * Same filled OWWA spreadsheet as Excel export, converted via LibreOffice (Dompdf fallback).
+     *
+     * @param  array<string, string|int|float|null>  $cellValues
+     * @param  array{formCode?: string, signatures?: array<string, string|int|float|null>, useMasterSignatures?: bool}|null  $physicalCountExport
+     */
+    public function downloadPdfFromTemplate(
+        string $templateFilename,
+        array $cellValues,
+        string $outputFilename,
+        int $sheetIndex = 0,
+        ?string $sheetName = null,
+        ?array $physicalCountExport = null,
+    ): Response {
+        $spreadsheet = $this->renderFilledSpreadsheet(
+            $templateFilename,
+            $cellValues,
+            $sheetIndex,
+            $sheetName,
+            $physicalCountExport,
+        );
+
+        return $this->pdfDownloadResponse($spreadsheet, $this->pdfFilenameFromXlsx($outputFilename));
+    }
+
+    public function pdfDownloadResponse(Spreadsheet $spreadsheet, string $filename): Response
+    {
+        try {
+            $binary = $this->spreadsheetToPdfBinary($spreadsheet);
+        } finally {
+            $spreadsheet->disconnectWorksheets();
+        }
+
+        return response($binary, 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'attachment; filename="'.$filename.'"',
+        ]);
+    }
+
+    public function pdfFilenameFromXlsx(string $xlsxFilename): string
+    {
+        return (string) preg_replace('/\.xlsx$/i', '.pdf', $xlsxFilename);
     }
 
     /**
@@ -250,6 +295,8 @@ class OwwaTemplateExportService
             if ($detailCount > 0) {
                 $this->finalizeDetailSection('PO', $sheet, $detailCount);
             }
+
+            $this->applyPoTotalAmountInNumbersFormat($sheet, $cellValues);
 
             return;
         }
@@ -622,6 +669,29 @@ class OwwaTemplateExportService
                 'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
             ]
         );
+    }
+
+    public function downloadPhysicalCountSpreadsheetPdf(
+        PhysicalCountSession $session,
+        string $formCode,
+        string $templateFilename,
+        string $outputFilename,
+        ?int $sheetIndex = 0,
+        ?string $sheetName = null,
+        ?Collection $lines = null,
+        ?string $propertyClass = null,
+    ): Response {
+        $spreadsheet = $this->buildPhysicalCountSpreadsheet(
+            $session,
+            $formCode,
+            $templateFilename,
+            $sheetIndex,
+            $sheetName,
+            $lines,
+            $propertyClass,
+        );
+
+        return $this->pdfDownloadResponse($spreadsheet, $this->pdfFilenameFromXlsx($outputFilename));
     }
 
     protected function ensureRsmiSignatureLines(Worksheet $sheet, int $rowOffset = 0): void
@@ -1103,6 +1173,48 @@ class OwwaTemplateExportService
         }
     }
 
+    /**
+     * @param  array<string, string|int|float|null>  $cellValues
+     */
+    protected function applyPoTotalAmountInNumbersFormat(Worksheet $sheet, array $cellValues): void
+    {
+        $detail = (array) OwwaCellMapping::form('PO')['detail'];
+        $footerStartRow = (int) ($detail['footer_start_row'] ?? 32);
+        $amountColumn = (string) ($detail['columns']['amount'] ?? 'F');
+        $wordsRow = null;
+
+        foreach ($cellValues as $ref => $value) {
+            if (! is_string($value) || ! str_contains($value, 'Pesos')) {
+                continue;
+            }
+
+            if (preg_match('/^A(\d+)$/', (string) $ref, $matches) === 1) {
+                $wordsRow = (int) $matches[1];
+                break;
+            }
+        }
+
+        $wordsRow ??= OwwaCellMapping::poTotalAmountInWordsRow($footerStartRow);
+        $numbersRow = OwwaCellMapping::poTotalAmountInNumbersRow($wordsRow);
+        $coordinate = OwwaCellMapping::columnCell($amountColumn, $numbersRow);
+        $value = $sheet->getCell($coordinate)->getValue();
+
+        if ($value === null || $value === '' || ! is_numeric($value)) {
+            return;
+        }
+
+        $sheet->getStyle($coordinate)
+            ->getNumberFormat()
+            ->setFormatCode(OwwaExportStandards::currencyExcelFormatCode());
+
+        $dimension = $sheet->getColumnDimension($amountColumn);
+        $currentWidth = (float) $dimension->getWidth();
+
+        if ($currentWidth <= 0 || $currentWidth < 12.0) {
+            $dimension->setWidth(12.0);
+        }
+    }
+
     protected function applyRsmiRecapMonetaryFormats(Worksheet $sheet, int $detailRowCount, int $rowOffset = 0): void
     {
         if ($detailRowCount <= 0) {
@@ -1555,6 +1667,17 @@ class OwwaTemplateExportService
     /**
      * @param  array<int, array{sheetName: string, cellValues: array<string, string|int|float|null>}>  $tabs
      */
+    public function downloadAnnexA1SpreadsheetPdf(array $tabs, string $outputFilename, ?string $templateFilename = null): Response
+    {
+        return $this->pdfDownloadResponse(
+            $this->buildAnnexA1Spreadsheet($tabs, $templateFilename),
+            $this->pdfFilenameFromXlsx($outputFilename),
+        );
+    }
+
+    /**
+     * @param  array<int, array{sheetName: string, cellValues: array<string, string|int|float|null>}>  $tabs
+     */
     public function buildRpcspPhysicalCountSpreadsheet(
         array $tabs,
         ?string $templateFilename = null,
@@ -1668,6 +1791,21 @@ class OwwaTemplateExportService
             [
                 'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
             ]
+        );
+    }
+
+    /**
+     * @param  array<int, array{sheetName: string, cellValues: array<string, string|int|float|null>}>  $tabs
+     */
+    public function downloadRpcspPhysicalCountSpreadsheetPdf(
+        array $tabs,
+        string $outputFilename,
+        ?string $templateFilename = null,
+        ?PhysicalCountSession $session = null,
+    ): Response {
+        return $this->pdfDownloadResponse(
+            $this->buildRpcspPhysicalCountSpreadsheet($tabs, $templateFilename, $session),
+            $this->pdfFilenameFromXlsx($outputFilename),
         );
     }
 
@@ -1828,6 +1966,21 @@ class OwwaTemplateExportService
             [
                 'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
             ]
+        );
+    }
+
+    /**
+     * @param  array<int, array{
+     *     sheetName: string,
+     *     header: array<string, string|null>,
+     *     entries: array<int, array<string, mixed>>
+     * }>  $tabs
+     */
+    public function downloadAnnexA4SpreadsheetPdf(array $tabs, string $outputFilename, ?string $templateFilename = null): Response
+    {
+        return $this->pdfDownloadResponse(
+            $this->buildAnnexA4Spreadsheet($tabs, $templateFilename),
+            $this->pdfFilenameFromXlsx($outputFilename),
         );
     }
 
@@ -3297,6 +3450,25 @@ class OwwaTemplateExportService
         );
     }
 
+    public function downloadIssuancePdf(Issuance $issuance, ?string $templateFilename = null, ?string $formSlug = null): Response
+    {
+        $issuance->loadMissing('item.category');
+        $sheet = $this->resolveTemplateSheetForCategory('issuance', $issuance->item?->category, $formSlug);
+        if ($templateFilename === null) {
+            $templateFilename = $this->getTemplatePathForCategory('issuance', $issuance->item?->category, $formSlug);
+        }
+        $formCode = $this->resolveOwwaFormCode($templateFilename);
+        $filename = $this->buildOwwaExportFilename($formCode, $issuance->controlNumber() ?? (string) $issuance->getKey());
+
+        return $this->downloadPdfFromTemplate(
+            $templateFilename,
+            $this->cellValuesForIssuance($issuance, $templateFilename),
+            $filename,
+            $sheet['sheetIndex'],
+            $sheet['sheetName']
+        );
+    }
+
     /**
      * Export a single acquisition as OWWA-format Excel using the template for the item's category and optional form.
      */
@@ -3328,6 +3500,34 @@ class OwwaTemplateExportService
         );
     }
 
+    public function downloadAcquisitionPdf(Acquisition $acquisition, ?string $templateFilename = null, ?string $formSlug = null): Response
+    {
+        $acquisition->loadMissing('item.category');
+        if ($templateFilename === null) {
+            $templateFilename = $this->getTemplatePathForCategory('acquisition', $acquisition->item?->category, $formSlug);
+        }
+        $formCode = $this->resolveOwwaFormCode($templateFilename);
+        $filename = $this->buildOwwaExportFilename($formCode, $acquisition->reference_code ?? (string) $acquisition->getKey());
+
+        if ($this->isAnnexA1PropertyCardTemplate($templateFilename)) {
+            return $this->downloadAnnexA1SpreadsheetPdf(
+                [$this->acquisitionAnnexA1ExportTab($acquisition)],
+                $filename,
+                $templateFilename,
+            );
+        }
+
+        $sheet = $this->resolveAcquisitionSheet($acquisition, $formSlug, $templateFilename);
+
+        return $this->downloadPdfFromTemplate(
+            $templateFilename,
+            $this->cellValuesForAcquisition($acquisition, $templateFilename),
+            $filename,
+            $sheet['sheetIndex'],
+            $sheet['sheetName']
+        );
+    }
+
     /**
      * Export a single transfer as OWWA-format Excel using the template for the item's category and optional form.
      */
@@ -3342,6 +3542,25 @@ class OwwaTemplateExportService
         $filename = $this->buildOwwaExportFilename($formCode, $transfer->reference_code ?? (string) $transfer->getKey());
 
         return $this->downloadFromTemplate(
+            $templateFilename,
+            $this->cellValuesForTransfer($transfer, $templateFilename),
+            $filename,
+            $sheet['sheetIndex'],
+            $sheet['sheetName']
+        );
+    }
+
+    public function downloadTransferPdf(Transfer $transfer, ?string $templateFilename = null, ?string $formSlug = null): Response
+    {
+        $transfer->loadMissing('item.category');
+        $sheet = $this->resolveTemplateSheetForCategory('transfer', $transfer->item?->category, $formSlug);
+        if ($templateFilename === null) {
+            $templateFilename = $this->getTemplatePathForCategory('transfer', $transfer->item?->category, $formSlug);
+        }
+        $formCode = $this->resolveOwwaFormCode($templateFilename);
+        $filename = $this->buildOwwaExportFilename($formCode, $transfer->reference_code ?? (string) $transfer->getKey());
+
+        return $this->downloadPdfFromTemplate(
             $templateFilename,
             $this->cellValuesForTransfer($transfer, $templateFilename),
             $filename,
@@ -3367,6 +3586,28 @@ class OwwaTemplateExportService
         $filename = $this->buildOwwaExportFilename($formCode, $disposal->reference_code ?? (string) $disposal->getKey());
 
         return $this->downloadFromTemplate(
+            $templateFilename,
+            $cellValues,
+            $filename,
+            $sheet['sheetIndex'],
+            $sheet['sheetName']
+        );
+    }
+
+    public function downloadDisposalPdf(Disposal $disposal, ?string $templateFilename = null, ?string $formSlug = null): Response
+    {
+        $disposal->loadMissing('item.category');
+        $formSlug = $this->resolveDisposalFormSlug($disposal, $formSlug);
+        $transactionType = $disposal->disposal_type === 'lost_stolen_damaged' ? 'incident_report' : 'disposal';
+        $sheet = $this->resolveTemplateSheetForCategory($transactionType, $disposal->item?->category, $formSlug);
+        if ($templateFilename === null) {
+            $templateFilename = $this->getDisposalTemplatePath($disposal, $formSlug);
+        }
+        $cellValues = $this->cellValuesForDisposal($disposal, $templateFilename);
+        $formCode = $this->resolveOwwaFormCode($templateFilename);
+        $filename = $this->buildOwwaExportFilename($formCode, $disposal->reference_code ?? (string) $disposal->getKey());
+
+        return $this->downloadPdfFromTemplate(
             $templateFilename,
             $cellValues,
             $filename,
@@ -3519,6 +3760,27 @@ class OwwaTemplateExportService
         );
     }
 
+    public function downloadRequisitionPdf(Requisition $requisition, ?string $templateFilename = null): Response
+    {
+        if ($templateFilename === null) {
+            $templateFilename = (string) config('owwa_templates.requisition.default.file', 'requisition/Appendix 63 - RIS.xls');
+        }
+        $sheetIndex = (int) config('owwa_templates.requisition.default.sheet_index', 0);
+        $sheetName = config('owwa_templates.requisition.default.sheet_name');
+        $sheetName = is_string($sheetName) ? $sheetName : null;
+
+        $formCode = $this->resolveOwwaFormCode($templateFilename);
+        $filename = $this->buildOwwaExportFilename($formCode, $requisition->reference_code ?? (string) $requisition->getKey());
+
+        return $this->downloadPdfFromTemplate(
+            $templateFilename,
+            $this->cellValuesForRequisition($requisition),
+            $filename,
+            $sheetIndex,
+            $sheetName
+        );
+    }
+
     /**
      * Export a distribution using the OWWA issuance form for the item category (RSMI/PAR/ICS).
      */
@@ -3533,6 +3795,19 @@ class OwwaTemplateExportService
         $filename = $this->buildOwwaExportFilename($formCode, $reference);
 
         return $this->downloadFromTemplate($templateFilename, $cellValues, $filename, $sheet['sheetIndex'], $sheet['sheetName']);
+    }
+
+    public function downloadDistributionPdf(\App\Models\Distribution $distribution, ?string $formSlug = null): Response
+    {
+        $distribution->loadMissing(['item.category', 'office', 'department', 'distributedTo', 'distributedBy', 'requisition']);
+        $templateFilename = $this->getTemplatePathForCategory('distribution', $distribution->item?->category, $formSlug);
+        $sheet = $this->resolveTemplateSheetForCategory('distribution', $distribution->item?->category, $formSlug);
+        $cellValues = $this->cellValuesForDistribution($distribution, $templateFilename);
+        $formCode = $this->resolveOwwaFormCode($templateFilename);
+        $reference = $distribution->requisition?->reference_code ?? 'DIST-'.$distribution->getKey();
+        $filename = $this->buildOwwaExportFilename($formCode, $reference);
+
+        return $this->downloadPdfFromTemplate($templateFilename, $cellValues, $filename, $sheet['sheetIndex'], $sheet['sheetName']);
     }
 
     /**

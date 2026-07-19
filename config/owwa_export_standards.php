@@ -2,7 +2,7 @@
 
 return [
     'currency' => [
-        'excel_format_code' => '"P"#,##0.00',
+        'excel_format_code' => '"₱"#,##0.00',
     ],
 
     'ledger' => [

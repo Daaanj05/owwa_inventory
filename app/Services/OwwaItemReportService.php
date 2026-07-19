@@ -23,6 +23,7 @@ use App\Support\PhysicalCountPropertyClassResolver;
 use App\Support\PpePropertyType;
 use App\Support\PropertyCardLayout;
 use App\Support\UnitCostKey;
+use Illuminate\Http\Response;
 use Illuminate\Support\Collection;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
@@ -534,6 +535,30 @@ class OwwaItemReportService
 
     public function downloadStockCardBulk(Collection $pairs): StreamedResponse
     {
+        $merged = $this->buildStockCardBulkSpreadsheet($pairs);
+        $writer = new Xlsx($merged);
+        $downloadName = OwwaExportFilename::batch('SC');
+
+        return response()->streamDownload(function () use ($writer): void {
+            $writer->save('php://output');
+        }, $downloadName, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ]);
+    }
+
+    public function downloadStockCardBulkPdf(Collection $pairs): Response
+    {
+        return $this->templateExport->pdfDownloadResponse(
+            $this->buildStockCardBulkSpreadsheet($pairs),
+            OwwaExportFilename::batch('SC', ext: 'pdf'),
+        );
+    }
+
+    /**
+     * @param  Collection<int, array{item_id: int, office_id: int, unit_cost: float|null}>  $pairs
+     */
+    protected function buildStockCardBulkSpreadsheet(Collection $pairs): Spreadsheet
+    {
         $merged = new Spreadsheet;
         $removedDefaultSheet = false;
         $usedSheetTitles = [];
@@ -580,8 +605,14 @@ class OwwaItemReportService
 
         $merged->setActiveSheetIndex(0);
 
+        return $merged;
+    }
+
+    public function downloadPropertyCardBulk(Collection $pairs): StreamedResponse
+    {
+        $merged = $this->buildPropertyCardBulkSpreadsheet($pairs);
         $writer = new Xlsx($merged);
-        $downloadName = OwwaExportFilename::batch('SC');
+        $downloadName = OwwaExportFilename::batch('PC');
 
         return response()->streamDownload(function () use ($writer): void {
             $writer->save('php://output');
@@ -590,7 +621,18 @@ class OwwaItemReportService
         ]);
     }
 
-    public function downloadPropertyCardBulk(Collection $pairs): StreamedResponse
+    public function downloadPropertyCardBulkPdf(Collection $pairs): Response
+    {
+        return $this->templateExport->pdfDownloadResponse(
+            $this->buildPropertyCardBulkSpreadsheet($pairs),
+            OwwaExportFilename::batch('PC', ext: 'pdf'),
+        );
+    }
+
+    /**
+     * @param  Collection<int, array{item_id: int, office_id: int, unit_cost?: float|null}>  $pairs
+     */
+    protected function buildPropertyCardBulkSpreadsheet(Collection $pairs): Spreadsheet
     {
         $merged = new Spreadsheet;
         $removedDefaultSheet = false;
@@ -599,6 +641,7 @@ class OwwaItemReportService
         foreach ($pairs as $pair) {
             $itemId = (int) ($pair['item_id'] ?? 0);
             $officeId = (int) ($pair['office_id'] ?? 0);
+            $unitCost = isset($pair['unit_cost']) ? (float) $pair['unit_cost'] : null;
 
             if ($itemId <= 0 || $officeId <= 0) {
                 continue;
@@ -613,8 +656,6 @@ class OwwaItemReportService
             if ($office === null) {
                 continue;
             }
-
-            $unitCost = isset($pair['unit_cost']) ? (float) $pair['unit_cost'] : null;
 
             $source = $this->propertyCardFilledSpreadsheet($item, $office, $officeId, $unitCost);
             $sheet = $source->getSheet(0);
@@ -639,14 +680,7 @@ class OwwaItemReportService
 
         $merged->setActiveSheetIndex(0);
 
-        $writer = new Xlsx($merged);
-        $downloadName = OwwaExportFilename::batch('PC');
-
-        return response()->streamDownload(function () use ($writer): void {
-            $writer->save('php://output');
-        }, $downloadName, [
-            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        ]);
+        return $merged;
     }
 
     /**
@@ -674,6 +708,31 @@ class OwwaItemReportService
     }
 
     public function downloadAnnexA1Bulk(Collection $pairs): StreamedResponse
+    {
+        $tabs = $this->buildAnnexA1BulkTabs($pairs);
+        abort_if($tabs === [], 404);
+
+        $filename = OwwaExportFilename::batch('AnnexA1');
+
+        return $this->templateExport->downloadAnnexA1Spreadsheet($tabs, $filename);
+    }
+
+    public function downloadAnnexA1BulkPdf(Collection $pairs): Response
+    {
+        $tabs = $this->buildAnnexA1BulkTabs($pairs);
+        abort_if($tabs === [], 404);
+
+        return $this->templateExport->downloadAnnexA1SpreadsheetPdf(
+            $tabs,
+            OwwaExportFilename::batch('AnnexA1'),
+        );
+    }
+
+    /**
+     * @param  Collection<int, array{item_id: int, office_id: int, unit_cost?: float|null}>  $pairs
+     * @return array<int, array{sheetName: string, blocks?: array<int, array{header: array<string, string|null>, transactions: array<int, array<string, mixed>>}>}>
+     */
+    protected function buildAnnexA1BulkTabs(Collection $pairs): array
     {
         $resolvedPairs = $this->resolveSemiExpendableBulkPairs($pairs);
 
@@ -733,9 +792,7 @@ class OwwaItemReportService
 
         usort($tabs, fn (array $a, array $b): int => strcmp($a['sheetName'], $b['sheetName']));
 
-        $filename = OwwaExportFilename::batch('AnnexA1');
-
-        return $this->templateExport->downloadAnnexA1Spreadsheet($tabs, $filename);
+        return $tabs;
     }
 
     public function downloadAnnexA4Bulk(Collection $pairs): StreamedResponse
@@ -746,6 +803,17 @@ class OwwaItemReportService
         $filename = OwwaExportFilename::batch('AnnexA4');
 
         return $this->templateExport->downloadAnnexA4Spreadsheet($tabs, $filename);
+    }
+
+    public function downloadAnnexA4BulkPdf(Collection $pairs): Response
+    {
+        $tabs = $this->buildAnnexA4ExportTabs($pairs);
+        abort_if($tabs === [], 404);
+
+        return $this->templateExport->downloadAnnexA4SpreadsheetPdf(
+            $tabs,
+            OwwaExportFilename::batch('AnnexA4'),
+        );
     }
 
     /**
@@ -970,6 +1038,40 @@ class OwwaItemReportService
         );
     }
 
+    public function downloadPhysicalCountPdf(PhysicalCountSession $session): Response
+    {
+        $session->loadMissing(['office', 'lines.item']);
+
+        if ($session->count_type === PhysicalCountSession::TYPE_RPCSP) {
+            return $this->downloadRpcspPhysicalCountPdf($session);
+        }
+
+        $formCode = $this->physicalCountFormCode($session);
+        $templatePath = (string) (OwwaCellMapping::form($formCode)['template'] ?? '');
+
+        if ($templatePath === '') {
+            $templatePath = match ($session->count_type) {
+                PhysicalCountSession::TYPE_RPCPPE => 'ppe/Physical Count/Appendix 73 - RPCPPE.xlsx',
+                default => 'Consumable/Stock Levels & Recording/Appendix 66 - RPCI.xlsx',
+            };
+        }
+
+        $filename = OwwaExportFilename::physicalCount(
+            (string) $session->count_type,
+            (string) $session->reference_code,
+        );
+        $sheet = $this->resolvePhysicalCountSheet($session);
+
+        return $this->templateExport->downloadPhysicalCountSpreadsheetPdf(
+            $session,
+            $formCode,
+            $templatePath,
+            $filename,
+            $sheet['sheetIndex'],
+            $sheet['sheetName'],
+        );
+    }
+
     public function downloadRpcspPhysicalCount(PhysicalCountSession $session): StreamedResponse
     {
         $formCode = $this->physicalCountFormCode($session);
@@ -985,6 +1087,23 @@ class OwwaItemReportService
         );
 
         return $this->templateExport->downloadRpcspPhysicalCountSpreadsheet($tabs, $filename, $templatePath, $session);
+    }
+
+    public function downloadRpcspPhysicalCountPdf(PhysicalCountSession $session): Response
+    {
+        $formCode = $this->physicalCountFormCode($session);
+        $templatePath = (string) (OwwaCellMapping::form($formCode)['template'] ?? '');
+        $templatePath = $templatePath !== ''
+            ? $templatePath
+            : 'Semi-Expendable/Physical Count/Inventory-Annex-A.8-RPCSP - REPORT.xlsx';
+
+        $tabs = $this->buildRpcspPhysicalCountTabs($session);
+        $filename = OwwaExportFilename::physicalCount(
+            (string) $session->count_type,
+            (string) $session->reference_code,
+        );
+
+        return $this->templateExport->downloadRpcspPhysicalCountSpreadsheetPdf($tabs, $filename, $templatePath, $session);
     }
 
     /**

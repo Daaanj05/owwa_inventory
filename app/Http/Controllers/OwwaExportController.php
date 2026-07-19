@@ -36,7 +36,7 @@ class OwwaExportController extends Controller
         protected AcquisitionPaperworkPdfExportService $acquisitionPdfExport,
     ) {}
 
-    public function acquisition(Request $request, Acquisition $acquisition): StreamedResponse
+    public function acquisition(Request $request, Acquisition $acquisition): StreamedResponse|Response
     {
         $this->authorizeAcquisitionExport($acquisition);
         $acquisition->load(['item.category', 'office', 'recordedBy']);
@@ -46,16 +46,22 @@ class OwwaExportController extends Controller
             $formSlug = null;
         }
 
+        $asPdf = $request->query('format') === 'pdf';
+
         $this->logExportActivity(
-            'Exported OWWA acquisition report '.$acquisition->reference_code,
+            ($asPdf ? 'Exported OWWA acquisition PDF ' : 'Exported OWWA acquisition report ').$acquisition->reference_code,
             $acquisition,
-            ['form' => $formSlug],
+            ['form' => $formSlug, 'format' => $asPdf ? 'pdf' : 'xlsx'],
         );
+
+        if ($asPdf) {
+            return $this->owwaExport->downloadAcquisitionPdf($acquisition, null, $formSlug);
+        }
 
         return $this->owwaExport->downloadAcquisition($acquisition, null, $formSlug);
     }
 
-    public function issuance(Request $request, Issuance $issuance): StreamedResponse
+    public function issuance(Request $request, Issuance $issuance): StreamedResponse|Response
     {
         $this->authorizeIssuanceExport($issuance);
         $issuance->load(['item.category', 'office', 'department', 'issuedBy', 'issuedTo']);
@@ -65,16 +71,22 @@ class OwwaExportController extends Controller
             $formSlug = null;
         }
 
+        $asPdf = $request->query('format') === 'pdf';
+
         $this->logExportActivity(
-            'Exported OWWA issuance report '.$issuance->reference_code,
+            ($asPdf ? 'Exported OWWA issuance PDF ' : 'Exported OWWA issuance report ').$issuance->reference_code,
             $issuance,
-            ['form' => $formSlug],
+            ['form' => $formSlug, 'format' => $asPdf ? 'pdf' : 'xlsx'],
         );
+
+        if ($asPdf) {
+            return $this->owwaExport->downloadIssuancePdf($issuance, null, $formSlug);
+        }
 
         return $this->owwaExport->downloadIssuance($issuance, null, $formSlug);
     }
 
-    public function transfer(Request $request, Transfer $transfer): StreamedResponse
+    public function transfer(Request $request, Transfer $transfer): StreamedResponse|Response
     {
         $this->authorizeTransferExport($transfer);
         $transfer->load(['item.category', 'fromOffice', 'toOffice', 'recordedBy']);
@@ -84,16 +96,22 @@ class OwwaExportController extends Controller
             $formSlug = null;
         }
 
+        $asPdf = $request->query('format') === 'pdf';
+
         $this->logExportActivity(
-            'Exported OWWA transfer report '.$transfer->reference_code,
+            ($asPdf ? 'Exported OWWA transfer PDF ' : 'Exported OWWA transfer report ').$transfer->reference_code,
             $transfer,
-            ['form' => $formSlug],
+            ['form' => $formSlug, 'format' => $asPdf ? 'pdf' : 'xlsx'],
         );
+
+        if ($asPdf) {
+            return $this->owwaExport->downloadTransferPdf($transfer, null, $formSlug);
+        }
 
         return $this->owwaExport->downloadTransfer($transfer, null, $formSlug);
     }
 
-    public function disposal(Request $request, Disposal $disposal): StreamedResponse
+    public function disposal(Request $request, Disposal $disposal): StreamedResponse|Response
     {
         $this->authorizeDisposalExport($disposal);
         $disposal->load(['item.category', 'office', 'recordedBy']);
@@ -103,16 +121,22 @@ class OwwaExportController extends Controller
             $formSlug = null;
         }
 
+        $asPdf = $request->query('format') === 'pdf';
+
         $this->logExportActivity(
-            'Exported OWWA disposal report '.$disposal->reference_code,
+            ($asPdf ? 'Exported OWWA disposal PDF ' : 'Exported OWWA disposal report ').$disposal->reference_code,
             $disposal,
-            ['form' => $formSlug],
+            ['form' => $formSlug, 'format' => $asPdf ? 'pdf' : 'xlsx'],
         );
+
+        if ($asPdf) {
+            return $this->owwaExport->downloadDisposalPdf($disposal, null, $formSlug);
+        }
 
         return $this->owwaExport->downloadDisposal($disposal, null, $formSlug);
     }
 
-    public function requisition(Requisition $requisition): StreamedResponse
+    public function requisition(Request $request, Requisition $requisition): StreamedResponse|Response
     {
         $user = Auth::user();
         abort_unless(
@@ -123,10 +147,17 @@ class OwwaExportController extends Controller
 
         $requisition->load(['office', 'department', 'requestedBy', 'approvedBy', 'items.item']);
 
+        $asPdf = $request->query('format') === 'pdf';
+
         $this->logExportActivity(
-            'Exported OWWA requisition report '.$requisition->reference_code,
+            ($asPdf ? 'Exported OWWA requisition PDF ' : 'Exported OWWA requisition report ').$requisition->reference_code,
             $requisition,
+            ['format' => $asPdf ? 'pdf' : 'xlsx'],
         );
+
+        if ($asPdf) {
+            return $this->owwaExport->downloadRequisitionPdf($requisition);
+        }
 
         return $this->owwaExport->downloadRequisition($requisition);
     }
@@ -158,27 +189,41 @@ class OwwaExportController extends Controller
         );
     }
 
-    public function physicalCount(PhysicalCountSession $physicalCountSession): StreamedResponse
+    public function physicalCount(Request $request, PhysicalCountSession $physicalCountSession): StreamedResponse|Response
     {
         $this->authorizePhysicalCountExport($physicalCountSession);
 
+        $asPdf = $request->query('format') === 'pdf';
+
         $this->logExportActivity(
-            'Exported physical count report '.$physicalCountSession->reference_code,
+            ($asPdf ? 'Exported physical count PDF ' : 'Exported physical count report ').$physicalCountSession->reference_code,
             $physicalCountSession,
+            ['format' => $asPdf ? 'pdf' : 'xlsx'],
         );
+
+        if ($asPdf) {
+            return $this->itemReport->downloadPhysicalCountPdf($physicalCountSession);
+        }
 
         return $this->itemReport->downloadPhysicalCount($physicalCountSession);
     }
 
-    public function distribution(Distribution $distribution): StreamedResponse
+    public function distribution(Request $request, Distribution $distribution): StreamedResponse|Response
     {
         $this->authorizeDistributionExport($distribution);
         $distribution->load(['item.category', 'office', 'department', 'distributedTo', 'distributedBy']);
 
+        $asPdf = $request->query('format') === 'pdf';
+
         $this->logExportActivity(
-            'Exported OWWA distribution report #'.$distribution->getKey(),
+            ($asPdf ? 'Exported OWWA distribution PDF #' : 'Exported OWWA distribution report #').$distribution->getKey(),
             $distribution,
+            ['format' => $asPdf ? 'pdf' : 'xlsx'],
         );
+
+        if ($asPdf) {
+            return $this->owwaExport->downloadDistributionPdf($distribution);
+        }
 
         return $this->owwaExport->downloadDistribution($distribution);
     }

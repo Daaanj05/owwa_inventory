@@ -10,6 +10,7 @@ use App\Models\User;
 use App\Services\OwwaItemReportService;
 use App\Support\ConsumableInventoryType;
 use App\Support\ItemPropertyClass;
+use App\Support\PhysicalCountPropertyClassResolver;
 use App\Support\PpePropertyType;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -62,19 +63,31 @@ class ConsumableInventoryTypeAndPpeTypeTest extends TestCase
     {
         $office = Office::factory()->create();
         $category = ItemCategory::factory()->create(['name' => 'Consumables']);
+        $item = Item::factory()->create([
+            'item_category_id' => $category->id,
+            'inventory_type' => ConsumableInventoryType::AccountableForms,
+        ]);
+
         $session = PhysicalCountSession::query()->create([
             'count_type' => PhysicalCountSession::TYPE_RPCI,
             'office_id' => $office->id,
             'item_category_id' => $category->id,
             'count_date' => now(),
-            'inventory_type' => ConsumableInventoryType::AccountableForms,
-            'inventory_type_label' => ConsumableInventoryType::label(ConsumableInventoryType::AccountableForms),
             'accountable_officer_name' => 'Officer',
             'recorded_by' => User::factory()->create()->id,
         ]);
 
+        $session->lines()->create([
+            'item_id' => $item->id,
+            'article' => $item->name,
+            'balance_per_card' => 1,
+            'on_hand_count' => 1,
+        ]);
+
+        PhysicalCountPropertyClassResolver::syncSession($session->fresh(['lines.item']));
+
         $method = new \ReflectionMethod(OwwaItemReportService::class, 'physicalCountHeaderData');
-        $header = $method->invoke(app(OwwaItemReportService::class), $session);
+        $header = $method->invoke(app(OwwaItemReportService::class), $session->fresh());
 
         $this->assertSame(
             ConsumableInventoryType::label(ConsumableInventoryType::AccountableForms),

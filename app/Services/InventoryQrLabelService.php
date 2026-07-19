@@ -6,11 +6,8 @@ use App\Models\Acquisition;
 use App\Models\AcquisitionPaperwork;
 use App\Models\InventoryUnit;
 use App\Models\Issuance;
-use App\Models\Item;
-use App\Models\Office;
 use App\Models\PhysicalCountLine;
 use App\Models\PhysicalCountSession;
-use App\Support\ConsumableStockQrPayload;
 use App\Support\InventoryUnitQrPayload;
 use chillerlan\QRCode\QRCode;
 use chillerlan\QRCode\QROptions;
@@ -137,21 +134,6 @@ class InventoryQrLabelService
                 $session->office?->name ?? '',
             ))
             ->values();
-    }
-
-    /**
-     * @return Collection<int, array{property_number: string, item_name: string, office_name: string, qr_data_uri: string}>
-     */
-    public function labelsForConsumableStock(Item $item, Office $office, ?string $unitCostKey = null): Collection
-    {
-        $payload = ConsumableStockQrPayload::encode($item, $office, $unitCostKey);
-
-        return collect([[
-            'property_number' => (string) ($item->item_code ?? $item->id),
-            'item_name' => $item->name,
-            'office_name' => $office->name ?? '',
-            'qr_data_uri' => $this->qrCodeDataUri($payload),
-        ]]);
     }
 
     /**

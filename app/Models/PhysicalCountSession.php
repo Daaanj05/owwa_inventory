@@ -109,7 +109,7 @@ class PhysicalCountSession extends Model
 
     public function supportsQrScanning(): bool
     {
-        return in_array($this->count_type, [self::TYPE_RPCI, self::TYPE_RPCPPE, self::TYPE_RPCSP], true);
+        return $this->supportsUnitQrScanning();
     }
 
     public function supportsUnitQrScanning(): bool
@@ -117,9 +117,14 @@ class PhysicalCountSession extends Model
         return in_array($this->count_type, [self::TYPE_RPCPPE, self::TYPE_RPCSP], true);
     }
 
-    public function supportsStockQrScanning(): bool
+    public function isConsumablePhysicalCount(): bool
     {
         return $this->count_type === self::TYPE_RPCI;
+    }
+
+    public function supportsCompletionWorkflow(): bool
+    {
+        return $this->supportsUnitQrScanning() || $this->isConsumablePhysicalCount();
     }
 
     public function expectedUnits(): int
@@ -239,7 +244,7 @@ class PhysicalCountSession extends Model
 
     public function usesDerivedInventoryTypeLabel(): bool
     {
-        if (! in_array($this->count_type, [self::TYPE_RPCSP, self::TYPE_RPCPPE], true)) {
+        if (! in_array($this->count_type, [self::TYPE_RPCSP, self::TYPE_RPCPPE, self::TYPE_RPCI], true)) {
             return false;
         }
 

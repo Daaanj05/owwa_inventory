@@ -6,6 +6,8 @@ use App\Filament\Concerns\RedirectsCreateToList;
 use App\Filament\Concerns\SyncsActiveItemCategory;
 use App\Filament\Resources\PhysicalCountSessions\PhysicalCountSessionResource;
 use App\Filament\Resources\PhysicalCountSessions\Schemas\PhysicalCountSessionForm;
+use App\Models\PhysicalCountSession;
+use App\Support\PhysicalCountPropertyClassResolver;
 use Filament\Resources\Pages\CreateRecord;
 
 class CreatePhysicalCountSession extends CreateRecord
@@ -21,5 +23,12 @@ class CreatePhysicalCountSession extends CreateRecord
 
         $this->syncActiveItemCategoryFromRequest(false);
         $this->form->fill(PhysicalCountSessionForm::defaultCreateFormData($this->activeItemCategoryId()));
+    }
+
+    protected function afterCreate(): void
+    {
+        /** @var PhysicalCountSession $record */
+        $record = $this->getRecord();
+        PhysicalCountPropertyClassResolver::syncSession($record);
     }
 }

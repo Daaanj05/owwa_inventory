@@ -60,10 +60,10 @@ class PhysicalCountSessionActions
             ->label('Load stock lines')
             ->icon('heroicon-o-arrow-down-tray')
             ->color('success')
-            ->visible(fn (PhysicalCountSession $record): bool => $record->supportsStockQrScanning() && ! $record->hasBookListLoaded() && ! $record->isArchived())
+            ->visible(fn (PhysicalCountSession $record): bool => $record->isConsumablePhysicalCount() && ! $record->hasBookListLoaded() && ! $record->isArchived())
             ->requiresConfirmation()
             ->modalHeading('Load stock lines from Stock Card balances?')
-            ->modalDescription('Loads consumable items with stock activity for this office and inventory type. Counted quantities stay at zero until you enter them or scan stock QR labels.')
+            ->modalDescription('Loads consumable items with stock activity for this office. Inventory type is set automatically from the loaded items. Enter On hand per count manually for each line after loading.')
             ->action(function (PhysicalCountSession $record, Action $action) use ($afterSuccess): void {
                 $result = app(PhysicalCountPreloadService::class)->preloadFromStockBalances($record);
 
@@ -87,7 +87,7 @@ class PhysicalCountSessionActions
             ->label('Mark complete')
             ->icon('heroicon-o-check-circle')
             ->color('success')
-            ->visible(fn (PhysicalCountSession $record): bool => $record->supportsQrScanning() && ! $record->isComplete() && ! $record->isArchived())
+            ->visible(fn (PhysicalCountSession $record): bool => $record->supportsCompletionWorkflow() && ! $record->isComplete() && ! $record->isArchived())
             ->requiresConfirmation()
             ->action(function (PhysicalCountSession $record, Action $action): void {
                 try {
@@ -126,19 +126,36 @@ class PhysicalCountSessionActions
     public static function exportOwwaAction(): Action
     {
         return Action::make('exportOwwa')
-            ->label('Export OWWA form')
+            ->label('Export Excel')
             ->icon('heroicon-o-document-arrow-down')
             ->color('gray')
             ->visible(fn (PhysicalCountSession $record): bool => $record->isComplete())
             ->action(function (PhysicalCountSession $record, Action $action): void {
-                $livewire = $action->getLivewire();
-                OwwaExportBusyDispatcher::start(
-                    $livewire instanceof LivewireComponent ? $livewire : null,
-                    route('owwa.export.physical-count', $record),
-                    'Preparing Excel export…',
-                    'Building your OWWA form…',
-                );
+                self::startExport($record, $action, false);
             });
+    }
+
+    public static function exportPdfAction(): Action
+    {
+        return Action::make('exportOwwaPdf')
+            ->label('Export PDF')
+            ->icon('heroicon-o-document-text')
+            ->color('gray')
+            ->visible(fn (PhysicalCountSession $record): bool => $record->isComplete())
+            ->action(function (PhysicalCountSession $record, Action $action): void {
+                self::startExport($record, $action, true);
+            });
+    }
+
+    protected static function startExport(PhysicalCountSession $record, Action $action, bool $asPdf): void
+    {
+        $livewire = $action->getLivewire();
+        OwwaExportBusyDispatcher::start(
+            $livewire instanceof LivewireComponent ? $livewire : null,
+            route('owwa.export.physical-count', $record).($asPdf ? '?format=pdf' : ''),
+            $asPdf ? 'Preparing PDF export…' : 'Preparing Excel export…',
+            $asPdf ? 'Building your OWWA PDF…' : 'Building your OWWA form…',
+        );
     }
 
     public static function editAction(): EditAction
@@ -164,6 +181,7 @@ class PhysicalCountSessionActions
                 self::editAction(),
                 self::printQrLabelsAction(),
                 self::exportOwwaAction(),
+                self::exportPdfAction(),
             ])
                 ->label('More')
                 ->icon('heroicon-m-ellipsis-horizontal')

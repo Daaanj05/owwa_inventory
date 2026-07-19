@@ -13,17 +13,28 @@ class DistributionViewActions
 {
     public static function exportOwwaAction(): Action
     {
-        return Action::make('exportOwwa')
-            ->label('Export OWWA form')
-            ->icon('heroicon-o-document-arrow-down')
+        return self::exportAction('exportOwwa', 'Export Excel', false);
+    }
+
+    public static function exportPdfAction(): Action
+    {
+        return self::exportAction('exportOwwaPdf', 'Export PDF', true);
+    }
+
+    protected static function exportAction(string $name, string $label, bool $asPdf): Action
+    {
+        return Action::make($name)
+            ->label($label)
+            ->icon($asPdf ? 'heroicon-o-document-text' : 'heroicon-o-document-arrow-down')
             ->visible(fn (): bool => Auth::user() instanceof User && Auth::user()->isSupplyCustodian())
-            ->action(function (Distribution $record, Action $action): void {
+            ->action(function (Distribution $record, Action $action) use ($asPdf): void {
+                $url = route('owwa.export.distribution', $record).($asPdf ? '?format=pdf' : '');
                 $livewire = $action->getLivewire();
                 OwwaExportBusyDispatcher::start(
                     $livewire instanceof LivewireComponent ? $livewire : null,
-                    route('owwa.export.distribution', $record),
-                    'Preparing Excel export…',
-                    'Building your OWWA form…',
+                    $url,
+                    $asPdf ? 'Preparing PDF export…' : 'Preparing Excel export…',
+                    $asPdf ? 'Building your OWWA PDF…' : 'Building your OWWA form…',
                 );
             });
     }

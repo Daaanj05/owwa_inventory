@@ -7,7 +7,6 @@ use App\Models\Issuance;
 use App\Models\PhysicalCountLine;
 use App\Models\PhysicalCountScanEvent;
 use App\Models\PhysicalCountSession;
-use App\Support\ConsumableStockQrPayload;
 use App\Support\InventoryUnitQrPayload;
 use App\Support\ItemPropertyClass;
 use App\Support\PhysicalCountScanOutcome;
@@ -35,14 +34,14 @@ class PhysicalCountScanService
 
     public function resolve(PhysicalCountSession $session, string $rawCode, ?int $userId = null): PhysicalCountScanResult
     {
-        if (ConsumableStockQrPayload::resolve($rawCode) !== null) {
+        if ($this->looksLikeRetiredStockQr($rawCode)) {
             return $this->recordEvent(
                 $session,
                 '',
                 PhysicalCountScanOutcome::NotFound,
                 null,
                 $userId,
-                'That QR is a stock / shelf label. Use property-tag QR for PPE and semi-expendable counts.',
+                'Stock / shelf QR labels are no longer used. Enter consumable counts manually on the session form.',
             );
         }
 
@@ -401,5 +400,24 @@ class PhysicalCountScanService
         ]);
 
         return new PhysicalCountScanResult($outcome, $line, $message);
+    }
+
+    protected function looksLikeRetiredStockQr(string $rawCode): bool
+    {
+        $raw = trim($rawCode);
+
+        if ($raw === '') {
+            return false;
+        }
+
+        if (str_contains($raw, '/stock/')) {
+            return true;
+        }
+
+        if (! str_starts_with(strtoupper($raw), 'OWWA|')) {
+            return false;
+        }
+
+        return (bool) preg_match('/\|kind=stock\|/i', $raw);
     }
 }

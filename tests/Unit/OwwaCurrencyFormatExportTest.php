@@ -40,11 +40,11 @@ class OwwaCurrencyFormatExportTest extends TestCase
 
         $formatCode = OwwaExportStandards::currencyExcelFormatCode();
 
-        $this->assertStringContainsString('P', $sheet->getStyle('E11')->getNumberFormat()->getFormatCode());
+        $this->assertStringContainsString('₱', $sheet->getStyle('E11')->getNumberFormat()->getFormatCode());
         $this->assertSame($formatCode, $sheet->getStyle('F11')->getNumberFormat()->getFormatCode());
         $this->assertSame(25.50, (float) $sheet->getCell('E11')->getValue());
         $this->assertSame(127.50, (float) $sheet->getCell('F11')->getValue());
-        $this->assertStringContainsString('P', (string) $sheet->getCell('E11')->getFormattedValue());
+        $this->assertStringContainsString('₱', (string) $sheet->getCell('E11')->getFormattedValue());
     }
 
     public function test_po_export_applies_peso_format_to_unit_cost_and_amount_columns(): void
@@ -76,7 +76,42 @@ class OwwaCurrencyFormatExportTest extends TestCase
             OwwaExportStandards::currencyExcelFormatCode(),
             $sheet->getStyle('F'.$startRow)->getNumberFormat()->getFormatCode(),
         );
-        $this->assertStringContainsString('P', (string) $sheet->getCell('F'.$startRow)->getFormattedValue());
+        $this->assertStringContainsString('₱', (string) $sheet->getCell('F'.$startRow)->getFormattedValue());
+    }
+
+    public function test_po_total_amount_in_numbers_uses_peso_format(): void
+    {
+        $template = 'Consumable/Acquisitions/Appendix 61 - PO.xls';
+
+        if (! is_readable(storage_path('app/templates/'.$template))) {
+            $this->markTestSkipped('PO template is not installed.');
+        }
+
+        $startRow = OwwaCellMapping::detailRowBase('PO');
+        $footerStartRow = (int) (OwwaCellMapping::form('PO')['detail']['footer_start_row'] ?? 32);
+        $wordsRow = OwwaCellMapping::poTotalAmountInWordsRow($footerStartRow);
+        $numbersRow = OwwaCellMapping::poTotalAmountInNumbersRow($wordsRow);
+
+        $values = [
+            'A'.$startRow => 'CON-100',
+            'C'.$startRow => 'Office supplies',
+            'D'.$startRow => '10',
+            'E'.$startRow => 185.0,
+            'F'.$startRow => 1850.0,
+            'F'.$numbersRow => 1850.0,
+            'A'.$wordsRow => 'One Thousand Eight Hundred Fifty Pesos Only',
+        ];
+
+        $sheet = app(OwwaTemplateExportService::class)
+            ->renderFilledSpreadsheet($template, $values)
+            ->getActiveSheet();
+
+        $this->assertSame(1850.0, (float) $sheet->getCell('F'.$numbersRow)->getValue());
+        $this->assertSame(
+            OwwaExportStandards::currencyExcelFormatCode(),
+            $sheet->getStyle('F'.$numbersRow)->getNumberFormat()->getFormatCode(),
+        );
+        $this->assertStringContainsString('₱', (string) $sheet->getCell('F'.$numbersRow)->getFormattedValue());
     }
 
     public function test_rsmi_export_applies_peso_format_to_detail_and_recap_monetary_columns(): void
@@ -116,7 +151,7 @@ class OwwaCurrencyFormatExportTest extends TestCase
         $this->assertSame($formatCode, $sheet->getStyle('F'.$recapStart)->getNumberFormat()->getFormatCode());
         $this->assertSame($formatCode, $sheet->getStyle('G'.$recapStart)->getNumberFormat()->getFormatCode());
         $this->assertSame(15.5, (float) $sheet->getCell('G'.$detailStart)->getValue());
-        $this->assertStringContainsString('P', (string) $sheet->getCell('H'.$detailStart)->getFormattedValue());
+        $this->assertStringContainsString('₱', (string) $sheet->getCell('H'.$detailStart)->getFormattedValue());
     }
 
     public function test_ics_export_widens_monetary_columns_to_avoid_hash_overflow(): void

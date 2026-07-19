@@ -17,12 +17,6 @@ class PhysicalCountScanResult
         return in_array($this->outcome, [
             PhysicalCountScanOutcome::Found,
             PhysicalCountScanOutcome::Overage,
-            PhysicalCountScanOutcome::NeedsQuantity,
         ], true);
-    }
-
-    public function needsQuantity(): bool
-    {
-        return $this->outcome === PhysicalCountScanOutcome::NeedsQuantity;
     }
 }

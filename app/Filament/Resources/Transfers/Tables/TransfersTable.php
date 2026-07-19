@@ -75,6 +75,7 @@ class TransfersTable
                     [
                         TransferViewActions::editAction(),
                         TransferViewActions::exportOwwaAction(),
+                        TransferViewActions::exportPdfAction(),
                         TransferViewActions::printViewAction(),
                     ],
                     '3xl',

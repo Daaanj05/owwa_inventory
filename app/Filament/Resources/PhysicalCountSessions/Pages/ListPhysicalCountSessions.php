@@ -12,8 +12,8 @@ use App\Models\PhysicalCountSession;
 use App\Services\PhysicalCountPreloadService;
 use App\Support\CustodianOfficeScope;
 use App\Support\OfficeSignatoryDefaults;
+use App\Support\PhysicalCountPropertyClassResolver;
 use Filament\Actions\Action;
-use Filament\Notifications\Actions\Action as NotificationAction;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ListRecords;
 use Filament\Schemas\Components\Tabs\Tab;
@@ -100,6 +100,32 @@ class ListPhysicalCountSessions extends ListRecords
                     );
                 })
                 ->after(function (PhysicalCountSession $record): void {
+                    PhysicalCountPropertyClassResolver::syncSession($record);
+
+                    if ($record->isConsumablePhysicalCount()) {
+                        Notification::make()
+                            ->title('Physical count session created')
+                            ->body('Next: load stock lines or add items. Inventory type is set automatically from those items.')
+                            ->success()
+                            ->actions([
+                                Action::make('preload')
+                                    ->label('Load stock lines now')
+                                    ->button()
+                                    ->action(function () use ($record): void {
+                                        $result = app(PhysicalCountPreloadService::class)->preloadFromStockBalances($record);
+
+                                        Notification::make()
+                                            ->title('Stock lines loaded')
+                                            ->body("Created {$result['created']}, updated {$result['updated']}, skipped {$result['skipped']}.")
+                                            ->success()
+                                            ->send();
+                                    }),
+                            ])
+                            ->send();
+
+                        return;
+                    }
+
                     if (! $record->supportsQrScanning()) {
                         return;
                     }
@@ -109,7 +135,7 @@ class ListPhysicalCountSessions extends ListRecords
                         ->body('Next: load expected assets, then scan property tags with your phone.')
                         ->success()
                         ->actions([
-                            NotificationAction::make('preload')
+                            Action::make('preload')
                                 ->label('Load expected assets now')
                                 ->button()
                                 ->action(function () use ($record): void {
@@ -121,7 +147,7 @@ class ListPhysicalCountSessions extends ListRecords
                                         ->success()
                                         ->send();
                                 }),
-                            NotificationAction::make('scan')
+                            Action::make('scan')
                                 ->label('Scan with phone')
                                 ->button()
                                 ->url(PhysicalCountSessionResource::getUrl('scan', ['record' => $record])),

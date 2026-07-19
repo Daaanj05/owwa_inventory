@@ -8,5 +8,4 @@ enum PhysicalCountScanOutcome: string
     case Duplicate = 'duplicate';
     case Overage = 'overage';
     case NotFound = 'not_found';
-    case NeedsQuantity = 'needs_quantity';
 }

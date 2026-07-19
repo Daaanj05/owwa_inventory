@@ -7,6 +7,7 @@ use App\Models\ItemCategory;
 use App\Models\Office;
 use App\Models\PhysicalCountLine;
 use App\Models\PhysicalCountSession;
+use App\Support\ConsumableInventoryType;
 use App\Support\ItemPropertyClass;
 use App\Support\PhysicalCountPropertyClassResolver;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -99,6 +100,86 @@ class PhysicalCountPropertyClassResolverTest extends TestCase
         $session->refresh();
         $this->assertNull($session->property_class);
         $this->assertNull($session->inventory_type_label);
+    }
+
+    public function test_rpci_sync_session_sets_inventory_type_from_counted_items(): void
+    {
+        $office = Office::factory()->create();
+        $category = ItemCategory::factory()->create(['name' => 'Consumables']);
+        $session = PhysicalCountSession::query()->create([
+            'count_type' => PhysicalCountSession::TYPE_RPCI,
+            'office_id' => $office->id,
+            'item_category_id' => $category->id,
+            'count_date' => now(),
+        ]);
+
+        $item = Item::factory()->create([
+            'item_category_id' => $category->id,
+            'inventory_type' => ConsumableInventoryType::AccountableForms,
+        ]);
+
+        PhysicalCountLine::query()->create([
+            'physical_count_session_id' => $session->id,
+            'item_id' => $item->id,
+            'balance_per_card' => 5,
+            'on_hand_count' => 4,
+        ]);
+
+        PhysicalCountPropertyClassResolver::syncSession($session->fresh());
+
+        $session->refresh();
+        $this->assertSame(ConsumableInventoryType::AccountableForms, $session->inventory_type);
+        $this->assertSame(
+            ConsumableInventoryType::label(ConsumableInventoryType::AccountableForms),
+            $session->inventory_type_label,
+        );
+        $this->assertTrue($session->usesDerivedInventoryTypeLabel());
+        $this->assertSame(
+            ConsumableInventoryType::label(ConsumableInventoryType::AccountableForms),
+            PhysicalCountPropertyClassResolver::displayInventoryTypeText($session),
+        );
+    }
+
+    public function test_rpci_sync_session_clears_inventory_type_for_mixed_item_types(): void
+    {
+        $office = Office::factory()->create();
+        $category = ItemCategory::factory()->create(['name' => 'Consumables']);
+        $session = PhysicalCountSession::query()->create([
+            'count_type' => PhysicalCountSession::TYPE_RPCI,
+            'office_id' => $office->id,
+            'item_category_id' => $category->id,
+            'count_date' => now(),
+            'inventory_type' => ConsumableInventoryType::OfficeSupplies,
+            'inventory_type_label' => ConsumableInventoryType::label(ConsumableInventoryType::OfficeSupplies),
+        ]);
+
+        $officeSupplies = Item::factory()->create([
+            'item_category_id' => $category->id,
+            'inventory_type' => ConsumableInventoryType::OfficeSupplies,
+        ]);
+        $food = Item::factory()->create([
+            'item_category_id' => $category->id,
+            'inventory_type' => ConsumableInventoryType::FoodSupplies,
+        ]);
+
+        foreach ([$officeSupplies, $food] as $item) {
+            PhysicalCountLine::query()->create([
+                'physical_count_session_id' => $session->id,
+                'item_id' => $item->id,
+                'balance_per_card' => 1,
+                'on_hand_count' => 1,
+            ]);
+        }
+
+        PhysicalCountPropertyClassResolver::syncSession($session->fresh());
+
+        $session->refresh();
+        $this->assertNull($session->inventory_type);
+        $this->assertNull($session->inventory_type_label);
+        $this->assertSame(
+            'Multiple inventory types',
+            PhysicalCountPropertyClassResolver::displayInventoryTypeText($session),
+        );
     }
 
     /**

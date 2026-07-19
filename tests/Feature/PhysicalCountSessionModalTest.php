@@ -125,7 +125,6 @@ class PhysicalCountSessionModalTest extends TestCase
             ->assertSet('mountedActions.0.data.count_type', PhysicalCountSession::TYPE_RPCSP)
             ->assertSet('mountedActions.0.data.item_category_id', $category->id)
             ->assertFormFieldIsHidden('item_category_id')
-            ->assertFormFieldIsHidden('inventory_type_label')
             ->assertFormFieldDoesNotExist('derived_inventory_type_label')
             ->assertFormFieldDoesNotExist('derived_property_class')
             ->assertFormFieldDoesNotExist('report_form_hint');
@@ -376,5 +375,40 @@ class PhysicalCountSessionModalTest extends TestCase
         $this->actingAs($custodian)
             ->get(PhysicalCountSessionResource::getUrl('scan', ['record' => $session]))
             ->assertNotFound();
+    }
+
+    public function test_create_modal_does_not_require_inventory_type_for_consumables(): void
+    {
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+
+        $office = Office::factory()->create();
+        $category = ItemCategory::factory()->create(['name' => 'Consumables']);
+        $custodian = User::factory()->create([
+            'role' => User::ROLE_SUPPLY_CUSTODIAN,
+            'office_id' => $office->id,
+        ]);
+
+        $this->actingAs($custodian);
+        session()->put('active_item_category_id', $category->id);
+
+        Livewire::withQueryParams(['category' => (string) $category->id])
+            ->test(ListPhysicalCountSessions::class)
+            ->mountAction('create')
+            ->assertSet('mountedActions.0.data.count_type', PhysicalCountSession::TYPE_RPCI)
+            ->fillForm([
+                'office_id' => $office->id,
+                'count_date' => now()->toDateString(),
+                'accountable_officer_name' => 'Officer',
+                'certified_by_printed_name' => 'Certifier',
+                'approved_by_printed_name' => 'Approver',
+                'verified_by_printed_name' => 'Verifier',
+            ])
+            ->callMountedAction()
+            ->assertHasNoFormErrors();
+
+        $session = PhysicalCountSession::query()->latest('id')->first();
+        $this->assertNotNull($session);
+        $this->assertSame(PhysicalCountSession::TYPE_RPCI, $session->count_type);
+        $this->assertNull($session->inventory_type);
     }
 }
