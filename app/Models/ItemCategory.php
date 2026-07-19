@@ -29,10 +29,10 @@ class ItemCategory extends Model
 
     protected static function booted(): void
     {
-        static::saved(function (): void {
+        static::saved(function () {
             InventoryCategoryOptions::forgetCache();
         });
-        static::deleted(function (): void {
+        static::deleted(function () {
             InventoryCategoryOptions::forgetCache();
         });
     }
