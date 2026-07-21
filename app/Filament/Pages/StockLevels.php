@@ -14,6 +14,8 @@ use App\Services\InventoryStockService;
 use App\Services\OwwaItemReportService;
 use App\Services\StockLedgerViewService;
 use App\Services\StockLevelExportService;
+use App\Support\OwwaExportBusyDispatcher;
+use App\Support\OwwaExportDiagnostics;
 use App\Support\UnitCostKey;
 use BackedEnum;
 use Filament\Actions\Action;
@@ -26,10 +28,12 @@ use Filament\Support\Enums\Width;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\HtmlString;
 use Illuminate\Support\Str;
 use Livewire\Attributes\Url;
+use Livewire\Component as LivewireComponent;
 use Livewire\WithPagination;
 use UnitEnum;
 
@@ -82,6 +86,9 @@ class StockLevels extends Page
 
     public function mount(): void
     {
+        OwwaExportDiagnostics::raiseMemoryLimit('512M');
+        OwwaExportDiagnostics::registerOomGuard('filament.pages.stock-levels');
+
         $categoryId = filled($this->category)
             ? (int) $this->category
             : (int) session('active_item_category_id', 0);
@@ -285,6 +292,9 @@ class StockLevels extends Page
                     ->live(),
             ])
             ->action(function (array $data, Action $action) use ($format): void {
+                OwwaExportDiagnostics::raiseMemoryLimit('512M');
+                OwwaExportDiagnostics::registerOomGuard('filament.pages.stock-levels.export');
+
                 $scope = (string) ($data['export_scope'] ?? 'all');
 
                 if ($scope === 'selected' && $this->selectedKeys === []) {
@@ -300,6 +310,16 @@ class StockLevels extends Page
                 }
 
                 $url = $this->buildStockCardsExportUrl($scope, $format);
+
+                OwwaExportDiagnostics::info('stock_levels_export_action', [
+                    'scope' => $scope,
+                    'format' => $format,
+                    'category' => $this->category,
+                    'selected_count' => count($this->selectedKeys),
+                    'url' => $url,
+                    'memory_limit' => ini_get('memory_limit'),
+                ]);
+
                 $this->startOwwaExportDownload(
                     $url,
                     $format === 'pdf' ? 'Preparing PDF export…' : 'Preparing Excel export…',
@@ -617,6 +637,16 @@ class StockLevels extends Page
         return $this->restockFilter === 'inactive' ? $isInactive : ! $isInactive;
     }
 
+    public ?string $ledgerExportUrl = null;
+
+    public ?string $ledgerExportPdfUrl = null;
+
+    public ?string $ledgerExportLabel = null;
+
+    public ?string $ledgerExportPdfLabel = null;
+
+    public ?string $ledgerExportTitle = null;
+
     public function openStockLedger(int $itemId, int $officeId, float|string|null $unitCost = null): void
     {
         $parsedCost = $unitCost !== null && $unitCost !== '' ? (float) $unitCost : null;
@@ -631,6 +661,16 @@ class StockLevels extends Page
         } catch (AuthorizationException) {
             abort(403);
         }
+
+        $item = Item::query()->with('category')->findOrFail($itemId);
+        $office = Office::query()->findOrFail($officeId);
+        $links = app(StockLedgerViewService::class)->exportLinks($item, $office, $parsedCost);
+
+        $this->ledgerExportUrl = $links['exportUrl'];
+        $this->ledgerExportPdfUrl = $links['exportPdfUrl'];
+        $this->ledgerExportLabel = $links['exportLabel'];
+        $this->ledgerExportPdfLabel = $links['exportPdfLabel'];
+        $this->ledgerExportTitle = $links['title'];
 
         $this->mountAction('viewStockLedger', [
             'itemId' => $itemId,
@@ -705,6 +745,11 @@ class StockLevels extends Page
         return TransferResource::canViewAny();
     }
 
+    /** @var array<string, mixed>|null */
+    protected ?array $resolvedMountedLedger = null;
+
+    protected ?string $resolvedMountedLedgerKey = null;
+
     public function viewStockLedgerAction(): Action
     {
         return Action::make('viewStockLedger')
@@ -712,6 +757,7 @@ class StockLevels extends Page
             ->extraModalWindowAttributes(['class' => 'owwa-view-record-modal'])
             ->modalSubmitAction(false)
             ->modalCancelActionLabel('Close')
+            ->stickyModalFooter()
             ->modalHeading(function (): string {
                 $ledger = $this->resolveMountedLedger();
 
@@ -721,35 +767,40 @@ class StockLevels extends Page
                 'filament.pages.partials.stock-ledger-modal',
                 ['ledger' => $this->resolveMountedLedger()],
             )->render()))
-            ->extraModalFooterActions(function (): array {
-                $ledger = $this->resolveMountedLedger();
-                $actions = [
-                    Action::make('exportLedgerExcel')
-                        ->label($ledger['exportLabel'])
-                        ->icon('heroicon-o-document-arrow-down')
-                        ->color('gray')
-                        ->action(function () use ($ledger): void {
-                            $this->startOwwaExportDownload(
-                                $ledger['exportUrl'],
-                                'Preparing Excel export…',
-                                'Building your '.$ledger['title'].' workbook…',
-                            );
-                        }),
-                    Action::make('exportLedgerPdf')
-                        ->label($ledger['exportPdfLabel'])
-                        ->icon('heroicon-o-document-arrow-down')
-                        ->color('gray')
-                        ->action(function () use ($ledger): void {
-                            $this->startOwwaExportDownload(
-                                $ledger['exportPdfUrl'],
-                                'Preparing PDF export…',
-                                'Building your '.$ledger['title'].' PDF…',
-                            );
-                        }),
-                ];
+            ->extraModalFooterActions([
+                Action::make('exportLedgerExcel')
+                    ->label(fn (): string => $this->ledgerExportLabel ?: 'Export Excel')
+                    ->icon('heroicon-o-document-arrow-down')
+                    ->visible(fn (): bool => filled($this->ledgerExportUrl))
+                    ->action(function (Action $action): void {
+                        $this->dispatchLedgerExport($action, false);
+                    }),
+                Action::make('exportLedgerPdf')
+                    ->label(fn (): string => $this->ledgerExportPdfLabel ?: 'Export PDF')
+                    ->icon('heroicon-o-document-text')
+                    ->visible(fn (): bool => filled($this->ledgerExportPdfUrl))
+                    ->action(function (Action $action): void {
+                        $this->dispatchLedgerExport($action, true);
+                    }),
+            ]);
+    }
 
-                return $actions;
-            });
+    protected function dispatchLedgerExport(Action $action, bool $asPdf): void
+    {
+        $url = $asPdf ? $this->ledgerExportPdfUrl : $this->ledgerExportUrl;
+        if (! filled($url)) {
+            return;
+        }
+
+        $title = $this->ledgerExportTitle ?: 'stock card';
+        $livewire = $action->getLivewire();
+
+        OwwaExportBusyDispatcher::start(
+            $livewire instanceof LivewireComponent ? $livewire : $this,
+            $url,
+            $asPdf ? 'Preparing PDF export…' : 'Preparing Excel export…',
+            $asPdf ? "Building your {$title} PDF…" : "Building your {$title} workbook…",
+        );
     }
 
     /**
@@ -767,16 +818,56 @@ class StockLevels extends Page
      */
     protected function resolveMountedLedger(): array
     {
-        $arguments = $this->getMountedAction()?->getArguments() ?? [];
+        $arguments = $this->mountedActionArguments();
         $itemId = (int) ($arguments['itemId'] ?? 0);
         $officeId = (int) ($arguments['officeId'] ?? 0);
         $unitCost = isset($arguments['unitCost']) && $arguments['unitCost'] !== null
             ? (float) $arguments['unitCost']
             : null;
 
-        $item = Item::query()->with('category')->findOrFail($itemId);
-        $office = Office::query()->findOrFail($officeId);
+        $requestKey = $itemId.'|'.$officeId.'|'.($unitCost === null ? 'null' : UnitCostKey::normalize($unitCost));
 
-        return app(StockLedgerViewService::class)->present($item, $office, $unitCost);
+        if ($this->resolvedMountedLedgerKey === $requestKey && $this->resolvedMountedLedger !== null) {
+            return $this->resolvedMountedLedger;
+        }
+
+        $userId = (int) (Filament::auth()->id() ?? 0);
+        $cacheKey = "stock-ledger-modal:{$userId}:{$requestKey}";
+
+        OwwaExportDiagnostics::raiseMemoryLimit('512M');
+
+        $this->resolvedMountedLedgerKey = $requestKey;
+        $this->resolvedMountedLedger = Cache::remember($cacheKey, now()->addMinutes(10), function () use ($itemId, $officeId, $unitCost, $requestKey): array {
+            OwwaExportDiagnostics::info('stock_ledger_modal_resolve', [
+                'cache_key' => $requestKey,
+                'item_id' => $itemId,
+                'office_id' => $officeId,
+                'unit_cost' => $unitCost,
+            ]);
+
+            $item = Item::query()->with('category')->findOrFail($itemId);
+            $office = Office::query()->findOrFail($officeId);
+
+            return app(StockLedgerViewService::class)->present($item, $office, $unitCost);
+        });
+
+        return $this->resolvedMountedLedger;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function mountedActionArguments(): array
+    {
+        // Prefer the root ledger action — nested footer export actions remount on top.
+        $parent = $this->getMountedAction(0);
+        if ($parent !== null) {
+            $arguments = $parent->getArguments();
+            if (isset($arguments['itemId'], $arguments['officeId'])) {
+                return $arguments;
+            }
+        }
+
+        return $this->getMountedAction()?->getArguments() ?? [];
     }
 }

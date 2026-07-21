@@ -32,10 +32,12 @@ class StockLedgerViewServiceTest extends TestCase
 
         $this->assertSame('Stock Card (Appendix 58)', $present['title']);
         $this->assertSame('sc', $present['exportForm']);
-        $this->assertStringContainsString('form=sc', $present['exportUrl']);
+        $this->assertStringContainsString('owwa/bulk/stock-cards', $present['exportUrl']);
+        $this->assertStringContainsString('pairs=', $present['exportUrl']);
         $this->assertStringContainsString('Export Stock Card (Excel)', $present['exportLabel']);
         $this->assertStringContainsString('Export Stock Card (PDF)', $present['exportPdfLabel']);
         $this->assertStringContainsString('format=pdf', $present['exportPdfUrl']);
+        $this->assertStringContainsString('pairs=', $present['exportPdfUrl']);
         $this->assertArrayHasKey('days_to_consume', $present['columns']);
         $this->assertSame($item->name, $present['header']['item_name']);
     }

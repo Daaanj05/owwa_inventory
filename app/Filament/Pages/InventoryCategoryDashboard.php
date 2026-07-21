@@ -167,7 +167,8 @@ class InventoryCategoryDashboard extends Page
             ];
             $disposalDescription = match ($this->categoryRecord?->getTemplateSlug()) {
                 'consumables' => 'Waste materials disposal (WMR) for this category.',
-                'ppe', 'semi_expendable' => 'Unserviceable property disposal (IIRUP) for this category.',
+                'ppe' => 'Unserviceable property disposal (IIRUP) for this category.',
+                'semi_expendable' => 'Unserviceable property disposal (IIRUSP) for this category.',
                 default => 'Review and create disposal records for this category.',
             };
 

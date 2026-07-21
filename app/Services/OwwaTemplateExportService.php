@@ -15,6 +15,7 @@ use App\Support\DisposalExportLayout;
 use App\Support\OwwaCellMapping;
 use App\Support\OwwaExportFilename;
 use App\Support\OwwaExportStandards;
+use App\Support\OwwaReferenceLabels;
 use App\Support\OwwaSpreadsheetLayoutHelper;
 use App\Support\OwwaTemplateLoader;
 use App\Support\PesoAmountInWords;
@@ -314,6 +315,15 @@ class OwwaTemplateExportService
 
         if ($formKey === 'PTR') {
             PtrSignatureLayout::finalizePrintedNameLayout($sheet);
+
+            return;
+        }
+
+        if (in_array($formKey, ['IIRUSP', 'IIRUP'], true)) {
+            $detailCount = $this->countDetailRowsFromCellValues($formKey, $cellValues);
+            if ($detailCount > 0) {
+                $this->finalizeDetailSection($formKey, $sheet, $detailCount);
+            }
 
             return;
         }
@@ -818,6 +828,8 @@ class OwwaTemplateExportService
             str_contains($normalized, 'Appendix 71') || str_contains($normalized, ' - PAR.') => 'PAR',
             str_contains($normalized, 'Appendix 59') || str_contains($normalized, ' - ICS.') => 'ICS',
             str_contains($normalized, 'Appendix 76') || str_contains($normalized, ' - PTR.') => 'PTR',
+            str_contains($normalized, 'IIRUSP') || str_contains($normalized, 'Annex A.10') => 'IIRUSP',
+            str_contains($normalized, 'IIRUP') || str_contains($normalized, 'Appendix 74') => 'IIRUP',
             str_contains($normalized, 'Appendix 66') || str_contains($normalized, ' - RPCI.') => 'RPCI',
             str_contains($normalized, 'Appendix 73') && str_contains($normalized, 'Physical Count') => 'RPCPPE',
             str_contains($normalized, 'Annex-A.8') || str_contains($normalized, 'RPCSP') => 'RPCSP',
@@ -905,8 +917,9 @@ class OwwaTemplateExportService
         $detailStart = PhysicalCountPageLayout::detailStartRowForBlock($formKey, $blockStartRow);
         $detailCount = $this->countPhysicalCountDetailRows($formKey, $cellValues, $detailStart);
         $templateDetailRows = (int) ($detail['template_detail_rows'] ?? $detail['max_rows'] ?? 21);
-        $styleRow = $detailStart;
+        $styleRow = $this->resolvePhysicalCountStyleRow($formKey, $detailStart);
         $highestColumn = (string) ($detail['highest_column'] ?? 'K');
+        $firstColumn = $this->physicalCountFirstDetailColumn($formKey);
         $columnTypes = (array) ($detail['column_types'] ?? []);
         $alignments = $columnTypes !== []
             ? OwwaExportStandards::resolveColumnAlignments($columnTypes)
@@ -932,6 +945,15 @@ class OwwaTemplateExportService
             OwwaExportStandards::minWrapLinesForExpansion($detail),
             false,
             false,
+            false,
+        );
+
+        OwwaSpreadsheetLayoutHelper::applyPhysicalCountDetailGridBorders(
+            $sheet,
+            $detailStart,
+            $templateDetailRows,
+            $firstColumn,
+            $highestColumn,
         );
 
         if ($detailCount < $templateDetailRows) {
@@ -970,6 +992,11 @@ class OwwaTemplateExportService
             OwwaExportStandards::maxDetailRowHeight($detail),
             $blockHeightBudget,
         );
+
+        OwwaSpreadsheetLayoutHelper::lockHeaderDrawingPixelSizes(
+            $sheet,
+            max(1, $detailStart - 1),
+        );
     }
 
     protected function clearPhysicalCountBlockDetail(
@@ -980,6 +1007,14 @@ class OwwaTemplateExportService
         $detailStart = PhysicalCountPageLayout::detailStartRowForBlock($formKey, $blockStartRow);
         $templateDetailRows = (int) (OwwaCellMapping::form($formKey)['detail']['template_detail_rows'] ?? 21);
         $columns = OwwaCellMapping::detailColumns($formKey);
+
+        // RPCSP templates merge the first detail row (B15:K15) for "***nothing to report***".
+        // That merge redirects every column write to B15 and hides vertical borders.
+        OwwaSpreadsheetLayoutHelper::unmergeCellsInRowRange(
+            $sheet,
+            $detailStart,
+            $detailStart + $templateDetailRows - 1,
+        );
 
         for ($row = $detailStart; $row < $detailStart + $templateDetailRows; $row++) {
             foreach ($columns as $column) {
@@ -1044,8 +1079,9 @@ class OwwaTemplateExportService
         $detail = (array) OwwaCellMapping::form($formKey)['detail'];
         $detailStart = PhysicalCountPageLayout::detailStartRowForBlock($formKey, $blockStartRow);
         $templateDetailRows = (int) ($detail['template_detail_rows'] ?? $detail['max_rows'] ?? 21);
-        $styleRow = (int) ($detail['style_row'] ?? $detailStart);
+        $styleRow = $this->resolvePhysicalCountStyleRow($formKey, $detailStart);
         $highestColumn = (string) ($detail['highest_column'] ?? 'K');
+        $firstColumn = $this->physicalCountFirstDetailColumn($formKey);
         $columnTypes = (array) ($detail['column_types'] ?? []);
         $alignments = $columnTypes !== []
             ? OwwaExportStandards::resolveColumnAlignments($columnTypes)
@@ -1065,6 +1101,15 @@ class OwwaTemplateExportService
             OwwaExportStandards::minWrapLinesForExpansion($detail),
             false,
             false,
+            false,
+        );
+
+        OwwaSpreadsheetLayoutHelper::applyPhysicalCountDetailGridBorders(
+            $sheet,
+            $detailStart,
+            $rowsToNormalize,
+            $firstColumn,
+            $highestColumn,
         );
 
         if ($detailCount < $templateDetailRows) {
@@ -1098,6 +1143,34 @@ class OwwaTemplateExportService
             OwwaExportStandards::minWrapLinesForExpansion($detail),
             OwwaExportStandards::maxDetailRowHeight($detail),
         );
+
+        OwwaSpreadsheetLayoutHelper::lockHeaderDrawingPixelSizes(
+            $sheet,
+            max(1, $detailStart - 1),
+        );
+    }
+
+    protected function resolvePhysicalCountStyleRow(string $formKey, int $detailStart): int
+    {
+        $detail = (array) OwwaCellMapping::form($formKey)['detail'];
+        $configuredStyleRow = (int) ($detail['style_row'] ?? $detail['start_row'] ?? $detailStart);
+        $templateStartRow = (int) ($detail['start_row'] ?? $detailStart);
+        $offset = max(0, $configuredStyleRow - $templateStartRow);
+
+        return $detailStart + $offset;
+    }
+
+    protected function physicalCountFirstDetailColumn(string $formKey): string
+    {
+        $columns = array_values(OwwaCellMapping::detailColumns($formKey));
+
+        if ($columns === []) {
+            return 'B';
+        }
+
+        sort($columns);
+
+        return (string) $columns[0];
     }
 
     protected function finalizeLedgerSection(string $formKey, Worksheet $sheet, int $transactionCount): void
@@ -1270,13 +1343,13 @@ class OwwaTemplateExportService
         $startRow = (int) ($detail['start_row'] ?? 12);
         $maxRows = (int) ($detail['max_rows'] ?? ($detail['end_row'] ?? $startRow) - $startRow + 1);
         $columns = (array) ($detail['columns'] ?? []);
-        $firstColumn = (string) (reset($columns) ?: 'A');
+        $countColumn = (string) ($detail['count_column'] ?? (reset($columns) ?: 'A'));
         $count = 0;
 
         // Count contiguous detail rows only. Footer/signature cells may reuse the same
         // column after a gap, and must not inflate the expansion row count.
         for ($row = $startRow; $row < $startRow + $maxRows; $row++) {
-            $key = OwwaCellMapping::columnCell($firstColumn, $row);
+            $key = OwwaCellMapping::columnCell($countColumn, $row);
             if (! filled($cellValues[$key] ?? null)) {
                 break;
             }
@@ -1710,7 +1783,7 @@ class OwwaTemplateExportService
             $sourceSheet = $this->resolveRpcspSourceSheet($spreadsheet, (string) $tab['sheetName']) ?? $fallbackSheet;
             $clonedTabs[] = [
                 'sheet' => clone $sourceSheet,
-                'sourceSheet' => $sourceSheet,
+                'sourceSheetName' => (string) $tab['sheetName'],
                 'tab' => $tab,
             ];
         }
@@ -1719,31 +1792,43 @@ class OwwaTemplateExportService
             $spreadsheet->removeSheetByIndex($index);
         }
 
-        foreach ($clonedTabs as $entry) {
-            $sheet = $entry['sheet'];
-            $sourceSheet = $entry['sourceSheet'];
-            $tab = $entry['tab'];
-            $sheet->setTitle($this->sanitizeExcelSheetTitle($tab['sheetName']));
-            $spreadsheet->addSheet($sheet);
+        // Keep a live reference workbook for multi-page block copies. Sheets removed
+        // above must not be used as style/layout sources (PhpSpreadsheet "Sheet does not exist").
+        $referenceSpreadsheet = OwwaTemplateLoader::load($absolutePath);
+        $referenceFallback = $referenceSpreadsheet->getSheetByName('OFFICE EQUIPMENT')
+            ?? $referenceSpreadsheet->getSheetByName('ICT')
+            ?? $referenceSpreadsheet->getSheet(0);
 
-            if ($session === null) {
-                continue;
+        try {
+            foreach ($clonedTabs as $entry) {
+                $sheet = $entry['sheet'];
+                $tab = $entry['tab'];
+                $sheet->setTitle($this->sanitizeExcelSheetTitle($tab['sheetName']));
+                $spreadsheet->addSheet($sheet);
+
+                if ($session === null) {
+                    continue;
+                }
+
+                $lines = $tab['lines'] ?? collect();
+                $propertyClass = $tab['propertyClass'] ?? null;
+                $useMasterSignatures = ($tab['sheetName'] ?? '') === 'RPCSP';
+                $masterSheet = $this->resolveRpcspSourceSheet($referenceSpreadsheet, $entry['sourceSheetName'])
+                    ?? $referenceFallback;
+
+                app(PhysicalCountSpreadsheetBuilder::class)->populateStackedBlocksOnSheet(
+                    $sheet,
+                    $masterSheet,
+                    $session,
+                    'RPCSP',
+                    $lines instanceof Collection ? $lines : collect($lines),
+                    is_string($propertyClass) ? $propertyClass : null,
+                    (string) ($tab['sheetName'] ?? null),
+                    $useMasterSignatures,
+                );
             }
-
-            $lines = $tab['lines'] ?? collect();
-            $propertyClass = $tab['propertyClass'] ?? null;
-            $useMasterSignatures = ($tab['sheetName'] ?? '') === 'RPCSP';
-
-            app(PhysicalCountSpreadsheetBuilder::class)->populateStackedBlocksOnSheet(
-                $sheet,
-                $sourceSheet,
-                $session,
-                'RPCSP',
-                $lines instanceof Collection ? $lines : collect($lines),
-                is_string($propertyClass) ? $propertyClass : null,
-                (string) ($tab['sheetName'] ?? null),
-                $useMasterSignatures,
-            );
+        } finally {
+            $referenceSpreadsheet->disconnectWorksheets();
         }
 
         $spreadsheet->setActiveSheetIndex(0);
@@ -2545,9 +2630,9 @@ class OwwaTemplateExportService
             str_contains($path, 'ICS') || str_contains($path, 'Appendix 59') => 'ICS',
             str_contains($path, 'PTR') || str_contains($path, 'Appendix 76') => 'PTR',
             str_contains($path, 'WMR') || str_contains($path, 'Appendix 65') => 'WMR',
+            str_contains($path, 'IIRUSP') || str_contains($path, 'Annex A.10') => 'IIRUSP',
             str_contains($path, 'IIRUP') || str_contains($path, 'Appendix 74') => 'IIRUP',
             $this->isAnnexA1PropertyCardTemplate($path) => 'AnnexA1',
-            str_contains($path, 'IIRUSP') || str_contains($path, 'Annex A.10') => 'IIRUSP',
             str_contains($path, 'RLSDDP') || str_contains($path, 'Appendix 75') => 'RLSDDP',
             str_contains($path, 'RIS') || str_contains($path, 'Appendix 63') => 'RIS',
             str_contains($path, 'SLC') || str_contains($path, 'Appendix 57') => 'SLC',
@@ -2935,6 +3020,7 @@ class OwwaTemplateExportService
      */
     protected function cellValuesForTransferPtr(Transfer $transfer): array
     {
+        $transfer->loadMissing(['item.category', 'fromOffice', 'toOffice', 'recordedBy']);
         $item = $transfer->item;
         $from = $transfer->fromOffice;
         $to = $transfer->toOffice;
@@ -2961,7 +3047,14 @@ class OwwaTemplateExportService
         ]);
 
         $values[OwwaCellMapping::columnCell($detailCols['date_acquired'] ?? 'A', $detailStart)] = $dateAcquired ?? '';
-        $values[OwwaCellMapping::columnCell($detailCols['property_no'] ?? 'B', $detailStart)] = $transfer->property_number ?? $item?->item_code ?? '';
+        $values[OwwaCellMapping::columnCell($detailCols['property_no'] ?? 'B', $detailStart)] = OwwaReferenceLabels::assetIdentifierForTransfer($transfer) ?? '';
+        // Semi uses Inventory Item No.; PPE keeps Property No. (stock no. is consumables-only).
+        $slug = $item?->category?->getTemplateSlug();
+        if ($slug === 'semi_expendable') {
+            $values['B16'] = OwwaReferenceLabels::INVENTORY_ITEM_NO;
+        } elseif ($slug === 'ppe') {
+            $values['B16'] = OwwaReferenceLabels::PROPERTY_NO;
+        }
         $values[OwwaCellMapping::columnCell($detailCols['description'] ?? 'D', $detailStart)] = $description;
         $values[OwwaCellMapping::columnCell($detailCols['amount'] ?? 'H', $detailStart)] = $acquisitionCost !== null ? $acquisitionCost : '';
         $values[OwwaCellMapping::columnCell($detailCols['condition'] ?? 'I', $detailStart)] = $transfer->condition ?? '';
@@ -3018,16 +3111,16 @@ class OwwaTemplateExportService
      */
     public function cellValuesForDisposal(Disposal $disposal, ?string $templatePath = null): array
     {
-        $disposal->load(['item', 'office', 'recordedBy']);
+        $disposal->loadMissing(['item', 'office', 'recordedBy']);
         if ($templatePath !== null) {
             if (str_contains($templatePath, 'WMR') || str_contains($templatePath, 'Appendix 65')) {
                 return $this->cellValuesForDisposalWmr($disposal);
             }
-            if (str_contains($templatePath, 'IIRUP') || str_contains($templatePath, 'Appendix 74')) {
-                return $this->cellValuesForDisposalIirup($disposal);
-            }
             if (str_contains($templatePath, 'IIRUSP') || str_contains($templatePath, 'Annex A.10')) {
                 return $this->cellValuesForDisposalIirusp($disposal);
+            }
+            if (str_contains($templatePath, 'IIRUP') || str_contains($templatePath, 'Appendix 74')) {
+                return $this->cellValuesForDisposalIirup($disposal);
             }
             if (str_contains($templatePath, 'RLSDDP') || str_contains($templatePath, 'Appendix 75')) {
                 return $this->cellValuesForDisposalRlsddp($disposal);
@@ -3636,9 +3729,13 @@ class OwwaTemplateExportService
             return $formSlug;
         }
 
+        $disposal->loadMissing('item.category');
+
         return match ($disposal->disposal_type) {
             'waste_sale' => 'wmr',
-            'unserviceable' => 'iirup',
+            'unserviceable' => $disposal->item?->category?->getTemplateSlug() === 'semi_expendable'
+                ? 'iirusp'
+                : 'iirup',
             'lost_stolen_damaged' => 'rlsddp',
             default => 'default',
         };
@@ -3979,6 +4076,8 @@ class OwwaTemplateExportService
             OwwaCellMapping::applySignatures($values, 'PR', [
                 'requested_by' => $case->requested_by_name ?? '',
                 'approved_by' => $case->approved_by_name ?? '',
+                'requested_by_designation' => $case->requested_by_designation ?? '',
+                'approved_by_designation' => $case->approved_by_designation ?? '',
             ]);
         }
 

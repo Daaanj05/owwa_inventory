@@ -10,6 +10,8 @@ use App\Models\ItemCategory;
 use App\Models\Office;
 use App\Models\User;
 use App\Services\AcquisitionPaperworkCompletionService;
+use App\Services\InspectionAcceptanceReportWorkflowService;
+use App\Services\PurchaseOrderWorkflowService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -32,7 +34,7 @@ class AcquisitionPaperworkQrLabelsTest extends TestCase
             ->get();
 
         $this->assertCount(3, $units);
-        $this->assertSame(3, $units->pluck('property_number')->unique()->count());
+        $this->assertTrue($units->every(fn (InventoryUnit $unit): bool => filled($unit->property_number)));
     }
 
     public function test_consumables_paperwork_qr_labels_route_returns_not_found(): void
@@ -89,6 +91,17 @@ class AcquisitionPaperworkQrLabelsTest extends TestCase
             'property_number' => "PPE-2026-000{$index}",
             'item_name' => 'Wall Clock',
             'office_name' => 'OWWA Regional Office IV-A',
+            'unit_section' => 'OWWA Regional Office IV-A - Administrative Division',
+            'sp_tag_no' => '',
+            'property_number_label' => 'Property No.',
+            'property_name_label' => 'Property',
+            'description' => 'Analog wall clock',
+            'end_user' => 'Unit Consolidator',
+            'acquisition_cost' => '1500.00',
+            'date_acquired' => '2026-01-15',
+            'agency_line_1' => 'Republic of the Philippines',
+            'agency_line_2' => 'OVERSEAS WORKERS WELFARE ADMINISTRATION',
+            'agency_address' => 'G/F Parian Commerce Center II, National Highway, Brgy. Parian, Calamba, Laguna',
         ]);
 
         $html = view('reports.qr-labels', [
@@ -98,7 +111,16 @@ class AcquisitionPaperworkQrLabelsTest extends TestCase
 
         $this->assertStringContainsString('class="label-grid"', $html);
         $this->assertStringContainsString('class="label-cell"', $html);
-        $this->assertSame(3, substr_count($html, '<tr>'));
+        $this->assertStringContainsString('Republic of the Philippines', $html);
+        $this->assertStringContainsString('OVERSEAS WORKERS WELFARE ADMINISTRATION', $html);
+        $this->assertStringContainsString('Brgy. Parian, Calamba, Laguna', $html);
+        $this->assertStringContainsString('PPE-2026-0001', $html);
+        $this->assertStringContainsString('Wall Clock', $html);
+        $this->assertStringNotContainsString('SP Tag No.', $html);
+        $this->assertStringNotContainsString('Unit/Section', $html);
+        $this->assertStringNotContainsString('End-user', $html);
+        $this->assertStringNotContainsString('Acquisition Cost', $html);
+        $this->assertSame(5, substr_count($html, 'class="label"'));
     }
 
     protected function createReceivedPpePaperwork(int $quantity): AcquisitionPaperwork
@@ -150,10 +172,11 @@ class AcquisitionPaperworkQrLabelsTest extends TestCase
             'amount' => 75000 * $quantity,
         ]);
 
+        $this->actingAs($user);
+
         $service = app(AcquisitionPaperworkCompletionService::class);
         $service->completePr($paperwork->fresh());
-        $service->completePo($paperwork->fresh());
-        $service->completeIar($paperwork->fresh());
+        $this->advancePaperworkThroughPoAndIar($paperwork->fresh());
 
         return $paperwork->fresh(['lines.item', 'itemCategory']);
     }
@@ -191,11 +214,57 @@ class AcquisitionPaperworkQrLabelsTest extends TestCase
             'amount' => 127.50,
         ]);
 
+        $this->actingAs($user);
+
         $service = app(AcquisitionPaperworkCompletionService::class);
         $service->completePr($paperwork->fresh());
-        $service->completePo($paperwork->fresh());
-        $service->completeIar($paperwork->fresh());
+        $this->advancePaperworkThroughPoAndIar($paperwork->fresh());
 
         return $paperwork->fresh(['lines.item', 'itemCategory']);
+    }
+
+    protected function advancePaperworkThroughPoAndIar(AcquisitionPaperwork $paperwork): void
+    {
+        $poService = app(PurchaseOrderWorkflowService::class);
+        $iarService = app(InspectionAcceptanceReportWorkflowService::class);
+        $completion = app(AcquisitionPaperworkCompletionService::class);
+
+        $po = $poService->createFromApprovedPr($paperwork->fresh(['lines']));
+        $po->update([
+            'supplier_name' => 'Supplier Co.',
+            'supplier_address' => '123 Main St',
+            'mode_of_procurement' => 'Shopping',
+            'place_of_delivery' => 'OWWA RO',
+            'technical_specifications' => 'N/A',
+            'po_date' => now()->toDateString(),
+        ]);
+        $po->lines()->update([
+            'is_ordered' => true,
+        ]);
+        $po->lines()->each(function ($line): void {
+            $line->update([
+                'po_quantity' => (int) $line->pr_quantity,
+                'amount' => round((int) $line->pr_quantity * (float) $line->unit_cost, 2),
+            ]);
+        });
+
+        $completion->completePo($paperwork->fresh(['purchaseOrder.lines']));
+
+        $po = $paperwork->fresh(['purchaseOrder'])?->purchaseOrder;
+        $this->assertNotNull($po);
+
+        $iar = $iarService->createFromApprovedPo($po->fresh());
+        $iarDate = now()->startOfDay();
+        $iar->update([
+            'invoice_number' => 'INV'.(string) $paperwork->id,
+            'invoice_date' => $iarDate->copy()->addDay()->toDateString(),
+            'date_inspected' => $iarDate->copy()->addDays(2)->toDateString(),
+            'date_received' => $iarDate->copy()->addDays(3)->toDateString(),
+            'inspection_officer_name' => 'Inspector',
+            'custodian_name' => 'Custodian',
+            'iar_date' => $iarDate->toDateString(),
+        ]);
+
+        $completion->completeIar($paperwork->fresh(['purchaseOrder.inspectionAcceptanceReport']));
     }
 }

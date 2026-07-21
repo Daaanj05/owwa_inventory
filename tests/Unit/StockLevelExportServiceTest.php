@@ -3,10 +3,14 @@
 namespace Tests\Unit;
 
 use App\Services\StockLevelExportService;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Validation\ValidationException;
 use Tests\TestCase;
 
 class StockLevelExportServiceTest extends TestCase
 {
+    use RefreshDatabase;
+
     public function test_encode_and_decode_pair_key_with_unit_cost(): void
     {
         $service = app(StockLevelExportService::class);
@@ -38,5 +42,20 @@ class StockLevelExportServiceTest extends TestCase
 
         $this->assertNull($service->decodePairKey('invalid'));
         $this->assertNull($service->decodePairKey('0:1'));
+    }
+
+    public function test_resolve_explicit_pairs_does_not_require_full_stock_list_match(): void
+    {
+        $service = app(StockLevelExportService::class);
+
+        $this->expectException(ValidationException::class);
+
+        $service->resolvePairs(
+            categoryId: null,
+            search: null,
+            restockFilter: 'active',
+            scopedOfficeId: null,
+            explicitPairKeys: ['999:888:1'],
+        );
     }
 }

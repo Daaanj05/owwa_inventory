@@ -58,21 +58,21 @@ return [
     'transfer' => [
         'ppe' => [
             'default' => [
-                'file' => 'ppe/Transfer/Appendix 76 - PTR.xls',
+                'file' => 'ppe/Transfer/Appendix 76 - PTR.xlsx',
                 'label' => 'Appendix 76 - PTR (Property Transfer Report)',
             ],
             'ptr' => [
-                'file' => 'ppe/Transfer/Appendix 76 - PTR.xls',
+                'file' => 'ppe/Transfer/Appendix 76 - PTR.xlsx',
                 'label' => 'Appendix 76 - PTR',
             ],
         ],
         'semi_expendable' => [
             'default' => [
-                'file' => 'Semi-Expendable/Transfer/Appendix 76 - PTR.xls',
+                'file' => 'Semi-Expendable/Transfer/Appendix 76 - PTR.xlsx',
                 'label' => 'Appendix 76 - PTR (Property Transfer Report)',
             ],
             'ptr' => [
-                'file' => 'Semi-Expendable/Transfer/Appendix 76 - PTR.xls',
+                'file' => 'Semi-Expendable/Transfer/Appendix 76 - PTR.xlsx',
                 'label' => 'Appendix 76 - PTR',
             ],
         ],
@@ -101,12 +101,17 @@ return [
         ],
         'semi_expendable' => [
             'default' => [
-                'file' => 'Semi-Expendable/Disposal/Appendix 74 - IIRUP.xlsx',
-                'label' => 'Appendix 74 - IIRUP (Unserviceable Property)',
+                'file' => 'Semi-Expendable/Disposal/Annex A.10 - IIRUSP.xlsx',
+                'label' => 'Annex A.10 - IIRUSP (Unserviceable Semi-Expendable Property)',
             ],
+            'iirusp' => [
+                'file' => 'Semi-Expendable/Disposal/Annex A.10 - IIRUSP.xlsx',
+                'label' => 'Annex A.10 - IIRUSP',
+            ],
+            // Legacy slug kept for older export links; same Annex A.10 workbook.
             'iirup' => [
-                'file' => 'Semi-Expendable/Disposal/Appendix 74 - IIRUP.xlsx',
-                'label' => 'Appendix 74 - IIRUP',
+                'file' => 'Semi-Expendable/Disposal/Annex A.10 - IIRUSP.xlsx',
+                'label' => 'Annex A.10 - IIRUSP',
             ],
         ],
     ],

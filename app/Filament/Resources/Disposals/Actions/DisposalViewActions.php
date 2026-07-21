@@ -9,7 +9,6 @@ use App\Services\OwwaTemplateExportService;
 use App\Support\OwwaExportBusyDispatcher;
 use Filament\Actions\Action;
 use Filament\Actions\EditAction;
-use Filament\Forms\Components\Select;
 use Livewire\Component as LivewireComponent;
 
 class DisposalViewActions
@@ -34,25 +33,13 @@ class DisposalViewActions
         return Action::make($name)
             ->label($label)
             ->icon($asPdf ? 'heroicon-o-document-text' : 'heroicon-o-document-arrow-down')
-            ->form([
-                Select::make('form')
-                    ->label('OWWA form')
-                    ->options(fn (Disposal $record): array => app(OwwaTemplateExportService::class)->getAvailableFormsForCategory('disposal', $record->item?->category))
-                    ->default(fn (Disposal $record): string => app(OwwaTemplateExportService::class)->resolveDisposalFormSlug($record))
-                    ->helperText('Auto-selected based on disposal type and category.'),
-            ])
-            ->action(function (Disposal $record, array $data, Action $action) use ($asPdf): void {
-                $query = [];
-                if (! empty($data['form'])) {
-                    $query['form'] = $data['form'];
-                }
+            ->action(function (Disposal $record, Action $action) use ($asPdf): void {
+                $form = app(OwwaTemplateExportService::class)->resolveDisposalFormSlug($record);
+                $query = ['form' => $form];
                 if ($asPdf) {
                     $query['format'] = 'pdf';
                 }
-                $url = route('owwa.export.disposal', $record);
-                if ($query !== []) {
-                    $url .= '?'.http_build_query($query);
-                }
+                $url = route('owwa.export.disposal', $record).'?'.http_build_query($query);
 
                 $livewire = $action->getLivewire();
                 OwwaExportBusyDispatcher::start(
@@ -71,9 +58,11 @@ class DisposalViewActions
             ->icon('heroicon-o-printer')
             ->url(function (Disposal $record): string {
                 $form = app(OwwaTemplateExportService::class)->resolveDisposalFormSlug($record);
-                $url = route('owwa.print.disposal', $record);
 
-                return $form !== 'default' ? $url.'?form='.$form : $url;
+                return route('owwa.export.disposal', $record).'?'.http_build_query([
+                    'form' => $form,
+                    'format' => 'pdf',
+                ]);
             })
             ->openUrlInNewTab();
     }

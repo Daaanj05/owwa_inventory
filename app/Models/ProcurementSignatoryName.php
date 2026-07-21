@@ -8,7 +8,11 @@ class ProcurementSignatoryName extends Model
 {
     public const ROLE_REQUESTED = 'requested';
 
+    public const ROLE_REQUESTED_DESIGNATION = 'requested_designation';
+
     public const ROLE_APPROVED = 'approved';
+
+    public const ROLE_APPROVED_DESIGNATION = 'approved_designation';
 
     public const ROLE_INSPECTION_OFFICER = 'inspection_officer';
 

@@ -15,7 +15,7 @@ class PtrSignatureLayout
     {
         $map = (array) (OwwaCellMapping::form('PTR')['transfer_type_marks'] ?? []);
         $othersLabelCell = (string) (OwwaCellMapping::form('PTR')['transfer_type_others_label'] ?? 'F14');
-        $transferType = (string) ($transfer->transfer_type ?? '');
+        $transferType = strtolower(trim((string) ($transfer->transfer_type ?? '')));
         $othersSpecify = trim((string) ($transfer->transfer_type_other ?? ''));
 
         // Template only has Donation / Relocate / Reassignment / Others.
@@ -27,13 +27,13 @@ class PtrSignatureLayout
         }
 
         if ($transferType === 'donation' && isset($map['donation'])) {
-            $values[$map['donation']] = 'X';
+            $values[$map['donation']] = '✓';
         } elseif ($transferType === 'relocate' && isset($map['relocate'])) {
-            $values[$map['relocate']] = 'X';
+            $values[$map['relocate']] = '✓';
         } elseif ($transferType === 'reassignment' && isset($map['reassignment'])) {
-            $values[$map['reassignment']] = 'X';
+            $values[$map['reassignment']] = '✓';
         } elseif ($transferType === 'others' && isset($map['others'])) {
-            $values[$map['others']] = 'X';
+            $values[$map['others']] = '✓';
             $values[$othersLabelCell] = $othersSpecify !== ''
                 ? 'Others (Specify) '.$othersSpecify
                 : 'Others (Specify) _________________';
@@ -102,7 +102,7 @@ class PtrSignatureLayout
         }
 
         self::expandRowForWrappedCells($sheet, 53, ['B', 'F', 'H'], 20.0);
-        self::expandRowForWrappedCells($sheet, 54, ['A', 'F', 'H'], 18.0);
+        self::expandRowForWrappedCells($sheet, 54, ['B', 'F', 'H'], 18.0);
     }
 
     /**

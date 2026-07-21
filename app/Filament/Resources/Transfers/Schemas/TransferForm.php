@@ -301,7 +301,7 @@ class TransferForm
                         Textarea::make('reason_for_transfer')
                             ->label('Reason for transfer')
                             ->rows(2)
-                            ->helperText('PTR cell A43')
+                            ->helperText('PTR cell A44')
                             ->columnSpanFull(),
                     ])
                     ->columns(2)
@@ -376,7 +376,7 @@ class TransferForm
                             ->datalist(fn (): array => ProcurementSignatoryName::suggestionsForRole(
                                 ProcurementSignatoryName::ROLE_TRANSFER_APPROVED_DESIGNATION,
                             ))
-                            ->helperText('PTR A54'),
+                            ->helperText('PTR B54'),
                         TextInput::make('released_by_printed_name')
                             ->label('Released by')
                             ->maxLength(255)
@@ -472,7 +472,13 @@ class TransferForm
             return null;
         }
 
-        $identifier = $item->catalogAssetIdentifier();
+        $slug = $item->category?->getTemplateSlug();
+
+        $identifier = match ($slug) {
+            'semi_expendable' => $item->resolvedSemiExpendablePropertyNumber(),
+            'ppe' => $item->resolvedPpePropertyNumber(),
+            default => null,
+        };
 
         return filled($identifier) ? (string) $identifier : null;
     }

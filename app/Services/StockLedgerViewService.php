@@ -31,22 +31,22 @@ class StockLedgerViewService
      *     unit_cost: float|null
      * }
      */
-    public function present(Item $item, Office $office, ?float $unitCost = null): array
+    /**
+     * Lightweight export metadata (no transaction history). Safe for Livewire props / footer actions.
+     *
+     * @return array{
+     *     title: string,
+     *     exportLabel: string,
+     *     exportUrl: string,
+     *     exportPdfLabel: string,
+     *     exportPdfUrl: string
+     * }
+     */
+    public function exportLinks(Item $item, Office $office, ?float $unitCost = null): array
     {
         $item->loadMissing('category');
         $slug = $item->category?->getTemplateSlug() ?? 'consumables';
         $config = $this->categoryConfig($slug);
-
-        $history = $this->itemReport->buildTransactionHistory($item, $office->id, newestFirst: true, unitCost: $unitCost);
-        $rows = array_map(
-            fn (array $txn): array => $this->mapRow($txn, $item, $slug),
-            $history,
-        );
-
-        $exportUrl = route('owwa.export.item', $item).'?form='.urlencode($config['exportForm']).'&office_id='.$office->id;
-        if ($unitCost !== null) {
-            $exportUrl .= '&unit_cost='.urlencode(UnitCostKey::normalize($unitCost));
-        }
 
         $pairKey = app(StockLevelExportService::class)->encodePairKey(
             (int) $item->id,
@@ -54,19 +54,47 @@ class StockLedgerViewService
             $unitCost,
         );
 
+        // Same bulk stock-cards route as the toolbar export (one pair).
+        $exportUrl = route('owwa.export.bulk.stock-cards', array_filter([
+            'category' => $item->item_category_id,
+            'pairs' => $pairKey,
+        ], fn (mixed $value): bool => filled($value)));
+
         $exportPdfUrl = route('owwa.export.bulk.stock-cards', array_filter([
             'category' => $item->item_category_id,
             'format' => 'pdf',
             'pairs' => $pairKey,
-        ]));
+        ], fn (mixed $value): bool => filled($value)));
 
         return [
             'title' => $config['title'],
-            'exportForm' => $config['exportForm'],
             'exportLabel' => $config['exportLabel'],
             'exportUrl' => $exportUrl,
             'exportPdfLabel' => $config['exportPdfLabel'],
             'exportPdfUrl' => $exportPdfUrl,
+        ];
+    }
+
+    public function present(Item $item, Office $office, ?float $unitCost = null): array
+    {
+        $item->loadMissing('category');
+        $slug = $item->category?->getTemplateSlug() ?? 'consumables';
+        $config = $this->categoryConfig($slug);
+        $links = $this->exportLinks($item, $office, $unitCost);
+
+        $history = $this->itemReport->buildTransactionHistory($item, $office->id, newestFirst: true, unitCost: $unitCost);
+        $rows = array_map(
+            fn (array $txn): array => $this->mapRow($txn, $item, $slug),
+            $history,
+        );
+
+        return [
+            'title' => $links['title'],
+            'exportForm' => $config['exportForm'],
+            'exportLabel' => $links['exportLabel'],
+            'exportUrl' => $links['exportUrl'],
+            'exportPdfLabel' => $links['exportPdfLabel'],
+            'exportPdfUrl' => $links['exportPdfUrl'],
             'header' => $this->buildHeader($item, $office, $slug, $unitCost),
             'columns' => $config['columns'],
             'rows' => $rows,

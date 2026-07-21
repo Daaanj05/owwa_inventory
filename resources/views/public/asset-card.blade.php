@@ -15,29 +15,36 @@
             padding: 16px;
         }
         .wrap { max-width: 420px; margin: 0 auto; }
-        .brand {
-            color: rgba(255, 255, 255, 0.95);
+        .letterhead {
+            background: #fff;
+            border-radius: 12px 12px 0 0;
+            padding: 16px 20px 12px;
+            text-align: center;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18);
+        }
+        .letterhead .line1 {
+            margin: 0;
+            font-size: 12px;
+            color: #374151;
+        }
+        .letterhead .line2 {
+            margin: 4px 0 0;
             font-size: 13px;
-            font-weight: 600;
+            font-weight: 700;
             letter-spacing: 0.02em;
-            margin-bottom: 12px;
+            color: #111827;
+        }
+        .letterhead .address {
+            margin: 6px 0 0;
+            font-size: 11px;
+            color: #6b7280;
+            line-height: 1.35;
         }
         .card {
             background: #fff;
-            border-radius: 12px;
-            padding: 20px;
+            border-radius: 0 0 12px 12px;
+            padding: 8px 20px 20px;
             box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18);
-        }
-        h1 {
-            margin: 0 0 4px;
-            font-size: 15px;
-            font-weight: 700;
-            word-break: break-word;
-        }
-        .subtitle {
-            margin: 0 0 16px;
-            font-size: 13px;
-            color: #6b7280;
         }
         dl { margin: 0; }
         .row {
@@ -49,7 +56,7 @@
             font-size: 14px;
         }
         .row:last-child { border-bottom: none; }
-        dt { margin: 0; color: #6b7280; flex-shrink: 0; }
+        dt { margin: 0; color: #6b7280; flex-shrink: 0; max-width: 55%; }
         dd {
             margin: 0;
             font-weight: 600;
@@ -66,24 +73,41 @@
 </head>
 <body>
     <div class="wrap">
-        <div class="brand">OWWA Inventory — Asset tag</div>
+        <div class="letterhead">
+            <p class="line1">{{ $asset->agencyLine1 }}</p>
+            <p class="line2">{{ $asset->agencyLine2 }}</p>
+            <p class="address">{{ $asset->agencyAddress }}</p>
+        </div>
 
         <div class="card">
-            <h1>{{ $asset->article }}</h1>
-            <p class="subtitle">{{ $asset->propertyNumber }}</p>
-
             <dl>
                 <div class="row">
-                    <dt>Description</dt>
-                    <dd>{{ $asset->description }}</dd>
+                    <dt>SP Tag No.</dt>
+                    <dd>{{ $asset->spTagNo !== '' ? $asset->spTagNo : '—' }}</dd>
                 </div>
                 <div class="row">
-                    <dt>Unit / Section</dt>
+                    <dt>Unit/Section</dt>
                     <dd>{{ $asset->unitSection }}</dd>
                 </div>
                 <div class="row">
-                    <dt>Stock No.</dt>
-                    <dd>{{ $asset->stockNumber }}</dd>
+                    <dt>{{ $asset->propertyNumberLabel }}</dt>
+                    <dd>{{ $asset->propertyNumber }}</dd>
+                </div>
+                <div class="row">
+                    <dt>{{ $asset->propertyNameLabel }}</dt>
+                    <dd>{{ $asset->article }}</dd>
+                </div>
+                <div class="row">
+                    <dt>Description</dt>
+                    <dd>{{ $asset->description !== '' ? $asset->description : '—' }}</dd>
+                </div>
+                <div class="row">
+                    <dt>End-user</dt>
+                    <dd>{{ $asset->endUser !== '' ? $asset->endUser : '—' }}</dd>
+                </div>
+                <div class="row">
+                    <dt>Acquisition Cost</dt>
+                    <dd>{{ $asset->acquisitionCost !== '' ? $asset->acquisitionCost : '—' }}</dd>
                 </div>
                 <div class="row">
                     <dt>Date Acquired</dt>

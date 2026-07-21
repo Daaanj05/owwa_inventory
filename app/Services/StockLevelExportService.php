@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Item;
 use App\Models\ItemCategory;
 use App\Support\UnitCostKey;
 use Illuminate\Http\Request;
@@ -127,48 +128,23 @@ class StockLevelExportService
         ?int $scopedOfficeId,
         array $explicitPairKeys = [],
     ): Collection {
-        $visibleRows = $this->filterStockLevelRows($categoryId, $search, $restockFilter, $scopedOfficeId);
-
         if ($explicitPairKeys !== []) {
-            $resolved = collect();
-
-            foreach ($explicitPairKeys as $pairKey) {
-                $decoded = $this->decodePairKey($pairKey);
-                if ($decoded === null) {
-                    continue;
-                }
-
-                $match = $visibleRows->first(
-                    fn (object $row): bool => (int) ($row->item_id ?? 0) === $decoded['item_id']
-                        && (int) ($row->office_id ?? 0) === $decoded['office_id']
-                        && ($decoded['unit_cost'] === null || UnitCostKey::equals(
-                            isset($row->unit_cost) ? (float) $row->unit_cost : null,
-                            $decoded['unit_cost'],
-                        )),
-                );
-
-                if ($match === null) {
-                    continue;
-                }
-
-                $resolved->push([
-                    'item_id' => $decoded['item_id'],
-                    'office_id' => $decoded['office_id'],
-                    'unit_cost' => $decoded['unit_cost'] ?? (isset($match->unit_cost) ? (float) $match->unit_cost : null),
-                ]);
-            }
-
-            $pairs = $resolved->unique(fn (array $pair): string => $this->encodePairKey(
-                $pair['item_id'],
-                $pair['office_id'],
-                $pair['unit_cost'],
-            ))->values();
+            $pairs = $this->resolveExplicitPairs($explicitPairKeys, $categoryId, $scopedOfficeId);
         } else {
-            $pairs = $visibleRows->map(fn (object $row): array => [
-                'item_id' => (int) $row->item_id,
-                'office_id' => (int) $row->office_id,
-                'unit_cost' => isset($row->unit_cost) ? (float) $row->unit_cost : null,
-            ])->values();
+            $pairs = $this->filterStockLevelRows($categoryId, $search, $restockFilter, $scopedOfficeId)
+                ->map(fn (object $row): array => [
+                    'item_id' => (int) $row->item_id,
+                    'office_id' => (int) $row->office_id,
+                    'unit_cost' => isset($row->unit_cost) ? (float) $row->unit_cost : null,
+                ])->values();
+        }
+
+        if ($pairs->isEmpty()) {
+            throw ValidationException::withMessages([
+                'pairs' => $explicitPairKeys !== []
+                    ? 'None of the selected stock positions could be exported. Clear filters or reselect rows.'
+                    : 'No stock positions matched the current filters.',
+            ]);
         }
 
         if ($pairs->count() > self::MAX_PAIRS) {
@@ -178,6 +154,53 @@ class StockLevelExportService
         }
 
         return $pairs;
+    }
+
+    /**
+     * @param  array<int, string>  $explicitPairKeys
+     * @return Collection<int, array{item_id: int, office_id: int, unit_cost: float|null}>
+     */
+    protected function resolveExplicitPairs(
+        array $explicitPairKeys,
+        ?int $categoryId,
+        ?int $scopedOfficeId,
+    ): Collection {
+        $resolved = collect();
+        $category = $categoryId !== null && $categoryId > 0
+            ? ItemCategory::query()->find($categoryId)
+            : null;
+
+        foreach ($explicitPairKeys as $pairKey) {
+            $decoded = $this->decodePairKey($pairKey);
+            if ($decoded === null) {
+                continue;
+            }
+
+            if ($scopedOfficeId !== null && $scopedOfficeId > 0 && $decoded['office_id'] !== $scopedOfficeId) {
+                continue;
+            }
+
+            $item = Item::query()->with('category')->find($decoded['item_id']);
+            if ($item === null) {
+                continue;
+            }
+
+            if ($category !== null && (int) $item->item_category_id !== (int) $category->id) {
+                continue;
+            }
+
+            $resolved->push([
+                'item_id' => $decoded['item_id'],
+                'office_id' => $decoded['office_id'],
+                'unit_cost' => $decoded['unit_cost'],
+            ]);
+        }
+
+        return $resolved->unique(fn (array $pair): string => $this->encodePairKey(
+            $pair['item_id'],
+            $pair['office_id'],
+            $pair['unit_cost'],
+        ))->values();
     }
 
     /**
@@ -201,13 +224,10 @@ class StockLevelExportService
 
     /**
      * @param  Collection<int, array{item_id: int, office_id: int, unit_cost: float|null}>  $pairs
-     * @return Collection<int, array{item_id: int, office_id: int}>
+     * @return Collection<int, array{item_id: int, office_id: int, unit_cost: float|null}>
      */
-    public function pairsWithoutUnitCost(Collection $pairs): Collection
+    public function takeLimited(Collection $pairs): Collection
     {
-        return $pairs->map(fn (array $pair): array => [
-            'item_id' => $pair['item_id'],
-            'office_id' => $pair['office_id'],
-        ]);
+        return $pairs->take(self::MAX_PAIRS)->values();
     }
 }

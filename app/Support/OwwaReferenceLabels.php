@@ -3,6 +3,7 @@
 namespace App\Support;
 
 use App\Models\Disposal;
+use App\Models\InventoryUnit;
 use App\Models\Issuance;
 use App\Models\Item;
 use App\Models\ItemCategory;
@@ -31,6 +32,8 @@ class OwwaReferenceLabels
     public const WMR = 'WMR No.';
 
     public const IIRUP = 'IIRUP No.';
+
+    public const IIRUSP = 'IIRUSP No.';
 
     public const STOCK_NO = 'Stock No.';
 
@@ -71,7 +74,8 @@ class OwwaReferenceLabels
 
         return match ($slug) {
             'consumables' => self::WMR,
-            'ppe', 'semi_expendable' => self::IIRUP,
+            'ppe' => self::IIRUP,
+            'semi_expendable' => self::IIRUSP,
             default => self::IIRUP,
         };
     }
@@ -155,9 +159,70 @@ class OwwaReferenceLabels
     public static function assetIdentifierForTransfer(Transfer $transfer): ?string
     {
         $transfer->loadMissing('item.category');
-        $slug = $transfer->item?->category?->getTemplateSlug();
+        $item = $transfer->item;
+        $slug = $item?->category?->getTemplateSlug();
 
-        return self::assetIdentifierValue($slug, $transfer->property_number, $transfer->item?->item_code);
+        if (! self::usesPropertyNumber($slug)) {
+            return filled($item?->item_code) ? (string) $item->item_code : null;
+        }
+
+        $resolved = self::resolvedCatalogPropertyNumber($transfer);
+        $stored = filled($transfer->property_number) ? (string) $transfer->property_number : null;
+        $itemCode = filled($item?->item_code) ? (string) $item->item_code : null;
+
+        // Prefer a real inventory/property number over a mistaken stock/item code.
+        if ($stored !== null && ($itemCode === null || $stored !== $itemCode)) {
+            return $stored;
+        }
+
+        if (filled($resolved) && ($itemCode === null || $resolved !== $itemCode)) {
+            return $resolved;
+        }
+
+        if ($stored !== null) {
+            return $stored;
+        }
+
+        return filled($resolved) ? $resolved : null;
+    }
+
+    /**
+     * Semi = inventory item no.; PPE = property no. Never stock/item codes.
+     */
+    public static function resolvedCatalogPropertyNumber(Transfer $transfer): ?string
+    {
+        $transfer->loadMissing('item.category');
+        $item = $transfer->item;
+        if ($item === null) {
+            return null;
+        }
+
+        $slug = $item->category?->getTemplateSlug();
+
+        if ($slug === 'semi_expendable') {
+            $number = $item->resolvedSemiExpendablePropertyNumber(
+                $transfer->unit_cost !== null ? (float) $transfer->unit_cost : null,
+            );
+
+            return filled($number) ? (string) $number : null;
+        }
+
+        if ($slug === 'ppe') {
+            $number = $item->resolvedPpePropertyNumber();
+            if (filled($number)) {
+                return (string) $number;
+            }
+
+            $fromUnit = InventoryUnit::query()
+                ->where('item_id', $item->id)
+                ->whereNotNull('property_number')
+                ->orderByDesc('id')
+                ->value('property_number');
+
+            return filled($fromUnit) ? (string) $fromUnit : null;
+        }
+
+        return null;
     }
 
     public static function assetIdentifierForDisposal(Disposal $disposal): ?string

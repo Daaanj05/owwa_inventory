@@ -40,6 +40,52 @@
             return token;
         };
 
+        /**
+         * Client-side export from a Filament modal: clear the dark modal shell, show the
+         * busy overlay, then navigate. Avoids a Livewire round-trip that can OOM while
+         * rebuilding heavy ledger modals.
+         */
+        window.owwaBusyNavigate = function (url, detail = {}) {
+            document.querySelectorAll('.fi-modal-close-overlay').forEach((el) => el.remove());
+            document.documentElement.classList.remove('fi-modal-open');
+            document.body.classList.remove('fi-modal-open');
+            document.body.style.removeProperty('overflow');
+
+            const title = detail.title || 'Preparing export…';
+            const message = detail.message || 'Building your file. Large exports can take a little while.';
+            const autoClearMs = detail.autoClearMs || 120000;
+
+            // Build token first so busy overlay and download cookie match.
+            const token = ('owwa' + Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2))
+                .replace(/[^A-Za-z0-9_-]/g, '')
+                .slice(0, 32);
+            let downloadUrl = url;
+
+            try {
+                const parsed = new URL(url, window.location.origin);
+                parsed.searchParams.set(detail.tokenQuery || 'owwa_download_token', token);
+                downloadUrl = parsed.pathname + parsed.search + parsed.hash;
+            } catch (error) {
+                const joiner = url.includes('?') ? '&' : '?';
+                downloadUrl = url + joiner + encodeURIComponent(detail.tokenQuery || 'owwa_download_token') + '=' + encodeURIComponent(token);
+            }
+
+            window.dispatchEvent(new CustomEvent('owwa-busy-start', {
+                detail: {
+                    title,
+                    message,
+                    token,
+                    autoClearMs,
+                },
+            }));
+
+            window.setTimeout(() => {
+                window.location.assign(downloadUrl);
+            }, 50);
+
+            return token;
+        };
+
         window.owwaBusyGuard = function (config) {
             return {
                 busy: Boolean(config.initialBusy),
@@ -118,6 +164,7 @@
                     this.allowUnload = false;
                     this.title = detail.title || config.defaultTitle || 'Please wait…';
                     this.message = detail.message || config.defaultMessage || '';
+                    this.clearFilamentModalShell();
                     this.busy = true;
 
                     if (detail.url) {
@@ -131,6 +178,24 @@
                     }
 
                     this.watchDownloadCompletion(detail.autoClearMs || 120000);
+                },
+                clearFilamentModalShell() {
+                    // Filament can leave .fi-modal-close-overlay up after unmountAction + redirect,
+                    // producing a blank dark page with no dialog.
+                    document.querySelectorAll('.fi-modal-close-overlay').forEach((el) => el.remove());
+                    document.querySelectorAll('.fi-modal').forEach((el) => {
+                        if (el.__x && typeof el.__x.$data === 'object') {
+                            try {
+                                el.__x.$data.isOpen = false;
+                                el.__x.$data.isWindowVisible = false;
+                            } catch (error) {
+                                // ignore Alpine state races
+                            }
+                        }
+                    });
+                    document.documentElement.classList.remove('fi-modal-open');
+                    document.body.classList.remove('fi-modal-open');
+                    document.body.style.removeProperty('overflow');
                 },
                 watchDownloadCompletion(autoClearMs) {
                     this.clearCookie(this.doneCookie);

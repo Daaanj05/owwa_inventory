@@ -11,6 +11,8 @@ use App\Models\ItemCategory;
 use App\Models\Office;
 use App\Models\User;
 use App\Services\AcquisitionPaperworkCompletionService;
+use App\Services\InspectionAcceptanceReportWorkflowService;
+use App\Services\PurchaseOrderWorkflowService;
 use App\Support\DemoAcquisitionPaperworkCatalog;
 use App\Support\DemoStockLedgerCatalog;
 use Illuminate\Database\Seeder;
@@ -157,19 +159,57 @@ class AcquisitionPaperworkDemoSeeder extends Seeder
         }
 
         $paperwork = $paperwork->fresh(['lines.item']);
-        $service->submitPo($paperwork);
+        $poService = app(PurchaseOrderWorkflowService::class);
+        $po = $paperwork->purchaseOrder ?? $poService->createFromApprovedPr($paperwork);
+        $po->update([
+            'supplier_name' => (string) ($spec['supplier'] ?? $paperwork->supplier ?? 'PS-DBM / Authorized Supplier'),
+            'supplier_address' => 'G/F Parian Commerce Center II, National Highway, Brgy. Parian, Calamba, Laguna',
+            'mode_of_procurement' => 'Shopping',
+            'place_of_delivery' => $paperwork->office?->name ?? 'OWWA Regional Office IV-A',
+            'delivery_term' => 'FOB Destination',
+            'technical_specifications' => 'As per PR line items',
+            'po_date' => $paperwork->po_date?->toDateString() ?? now()->toDateString(),
+        ]);
+        $po->lines()->each(function ($line): void {
+            $line->update([
+                'is_ordered' => true,
+                'po_quantity' => (int) $line->pr_quantity,
+                'amount' => round((int) $line->pr_quantity * (float) $line->unit_cost, 2),
+            ]);
+        });
+
+        $service->submitPo($paperwork->fresh(['purchaseOrder.lines']));
 
         if (($spec['in_progress_stop'] ?? null) === 'po_submitted') {
             return;
         }
 
-        $paperwork = $paperwork->fresh(['lines.item']);
+        $paperwork = $paperwork->fresh(['purchaseOrder']);
         $service->approvePo($paperwork);
-        $service->submitIar($paperwork);
-        $service->approveIar($paperwork);
+
+        $po = $paperwork->fresh(['purchaseOrder'])?->purchaseOrder;
+        if ($po === null) {
+            return;
+        }
+
+        $iarService = app(InspectionAcceptanceReportWorkflowService::class);
+        $iar = $po->inspectionAcceptanceReport ?? $iarService->createFromApprovedPo($po->fresh());
+        $iarDate = Carbon::parse($spec['iar_date'] ?? $paperwork->iar_date ?? now())->startOfDay();
+        $iar->update([
+            'invoice_number' => 'INV'.preg_replace('/\D+/', '', (string) ($spec['reference_code'] ?? $paperwork->id)).$paperwork->id,
+            'invoice_date' => $iarDate->copy()->addDay()->toDateString(),
+            'date_inspected' => $iarDate->copy()->addDays(2)->toDateString(),
+            'date_received' => $iarDate->copy()->addDays(3)->toDateString(),
+            'inspection_officer_name' => 'Ana Reyes',
+            'custodian_name' => 'Supply Custodian',
+            'iar_date' => $iarDate->toDateString(),
+        ]);
+
+        $service->submitIar($paperwork->fresh(['purchaseOrder.inspectionAcceptanceReport']));
+        $service->approveIar($paperwork->fresh(['purchaseOrder.inspectionAcceptanceReport']));
 
         if ($spec['received']) {
-            $service->recordCustodyReceipts($paperwork->fresh(['lines.item']));
+            $service->recordCustodyReceipts($paperwork->fresh(['lines.item', 'purchaseOrder.inspectionAcceptanceReport']));
         }
     }
 

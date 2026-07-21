@@ -145,6 +145,12 @@ class OwwaSpreadsheetLayoutHelper
                 continue;
             }
 
+            // Hyphenated stock/property codes (no spaces) often need one more visual
+            // line than character math predicts at Times New Roman in narrow columns.
+            if (self::shouldPadHyphenatedStockCodeWrap($value) && $lineCount >= 2) {
+                $lineCount++;
+            }
+
             $maxLines = max($maxLines, min($lineCount, OwwaExportStandards::maxWrapLines()));
         }
 
@@ -188,7 +194,21 @@ class OwwaSpreadsheetLayoutHelper
             }
         }
 
+        // Prefer the hyphen-token estimate when it is stricter than raw length math.
         return max(1, $charDivisionEstimate, $lines);
+    }
+
+    /**
+     * Stock/property numbers look like SPLV-2026-OE-106-002-OWWA-IVA (hyphenated, no spaces).
+     * Prose with incidental hyphens (e.g. "Office IV-A") should not get the safety pad.
+     */
+    protected static function shouldPadHyphenatedStockCodeWrap(string $value): bool
+    {
+        if (! str_contains($value, '-') || str_contains($value, ' ')) {
+            return false;
+        }
+
+        return substr_count($value, '-') >= 2;
     }
 
     public static function effectiveColumnWidth(Worksheet $sheet, string $column, int $row): float
@@ -339,6 +359,7 @@ class OwwaSpreadsheetLayoutHelper
         int $minWrapLinesForExpansion = 2,
         bool $uniformDataRowHeight = false,
         bool $expandWrapRowHeights = true,
+        bool $applyBlockEndBorder = true,
     ): void {
         if ($rowCount <= 0) {
             return;
@@ -413,7 +434,97 @@ class OwwaSpreadsheetLayoutHelper
             }
         }
 
-        self::applyBlockEndBorder($sheet, $detailStart, $lastRow, $highestColumn);
+        if ($applyBlockEndBorder) {
+            self::applyBlockEndBorder($sheet, $detailStart, $lastRow, $highestColumn);
+        }
+    }
+
+    public static function unmergeCellsInRowRange(
+        Worksheet $sheet,
+        int $fromRow,
+        int $toRow,
+    ): void {
+        if ($fromRow > $toRow) {
+            return;
+        }
+
+        foreach (array_keys($sheet->getMergeCells()) as $mergeRange) {
+            $bounds = self::parseMergeRangeBounds((string) $mergeRange);
+
+            if ($bounds === null) {
+                continue;
+            }
+
+            if ($bounds['endRow'] < $fromRow || $bounds['startRow'] > $toRow) {
+                continue;
+            }
+
+            $sheet->unmergeCells((string) $mergeRange);
+        }
+    }
+
+    /**
+     * Restore physical-count detail grid lines after style normalization.
+     * Category template sheets often have incomplete borders on the first data row;
+     * copying that style would erase vertical column lines.
+     */
+    public static function applyPhysicalCountDetailGridBorders(
+        Worksheet $sheet,
+        int $detailStart,
+        int $rowCount,
+        string $firstColumn,
+        string $highestColumn,
+    ): void {
+        if ($rowCount <= 0) {
+            return;
+        }
+
+        $lastRow = $detailStart + $rowCount - 1;
+
+        foreach (range($detailStart, $lastRow) as $row) {
+            $isFirst = $row === $detailStart;
+            $isLast = $row === $lastRow;
+
+            foreach (range($firstColumn, $highestColumn) as $column) {
+                $borders = $sheet->getStyle($column.$row)->getBorders();
+                $borders->getTop()->setBorderStyle($isFirst ? Border::BORDER_MEDIUM : Border::BORDER_HAIR);
+                $borders->getBottom()->setBorderStyle($isLast ? Border::BORDER_MEDIUM : Border::BORDER_HAIR);
+                $borders->getLeft()->setBorderStyle(Border::BORDER_MEDIUM);
+                $borders->getRight()->setBorderStyle(Border::BORDER_MEDIUM);
+            }
+        }
+    }
+
+    /**
+     * Keep header logos at their template pixel size when detail columns are widened.
+     */
+    public static function lockHeaderDrawingPixelSizes(Worksheet $sheet, int $maxAnchorRow = 14): void
+    {
+        foreach ($sheet->getDrawingCollection() as $drawing) {
+            if (! $drawing instanceof BaseDrawing) {
+                continue;
+            }
+
+            $anchorRow = self::cellRow($drawing->getCoordinates());
+            if ($anchorRow < 1 || $anchorRow > $maxAnchorRow) {
+                continue;
+            }
+
+            $width = (int) $drawing->getWidth();
+            $height = (int) $drawing->getHeight();
+            if ($width <= 0 || $height <= 0) {
+                continue;
+            }
+
+            $drawing->setResizeProportional(false);
+
+            if ($drawing->getCoordinates2() !== '') {
+                $drawing->setCoordinates2('');
+            }
+
+            $drawing->setWidth($width);
+            $drawing->setHeight($height);
+        }
     }
 
     public static function expandDetailRowsToFillBlock(
@@ -765,6 +876,22 @@ class OwwaSpreadsheetLayoutHelper
         $worksheetProperty = new \ReflectionProperty($clone, 'worksheet');
         $worksheetProperty->setAccessible(true);
         $worksheetProperty->setValue($clone, null);
+
+        $width = (int) $drawing->getWidth();
+        $height = (int) $drawing->getHeight();
+        $clone->setResizeProportional(false);
+
+        if ($drawing->getCoordinates2() !== '') {
+            $clone->setCoordinates2('');
+        }
+
+        if ($width > 0) {
+            $clone->setWidth($width);
+        }
+
+        if ($height > 0) {
+            $clone->setHeight($height);
+        }
 
         return $clone;
     }

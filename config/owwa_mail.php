@@ -28,4 +28,8 @@ return [
 
     'logo_height' => 64,
 
+    'agency_line_1' => 'Republic of the Philippines',
+    'agency_line_2' => 'OVERSEAS WORKERS WELFARE ADMINISTRATION',
+    'agency_address' => 'G/F Parian Commerce Center II, National Highway, Brgy. Parian, Calamba, Laguna',
+
 ];

@@ -95,13 +95,13 @@ class DisposalResource extends Resource
                             ))
                             ->state(fn (Disposal $record): ?string => OwwaReferenceLabels::assetIdentifierForDisposal($record))
                             ->placeholder('—'),
-                        TextEntry::make('acquisition_cost')->label('Acquisition cost')->money('PHP')->placeholder('—'),
                         TextEntry::make('reason')->label('Reason')->placeholder('—'),
                         TextEntry::make('remarks')->label('Remarks')->placeholder('—')->columnSpanFull(),
                     ])
                     ->columns(2)
                     ->columnSpanFull(),
                 Section::make('Sale Details')
+                    ->visible(fn (Disposal $record): bool => self::isWmr($record))
                     ->schema([
                         TextEntry::make('official_receipt_no')->label('Official receipt number')->placeholder('—'),
                         TextEntry::make('sale_date')->label('Date of sale')->date('M d, Y')->placeholder('—'),
@@ -134,12 +134,7 @@ class DisposalResource extends Resource
                             $record->item?->category?->getTemplateSlug()
                         ))
                         ->state(fn (Disposal $record): ?string => OwwaReferenceLabels::assetIdentifierForDisposal($record))
-                        ->visible(fn (Disposal $record): bool => self::isIirup($record))
-                        ->placeholder('—'),
-                    TextEntry::make('acquisition_cost')
-                        ->label('Acquisition cost')
-                        ->money('PHP')
-                        ->visible(fn (Disposal $record): bool => self::isIirup($record))
+                        ->visible(fn (Disposal $record): bool => self::isUnserviceableForm($record))
                         ->placeholder('—'),
                     TextEntry::make('reason')->label('Reason')->placeholder('—'),
                     TextEntry::make('remarks')->label('Remarks')->placeholder('—')->columnSpanFull(),
@@ -163,26 +158,47 @@ class DisposalResource extends Resource
                 ])
                 ->columns(2)
                 ->columnSpanFull(),
-            Section::make('IIRUP Inventory and Inspection')
-                ->visible(fn (Disposal $record): bool => self::isIirup($record))
+            Section::make('IIRUSP details')
+                ->visible(fn (Disposal $record): bool => self::isIirusp($record))
                 ->schema([
-                    TextEntry::make('accountable_officer_designation')->label('Accountable officer designation')->placeholder('—'),
-                    TextEntry::make('accountable_officer_station')->label('Station / office')->placeholder('—'),
                     TextEntry::make('acquisition_cost')->label('Unit cost')->money('PHP')->placeholder('—'),
                     TextEntry::make('accumulated_depreciation')->label('Accumulated depreciation')->money('PHP')->placeholder('—'),
                     TextEntry::make('accumulated_impairment_losses')->label('Accumulated impairment losses')->money('PHP')->placeholder('—'),
-                    TextEntry::make('appraised_value')->label('Appraised value')->money('PHP')->placeholder('—'),
+                ])
+                ->columns(2)
+                ->columnSpanFull(),
+            Section::make('IIRUP details')
+                ->visible(fn (Disposal $record): bool => self::isIirupPpe($record))
+                ->schema([
+                    TextEntry::make('acquisition_cost')->label('Unit cost')->money('PHP')->placeholder('—'),
+                    TextEntry::make('accumulated_depreciation')->label('Accumulated depreciation')->money('PHP')->placeholder('—'),
+                    TextEntry::make('accumulated_impairment_losses')->label('Accumulated impairment losses')->money('PHP')->placeholder('—'),
+                ])
+                ->columns(2)
+                ->columnSpanFull(),
+            Section::make('Disposal')
+                ->visible(fn (Disposal $record): bool => self::isUnserviceableForm($record))
+                ->schema([
                     TextEntry::make('iirup_disposal_mode')
                         ->label('Disposal mode')
                         ->formatStateUsing(fn (?string $state): string => filled($state) ? ucfirst($state) : '—'),
                     TextEntry::make('iirup_disposal_amount')->label('Disposal amount')->money('PHP')->placeholder('—'),
-                    TextEntry::make('iirup_other_mode')->label('Other mode specification')->placeholder('—'),
+                    TextEntry::make('iirup_other_mode')->label('Other mode specification')->placeholder('—')
+                        ->visible(fn (Disposal $record): bool => $record->iirup_disposal_mode === 'others'),
+                ])
+                ->columns(2)
+                ->columnSpanFull(),
+            Section::make('Accountable officer')
+                ->visible(fn (Disposal $record): bool => self::isUnserviceableForm($record))
+                ->schema([
+                    TextEntry::make('accountable_officer_designation')->label('Designation')->placeholder('—'),
+                    TextEntry::make('accountable_officer_station')->label('Station / office')->placeholder('—'),
                 ])
                 ->columns(2)
                 ->columnSpanFull(),
             Section::make('Sale Details')
-                ->visible(fn (Disposal $record): bool => filled($record->official_receipt_no)
-                    || $record->sale_amount !== null)
+                ->visible(fn (Disposal $record): bool => self::isWmr($record)
+                    && (filled($record->official_receipt_no) || $record->sale_amount !== null))
                 ->schema([
                     TextEntry::make('official_receipt_no')->label('Official receipt number')->placeholder('—'),
                     TextEntry::make('sale_date')->label('Official receipt date')->date('M d, Y')->placeholder('—'),
@@ -207,13 +223,23 @@ class DisposalResource extends Resource
         return $record->item?->category?->getTemplateSlug() === 'consumables';
     }
 
-    protected static function isIirup(Disposal $record): bool
+    protected static function isUnserviceableForm(Disposal $record): bool
     {
         return in_array(
             $record->item?->category?->getTemplateSlug(),
             ['ppe', 'semi_expendable'],
             true,
         );
+    }
+
+    protected static function isIirusp(Disposal $record): bool
+    {
+        return $record->item?->category?->getTemplateSlug() === 'semi_expendable';
+    }
+
+    protected static function isIirupPpe(Disposal $record): bool
+    {
+        return $record->item?->category?->getTemplateSlug() === 'ppe';
     }
 
     public static function table(Table $table): Table

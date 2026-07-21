@@ -387,10 +387,22 @@ class AcquisitionPaperworkForm
                 ->datalist(fn (): array => \App\Models\ProcurementSignatoryName::suggestionsForRole(\App\Models\ProcurementSignatoryName::ROLE_REQUESTED))
                 ->maxLength(255)
                 ->disabled(fn (?AcquisitionPaperwork $record): bool => ! self::isPrEditable($record)),
+            TextInput::make('requested_by_designation')
+                ->label('Requested by designation')
+                ->datalist(fn (): array => \App\Models\ProcurementSignatoryName::suggestionsForRole(\App\Models\ProcurementSignatoryName::ROLE_REQUESTED_DESIGNATION))
+                ->maxLength(255)
+                ->helperText('PR cell B40')
+                ->disabled(fn (?AcquisitionPaperwork $record): bool => ! self::isPrEditable($record)),
             TextInput::make('approved_by_name')
                 ->label('Approved by (printed name)')
                 ->datalist(fn (): array => \App\Models\ProcurementSignatoryName::suggestionsForRole(\App\Models\ProcurementSignatoryName::ROLE_APPROVED))
                 ->maxLength(255)
+                ->disabled(fn (?AcquisitionPaperwork $record): bool => ! self::isPrEditable($record)),
+            TextInput::make('approved_by_designation')
+                ->label('Approved by designation')
+                ->datalist(fn (): array => \App\Models\ProcurementSignatoryName::suggestionsForRole(\App\Models\ProcurementSignatoryName::ROLE_APPROVED_DESIGNATION))
+                ->maxLength(255)
+                ->helperText('PR cell D40')
                 ->disabled(fn (?AcquisitionPaperwork $record): bool => ! self::isPrEditable($record)),
         ];
     }

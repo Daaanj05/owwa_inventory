@@ -5,11 +5,9 @@ namespace App\Filament\Resources\IncidentReports\Actions;
 use App\Filament\Resources\IncidentReports\IncidentReportResource;
 use App\Filament\Support\OwwaFormModalDefaults;
 use App\Models\Disposal;
-use App\Services\OwwaTemplateExportService;
 use App\Support\OwwaExportBusyDispatcher;
 use Filament\Actions\Action;
 use Filament\Actions\EditAction;
-use Filament\Forms\Components\Select;
 use Livewire\Component as LivewireComponent;
 
 class IncidentReportViewActions
@@ -34,16 +32,8 @@ class IncidentReportViewActions
         return Action::make($name)
             ->label($label)
             ->icon($asPdf ? 'heroicon-o-document-text' : 'heroicon-o-document-arrow-down')
-            ->form([
-                Select::make('form')
-                    ->label('OWWA form')
-                    ->options(fn (): array => app(OwwaTemplateExportService::class)->getAvailableFormsForCategory('incident_report', null))
-                    ->default('rlsddp'),
-            ])
-            ->action(function (Disposal $record, array $data, Action $action) use ($asPdf): void {
-                $query = [
-                    'form' => $data['form'] ?? 'rlsddp',
-                ];
+            ->action(function (Disposal $record, Action $action) use ($asPdf): void {
+                $query = ['form' => 'rlsddp'];
                 if ($asPdf) {
                     $query['format'] = 'pdf';
                 }
@@ -64,7 +54,10 @@ class IncidentReportViewActions
         return Action::make('printView')
             ->label('Print Preview')
             ->icon('heroicon-o-printer')
-            ->url(fn (Disposal $record): string => route('owwa.print.disposal', $record).'?form=rlsddp')
+            ->url(fn (Disposal $record): string => route('owwa.export.disposal', $record).'?'.http_build_query([
+                'form' => 'rlsddp',
+                'format' => 'pdf',
+            ]))
             ->openUrlInNewTab();
     }
 }

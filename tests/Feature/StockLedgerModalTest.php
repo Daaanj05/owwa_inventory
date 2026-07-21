@@ -45,7 +45,59 @@ class StockLedgerModalTest extends TestCase
         Livewire::actingAs($custodian)
             ->test(StockLevels::class, ['category' => $category->id])
             ->call('openStockLedger', $item->id, $office->id, 0.0)
-            ->assertActionMounted('viewStockLedger');
+            ->assertActionMounted('viewStockLedger')
+            ->assertSet('ledgerExportUrl', fn (?string $url): bool => is_string($url) && str_contains($url, 'stock-cards') && str_contains($url, 'pairs='))
+            ->assertSet('ledgerExportPdfUrl', fn (?string $url): bool => is_string($url) && str_contains($url, 'format=pdf'));
+    }
+
+    public function test_stock_ledger_modal_footer_export_dispatches_busy_download(): void
+    {
+        $office = Office::factory()->create();
+        $category = ItemCategory::factory()->create(['name' => 'Consumables']);
+        $item = Item::factory()->create(['item_category_id' => $category->id]);
+
+        /** @var User $custodian */
+        $custodian = User::factory()->create(['role' => User::ROLE_SUPPLY_CUSTODIAN]);
+
+        DB::table('acquisitions')->insert([
+            'reference_code' => 'ACQ-MODAL-EXPORT',
+            'item_id' => $item->id,
+            'office_id' => $office->id,
+            'quantity' => 8,
+            'acquisition_date' => now()->toDateString(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $links = app(\App\Services\StockLedgerViewService::class)->exportLinks($item, $office, 0.0);
+
+        Livewire::actingAs($custodian)
+            ->test(StockLevels::class, ['category' => $category->id])
+            ->set([
+                'ledgerExportUrl' => $links['exportUrl'],
+                'ledgerExportPdfUrl' => $links['exportPdfUrl'],
+                'ledgerExportLabel' => $links['exportLabel'],
+                'ledgerExportPdfLabel' => $links['exportPdfLabel'],
+                'ledgerExportTitle' => $links['title'],
+            ])
+            ->callAction(
+                ['viewStockLedger', 'exportLedgerExcel'],
+                arguments: [
+                    'viewStockLedger' => [
+                        'itemId' => $item->id,
+                        'officeId' => $office->id,
+                        'unitCost' => 0.0,
+                    ],
+                ],
+            )
+            ->assertSet('exportBusy', true);
+
+        $html = view('filament.pages.partials.stock-ledger-modal', [
+            'ledger' => app(\App\Services\StockLedgerViewService::class)->present($item, $office, 0.0),
+        ])->render();
+
+        $this->assertStringNotContainsString('owwaBusyNavigate', $html);
+        $this->assertStringNotContainsString('data-owwa-export-url', $html);
     }
 
     public function test_open_stock_ledger_rejects_item_not_in_visible_list(): void

@@ -104,6 +104,20 @@ class PhysicalCountSpreadsheetBuilder
         ?string $sheetName = null,
         bool $useMasterSignatures = false,
     ): void {
+        if (PhysicalCountPageLayout::isContinuousLayout($formCode)) {
+            $this->exportService->populateContinuousPhysicalCountSheet(
+                $sheet,
+                $session,
+                $formCode,
+                $lines,
+                $propertyClass,
+                $sheetName,
+                $useMasterSignatures,
+            );
+
+            return;
+        }
+
         $chunks = self::chunkLines($lines, PhysicalCountPageLayout::rowsPerPage($formCode));
 
         $this->exportService->populatePhysicalCountSheet(

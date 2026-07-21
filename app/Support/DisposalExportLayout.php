@@ -89,26 +89,36 @@ class DisposalExportLayout
             'accountable_station' => $disposal->accountable_officer_station ?? $office?->name ?? '',
         ]);
 
-        $values[OwwaCellMapping::columnCell($cols['date_acquired'] ?? 'B', $detailStart)] = $dateAcquired ?? '';
-        $values[OwwaCellMapping::columnCell($cols['description'] ?? 'C', $detailStart)] = self::itemDescription($item);
-        $values[OwwaCellMapping::columnCell($cols['property_no'] ?? 'D', $detailStart)] = $disposal->property_number ?? $item?->item_code ?? '';
-        $values[OwwaCellMapping::columnCell($cols['quantity'] ?? 'E', $detailStart)] = (string) $quantity;
-        $values[OwwaCellMapping::columnCell($cols['unit_cost'] ?? 'F', $detailStart)] = $unitCost ?? '';
-        $values[OwwaCellMapping::columnCell($cols['total_cost'] ?? 'G', $detailStart)] = $totalCost ?? '';
-        $values[OwwaCellMapping::columnCell($cols['accumulated_depreciation'] ?? 'H', $detailStart)] = $accumulatedDepreciation;
-        $values[OwwaCellMapping::columnCell($cols['accumulated_impairment_losses'] ?? 'I', $detailStart)] = $accumulatedImpairment;
-        $values[OwwaCellMapping::columnCell($cols['carrying_amount'] ?? 'J', $detailStart)] = $carryingAmount ?? '';
-        $values[OwwaCellMapping::columnCell($cols['remarks'] ?? 'K', $detailStart)] = $remarks;
-        $values[OwwaCellMapping::columnCell($cols['disposal_total'] ?? 'P', $detailStart)] = $disposal->iirup_disposal_amount !== null
-            ? (float) $disposal->iirup_disposal_amount
-            : '';
-        $values[OwwaCellMapping::columnCell($cols['appraised_value'] ?? 'Q', $detailStart)] = $disposal->appraised_value !== null
-            ? (float) $disposal->appraised_value
-            : '';
-        $values[OwwaCellMapping::columnCell($cols['official_receipt_no'] ?? 'R', $detailStart)] = $disposal->official_receipt_no ?? '';
-        $values[OwwaCellMapping::columnCell($cols['sale_amount'] ?? 'S', $detailStart)] = $disposal->sale_amount !== null
-            ? (float) $disposal->sale_amount
-            : '';
+        $detailValues = [
+            'date_acquired' => $dateAcquired ?? '',
+            'description' => self::itemDescription($item),
+            'property_no' => $disposal->property_number ?? $item?->item_code ?? '',
+            'quantity' => (string) $quantity,
+            'unit_cost' => $unitCost ?? '',
+            'total_cost' => $totalCost ?? '',
+            'accumulated_depreciation' => $accumulatedDepreciation,
+            'accumulated_impairment_losses' => $accumulatedImpairment,
+            'carrying_amount' => $carryingAmount ?? '',
+            'remarks' => $remarks,
+            'disposal_total' => $disposal->iirup_disposal_amount !== null
+                ? (float) $disposal->iirup_disposal_amount
+                : '',
+            'appraised_value' => $disposal->appraised_value !== null
+                ? (float) $disposal->appraised_value
+                : '',
+            'official_receipt_no' => $disposal->official_receipt_no ?? '',
+            'sale_amount' => $disposal->sale_amount !== null
+                ? (float) $disposal->sale_amount
+                : '',
+        ];
+
+        foreach ($detailValues as $field => $value) {
+            if (! isset($cols[$field])) {
+                continue;
+            }
+
+            $values[OwwaCellMapping::columnCell((string) $cols[$field], $detailStart)] = $value;
+        }
 
         self::applyIirupDisposalMode($values, $disposal, $formCode, $detailStart);
         self::applyIirupSignatures($values, $disposal, $formCode);

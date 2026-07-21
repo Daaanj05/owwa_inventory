@@ -25,7 +25,7 @@
         class="owwa-inventory-layout"
         wire:key="stock-levels-layout-{{ $this->getPage() }}-{{ implode(',', $pagePairKeys) }}"
         x-data="owwaStockSelection({
-            selected: @entangle('selectedKeys'),
+            selected: $wire.$entangle('selectedKeys', true),
             pageKeys: @js($pagePairKeys),
         })"
     >
@@ -145,13 +145,12 @@
                                         x-ref="selectAll"
                                         aria-label="Select all rows on this page (keeps selections from other pages)"
                                         title="Select all on this page. Previous page selections stay selected."
+                                        x-bind:checked="allOnPageSelected()"
                                         x-effect="
-                                            const all = pageKeys.length > 0 && pageKeys.every((key) => (selected || []).includes(key));
-                                            const some = pageKeys.some((key) => (selected || []).includes(key));
-                                            $refs.selectAll.checked = all;
-                                            $refs.selectAll.indeterminate = some && ! all;
+                                            const some = pageKeys.some((key) => isSelected(key));
+                                            $refs.selectAll.indeterminate = some && ! allOnPageSelected();
                                         "
-                                        @click.prevent="toggleSelectAll()"
+                                        x-on:click.stop="toggleSelectAll()"
                                     />
                                 </th>
                                 @php
@@ -193,8 +192,9 @@
                                         <input
                                             type="checkbox"
                                             aria-label="Select {{ $row->item_name }}"
-                                            :checked="(selected || []).includes(@js($pairKey))"
-                                            @click.prevent="toggleRow(@js($pairKey))"
+                                            x-bind:checked="isSelected(@js($pairKey))"
+                                            x-on:click.stop="toggleRow(@js($pairKey))"
+                                            x-on:keydown.space.prevent.stop="toggleRow(@js($pairKey))"
                                         />
                                     </td>
                                     <td class="owwa-cell-primary">
@@ -326,27 +326,37 @@
                     selected: config.selected,
                     pageKeys: Array.isArray(config.pageKeys) ? config.pageKeys : [],
                     isSelected(key) {
-                        return Array.isArray(this.selected) && this.selected.includes(key);
+                        const current = Array.isArray(this.selected) ? this.selected : [];
+
+                        return current.map(String).includes(String(key));
                     },
                     allOnPageSelected() {
                         return this.pageKeys.length > 0
                             && this.pageKeys.every((key) => this.isSelected(key));
                     },
                     toggleRow(key) {
-                        if (this.isSelected(key)) {
-                            this.selected = this.selected.filter((item) => item !== key);
-                            return;
+                        const current = Array.isArray(this.selected) ? [...this.selected] : [];
+                        const needle = String(key);
+                        const index = current.findIndex((item) => String(item) === needle);
+
+                        if (index >= 0) {
+                            current.splice(index, 1);
+                        } else {
+                            current.push(key);
                         }
 
-                        this.selected = [...this.selected, key];
+                        this.selected = current;
                     },
                     toggleSelectAll() {
+                        const current = Array.isArray(this.selected) ? [...this.selected] : [];
+
                         if (this.allOnPageSelected()) {
-                            this.selected = this.selected.filter((item) => ! this.pageKeys.includes(item));
+                            this.selected = current.filter((item) => ! this.pageKeys.includes(item));
+
                             return;
                         }
 
-                        this.selected = [...new Set([...this.selected, ...this.pageKeys])];
+                        this.selected = [...new Set([...current, ...this.pageKeys])];
                     },
                 };
             };

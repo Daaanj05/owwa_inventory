@@ -96,7 +96,11 @@ class OwwaExportStandards
      */
     public static function minWrapLinesForExpansion(array $ledger): int
     {
-        return max(2, (int) ($ledger['min_wrap_lines_for_expansion'] ?? 2));
+        if (array_key_exists('min_wrap_lines_for_expansion', $ledger)) {
+            return max(1, (int) $ledger['min_wrap_lines_for_expansion']);
+        }
+
+        return 2;
     }
 
     /**

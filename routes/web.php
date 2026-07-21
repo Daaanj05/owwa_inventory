@@ -47,7 +47,10 @@ Route::middleware(['auth', 'web'])->group(function () {
     Route::get('reports/coa/acquisition', [CoaReportController::class, 'acquisitionReport'])->name('reports.coa.acquisition');
     Route::get('reports/coa/transfer', [CoaReportController::class, 'transferReport'])->name('reports.coa.transfer');
     Route::get('reports/coa/disposal', [CoaReportController::class, 'disposalReport'])->name('reports.coa.disposal');
-    Route::middleware([\App\Http\Middleware\SetOwwaExportDownloadCookie::class])->group(function () {
+    Route::middleware([
+        \App\Http\Middleware\SetOwwaExportDownloadCookie::class,
+        \App\Http\Middleware\RaiseOwwaExportMemoryLimit::class,
+    ])->group(function () {
         Route::get('reports/owwa/acquisition/{acquisition}', [OwwaExportController::class, 'acquisition'])->name('owwa.export.acquisition');
         Route::get('reports/owwa/issuance/{issuance}', [OwwaExportController::class, 'issuance'])->name('owwa.export.issuance');
         Route::get('reports/owwa/transfer/{transfer}', [OwwaExportController::class, 'transfer'])->name('owwa.export.transfer');

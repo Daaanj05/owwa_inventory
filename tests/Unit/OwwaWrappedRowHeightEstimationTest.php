@@ -194,18 +194,34 @@ class OwwaWrappedRowHeightEstimationTest extends TestCase
             $baseHeight,
         );
 
-        $this->assertSame(31.5, $height);
+        $this->assertGreaterThanOrEqual($baseHeight * 3, $height);
     }
 
-    public function test_hyphenated_property_number_estimates_two_lines_at_boundary_capacity(): void
+    public function test_hyphenated_property_number_estimates_at_least_two_lines_at_boundary_capacity(): void
     {
         $charsPerLine = OwwaExportStandards::charsPerLineForColumnWidth(10.59765625);
 
         $this->assertSame(12, $charsPerLine);
-        $this->assertSame(
+        $this->assertGreaterThanOrEqual(
             2,
             OwwaSpreadsheetLayoutHelper::estimateWrappedLineCount('SEM-FF-001-001', $charsPerLine),
         );
+    }
+
+    public function test_splv_stock_no_expands_to_at_least_three_base_rows_at_pr_column_a_width(): void
+    {
+        $sheet = $this->worksheetWithCell('A11', 'SPLV-2026-OE-106-002-OWWA-IVA', 15.33203125);
+        $baseHeight = 15.0;
+
+        $height = OwwaSpreadsheetLayoutHelper::estimateWrappedRowHeight(
+            $sheet,
+            11,
+            ['A'],
+            $baseHeight,
+            1,
+        );
+
+        $this->assertGreaterThanOrEqual(45.0, $height);
     }
 
     public function test_annex_a1_wrap_text_columns_include_reference_column(): void

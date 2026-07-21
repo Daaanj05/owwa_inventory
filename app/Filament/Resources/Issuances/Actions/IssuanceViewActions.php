@@ -84,13 +84,7 @@ class IssuanceViewActions
         return Action::make('printView')
             ->label('Print Preview')
             ->icon('heroicon-o-printer')
-            ->url(function (Issuance $record): string {
-                $slug = $record->item?->category?->getTemplateSlug();
-                $form = $slug === 'ppe' ? 'par' : ($slug === 'semi_expendable' ? 'ics' : '');
-                $url = route('owwa.print.issuance', $record);
-
-                return $form !== '' ? $url.'?form='.$form : $url;
-            })
+            ->url(fn (Issuance $record): string => route('owwa.export.issuance', $record).'?format=pdf')
             ->openUrlInNewTab();
     }
 

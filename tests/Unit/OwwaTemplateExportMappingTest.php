@@ -102,15 +102,42 @@ class OwwaTemplateExportMappingTest extends TestCase
 
         $values = app(OwwaTemplateExportService::class)->cellValuesForTransfer(
             $transfer,
-            'ppe/Transfer/Appendix 76 - PTR.xls'
+            'ppe/Transfer/Appendix 76 - PTR.xlsx'
         );
 
         $this->assertArrayHasKey('A18', $values);
         $this->assertArrayNotHasKey('A17', $values);
         $this->assertSame('PPE-001', $values['B18']);
         $this->assertSame('Serviceable', $values['I18']);
-        $this->assertSame('X', $values['B13']);
+        $this->assertSame('✓', $values['B13']);
         $this->assertArrayNotHasKey('C13', $values);
+    }
+
+    public function test_ptr_transfer_type_mark_is_case_insensitive(): void
+    {
+        $fromOffice = new Office(['name' => 'From Office']);
+        $toOffice = new Office(['name' => 'To Office']);
+        $item = new Item(['item_code' => 'PPE-001', 'name' => 'Laptop']);
+
+        $transfer = new Transfer([
+            'reference_code' => '2026-01-0099',
+            'property_number' => 'PPE-001',
+            'quantity' => 1,
+            'condition' => 'Serviceable',
+            'transfer_date' => now(),
+            'transfer_type' => 'Donation',
+        ]);
+        $transfer->setRelation('item', $item);
+        $transfer->setRelation('fromOffice', $fromOffice);
+        $transfer->setRelation('toOffice', $toOffice);
+        $transfer->setRelation('recordedBy', null);
+
+        $values = app(OwwaTemplateExportService::class)->cellValuesForTransfer(
+            $transfer,
+            'ppe/Transfer/Appendix 76 - PTR.xlsx'
+        );
+
+        $this->assertSame('✓', $values['B13']);
     }
 
     public function test_ptr_transfer_type_marks_use_checkbox_cells(): void
@@ -143,10 +170,10 @@ class OwwaTemplateExportMappingTest extends TestCase
 
             $values = app(OwwaTemplateExportService::class)->cellValuesForTransfer(
                 $transfer,
-                'Semi-Expendable/Transfer/Appendix 76 - PTR.xls'
+                'Semi-Expendable/Transfer/Appendix 76 - PTR.xlsx'
             );
 
-            $this->assertSame('X', $values[$markCell], "Expected mark for {$transferType} at {$markCell}");
+            $this->assertSame('✓', $values[$markCell], "Expected mark for {$transferType} at {$markCell}");
             $this->assertArrayNotHasKey('C13', $values);
             $this->assertArrayNotHasKey('F13', $values);
             $this->assertArrayNotHasKey('C14', $values);

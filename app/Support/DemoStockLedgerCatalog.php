@@ -268,7 +268,9 @@ class DemoStockLedgerCatalog
             ['item' => 'CON-004', 'qty' => 20, 'date' => '2026-02-20'],
             ['item' => 'CON-005', 'qty' => 10, 'date' => '2026-02-20'],
             ['item' => 'SEM-001', 'qty' => 2, 'date' => '2026-03-01'],
+            ['item' => 'SEM-002', 'qty' => 1, 'date' => '2026-03-08'],
             ['item' => 'PPE-002', 'qty' => 2, 'date' => '2026-03-05'],
+            ['item' => 'PPE-001', 'qty' => 1, 'date' => '2026-03-12'],
         ];
     }
 
@@ -368,6 +370,14 @@ class DemoStockLedgerCatalog
             ],
             [
                 'type' => 'disposal',
+                'item_code' => 'CON-007',
+                'office_code' => $officeCode,
+                'quantity' => 2,
+                'date' => '2026-03-25',
+                'meta' => ['reference_code' => '2026-03-0001'],
+            ],
+            [
+                'type' => 'disposal',
                 'item_code' => 'SEM-004',
                 'office_code' => $officeCode,
                 'quantity' => 1,
@@ -381,6 +391,30 @@ class DemoStockLedgerCatalog
                 'quantity' => 1,
                 'date' => '2026-03-15',
                 'meta' => ['reference_code' => '2026-03-0003'],
+            ],
+            [
+                'type' => 'disposal',
+                'item_code' => 'PPE-004',
+                'office_code' => $officeCode,
+                'quantity' => 1,
+                'date' => '2026-03-15',
+                'meta' => ['reference_code' => '2026-03-0003'],
+            ],
+            [
+                'type' => 'disposal',
+                'item_code' => 'SEM-002',
+                'office_code' => $officeCode,
+                'quantity' => 1,
+                'date' => '2026-03-28',
+                'meta' => ['reference_code' => '2026-03-0004'],
+            ],
+            [
+                'type' => 'disposal',
+                'item_code' => 'SEM-005',
+                'office_code' => $officeCode,
+                'quantity' => 1,
+                'date' => '2026-03-28',
+                'meta' => ['reference_code' => '2026-03-0004'],
             ],
         ];
     }

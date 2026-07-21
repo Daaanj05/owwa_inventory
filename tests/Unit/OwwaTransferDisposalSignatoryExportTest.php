@@ -14,12 +14,19 @@ use App\Services\OwwaItemReportService;
 use App\Services\OwwaTemplateExportService;
 use App\Support\DisposalExportLayout;
 use App\Support\OwwaCellMapping;
+use App\Support\OwwaReferenceLabels;
 use Illuminate\Support\Collection;
-use ReflectionMethod;
 use Tests\TestCase;
 
 class OwwaTransferDisposalSignatoryExportTest extends TestCase
 {
+    public function test_disposal_reference_labels_split_iirup_and_iirusp(): void
+    {
+        $this->assertSame(OwwaReferenceLabels::IIRUP, OwwaReferenceLabels::disposal('ppe'));
+        $this->assertSame(OwwaReferenceLabels::IIRUSP, OwwaReferenceLabels::disposal('semi_expendable'));
+        $this->assertSame(OwwaReferenceLabels::WMR, OwwaReferenceLabels::disposal('consumables'));
+    }
+
     public function test_ptr_signatory_cells_use_configured_map(): void
     {
         $fromOffice = new Office(['name' => 'From Office', 'fund_cluster' => '01']);
@@ -41,6 +48,7 @@ class OwwaTransferDisposalSignatoryExportTest extends TestCase
             'released_by_designation' => 'Supply Officer',
             'received_by_printed_name' => 'Receiver Name',
             'received_by_designation' => 'Custodian',
+            'reason_for_transfer' => 'Office relocation',
         ]);
         $transfer->setRelation('item', $item);
         $transfer->setRelation('fromOffice', $fromOffice);
@@ -49,18 +57,23 @@ class OwwaTransferDisposalSignatoryExportTest extends TestCase
 
         $values = app(OwwaTemplateExportService::class)->cellValuesForTransfer(
             $transfer,
-            'ppe/Transfer/Appendix 76 - PTR.xls'
+            'ppe/Transfer/Appendix 76 - PTR.xlsx'
         );
 
         $signatures = OwwaCellMapping::form('PTR')['signatures'];
 
         $this->assertSame('Approver Name', $values[$signatures['approved_name']]);
         $this->assertSame('Regional Director', $values[$signatures['approved_designation']]);
+        $this->assertSame('B54', $signatures['approved_designation']);
+        $this->assertSame('A44', $signatures['reason']);
+        $this->assertSame('Office relocation', $values[$signatures['reason']]);
         $this->assertSame('Releaser Name', $values[$signatures['released_name']]);
         $this->assertSame('Receiver Name', $values[$signatures['received_name']]);
+        $this->assertArrayNotHasKey('A54', $values);
+        $this->assertArrayNotHasKey('A43', $values);
 
         $spreadsheet = app(OwwaTemplateExportService::class)->renderFilledSpreadsheet(
-            'ppe/Transfer/Appendix 76 - PTR.xls',
+            'ppe/Transfer/Appendix 76 - PTR.xlsx',
             $values,
         );
 
@@ -71,6 +84,118 @@ class OwwaTransferDisposalSignatoryExportTest extends TestCase
         } finally {
             $spreadsheet->disconnectWorksheets();
         }
+    }
+
+    public function test_ptr_uses_semi_inventory_number_not_item_stock_code(): void
+    {
+        $fromOffice = new Office(['name' => 'From Office']);
+        $toOffice = new Office(['name' => 'To Office']);
+        $category = new \App\Models\ItemCategory(['name' => 'Semi-Expendable']);
+        $item = new Item([
+            'item_code' => 'SEM-002',
+            'name' => 'Paper Cutter',
+            'semi_expendable_property_number' => 'SPLV-2026-OE-106-002-OWWA-IVA',
+        ]);
+        $item->setRelation('category', $category);
+
+        $transfer = new Transfer([
+            'reference_code' => 'PTR-2026-0004',
+            'property_number' => null,
+            'quantity' => 1,
+            'condition' => 'Serviceable',
+            'transfer_date' => now(),
+        ]);
+        $transfer->setRelation('item', $item);
+        $transfer->setRelation('fromOffice', $fromOffice);
+        $transfer->setRelation('toOffice', $toOffice);
+
+        $values = app(OwwaTemplateExportService::class)->cellValuesForTransfer(
+            $transfer,
+            'Semi-Expendable/Transfer/Appendix 76 - PTR.xlsx'
+        );
+
+        $detailStart = OwwaCellMapping::detailRowBase('PTR');
+        $cols = OwwaCellMapping::detailColumns('PTR');
+
+        $this->assertSame(
+            'SPLV-2026-OE-106-002-OWWA-IVA',
+            $values[OwwaCellMapping::columnCell($cols['property_no'], $detailStart)],
+        );
+        $this->assertSame(OwwaReferenceLabels::INVENTORY_ITEM_NO, $values['B16']);
+        $this->assertNotSame('SEM-002', $values[OwwaCellMapping::columnCell($cols['property_no'], $detailStart)]);
+    }
+
+    public function test_ptr_replaces_mistaken_item_code_with_semi_inventory_number(): void
+    {
+        $fromOffice = new Office(['name' => 'From Office']);
+        $toOffice = new Office(['name' => 'To Office']);
+        $category = new \App\Models\ItemCategory(['name' => 'Semi-Expendable']);
+        $item = new Item([
+            'item_code' => 'SEM-002',
+            'name' => 'Paper Cutter',
+            'semi_expendable_property_number' => 'SPLV-2026-OE-106-002-OWWA-IVA',
+        ]);
+        $item->setRelation('category', $category);
+
+        $transfer = new Transfer([
+            'reference_code' => 'PTR-2026-0004',
+            'property_number' => 'SEM-002',
+            'quantity' => 1,
+            'transfer_date' => now(),
+        ]);
+        $transfer->setRelation('item', $item);
+        $transfer->setRelation('fromOffice', $fromOffice);
+        $transfer->setRelation('toOffice', $toOffice);
+
+        $values = app(OwwaTemplateExportService::class)->cellValuesForTransfer(
+            $transfer,
+            'Semi-Expendable/Transfer/Appendix 76 - PTR.xlsx'
+        );
+
+        $detailStart = OwwaCellMapping::detailRowBase('PTR');
+        $cols = OwwaCellMapping::detailColumns('PTR');
+
+        $this->assertSame(
+            'SPLV-2026-OE-106-002-OWWA-IVA',
+            $values[OwwaCellMapping::columnCell($cols['property_no'], $detailStart)],
+        );
+    }
+
+    public function test_ptr_uses_ppe_property_number_not_item_stock_code(): void
+    {
+        $fromOffice = new Office(['name' => 'From Office']);
+        $toOffice = new Office(['name' => 'To Office']);
+        $category = new \App\Models\ItemCategory(['name' => 'PPE']);
+        $item = new Item([
+            'item_code' => 'PPE-100',
+            'name' => 'Laptop',
+            'ppe_property_number' => '2026-IT-106-001-RWO4A',
+        ]);
+        $item->setRelation('category', $category);
+
+        $transfer = new Transfer([
+            'reference_code' => 'PTR-2026-0100',
+            'property_number' => null,
+            'quantity' => 1,
+            'transfer_date' => now(),
+        ]);
+        $transfer->setRelation('item', $item);
+        $transfer->setRelation('fromOffice', $fromOffice);
+        $transfer->setRelation('toOffice', $toOffice);
+
+        $values = app(OwwaTemplateExportService::class)->cellValuesForTransfer(
+            $transfer,
+            'ppe/Transfer/Appendix 76 - PTR.xlsx'
+        );
+
+        $detailStart = OwwaCellMapping::detailRowBase('PTR');
+        $cols = OwwaCellMapping::detailColumns('PTR');
+
+        $this->assertSame(
+            '2026-IT-106-001-RWO4A',
+            $values[OwwaCellMapping::columnCell($cols['property_no'], $detailStart)],
+        );
+        $this->assertSame(OwwaReferenceLabels::PROPERTY_NO, $values['B16']);
     }
 
     public function test_wmr_signatory_cells_use_configured_map(): void
@@ -165,9 +290,9 @@ class OwwaTransferDisposalSignatoryExportTest extends TestCase
         $this->assertSame(1400.0, $values['J15']);
         $this->assertSame(750.0, $values['L15']);
         $this->assertSame(750.0, $values['P15']);
-        $this->assertSame(800.0, $values['Q15']);
-        $this->assertSame('OR-200', $values['R15']);
-        $this->assertSame(750.0, $values['S15']);
+        $this->assertArrayNotHasKey('Q15', $values);
+        $this->assertArrayNotHasKey('R15', $values);
+        $this->assertArrayNotHasKey('S15', $values);
 
         $sheet = app(OwwaTemplateExportService::class)
             ->renderFilledSpreadsheet('ppe/Disposal/Appendix 74 - IIRUP.xlsx', $values)
@@ -175,6 +300,131 @@ class OwwaTransferDisposalSignatoryExportTest extends TestCase
 
         $this->assertSame(1400.0, (float) $sheet->getCell('J15')->getValue());
         $this->assertSame('Regional Director', (string) $sheet->getCell('H42')->getValue());
+    }
+
+    public function test_iirusp_fills_disposal_and_inspection_but_skips_appraised_and_sales(): void
+    {
+        $office = new Office(['name' => 'OWWA 4A']);
+        $item = new Item(['item_code' => 'SEM-001', 'name' => 'OFFICE TABLE 120X60X75 LIGHT BROWN']);
+
+        $disposal = new Disposal([
+            'quantity' => 1,
+            'disposal_date' => now()->setDate(2026, 6, 15),
+            'reason' => 'Unserviceable',
+            'property_number' => '2011-FR-6010-0421-GF',
+            'acquisition_cost' => 3495,
+            'accumulated_depreciation' => 0,
+            'accumulated_impairment_losses' => 0,
+            'iirup_disposal_mode' => 'sale',
+            'iirup_disposal_amount' => 100,
+            'appraised_value' => 200,
+            'official_receipt_no' => 'OR-SHOULD-NOT-EXPORT',
+            'sale_amount' => 100,
+            'custodian_printed_name' => 'MARITA C. ABLIS',
+            'accountable_officer_designation' => 'OWWO II',
+            'accountable_officer_station' => 'OWWA RWO 4A',
+            'approved_by_printed_name' => 'ROSARIO C. BURAYAG',
+            'inspection_officer_printed_name' => 'IVY C. MACARAIG',
+            'witness_printed_name' => 'Witness Name',
+        ]);
+        $disposal->setRelation('office', $office);
+        $disposal->setRelation('item', $item);
+        $disposal->setRelation('parIssuance', null);
+        $disposal->setRelation('inventoryUnit', null);
+
+        $values = app(OwwaTemplateExportService::class)->cellValuesForDisposal(
+            $disposal,
+            'Semi-Expendable/Disposal/Annex A.10 - IIRUSP.xlsx'
+        );
+
+        $this->assertSame('As at 2026-06-15', $values['B6']);
+        $this->assertSame('Entity Name: OWWA 4A', $values['B8']);
+        $this->assertSame('MARITA C. ABLIS', $values['C9']);
+        $this->assertSame('OWWO II', $values['F9']);
+        $this->assertSame('OWWA RWO 4A', $values['K9']);
+        $this->assertSame('OFFICE TABLE 120X60X75 LIGHT BROWN', $values['C17']);
+        $this->assertSame('2011-FR-6010-0421-GF', $values['D17']);
+        $this->assertSame('1', $values['E17']);
+        $this->assertSame(3495.0, $values['F17']);
+        $this->assertSame(3495.0, $values['G17']);
+        $this->assertSame(3495.0, $values['J17']);
+        $this->assertSame('Unserviceable', $values['K17']);
+        $this->assertSame(100.0, $values['L17']);
+        $this->assertSame(100.0, $values['P17']);
+        $this->assertSame('MARITA C. ABLIS', $values['C45']);
+        $this->assertSame('ROSARIO C. BURAYAG', $values['H45']);
+        $this->assertSame('IVY C. MACARAIG', $values['L45']);
+        $this->assertSame('Witness Name', $values['Q45']);
+
+        foreach (['Q17', 'R17', 'S17'] as $cell) {
+            $this->assertArrayNotHasKey($cell, $values);
+        }
+
+        $sheet = app(OwwaTemplateExportService::class)
+            ->renderFilledSpreadsheet('Semi-Expendable/Disposal/Annex A.10 - IIRUSP.xlsx', $values)
+            ->getActiveSheet();
+
+        $this->assertSame('MARITA C. ABLIS', (string) $sheet->getCell('C9')->getValue());
+        $this->assertSame(3495.0, (float) $sheet->getCell('F17')->getValue());
+        $this->assertSame('ROSARIO C. BURAYAG', (string) $sheet->getCell('H45')->getValue());
+        $this->assertSame('IVY C. MACARAIG', (string) $sheet->getCell('L45')->getValue());
+    }
+
+    public function test_iirusp_data_row_height_expands_for_wrapped_property_no_and_remarks(): void
+    {
+        $template = 'Semi-Expendable/Disposal/Annex A.10 - IIRUSP.xlsx';
+        $absolute = storage_path('app/templates/'.$template);
+        if (! is_readable($absolute)) {
+            $absolute = base_path('resources/owwa-templates/'.$template);
+        }
+        if (! is_readable($absolute)) {
+            $this->markTestSkipped('IIRUSP template is not present.');
+        }
+
+        $office = new Office(['name' => 'OWWA Regional Office IV-A']);
+        $item = new Item([
+            'item_code' => 'SEM-FF-106',
+            'name' => 'Whiteboard 4x3 ft with long instructional description for wrap testing',
+        ]);
+
+        $disposal = new Disposal([
+            'quantity' => 1,
+            'disposal_date' => now()->setDate(2026, 3, 28),
+            'reason' => 'Unserviceable — motor failure — Export-mapping validation remarks',
+            'remarks' => 'Additional disposition notes that must wrap in column K',
+            'property_number' => 'SPLV-2026-FF-106-005-OWWA-IVA',
+            'acquisition_cost' => 1200,
+            'accumulated_depreciation' => 0,
+            'accumulated_impairment_losses' => 0,
+            'custodian_printed_name' => 'Supply Custodian',
+            'accountable_officer_designation' => 'Supply Officer',
+            'accountable_officer_station' => 'OWWA Regional Office IV-A',
+            'approved_by_printed_name' => 'Roberto Cruz',
+        ]);
+        $disposal->setRelation('office', $office);
+        $disposal->setRelation('item', $item);
+        $disposal->setRelation('parIssuance', null);
+        $disposal->setRelation('inventoryUnit', null);
+
+        $values = app(OwwaTemplateExportService::class)->cellValuesForDisposal($disposal, $template);
+        $sheet = app(OwwaTemplateExportService::class)
+            ->renderFilledSpreadsheet($template, $values)
+            ->getActiveSheet();
+
+        $rowHeight = (float) $sheet->getRowDimension(17)->getRowHeight();
+        $templateBaseHeight = 16.5;
+
+        $this->assertTrue($sheet->getStyle('D17')->getAlignment()->getWrapText());
+        $this->assertTrue($sheet->getStyle('K17')->getAlignment()->getWrapText());
+        $this->assertGreaterThan(
+            $templateBaseHeight,
+            $rowHeight,
+            'IIRUSP data row should expand when property no. / remarks wrap.',
+        );
+        $this->assertGreaterThanOrEqual(
+            $templateBaseHeight * 2,
+            $rowHeight,
+        );
     }
 
     public function test_rlsddp_signatory_cells_use_configured_map(): void
@@ -289,13 +539,12 @@ class OwwaTransferDisposalSignatoryExportTest extends TestCase
         $session->setRelation('office', $office);
         $session->setRelation('lines', Collection::make());
 
-        $method = new ReflectionMethod(OwwaItemReportService::class, 'cellValuesForPhysicalCount');
-        $values = $method->invoke(app(OwwaItemReportService::class), $session);
+        $signatureValues = app(OwwaItemReportService::class)->physicalCountSignatureCells($session);
 
         $signatures = OwwaCellMapping::form('RPCI')['signatures'];
 
-        $this->assertSame('Certifier', $values[$signatures['certified_by']]);
-        $this->assertSame('Approver', $values[$signatures['approved_by']]);
-        $this->assertSame('Verifier', $values[$signatures['verified_by']]);
+        $this->assertSame('Certifier', $signatureValues[$signatures['certified_by']]);
+        $this->assertSame('Approver', $signatureValues[$signatures['approved_by']]);
+        $this->assertSame('Verifier', $signatureValues[$signatures['verified_by']]);
     }
 }

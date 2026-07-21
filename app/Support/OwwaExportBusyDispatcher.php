@@ -23,6 +23,10 @@ final class OwwaExportBusyDispatcher
             return;
         }
 
+        if (str_contains($url, 'format=pdf') || str_contains($url, 'format%3Dpdf')) {
+            OwwaLibreOfficeExportGuard::warnIfUnavailable();
+        }
+
         if (method_exists($livewire, 'unmountAction')) {
             $livewire->unmountAction();
         }
@@ -35,7 +39,12 @@ final class OwwaExportBusyDispatcher
         $downloadUrl = OwwaExportDownloadCookie::sameOriginDownloadUrl($url, $token);
 
         $livewire->js(
-            'window.dispatchEvent(new CustomEvent("owwa-busy-start", { detail: '
+            '(() => {'
+            .'document.querySelectorAll(".fi-modal-close-overlay").forEach((el) => el.remove());'
+            .'document.documentElement.classList.remove("fi-modal-open");'
+            .'document.body.classList.remove("fi-modal-open");'
+            .'document.body.style.removeProperty("overflow");'
+            .'window.dispatchEvent(new CustomEvent("owwa-busy-start", { detail: '
             .json_encode([
                 'title' => $title,
                 'message' => $message,
@@ -43,8 +52,8 @@ final class OwwaExportBusyDispatcher
                 'autoClearMs' => $autoClearMs,
             ], JSON_UNESCAPED_SLASHES)
             .'}));'
+            .'window.setTimeout(() => { window.location.assign('.json_encode($downloadUrl, JSON_UNESCAPED_SLASHES).'); }, 50);'
+            .'})();'
         );
-
-        $livewire->redirect($downloadUrl);
     }
 }

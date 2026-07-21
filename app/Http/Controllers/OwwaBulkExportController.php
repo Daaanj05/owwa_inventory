@@ -23,6 +23,7 @@ use App\Services\OwwaItemReportService;
 use App\Services\OwwaTemplateExportService;
 use App\Services\StockCardPdfExportService;
 use App\Services\StockLevelExportService;
+use App\Support\OwwaExportDiagnostics;
 use App\Support\OwwaExportFilename;
 use App\Support\OwwaReferenceLabels;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
@@ -36,6 +37,7 @@ use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpFoundation\StreamedResponse;
+use Throwable;
 
 class OwwaBulkExportController extends Controller
 {
@@ -151,28 +153,55 @@ class OwwaBulkExportController extends Controller
     {
         abort_unless(StockLevels::canAccess(), 403);
 
-        $pairs = $this->resolveStockLevelPairs($request);
-        abort_if($pairs->isEmpty(), 404);
+        OwwaExportDiagnostics::raiseMemoryLimit('512M');
+        OwwaExportDiagnostics::registerOomGuard($request->path());
 
-        $category = ItemCategory::query()->find((int) $request->query('category'));
-        $slug = $category?->getTemplateSlug() ?? 'consumables';
-        $format = (string) $request->query('format', 'xlsx');
+        try {
+            $pairs = $this->resolveStockLevelPairs($request);
 
-        $this->logExportActivity('Exported bulk stock cards', properties: [
-            'count' => $pairs->count(),
-            'category' => $slug,
-            'format' => $format,
-        ]);
+            $category = ItemCategory::query()->find((int) $request->query('category'));
+            $slug = $category?->getTemplateSlug() ?? 'consumables';
+            $format = (string) $request->query('format', 'xlsx');
 
-        if ($format === 'pdf') {
-            return $this->stockCardPdfExport->downloadMerged($pairs, $slug);
+            OwwaExportDiagnostics::info('stock_cards_start', [
+                'pair_count' => $pairs->count(),
+                'pairs' => $pairs->take(20)->values()->all(),
+                'category_id' => $category?->id,
+                'category_slug' => $slug,
+                'format' => $format,
+                'has_explicit_pairs' => filled($request->query('pairs')),
+            ]);
+
+            $this->logExportActivity('Exported bulk stock cards', properties: [
+                'count' => $pairs->count(),
+                'category' => $slug,
+                'format' => $format,
+            ]);
+
+            $response = $format === 'pdf'
+                ? $this->stockCardPdfExport->downloadMerged($pairs, $slug)
+                : match ($slug) {
+                    'ppe' => $this->itemReport->downloadPropertyCardBulk($pairs),
+                    'semi_expendable' => $this->itemReport->downloadAnnexA1Bulk($pairs),
+                    default => $this->itemReport->downloadStockCardBulk($pairs),
+                };
+
+            OwwaExportDiagnostics::info('stock_cards_built', [
+                'pair_count' => $pairs->count(),
+                'category_slug' => $slug,
+                'format' => $format,
+            ]);
+
+            return $response;
+        } catch (Throwable $throwable) {
+            OwwaExportDiagnostics::error('stock_cards_failed', $throwable, [
+                'category' => $request->query('category'),
+                'format' => $request->query('format', 'xlsx'),
+                'pairs' => $request->query('pairs'),
+            ]);
+
+            throw $throwable;
         }
-
-        return match ($slug) {
-            'ppe' => $this->itemReport->downloadPropertyCardBulk($pairs),
-            'semi_expendable' => $this->itemReport->downloadAnnexA1Bulk($pairs),
-            default => $this->itemReport->downloadStockCardBulk($pairs),
-        };
     }
 
     /**
@@ -183,7 +212,14 @@ class OwwaBulkExportController extends Controller
         $user = Auth::user();
         $scopedOfficeId = $user?->office_id ? (int) $user->office_id : null;
 
-        return $this->stockLevelExport->resolvePairsFromRequest($request, $scopedOfficeId);
+        try {
+            return $this->stockLevelExport->resolvePairsFromRequest($request, $scopedOfficeId);
+        } catch (\Illuminate\Validation\ValidationException $exception) {
+            $message = collect($exception->errors())->flatten()->first()
+                ?? 'Invalid stock card export selection.';
+
+            abort(422, is_string($message) ? $message : 'Invalid stock card export selection.');
+        }
     }
 
     public function annexA4(Request $request): StreamedResponse|Response

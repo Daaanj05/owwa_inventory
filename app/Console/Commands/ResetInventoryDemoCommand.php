@@ -61,7 +61,10 @@ class ResetInventoryDemoCommand extends Command
         $this->components->info('Export demo data reset complete.');
         $this->line('Login: custodian@owwa.gov.ph / password');
         $this->line('Physical count exports: PC-EXPORT-RPCI-2026, PC-EXPORT-RPCSP-2026, PC-EXPORT-RPCPPE-2026');
-        $this->line('Acquisition paperwork: DEMO-PR-CON, DEMO-PR-SEM, DEMO-PR-PPE');
+        $this->line('Acquisition paperwork: DEMO-PR-CON-*, DEMO-PR-SEM-*, DEMO-PR-PPE-*');
+        $this->line('Disposal batches: 2026-03-0001 (WMR multi-line), 2026-03-0002 (RLSDDP), 2026-03-0003 (IIRUP multi-line), 2026-03-0004 (IIRUSP multi-line)');
+        $this->line('Transfers: PTR-2026-0001… (CON/SEM/PPE with signatories)');
+        $this->line('Inventory schedule: IP-DEMO-FY2026');
         $this->newLine();
         $this->comment('Templates: run php artisan owwa:sync-templates if exports fail due to missing files.');
         $this->comment('Legacy: InventoryScenarioSeeder, ConsumptionDemoSeeder, and owwa:remove-mock-data are deprecated.');

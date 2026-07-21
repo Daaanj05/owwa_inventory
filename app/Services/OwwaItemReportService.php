@@ -17,6 +17,7 @@ use App\Support\ConsumableInventoryType;
 use App\Support\IssuanceDistributionVisibility;
 use App\Support\ItemPropertyClass;
 use App\Support\OwwaCellMapping;
+use App\Support\OwwaExportDiagnostics;
 use App\Support\OwwaExportFilename;
 use App\Support\PhysicalCountPageLayout;
 use App\Support\PhysicalCountPropertyClassResolver;
@@ -582,6 +583,13 @@ class OwwaItemReportService
                 continue;
             }
 
+            OwwaExportDiagnostics::info('stock_card_sheet_start', [
+                'item_id' => $itemId,
+                'office_id' => $officeId,
+                'unit_cost' => $unitCost,
+                'item_code' => $item->item_code,
+            ]);
+
             $source = $this->stockCardFilledSpreadsheet($item, $office, $officeId, $unitCost);
             $sheet = $source->getSheet(0);
 
@@ -596,11 +604,17 @@ class OwwaItemReportService
             }
 
             $source->disconnectWorksheets();
-            unset($source);
+            unset($source, $sheet);
+            gc_collect_cycles();
+
+            OwwaExportDiagnostics::info('stock_card_sheet_done', [
+                'item_id' => $itemId,
+                'office_id' => $officeId,
+            ]);
         }
 
         if (! $removedDefaultSheet) {
-            abort(404);
+            abort(404, 'No matching stock cards could be built for the selected positions.');
         }
 
         $merged->setActiveSheetIndex(0);
@@ -671,11 +685,12 @@ class OwwaItemReportService
             }
 
             $source->disconnectWorksheets();
-            unset($source);
+            unset($source, $sheet);
+            gc_collect_cycles();
         }
 
         if (! $removedDefaultSheet) {
-            abort(404);
+            abort(404, 'No matching property cards could be built for the selected positions.');
         }
 
         $merged->setActiveSheetIndex(0);
@@ -1538,8 +1553,6 @@ class OwwaItemReportService
      */
     protected function physicalCountHeaderData(PhysicalCountSession $session, ?string $propertyClass = null): array
     {
-        $office = $session->office;
-
         $inventoryType = match (true) {
             $session->count_type === PhysicalCountSession::TYPE_RPCI && filled($session->inventory_type_label) => (string) $session->inventory_type_label,
             $session->count_type === PhysicalCountSession::TYPE_RPCI && filled($session->inventory_type) => ConsumableInventoryType::label($session->inventory_type),
@@ -1553,13 +1566,30 @@ class OwwaItemReportService
             'inventory_type' => $inventoryType,
             'count_date' => $session->count_date?->format('Y-m-d') ?? '',
             'fund_cluster' => '',
-            'accountable_officer' => implode(', ', array_filter([
-                $session->accountable_officer_name,
-                $session->accountable_officer_designation,
-                $office?->name,
-                $session->date_of_assumption?->format('Y-m-d'),
-            ])),
+            'accountable_officer' => $this->formatPhysicalCountAccountableOfficerClause($session),
         ];
+    }
+
+    protected function formatPhysicalCountAccountableOfficerClause(PhysicalCountSession $session): string
+    {
+        $officerParts = array_values(array_filter([
+            $session->accountable_officer_name,
+            $session->accountable_officer_designation,
+            $session->office?->name,
+        ], static fn (?string $part): bool => filled($part)));
+
+        $assumptionDate = $session->date_of_assumption?->format('Y-m-d') ?? '';
+        $accountabilityPhrase = ' is accountable, having assumed such accountability on ';
+
+        if ($officerParts === []) {
+            return $assumptionDate !== ''
+                ? ltrim($accountabilityPhrase).$assumptionDate.'.'
+                : '';
+        }
+
+        $clause = implode(', ', $officerParts).$accountabilityPhrase.$assumptionDate;
+
+        return $assumptionDate !== '' ? $clause.'.' : $clause;
     }
 
     /**

@@ -139,8 +139,8 @@ class CatalogAssetNumberService
 
         return match ($slug) {
             'consumables' => $item->item_code,
-            'semi_expendable' => $item->semi_expendable_property_number ?: $item->item_code,
-            'ppe' => $item->ppe_property_number ?: $item->item_code,
+            'semi_expendable' => $item->semi_expendable_property_number ?: null,
+            'ppe' => $item->ppe_property_number ?: null,
             default => $item->item_code,
         };
     }

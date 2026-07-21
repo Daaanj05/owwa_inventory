@@ -241,7 +241,7 @@ class DisposalForm
                             ->helperText(fn (Get $get): string => (bool) $get('inventory_auto_synced') || filled($get('inventory_unit_id'))
                                 ? 'Auto-filled from inventory.'
                                 : (self::isIirupCategory()
-                                    ? 'Required by IIRUP. Total cost is computed as quantity × unit cost.'
+                                    ? 'Required by '.(self::activeCategorySlug() === 'semi_expendable' ? 'IIRUSP' : 'IIRUP').'. Total cost is computed as quantity × unit cost.'
                                     : 'Enter acquisition cost if not available from records.')),
                         TextInput::make('accumulated_depreciation')
                             ->label('Accumulated depreciation')
@@ -257,13 +257,6 @@ class DisposalForm
                             ->prefix('₱')
                             ->minValue(0)
                             ->default(0)
-                            ->required(fn (): bool => self::isIirupCategory())
-                            ->visible(fn (): bool => self::isIirupCategory()),
-                        TextInput::make('appraised_value')
-                            ->label('Appraised value')
-                            ->numeric()
-                            ->prefix('₱')
-                            ->minValue(0)
                             ->required(fn (): bool => self::isIirupCategory())
                             ->visible(fn (): bool => self::isIirupCategory()),
                         Textarea::make('remarks')
@@ -342,9 +335,8 @@ class DisposalForm
 
                 Section::make('Sale details')
                     ->columnSpanFull()
-                    ->visible(fn (Get $get): bool => ($get('disposal_mode') === 'sold_private'
-                            || $get('disposal_mode') === 'sold_public')
-                        || (self::isIirupCategory() && $get('iirup_disposal_mode') === 'sale'))
+                    ->visible(fn (Get $get): bool => self::activeCategorySlug() === 'consumables'
+                        && ($get('disposal_mode') === 'sold_private' || $get('disposal_mode') === 'sold_public'))
                     ->schema([
                         TextInput::make('official_receipt_no')
                             ->label('Official receipt number')
@@ -353,7 +345,7 @@ class DisposalForm
                             ->placeholder('—'),
                         DatePicker::make('sale_date')
                             ->label('Official receipt date')
-                            ->required(fn (): bool => self::activeCategorySlug() === 'consumables')
+                            ->required()
                             ->visible(fn (): bool => self::activeCategorySlug() === 'consumables'),
                         TextInput::make('sale_amount')
                             ->label('Official receipt amount')
@@ -467,8 +459,11 @@ class DisposalForm
             'consumables' => [
                 'waste_sale' => 'Waste or sale (WMR)',
             ],
-            'ppe', 'semi_expendable' => [
+            'ppe' => [
                 'unserviceable' => 'Unserviceable (IIRUP)',
+            ],
+            'semi_expendable' => [
+                'unserviceable' => 'Unserviceable (IIRUSP)',
             ],
             default => [],
         };

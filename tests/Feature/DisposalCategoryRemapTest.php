@@ -31,7 +31,7 @@ class DisposalCategoryRemapTest extends TestCase
         $this->assertSame('Incident report/Appendix 75 - RLSDDP.xls', $path);
     }
 
-    public function test_semi_unserviceable_disposal_uses_semi_iirup_template(): void
+    public function test_semi_unserviceable_disposal_uses_semi_iirusp_template(): void
     {
         $category = ItemCategory::factory()->create(['name' => 'Semi-Expendable']);
         $item = Item::factory()->create(['item_category_id' => $category->id]);
@@ -44,8 +44,8 @@ class DisposalCategoryRemapTest extends TestCase
 
         $path = app(OwwaTemplateExportService::class)->getDisposalTemplatePath($disposal);
 
-        $this->assertSame('Semi-Expendable/Disposal/Appendix 74 - IIRUP.xlsx', $path);
-        $this->assertSame('iirup', app(OwwaTemplateExportService::class)->resolveDisposalFormSlug($disposal));
+        $this->assertSame('Semi-Expendable/Disposal/Annex A.10 - IIRUSP.xlsx', $path);
+        $this->assertSame('iirusp', app(OwwaTemplateExportService::class)->resolveDisposalFormSlug($disposal));
     }
 
     public function test_disposal_resource_excludes_incident_reports(): void

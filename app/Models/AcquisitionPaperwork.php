@@ -49,7 +49,9 @@ class AcquisitionPaperwork extends Model
         'purpose',
         'supplier',
         'requested_by_name',
+        'requested_by_designation',
         'approved_by_name',
+        'approved_by_designation',
         'inspection_officer_name',
         'custodian_name',
         'po_data',
@@ -102,7 +104,9 @@ class AcquisitionPaperwork extends Model
 
         static::saved(function (AcquisitionPaperwork $paperwork): void {
             ProcurementSignatoryName::remember(ProcurementSignatoryName::ROLE_REQUESTED, $paperwork->requested_by_name);
+            ProcurementSignatoryName::remember(ProcurementSignatoryName::ROLE_REQUESTED_DESIGNATION, $paperwork->requested_by_designation);
             ProcurementSignatoryName::remember(ProcurementSignatoryName::ROLE_APPROVED, $paperwork->approved_by_name);
+            ProcurementSignatoryName::remember(ProcurementSignatoryName::ROLE_APPROVED_DESIGNATION, $paperwork->approved_by_designation);
         });
     }
 

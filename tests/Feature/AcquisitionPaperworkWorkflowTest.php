@@ -291,7 +291,40 @@ class AcquisitionPaperworkWorkflowTest extends TestCase
         $sheet = $spreadsheet->getActiveSheet();
 
         $this->assertTrue($sheet->getStyle('A'.$startRow)->getAlignment()->getWrapText());
-        $this->assertGreaterThan(15, $sheet->getRowDimension($startRow)->getRowHeight());
+        $this->assertGreaterThanOrEqual(45, $sheet->getRowDimension($startRow)->getRowHeight());
+    }
+
+    public function test_pr_export_expands_detail_row_height_for_splv_stock_no_like_owwa_template(): void
+    {
+        if (! $this->acquisitionPaperworkTemplatesExist()) {
+            $this->markTestSkipped('OWWA acquisition paperwork templates are not installed.');
+        }
+
+        $paperwork = $this->createPaperworkDraft();
+        $longStockItem = Item::factory()->create([
+            'item_category_id' => $paperwork->item_category_id,
+            'item_code' => 'SPLV-2026-OE-106-002-OWWA-IVA',
+        ]);
+        $paperwork->lines()->delete();
+        AcquisitionPaperworkLine::query()->create([
+            'acquisition_paperwork_id' => $paperwork->id,
+            'item_id' => $longStockItem->id,
+            'description' => 'Paper Cutter',
+            'unit' => 'piece',
+            'quantity' => 3,
+            'unit_cost' => 100,
+            'amount' => 300,
+        ]);
+
+        $paperwork = $paperwork->fresh(['lines.item', 'itemCategory']);
+        $startRow = OwwaCellMapping::detailRowBase('PR');
+        $service = app(OwwaTemplateExportService::class);
+        $templateFilename = $service->getTemplatePathForCategory('acquisition_paperwork', $paperwork->itemCategory, 'pr');
+        $spreadsheet = $service->buildProcurementSpreadsheet($paperwork, 'pr', $templateFilename);
+        $sheet = $spreadsheet->getActiveSheet();
+
+        $this->assertSame('SPLV-2026-OE-106-002-OWWA-IVA', (string) $sheet->getCell('A'.$startRow)->getValue());
+        $this->assertGreaterThanOrEqual(45, $sheet->getRowDimension($startRow)->getRowHeight());
     }
 
     public function test_po_export_expands_detail_row_height_for_long_stock_no(): void
