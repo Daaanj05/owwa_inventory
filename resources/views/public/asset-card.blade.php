@@ -11,8 +11,7 @@
             --owwa-crimson: #7f1d1d;
             --owwa-text: #111827;
             --owwa-muted: #6b7280;
-            --owwa-line: #e5e7eb;
-            --owwa-soft: #f8fafc;
+            --owwa-line: #eef2f7;
         }
 
         * { box-sizing: border-box; }
@@ -36,18 +35,15 @@
         .panel {
             background: #fff;
             border-radius: 16px;
-            overflow: hidden;
+            padding: 22px 20px 18px;
             box-shadow:
                 0 18px 40px rgba(15, 23, 42, 0.22),
                 0 0 0 1px rgba(255, 255, 255, 0.08);
         }
 
         .letterhead {
-            padding: 18px 20px 14px;
             text-align: center;
-            background:
-                linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
-            border-bottom: 3px solid var(--owwa-navy);
+            margin-bottom: 18px;
         }
 
         .logos {
@@ -69,7 +65,6 @@
             margin: 0;
             font-size: 12px;
             color: #374151;
-            letter-spacing: 0.01em;
         }
 
         .letterhead .line2 {
@@ -83,70 +78,35 @@
 
         .letterhead .office {
             margin: 8px 0 0;
-            display: inline-block;
-            font-size: 11px;
+            font-size: 12px;
             font-weight: 700;
             color: var(--owwa-navy);
-            background: #eff6ff;
-            border: 1px solid #dbeafe;
-            border-radius: 999px;
-            padding: 3px 10px;
         }
 
         .letterhead .address {
-            margin: 8px 0 0;
+            margin: 6px 0 0;
             font-size: 11px;
             color: var(--owwa-muted);
             line-height: 1.4;
         }
 
-        .hero {
-            padding: 14px 20px 6px;
-            background: var(--owwa-soft);
-            border-bottom: 1px solid var(--owwa-line);
-        }
-
-        .hero-label {
+        dl {
             margin: 0;
-            font-size: 11px;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.04em;
-            color: var(--owwa-muted);
         }
-
-        .hero-value {
-            margin: 4px 0 0;
-            font-size: 15px;
-            font-weight: 800;
-            color: var(--owwa-navy-deep);
-            word-break: break-word;
-            line-height: 1.35;
-        }
-
-        .hero-article {
-            margin: 6px 0 0;
-            font-size: 13px;
-            font-weight: 600;
-            color: #1f2937;
-        }
-
-        .card {
-            padding: 4px 20px 18px;
-        }
-
-        dl { margin: 0; }
 
         .row {
             display: grid;
             grid-template-columns: 1fr;
             gap: 2px;
             padding: 11px 0;
-            border-bottom: 1px solid #f3f4f6;
+            border-top: 1px solid var(--owwa-line);
             font-size: 14px;
         }
 
-        .row:last-child { border-bottom: none; }
+        .row.is-primary dd {
+            color: var(--owwa-navy-deep);
+            font-weight: 800;
+        }
 
         @media (min-width: 420px) {
             .row {
@@ -178,27 +138,12 @@
             font-weight: 500;
         }
 
-        .badge {
-            margin: 0 20px 16px;
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
+        .note {
+            margin: 14px 0 0;
+            text-align: center;
             font-size: 11px;
             font-weight: 600;
-            color: #166534;
-            background: #ecfdf5;
-            border: 1px solid #bbf7d0;
-            border-radius: 999px;
-            padding: 5px 10px;
-        }
-
-        .badge::before {
-            content: '';
-            width: 7px;
-            height: 7px;
-            border-radius: 50%;
-            background: #22c55e;
-            flex-shrink: 0;
+            color: #64748b;
         }
 
         .footer {
@@ -253,46 +198,42 @@
                 <p class="address">{{ $asset->agencyAddress }}</p>
             </div>
 
-            <div class="hero">
-                <p class="hero-label">{{ $asset->propertyNumberLabel }}</p>
-                <p class="hero-value">{{ $asset->propertyNumber }}</p>
-                <p class="hero-article">{{ $asset->article }}</p>
-            </div>
+            <dl>
+                <div class="row is-primary">
+                    <dt>{{ $asset->propertyNumberLabel }}</dt>
+                    <dd>{{ $asset->propertyNumber }}</dd>
+                </div>
+                <div class="row">
+                    <dt>SP Tag No.</dt>
+                    <dd @class(['is-empty' => $spTag['empty']])>{{ $spTag['text'] }}</dd>
+                </div>
+                <div class="row">
+                    <dt>Unit/Section</dt>
+                    <dd @class(['is-empty' => $unitSection['empty']])>{{ $unitSection['text'] }}</dd>
+                </div>
+                <div class="row">
+                    <dt>{{ $asset->propertyNameLabel }}</dt>
+                    <dd>{{ $asset->article }}</dd>
+                </div>
+                <div class="row">
+                    <dt>Description</dt>
+                    <dd @class(['is-empty' => $description['empty']])>{{ $description['text'] }}</dd>
+                </div>
+                <div class="row">
+                    <dt>End-user</dt>
+                    <dd @class(['is-empty' => $endUser['empty']])>{{ $endUser['text'] }}</dd>
+                </div>
+                <div class="row">
+                    <dt>Acquisition Cost</dt>
+                    <dd @class(['is-empty' => $cost['empty']])>{{ $cost['text'] }}</dd>
+                </div>
+                <div class="row">
+                    <dt>Date Acquired</dt>
+                    <dd @class(['is-empty' => $dateAcquired['empty']])>{{ $dateAcquired['text'] }}</dd>
+                </div>
+            </dl>
 
-            <div class="card">
-                <dl>
-                    <div class="row">
-                        <dt>SP Tag No.</dt>
-                        <dd @class(['is-empty' => $spTag['empty']])>{{ $spTag['text'] }}</dd>
-                    </div>
-                    <div class="row">
-                        <dt>Unit/Section</dt>
-                        <dd @class(['is-empty' => $unitSection['empty']])>{{ $unitSection['text'] }}</dd>
-                    </div>
-                    <div class="row">
-                        <dt>{{ $asset->propertyNameLabel }}</dt>
-                        <dd>{{ $asset->article }}</dd>
-                    </div>
-                    <div class="row">
-                        <dt>Description</dt>
-                        <dd @class(['is-empty' => $description['empty']])>{{ $description['text'] }}</dd>
-                    </div>
-                    <div class="row">
-                        <dt>End-user</dt>
-                        <dd @class(['is-empty' => $endUser['empty']])>{{ $endUser['text'] }}</dd>
-                    </div>
-                    <div class="row">
-                        <dt>Acquisition Cost</dt>
-                        <dd @class(['is-empty' => $cost['empty']])>{{ $cost['text'] }}</dd>
-                    </div>
-                    <div class="row">
-                        <dt>Date Acquired</dt>
-                        <dd @class(['is-empty' => $dateAcquired['empty']])>{{ $dateAcquired['text'] }}</dd>
-                    </div>
-                </dl>
-            </div>
-
-            <div class="badge">Verified asset record · read-only</div>
+            <p class="note">Verified asset record · read-only</p>
         </div>
 
         <p class="footer">Read-only asset information. No login required to view this page.</p>
