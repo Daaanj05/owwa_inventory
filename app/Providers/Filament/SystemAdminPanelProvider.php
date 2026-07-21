@@ -13,6 +13,7 @@ use App\Http\Middleware\EnsurePasswordChanged;
 use App\Http\Middleware\TouchUserSessionActivity;
 use App\Livewire\OwwaNotificationDropdown;
 use App\Support\FilamentSessionAudit;
+use App\Support\OwwaFilamentTheme;
 use Filament\Actions\Action;
 use Filament\Enums\ThemeMode;
 use Filament\Http\Middleware\AuthenticateSession;
@@ -64,7 +65,7 @@ class SystemAdminPanelProvider extends PanelProvider
 
         return $panel
             ->renderHook(PanelsRenderHook::STYLES_AFTER, function (): string {
-                return '<link rel="stylesheet" href="'.asset('css/filament/admin/owwa-theme.css').'">';
+                return OwwaFilamentTheme::stylesheetLinkTag();
             })
             ->renderHook(PanelsRenderHook::BODY_END, function (): string {
                 return FilamentSessionAudit::idleLogoutMonitorHtml();

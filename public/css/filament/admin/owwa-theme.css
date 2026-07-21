@@ -4262,10 +4262,10 @@ select.owwa-search-bar {
 
 /* Category dashboard: no outer white shell — only task cards stay white */
 .fi-page.owwa-inv-category-page .owwa-data-panel {
-    background: transparent;
-    border: none;
-    box-shadow: none;
-    overflow: visible;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    overflow: visible !important;
 }
 
 .fi-page.owwa-inv-category-page .owwa-category-task-body {

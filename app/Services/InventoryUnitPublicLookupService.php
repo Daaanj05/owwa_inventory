@@ -68,7 +68,7 @@ class InventoryUnitPublicLookupService
             propertyNumberLabel: $this->propertyNumberLabel($slug),
             propertyNameLabel: $this->propertyNameLabel($slug),
             endUser: (string) ($issuance?->issuedTo?->name ?? ''),
-            acquisitionCost: $cost !== null ? number_format((float) $cost, 2, '.', '') : '',
+            acquisitionCost: $cost !== null ? '₱'.number_format((float) $cost, 2) : '',
         );
     }
 
@@ -94,7 +94,7 @@ class InventoryUnitPublicLookupService
             propertyNameLabel: $this->propertyNameLabel($slug),
             endUser: (string) ($issuance->issuedTo?->name ?? ''),
             acquisitionCost: $issuance->unit_cost !== null
-                ? number_format((float) $issuance->unit_cost, 2, '.', '')
+                ? '₱'.number_format((float) $issuance->unit_cost, 2)
                 : '',
         );
     }
