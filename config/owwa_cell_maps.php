@@ -812,14 +812,16 @@ return [
             'accountable_officer' => ['cell' => 'B10', 'label' => 'For which '],
         ],
         'detail' => [
-            'start_row' => 15,
-            'max_rows' => 21,
+            // Category sheets reserve B15:K15 for "***nothing to report***"; data starts at row 16.
+            'start_row' => 16,
+            'max_rows' => 20,
             'style_row' => 16,
             'highest_column' => 'K',
             'signature_block_start_row' => 36,
-            'template_detail_rows' => 21,
+            'template_detail_rows' => 20,
             'continuation_sheet_suffix' => ' Cont.',
             'detail_block_end_row' => 35,
+            'nothing_to_report_row' => 15,
             'columns' => [
                 'article' => 'B',
                 'description' => 'C',
@@ -855,7 +857,7 @@ return [
             'page' => [
                 'block_start_row' => 1,
                 'block_row_count' => 39,
-                'rows_per_page' => 21,
+                'rows_per_page' => 20,
                 'highest_column' => 'K',
             ],
         ],

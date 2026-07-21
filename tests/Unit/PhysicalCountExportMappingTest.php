@@ -243,7 +243,7 @@ class PhysicalCountExportMappingTest extends TestCase
         );
     }
 
-    public function test_rpcsp_export_unmerges_first_detail_row_and_keeps_article_separate_from_property_number(): void
+    public function test_rpcsp_export_starts_data_after_nothing_to_report_row(): void
     {
         if (! extension_loaded('zip')) {
             $this->markTestSkipped('The zip extension is required to read OWWA .xlsx templates.');
@@ -263,7 +263,7 @@ class PhysicalCountExportMappingTest extends TestCase
             'office_id' => $office->id,
             'item_category_id' => $category->id,
             'count_date' => '2026-06-30',
-            'reference_code' => '2026-RPC-R15',
+            'reference_code' => '2026-RPC-R16',
             'certified_by_printed_name' => 'Certifier',
             'approved_by_printed_name' => 'Approver',
             'verified_by_printed_name' => 'Verifier',
@@ -292,7 +292,9 @@ class PhysicalCountExportMappingTest extends TestCase
         $cols = OwwaCellMapping::detailColumns('RPCSP');
         $detailStart = OwwaCellMapping::detailRowBase('RPCSP');
 
-        $this->assertArrayNotHasKey('B15:K15', $sheet->getMergeCells());
+        $this->assertSame(16, $detailStart);
+        $this->assertSame('', (string) $sheet->getCell('B15')->getValue());
+        $this->assertStringNotContainsString('nothing to report', mb_strtolower((string) $sheet->getCell('B15')->getValue()));
         $this->assertSame(
             'Paper Cutter Deluxe Model',
             (string) $sheet->getCell(OwwaCellMapping::columnCell($cols['article'], $detailStart))->getValue(),
@@ -305,10 +307,8 @@ class PhysicalCountExportMappingTest extends TestCase
             Border::BORDER_MEDIUM,
             $sheet->getStyle('C'.$detailStart)->getBorders()->getLeft()->getBorderStyle(),
         );
-        $this->assertSame(
-            Border::BORDER_MEDIUM,
-            $sheet->getStyle('C'.$detailStart)->getBorders()->getRight()->getBorderStyle(),
-        );
+        $this->assertTrue($sheet->getPageSetup()->getFitToPage());
+        $this->assertSame(1, $sheet->getPageSetup()->getFitToWidth());
         $this->assertGreaterThan(
             15.0,
             (float) $sheet->getRowDimension($detailStart)->getRowHeight(),
@@ -370,7 +370,8 @@ class PhysicalCountExportMappingTest extends TestCase
         $detailStart = OwwaCellMapping::detailRowBase('RPCSP');
         $cols = OwwaCellMapping::detailColumns('RPCSP');
 
-        $this->assertNotSame('', (string) $sheet->getCell('B15')->getValue());
+        $this->assertNotSame('', (string) $sheet->getCell('B16')->getValue());
+        $this->assertSame('', (string) $sheet->getCell('B15')->getValue());
         $this->assertStringStartsWith('As at ', (string) $sheet->getCell('B7')->getValue());
         $this->assertStringContainsString('2026-06-30', (string) $sheet->getCell('B7')->getValue());
         $this->assertSame(
@@ -379,6 +380,8 @@ class PhysicalCountExportMappingTest extends TestCase
                 OwwaCellMapping::columnCell($cols['property_number'], $detailStart + $lineCount - 1),
             )->getValue(),
         );
+        $this->assertTrue($sheet->getPageSetup()->getFitToPage());
+        $this->assertSame(1, $sheet->getPageSetup()->getFitToWidth());
         $this->assertSame(
             Border::BORDER_MEDIUM,
             $sheet->getStyle('C16')->getBorders()->getRight()->getBorderStyle(),

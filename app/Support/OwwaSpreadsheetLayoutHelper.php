@@ -1177,9 +1177,11 @@ class OwwaSpreadsheetLayoutHelper
         $pageSetup = $sheet->getPageSetup();
 
         $pageSetup->setPrintArea('A1:'.$highestColumn.$lastRow);
+        // Keep one-page width like the official OWWA templates. Do not call setScale()
+        // afterward — PhpSpreadsheet/Excel treat an explicit scale as disabling fit-to-page.
         $pageSetup->setFitToPage(true);
+        $pageSetup->setFitToWidth(1);
         $pageSetup->setFitToHeight(0);
-        $pageSetup->setScale(100);
     }
 
     public static function applyPhysicalCountStackedPrintLayout(
@@ -1200,11 +1202,9 @@ class OwwaSpreadsheetLayoutHelper
             'A'.$firstBlockStart.':'.$highestColumn.$lastBlockEndRow,
         );
 
-        if ($pageCount > 1) {
-            $pageSetup->setFitToPage(true);
-            $pageSetup->setFitToHeight(0);
-            $pageSetup->setScale(100);
-        }
+        $pageSetup->setFitToPage(true);
+        $pageSetup->setFitToWidth(1);
+        $pageSetup->setFitToHeight(0);
     }
 
     public static function columnIndex(string $column): int

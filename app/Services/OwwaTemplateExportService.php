@@ -514,6 +514,10 @@ class OwwaTemplateExportService
 
         $this->clearPhysicalCountBlockDetail($sheet, $formCode, $blockStartRow);
 
+        if ($lines->isNotEmpty()) {
+            $this->clearPhysicalCountNothingToReportPlaceholder($sheet, $formCode);
+        }
+
         $cellValues = $reportService->physicalCountCellValues(
             $session,
             $lines,
@@ -581,6 +585,10 @@ class OwwaTemplateExportService
             }
 
             $this->clearPhysicalCountBlockDetail($sheet, $formCode, $blockStartRow);
+
+            if ($chunk->isNotEmpty()) {
+                $this->clearPhysicalCountNothingToReportPlaceholder($sheet, $formCode);
+            }
 
             $cellValues = $reportService->physicalCountCellValues(
                 $session,
@@ -1008,8 +1016,8 @@ class OwwaTemplateExportService
         $templateDetailRows = (int) (OwwaCellMapping::form($formKey)['detail']['template_detail_rows'] ?? 21);
         $columns = OwwaCellMapping::detailColumns($formKey);
 
-        // RPCSP templates merge the first detail row (B15:K15) for "***nothing to report***".
-        // That merge redirects every column write to B15 and hides vertical borders.
+        // Unmerge only the writable detail band. Leave reserved placeholder rows
+        // (e.g. RPCSP B15:K15 "***nothing to report***") intact until data exists.
         OwwaSpreadsheetLayoutHelper::unmergeCellsInRowRange(
             $sheet,
             $detailStart,
@@ -1020,6 +1028,24 @@ class OwwaTemplateExportService
             foreach ($columns as $column) {
                 $this->setExportCellValue($sheet, OwwaCellMapping::columnCell($column, $row), null);
             }
+        }
+    }
+
+    protected function clearPhysicalCountNothingToReportPlaceholder(Worksheet $sheet, string $formKey): void
+    {
+        $placeholderRow = (int) (OwwaCellMapping::form($formKey)['detail']['nothing_to_report_row'] ?? 0);
+
+        if ($placeholderRow < 1) {
+            return;
+        }
+
+        $highestColumn = (string) (OwwaCellMapping::form($formKey)['detail']['highest_column'] ?? 'K');
+        $firstColumn = $this->physicalCountFirstDetailColumn($formKey);
+
+        OwwaSpreadsheetLayoutHelper::unmergeCellsInRowRange($sheet, $placeholderRow, $placeholderRow);
+
+        foreach (range($firstColumn, $highestColumn) as $column) {
+            $this->setExportCellValue($sheet, OwwaCellMapping::columnCell($column, $placeholderRow), null);
         }
     }
 
