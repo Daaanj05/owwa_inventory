@@ -8,6 +8,7 @@ use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use PhpOffice\PhpSpreadsheet\Style\Border;
 use PhpOffice\PhpSpreadsheet\Style\Font;
 use PhpOffice\PhpSpreadsheet\Worksheet\BaseDrawing;
+use PhpOffice\PhpSpreadsheet\Worksheet\PageSetup;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 
 class OwwaSpreadsheetLayoutHelper
@@ -1182,6 +1183,10 @@ class OwwaSpreadsheetLayoutHelper
         $pageSetup->setFitToPage(true);
         $pageSetup->setFitToWidth(1);
         $pageSetup->setFitToHeight(0);
+
+        if (in_array($formCode, ['RPCI', 'RPCPPE', 'RPCSP'], true)) {
+            $pageSetup->setOrientation(PageSetup::ORIENTATION_LANDSCAPE);
+        }
     }
 
     public static function applyPhysicalCountStackedPrintLayout(
@@ -1205,6 +1210,10 @@ class OwwaSpreadsheetLayoutHelper
         $pageSetup->setFitToPage(true);
         $pageSetup->setFitToWidth(1);
         $pageSetup->setFitToHeight(0);
+
+        if (in_array($formCode, ['RPCI', 'RPCPPE', 'RPCSP'], true)) {
+            $pageSetup->setOrientation(PageSetup::ORIENTATION_LANDSCAPE);
+        }
     }
 
     public static function columnIndex(string $column): int

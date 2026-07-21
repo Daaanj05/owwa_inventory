@@ -457,6 +457,9 @@ class PhysicalCountExportMappingTest extends TestCase
             Border::BORDER_MEDIUM,
             $sheet->getStyle('C16')->getBorders()->getRight()->getBorderStyle(),
         );
+        $this->assertTrue($sheet->getPageSetup()->getFitToPage());
+        $this->assertSame(1, $sheet->getPageSetup()->getFitToWidth());
+        $this->assertSame('landscape', $sheet->getPageSetup()->getOrientation());
 
         foreach ($sheet->getDrawingCollection() as $drawing) {
             $this->assertSame('', $drawing->getCoordinates2());
@@ -508,6 +511,9 @@ class PhysicalCountExportMappingTest extends TestCase
             Border::BORDER_MEDIUM,
             $ppeSheet->getStyle('D16')->getBorders()->getRight()->getBorderStyle(),
         );
+        $this->assertTrue($ppeSheet->getPageSetup()->getFitToPage());
+        $this->assertSame(1, $ppeSheet->getPageSetup()->getFitToWidth());
+        $this->assertSame('landscape', $ppeSheet->getPageSetup()->getOrientation());
     }
 
     public function test_physical_count_signatory_cells_use_configured_map(): void
