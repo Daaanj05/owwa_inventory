@@ -2,8 +2,7 @@
 
 namespace App\Filament\Resources\UacsObjectCodes;
 
-use App\Filament\Resources\UacsObjectCodes\Pages\CreateUacsObjectCode;
-use App\Filament\Resources\UacsObjectCodes\Pages\EditUacsObjectCode;
+use App\Filament\Concerns\HasOwwaViewModalUrl;
 use App\Filament\Resources\UacsObjectCodes\Pages\ListUacsObjectCodes;
 use App\Filament\Resources\UacsObjectCodes\Schemas\UacsObjectCodeForm;
 use App\Filament\Resources\UacsObjectCodes\Tables\UacsObjectCodesTable;
@@ -18,6 +17,8 @@ use UnitEnum;
 
 class UacsObjectCodeResource extends Resource
 {
+    use HasOwwaViewModalUrl;
+
     protected static ?string $model = UacsObjectCode::class;
 
     protected static string|UnitEnum|null $navigationGroup = 'Setup';
@@ -58,8 +59,6 @@ class UacsObjectCodeResource extends Resource
     {
         return [
             'index' => ListUacsObjectCodes::route('/'),
-            'create' => CreateUacsObjectCode::route('/create'),
-            'edit' => EditUacsObjectCode::route('/{record}/edit'),
         ];
     }
 }

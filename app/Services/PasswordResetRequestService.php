@@ -52,6 +52,14 @@ class PasswordResetRequestService
 
         $this->notifySystemAdmins($user);
 
+        app(UserActivityLogger::class)->record(
+            $user,
+            'password_reset_requested',
+            'Password reset requested for '.$user->email,
+            $request,
+            ['status' => $request->status],
+        );
+
         return true;
     }
 
@@ -78,6 +86,13 @@ class PasswordResetRequestService
                 'handled_by' => $admin->id,
                 'handled_at' => now(),
             ]);
+
+            app(UserActivityLogger::class)->record(
+                $admin,
+                'password_reset_sent',
+                'Password reset email sent to '.$user->email,
+                $request,
+            );
         }
 
         return $result;
@@ -108,6 +123,13 @@ class PasswordResetRequestService
             'handled_by' => $admin->id,
             'handled_at' => now(),
         ]);
+
+        app(UserActivityLogger::class)->record(
+            $admin,
+            'password_reset_dismissed',
+            'Password reset request dismissed for '.($request->user?->email ?? 'user #'.$request->user_id),
+            $request,
+        );
     }
 
     public function pruneExpired(): int

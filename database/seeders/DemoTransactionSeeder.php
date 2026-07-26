@@ -36,6 +36,7 @@ class DemoTransactionSeeder extends Seeder
         $joe1 = User::query()->where('email', 'maria@owwa.gov.ph')->firstOrFail();
         $joe2 = User::query()->where('email', 'juan@owwa.gov.ph')->firstOrFail();
         $joe3 = User::query()->where('email', 'anna@owwa.gov.ph')->firstOrFail();
+        $joeAdmin = User::query()->where('email', 'pedro@owwa.gov.ph')->firstOrFail();
 
         $admin = Department::query()->where('office_id', $regional->id)->where('code', 'ADM')->firstOrFail();
         $ops = Department::query()->where('office_id', $regional->id)->where('code', 'OPS')->firstOrFail();
@@ -45,6 +46,13 @@ class DemoTransactionSeeder extends Seeder
             'ADM' => $admin,
             'OPS' => $ops,
             'FIN' => $finance,
+        ];
+
+        // Requester must belong to the requisition department (profile vs transaction consistency).
+        $requestersByDeptCode = [
+            'ADM' => $joeAdmin,
+            'OPS' => $joe1,
+            'FIN' => $joe3,
         ];
 
         $itemMap = Item::query()
@@ -83,6 +91,7 @@ class DemoTransactionSeeder extends Seeder
                 'qty' => $row['qty'],
                 'date' => $row['date'],
                 'dept' => $departments[$row['dept_code']],
+                'requested_by' => $requestersByDeptCode[$row['dept_code']],
             ];
         }
 
@@ -103,6 +112,7 @@ class DemoTransactionSeeder extends Seeder
                 'qty' => $row['qty'],
                 'date' => $row['date'],
                 'dept' => $departments[$row['dept_code']],
+                'requested_by' => $requestersByDeptCode[$row['dept_code']],
             ];
         }
 
@@ -393,10 +403,14 @@ class DemoTransactionSeeder extends Seeder
             ],
         );
 
+        $employeeDepartment = $employee->department
+            ?? Department::query()->find($employee->department_id)
+            ?? $admin;
+
         $depletionRequisition = $workflow->seedRequisition(
             referenceCode: 'REQ-DEMO-CON-014-DEPLETION',
             office: $regional,
-            department: $admin,
+            department: $employeeDepartment,
             requestedBy: $employee,
             lines: [['item' => $item, 'quantity' => $depletedQuantity]],
             approvedBy: $supplyCustodian,

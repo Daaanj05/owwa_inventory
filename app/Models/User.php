@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\LogsUserActivity;
+use App\Services\UserActivityLogger;
 use App\Support\CustodianOfficeScope;
 use Filament\Models\Contracts\FilamentUser;
 use Filament\Panel;
@@ -157,7 +158,9 @@ class User extends Authenticatable implements FilamentUser, MustVerifyEmail
             $departments = is_array($group['departments'] ?? null) ? $group['departments'] : [];
 
             foreach ($departments as $departmentRow) {
-                $departmentId = (int) ($departmentRow['department_id'] ?? 0);
+                $departmentId = is_array($departmentRow)
+                    ? (int) ($departmentRow['department_id'] ?? 0)
+                    : (int) $departmentRow;
 
                 if ($officeId <= 0 || $departmentId <= 0) {
                     continue;
@@ -175,7 +178,7 @@ class User extends Authenticatable implements FilamentUser, MustVerifyEmail
 
     /**
      * @param  array<int, array{office_id: int, department_id: int}>  $rows
-     * @return array<int, array{office_id: int, departments: array<int, array{department_id: int}>}>
+     * @return array<int, array{office_id: int, departments: array<int, int>}>
      */
     public static function groupOfficeAssignmentsForForm(array $rows): array
     {
@@ -193,9 +196,8 @@ class User extends Authenticatable implements FilamentUser, MustVerifyEmail
                 ];
             }
 
-            $groups[$officeId]['departments'][] = [
-                'department_id' => $departmentId,
-            ];
+            // Filament simple() department repeater stores scalar IDs.
+            $groups[$officeId]['departments'][] = $departmentId;
         }
 
         return array_values($groups);
@@ -237,6 +239,23 @@ class User extends Authenticatable implements FilamentUser, MustVerifyEmail
                 'office_id' => $first->office_id,
                 'department_id' => $first->department_id,
             ])->saveQuietly();
+
+            app(UserActivityLogger::class)->recordForAuthenticated(
+                'assignments_synced',
+                'Synced office assignments for '.$this->email,
+                $this,
+                [
+                    'assignments' => array_values(array_map(
+                        fn (array $row): array => [
+                            'office_id' => (int) ($row['office_id'] ?? 0),
+                            'department_id' => (int) ($row['department_id'] ?? 0),
+                        ],
+                        $rows,
+                    )),
+                    'primary_office_id' => $first->office_id,
+                    'primary_department_id' => $first->department_id,
+                ],
+            );
         }
     }
 
@@ -310,6 +329,58 @@ class User extends Authenticatable implements FilamentUser, MustVerifyEmail
     public function hasSingleOfficeAssignment(): bool
     {
         return count($this->assignedOfficeIds()) === 1;
+    }
+
+    public function assignmentOfficesSummary(): ?string
+    {
+        if ($this->isUnitConsolidator()) {
+            $assignments = $this->relationLoaded('assignments')
+                ? $this->assignments
+                : $this->assignments()->with('office')->get();
+
+            $names = $assignments
+                ->map(fn (UserOfficeAssignment $assignment): ?string => $assignment->office?->name)
+                ->filter()
+                ->unique()
+                ->values();
+
+            if ($names->isEmpty()) {
+                return $this->office?->name;
+            }
+
+            $first = (string) $names->first();
+            $extra = $names->count() - 1;
+
+            return $extra > 0 ? "{$first} (+{$extra})" : $first;
+        }
+
+        return $this->office?->name;
+    }
+
+    public function assignmentDepartmentsSummary(): ?string
+    {
+        if ($this->isUnitConsolidator()) {
+            $assignments = $this->relationLoaded('assignments')
+                ? $this->assignments
+                : $this->assignments()->with('department')->get();
+
+            $names = $assignments
+                ->map(fn (UserOfficeAssignment $assignment): ?string => $assignment->department?->name)
+                ->filter()
+                ->unique()
+                ->values();
+
+            if ($names->isEmpty()) {
+                return $this->department?->name;
+            }
+
+            $first = (string) $names->first();
+            $extra = $names->count() - 1;
+
+            return $extra > 0 ? "{$first} (+{$extra})" : $first;
+        }
+
+        return $this->department?->name;
     }
 
     public function hasSingleDepartmentAssignmentForOffice(int $officeId): bool

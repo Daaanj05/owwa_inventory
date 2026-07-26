@@ -2,6 +2,8 @@
 
 namespace App\Http\Middleware;
 
+use App\Models\User;
+use App\Services\UserActivityLogger;
 use Filament\Facades\Filament;
 use Filament\Http\Middleware\Authenticate as FilamentAuthenticate;
 use Filament\Models\Contracts\FilamentUser;
@@ -37,6 +39,19 @@ class AuthenticateFilamentPanel extends FilamentAuthenticate
 
         if (! $cannotAccess) {
             return;
+        }
+
+        if ($user instanceof User) {
+            app(UserActivityLogger::class)->record(
+                $user,
+                'permission_denied',
+                'Denied access to '.$panel->getId().' panel for '.$user->email,
+                $user,
+                [
+                    'panel' => $panel->getId(),
+                    'role' => $user->role,
+                ],
+            );
         }
 
         Auth::logout();

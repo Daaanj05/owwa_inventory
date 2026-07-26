@@ -160,9 +160,18 @@ class UserAssignmentActionHooks
                 $departments = is_array($group['departments'] ?? null) ? $group['departments'] : [];
 
                 return collect($departments)
-                    ->pluck('department_id')
+                    ->map(function (mixed $departmentRow): ?int {
+                        if (is_array($departmentRow)) {
+                            $id = (int) ($departmentRow['department_id'] ?? 0);
+
+                            return $id > 0 ? $id : null;
+                        }
+
+                        $id = (int) $departmentRow;
+
+                        return $id > 0 ? $id : null;
+                    })
                     ->filter()
-                    ->map(fn (mixed $id): int => (int) $id)
                     ->all();
             });
 

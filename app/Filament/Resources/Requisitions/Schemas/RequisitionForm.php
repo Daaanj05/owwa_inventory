@@ -602,6 +602,10 @@ class RequisitionForm
             TableColumn::make('Unit')->alignment(Alignment::Start)->width('5rem; min-width: 4.5rem'),
             TableColumn::make('Available')->alignment(Alignment::End)->width('5.5rem; min-width: 5rem'),
             TableColumn::make('Qty')->markAsRequired()->alignment(Alignment::End)->width('6.5rem; min-width: 6.5rem'),
+            TableColumn::make('Restock')
+                ->hiddenHeaderLabel()
+                ->alignment(Alignment::Center)
+                ->width('5.25rem; min-width: 4.75rem'),
         ];
     }
 
@@ -623,6 +627,7 @@ class RequisitionForm
                 ->disabled(fn (Get $get): bool => $isUnitConsolidator && filled($get('../../source_requisition_ids')))
                 ->dehydrated()
                 ->extraInputAttributes(['class' => 'owwa-requisition-line-qty']),
+            self::requestItemRestockStatusPlaceholder(),
             Hidden::make('requested_total'),
             Hidden::make('allocation_summary'),
             Hidden::make('stock_at_request'),
@@ -705,19 +710,8 @@ class RequisitionForm
                     ->orderBy('name')
                     ->get(['id', 'name']);
 
-                $statusService = app(RequisitionRestockStatusService::class);
-                $statuses = $statusService->resolveForItems($items->pluck('id')->all());
-
                 return $items
-                    ->mapWithKeys(function (Item $item) use ($statusService, $statuses): array {
-                        $statusLabel = $statusService->displayLabel($statuses[$item->id] ?? null);
-
-                        return [
-                            $item->id => $statusLabel === null
-                                ? $item->name
-                                : "{$item->name} [{$statusLabel}]",
-                        ];
-                    })
+                    ->mapWithKeys(fn (Item $item): array => [$item->id => $item->name])
                     ->all();
             })
             ->searchable()
@@ -755,7 +749,7 @@ class RequisitionForm
         return Placeholder::make('regional_stock_available')
             ->label('Available')
             ->hiddenLabel()
-            ->content(function (Get $get): string|HtmlString {
+            ->content(function (Get $get): string {
                 $itemId = $get('item_id');
                 if (blank($itemId)) {
                     return '—';
@@ -767,17 +761,33 @@ class RequisitionForm
                 }
 
                 $stock = app(InventoryStockService::class)->getStock((int) $itemId, $supplyOfficeId);
-                $statusService = app(RequisitionRestockStatusService::class);
-                $status = $statusService->resolve((int) $itemId, $supplyOfficeId);
-                $statusLabel = $statusService->displayLabel($status);
 
-                if ($statusLabel === null) {
-                    return (string) max(0, $stock);
+                return (string) max(0, $stock);
+            });
+    }
+
+    private static function requestItemRestockStatusPlaceholder(): Placeholder
+    {
+        return Placeholder::make('restock_status')
+            ->label('Restock')
+            ->hiddenLabel()
+            ->content(function (Get $get): string|HtmlString {
+                $itemId = $get('item_id');
+                if (blank($itemId)) {
+                    return '—';
                 }
 
+                $supplyOfficeId = app(SupplyOfficeResolver::class)->resolve();
+                $statusService = app(RequisitionRestockStatusService::class);
+                $status = $statusService->resolve((int) $itemId, $supplyOfficeId);
+                $statusLabel = $statusService->displayLabel($status) ?? 'Active';
+                $badgeClass = $status === RequisitionRestockStatusService::STATUS_ACTIVE || $status === null
+                    ? 'owwa-badge owwa-badge-success'
+                    : 'owwa-badge owwa-badge-warning';
+
                 return new HtmlString(sprintf(
-                    '<div class="flex items-center justify-end gap-2"><span>%d</span><span class="owwa-badge owwa-badge-warning">%s</span></div>',
-                    max(0, $stock),
+                    '<div class="owwa-requisition-restock-cell"><span class="%s">%s</span></div>',
+                    e($badgeClass),
                     e($statusLabel),
                 ));
             });
@@ -813,6 +823,17 @@ class RequisitionForm
         ?User $user,
         callable $scopeActive,
     ): array {
+        if ($user?->isEmployee()) {
+            if (blank($user->department_id)) {
+                return [];
+            }
+
+            $query = Department::query()->whereKey((int) $user->department_id);
+            $scopeActive($query);
+
+            return $query->orderBy('name')->pluck('name', 'id')->all();
+        }
+
         $officeId = filled($get('office_id')) ? (int) $get('office_id') : null;
 
         $query = Department::query();

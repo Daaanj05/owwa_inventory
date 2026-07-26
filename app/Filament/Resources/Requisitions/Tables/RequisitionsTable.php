@@ -77,11 +77,13 @@ class RequisitionsTable
                 TextColumn::make('office.name')
                     ->label('Office')
                     ->searchable()
-                    ->placeholder('—'),
+                    ->placeholder('—')
+                    ->visible(! $isEmployeeViewer),
                 TextColumn::make('department.name')
                     ->label('Department')
                     ->searchable()
-                    ->placeholder('—'),
+                    ->placeholder('—')
+                    ->visible(! $isEmployeeViewer),
                 TextColumn::make('approved_at')
                     ->label('Actioned on')
                     ->date('M d, Y')
@@ -106,7 +108,8 @@ class RequisitionsTable
                     )
                     ->searchable()
                     ->preload()
-                    ->placeholder('All departments'),
+                    ->placeholder('All departments')
+                    ->visible(! $isEmployeeViewer),
             ])
             ->emptyStateHeading('No requisitions yet')
             ->emptyStateDescription('Requisitions submitted by employees will appear here.')

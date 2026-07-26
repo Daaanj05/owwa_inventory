@@ -12,7 +12,7 @@ class ItemCategorySeeder extends Seeder
         $categories = [
             ['name' => 'Consumables', 'description' => 'Office consumables and supplies'],
             ['name' => 'Semi-Expendable', 'description' => 'Semi-expendable properties'],
-            ['name' => 'Property, Plant and Equipment', 'description' => 'Property, plant and equipment (PPE)'],
+            ['name' => 'Property, Plant and Equipment', 'description' => 'Property, plant and equipment'],
         ];
 
         foreach ($categories as $cat) {
@@ -30,8 +30,13 @@ class ItemCategorySeeder extends Seeder
             return;
         }
 
+        ItemCategory::query()
+            ->where('name', 'Property, Plant and Equipment')
+            ->where('description', 'like', '%(PPE)%')
+            ->update(['description' => 'Property, plant and equipment']);
+
         $legacyIds = ItemCategory::query()
-            ->whereIn('name', ['PPE', 'Power Plant Equipment'])
+            ->whereIn('name', ['PPE', 'Power Plant Equipment', 'PPE / Safety'])
             ->pluck('id');
 
         if ($legacyIds->isEmpty()) {
@@ -44,6 +49,6 @@ class ItemCategorySeeder extends Seeder
 
         ItemCategory::query()
             ->whereIn('id', $legacyIds)
-            ->update(['archived_at' => now()]);
+            ->delete();
     }
 }

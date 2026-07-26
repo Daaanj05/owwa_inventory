@@ -66,13 +66,18 @@
                     </thead>
                     <tbody>
                         @forelse ($sectionRows as $row)
-                            <tr>
+                            @php
+                                $rowUrl = $row['record_url'] ?? null;
+                            @endphp
+                            <tr @if (filled($rowUrl)) class="owwa-kpi-row-clickable" style="cursor:pointer;" onclick="window.location.href=@js($rowUrl)" @endif>
                                 @foreach ($sectionColumns as $key => $label)
                                     <td class="{{ in_array($key, $numericKeys, true) ? 'owwa-num' : '' }}">
                                         @php
                                             $value = $row[$key] ?? null;
                                         @endphp
-                                        @if (in_array($key, $numericKeys, true) && $value !== null && $value !== '')
+                                        @if ($key === 'record_url')
+                                            @continue
+                                        @elseif (in_array($key, $numericKeys, true) && $value !== null && $value !== '')
                                             {{ number_format((int) $value) }}
                                         @elseif (filled($value))
                                             {{ $value }}
@@ -123,13 +128,18 @@
                 </thead>
                 <tbody>
                     @forelse ($rows as $row)
-                        <tr>
+                        @php
+                            $rowUrl = $row['record_url'] ?? null;
+                        @endphp
+                        <tr @if (filled($rowUrl)) class="owwa-kpi-row-clickable" style="cursor:pointer;" onclick="window.location.href=@js($rowUrl)" @endif>
                             @foreach ($columns as $key => $label)
                                 <td class="{{ in_array($key, $numericKeys, true) ? 'owwa-num' : '' }}">
                                     @php
                                         $value = $row[$key] ?? null;
                                     @endphp
-                                    @if (in_array($key, $numericKeys, true) && $value !== null && $value !== '')
+                                    @if ($key === 'record_url')
+                                        @continue
+                                    @elseif (in_array($key, $numericKeys, true) && $value !== null && $value !== '')
                                         {{ number_format((int) $value) }}
                                     @elseif (filled($value))
                                         {{ $value }}

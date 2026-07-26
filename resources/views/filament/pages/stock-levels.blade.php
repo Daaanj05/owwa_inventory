@@ -157,7 +157,9 @@
                                     $columns = [
                                         'item_name' => 'Item',
                                     ];
-                                    $columns['unit_cost'] = 'Unit cost';
+                                    $columns['avg_unit_cost'] = 'Avg cost';
+                                    $columns['stock_value'] = 'Value';
+                                    $columns['latest_unit_cost'] = 'Latest cost';
                                     if ($isSemiExpendable) {
                                         $columns['property_class'] = 'Property class';
                                         $columns['value_type'] = 'Value category';
@@ -172,7 +174,7 @@
                                     <th
                                         wire:click="sortByColumn('{{ $col }}')"
                                         style="cursor: pointer; user-select: none;"
-                                        class="{{ in_array($col, ['unit_cost', 'stock', 'tagged_units', 'reorder_level']) ? 'owwa-num' : '' }}"
+                                        class="{{ in_array($col, ['avg_unit_cost', 'stock_value', 'latest_unit_cost', 'stock', 'tagged_units', 'reorder_level']) ? 'owwa-num' : '' }}"
                                     >
                                         {{ $label }}
                                         @if($sortBy === $col)
@@ -200,14 +202,16 @@
                                     <td class="owwa-cell-primary">
                                         <button
                                             type="button"
-                                            wire:click="openStockLedger({{ (int) $row->item_id }}, {{ (int) $row->office_id }}, {{ json_encode((float) ($row->unit_cost ?? 0)) }})"
+                                            wire:click="openStockLedger({{ (int) $row->item_id }}, {{ (int) $row->office_id }}, null)"
                                             class="text-left font-medium text-primary-600 hover:text-primary-500 dark:text-primary-400 dark:hover:text-primary-300"
-                                            title="{{ $row->item_name }}"
+                                            title="{{ $row->item_name }} — open cost history ledger"
                                         >
                                             {{ $row->item_name }}
                                         </button>
                                     </td>
-                                    <td class="owwa-num owwa-cell-muted">₱{{ number_format((float) ($row->unit_cost ?? 0), 2) }}</td>
+                                    <td class="owwa-num owwa-cell-muted">₱{{ number_format((float) ($row->avg_unit_cost ?? $row->unit_cost ?? 0), 2) }}</td>
+                                    <td class="owwa-num owwa-cell-muted">₱{{ number_format((float) ($row->stock_value ?? 0), 2) }}</td>
+                                    <td class="owwa-num owwa-cell-muted">₱{{ number_format((float) ($row->latest_unit_cost ?? $row->avg_unit_cost ?? 0), 2) }}</td>
                                     @if($isSemiExpendable)
                                         <td class="owwa-cell-muted">
                                             @if(filled($row->property_class))
@@ -237,7 +241,7 @@
                                         @elseif($row->tagged_drift ?? false)
                                             <span class="owwa-status-badge owwa-status-low">Tag drift</span>
                                         @else
-                                            <span class="owwa-status-badge owwa-status-ok">OK</span>
+                                            <span class="owwa-status-badge owwa-status-ok">Sufficient</span>
                                         @endif
                                     </td>
                                     <td class="owwa-stock-actions">

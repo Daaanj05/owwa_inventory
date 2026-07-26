@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\LogsUserActivity;
 use App\Support\RequisitionLineFulfillmentState;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -10,7 +11,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 class RequisitionItem extends Model
 {
-    use HasFactory;
+    use HasFactory, LogsUserActivity;
 
     protected $fillable = [
         'requisition_id',
@@ -72,6 +73,17 @@ class RequisitionItem extends Model
 
     public function fulfillmentStateLabel(): string
     {
-        return RequisitionLineFulfillmentState::label($this->fulfillmentState());
+        $this->loadMissing('requisition');
+        $requisition = $this->requisition;
+        $employeeFacing = $requisition?->isEmployeeRequest() ?? false;
+        $endorsed = $requisition !== null && $requisition->compiled_into_requisition_id !== null;
+        $fullyDistributed = $requisition !== null && $requisition->closed_at !== null;
+
+        return RequisitionLineFulfillmentState::label(
+            $this->fulfillmentState(),
+            $employeeFacing,
+            $endorsed,
+            $fullyDistributed,
+        );
     }
 }

@@ -24,6 +24,12 @@ class PropertyActionRequestWorkflowService
 
         $request->update(['status' => PropertyActionRequest::STATUS_PENDING_UC]);
 
+        app(UserActivityLogger::class)->recordForAuthenticated(
+            'submitted',
+            'Submitted property action '.$request->reference_code,
+            $request,
+        );
+
         $this->notifyAccountableUser(
             $request,
             'Property return submitted',
@@ -44,6 +50,13 @@ class PropertyActionRequestWorkflowService
             'uc_remarks' => $remarks,
         ]);
 
+        app(UserActivityLogger::class)->record(
+            $uc,
+            'approved',
+            'UC approved property action '.$request->reference_code,
+            $request,
+        );
+
         $this->notifyRegionalCustodians(
             $request,
             'Property return awaiting SC approval',
@@ -63,6 +76,13 @@ class PropertyActionRequestWorkflowService
             'uc_approved_at' => now(),
             'uc_remarks' => $remarks,
         ]);
+
+        app(UserActivityLogger::class)->record(
+            $uc,
+            'rejected',
+            'UC rejected property action '.$request->reference_code,
+            $request,
+        );
 
         $this->notifyRequester(
             $request,

@@ -110,6 +110,18 @@ class DemoDataSeeder extends Seeder
         );
 
         User::updateOrCreate(
+            ['email' => 'pedro@owwa.gov.ph'],
+            [
+                'name' => 'Pedro Ramos',
+                'password' => 'password',
+                'role' => User::ROLE_EMPLOYEE,
+                'office_id' => $regional->id,
+                'department_id' => $admin->id,
+                'email_verified_at' => now(),
+            ]
+        );
+
+        User::updateOrCreate(
             ['email' => 'consolidator2@owwa.gov.ph'],
             [
                 'name' => 'Roberto Cruz',
@@ -131,10 +143,12 @@ class DemoDataSeeder extends Seeder
             ['name' => 'Semi-Expendable'],
             ['description' => 'Semi-expendable properties'],
         );
-        $ppe = ItemCategory::firstOrCreate(
+        $propertyPlantEquipment = ItemCategory::firstOrCreate(
             ['name' => 'Property, Plant and Equipment'],
-            ['description' => 'Property, plant and equipment (PPE)'],
+            ['description' => 'Property, plant and equipment'],
         );
+
+        $this->archiveLegacyPpeCategories($propertyPlantEquipment);
 
         $consumableItems = [
             ['base_name' => 'Bond Paper', 'sub_item' => 'A4', 'unit' => 'ream', 'item_code' => 'CON-001', 'reorder_level' => 20],
@@ -194,7 +208,7 @@ class DemoDataSeeder extends Seeder
             );
         }
 
-        $ppeItems = [
+        $propertyPlantEquipmentItems = [
             ['base_name' => 'Laptop', 'sub_item' => 'ThinkPad L14', 'unit' => 'unit', 'item_code' => 'PPE-001', 'reorder_level' => 2],
             ['base_name' => 'Office Desk', 'sub_item' => null, 'unit' => 'unit', 'item_code' => 'PPE-002', 'reorder_level' => 2],
             ['base_name' => 'Printer', 'sub_item' => 'Laser', 'unit' => 'unit', 'item_code' => 'PPE-003', 'reorder_level' => 1],
@@ -202,11 +216,11 @@ class DemoDataSeeder extends Seeder
             ['base_name' => 'Laptop', 'sub_item' => 'Dell Latitude', 'unit' => 'unit', 'item_code' => 'PPE-005', 'reorder_level' => 2],
         ];
 
-        foreach ($ppeItems as $pi) {
+        foreach ($propertyPlantEquipmentItems as $pi) {
             Item::updateOrCreate(
                 ['item_code' => $pi['item_code']],
                 [
-                    'item_category_id' => $ppe->id,
+                    'item_category_id' => $propertyPlantEquipment->id,
                     'base_name' => $pi['base_name'],
                     'sub_item' => $pi['sub_item'],
                     'name' => Item::mergeDisplayName($pi['base_name'], $pi['sub_item']),
@@ -215,5 +229,27 @@ class DemoDataSeeder extends Seeder
                 ],
             );
         }
+    }
+
+    /**
+     * Remove legacy short-label PPE categories; keep Property, Plant and Equipment only.
+     */
+    protected function archiveLegacyPpeCategories(ItemCategory $canonical): void
+    {
+        $legacyIds = ItemCategory::query()
+            ->whereIn('name', ['PPE', 'Power Plant Equipment', 'PPE / Safety'])
+            ->pluck('id');
+
+        if ($legacyIds->isEmpty()) {
+            return;
+        }
+
+        Item::query()
+            ->whereIn('item_category_id', $legacyIds)
+            ->update(['item_category_id' => $canonical->id]);
+
+        ItemCategory::query()
+            ->whereIn('id', $legacyIds)
+            ->delete();
     }
 }

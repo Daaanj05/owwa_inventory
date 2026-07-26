@@ -115,6 +115,11 @@ class StockLedgerViewService
             fn (object $row): bool => (int) ($row->item_id ?? 0) === $itemId
                 && (int) ($row->office_id ?? 0) === $officeId
                 && ($unitCost === null || UnitCostKey::equals(
+                    isset($row->avg_unit_cost)
+                        ? (float) $row->avg_unit_cost
+                        : (isset($row->unit_cost) ? (float) $row->unit_cost : null),
+                    $unitCost,
+                ) || UnitCostKey::equals(
                     isset($row->unit_cost) ? (float) $row->unit_cost : null,
                     $unitCost,
                 )),

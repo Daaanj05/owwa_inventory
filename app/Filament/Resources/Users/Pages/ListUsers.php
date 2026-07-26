@@ -69,7 +69,6 @@ class ListUsers extends ListRecords
             'archived' => Tab::make('Archived')
                 ->modifyQueryUsing(fn (Builder $query): Builder => $query->where('role', User::ROLE_SYSTEM_ADMIN))
                 ->excludeQueryWhenResolvingRecord(),
-            'all' => Tab::make('All'),
         ];
     }
 
@@ -77,18 +76,26 @@ class ListUsers extends ListRecords
     {
         $generatedPassword = null;
         $welcomeMailResult = null;
+        $pendingAssignments = [];
 
-        $createAction = OwwaFormModalDefaults::createActionForResource(UserResource::class, OwwaFormModalDefaults::WIDTH_COMPACT)
-            ->mutateDataUsing(function (array $data) use (&$generatedPassword): array {
+        $createAction = OwwaFormModalDefaults::createActionForResource(UserResource::class, OwwaFormModalDefaults::WIDTH_MEDIUM)
+            ->extraModalWindowAttributes(['class' => OwwaFormModalDefaults::MODAL_WINDOW_CLASS.' owwa-user-form-modal'])
+            ->mutateDataUsing(function (array $data) use (&$generatedPassword, &$pendingAssignments): array {
                 $generatedPassword = $this->generateTemporaryPassword();
                 $data['password'] = $generatedPassword;
                 $data['email_verified_at'] = null;
                 $data['must_change_password'] = true;
 
-                return UserAssignmentActionHooks::prepareCreateData($data);
+                $data = UserAssignmentActionHooks::prepareCreateData($data);
+                $pendingAssignments = $data['_assignments'] ?? [];
+                unset($data['_assignments']);
+
+                return $data;
             })
-            ->after(function (User $record, array $data) use (&$generatedPassword, &$welcomeMailResult): void {
-                UserAssignmentActionHooks::syncAfterSave($record, $data);
+            ->after(function (User $record) use (&$generatedPassword, &$welcomeMailResult, &$pendingAssignments): void {
+                if ($record->isUnitConsolidator() && $pendingAssignments !== []) {
+                    $record->syncOfficeAssignments($pendingAssignments);
+                }
 
                 $welcomeMailResult = MailDelivery::notify($record, new UserWelcomeNotification(
                     $generatedPassword ?? '',

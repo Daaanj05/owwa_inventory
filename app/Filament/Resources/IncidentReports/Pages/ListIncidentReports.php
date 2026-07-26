@@ -15,7 +15,6 @@ use Filament\Schemas\Components\Tabs\Tab;
 use Filament\Schemas\Schema;
 use Filament\View\PanelsRenderHook;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\SoftDeletingScope;
 
 class ListIncidentReports extends ListRecords
 {
@@ -41,9 +40,6 @@ class ListIncidentReports extends ListRecords
                 ->excludeQueryWhenResolvingRecord(),
             'archived' => Tab::make('Archived')
                 ->modifyQueryUsing(fn (Builder $query): Builder => $query->onlyTrashed())
-                ->excludeQueryWhenResolvingRecord(),
-            'all' => Tab::make('All')
-                ->modifyQueryUsing(fn (Builder $query): Builder => $query->withoutGlobalScopes([SoftDeletingScope::class]))
                 ->excludeQueryWhenResolvingRecord(),
         ];
     }

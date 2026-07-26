@@ -39,18 +39,32 @@ class DemoInventoryWorkflow
         ?Carbon $approvedAt = null,
         ?string $remarks = null,
     ): Requisition {
-        $requisition = Requisition::updateOrCreate(
-            ['reference_code' => $referenceCode],
-            [
-                'office_id' => $office->id,
-                'department_id' => $department->id,
-                'requested_by' => $requestedBy->id,
-                'status' => $status,
-                'remarks' => $remarks,
-                'approved_by' => $approvedBy?->id,
-                'approved_at' => $approvedAt,
-            ],
-        );
+        // Employee requests store the code on transaction_number (reference_code cleared by observer).
+        $requisition = Requisition::query()
+            ->where(function ($query) use ($referenceCode): void {
+                $query->where('reference_code', $referenceCode)
+                    ->orWhere('transaction_number', $referenceCode);
+            })
+            ->first();
+
+        $attributes = [
+            'office_id' => $office->id,
+            'department_id' => $department->id,
+            'requested_by' => $requestedBy->id,
+            'status' => $status,
+            'remarks' => $remarks,
+            'approved_by' => $approvedBy?->id,
+            'approved_at' => $approvedAt,
+        ];
+
+        if ($requisition) {
+            $requisition->update($attributes);
+        } else {
+            $requisition = Requisition::query()->create([
+                ...$attributes,
+                'reference_code' => $referenceCode,
+            ]);
+        }
 
         foreach ($lines as $line) {
             RequisitionItem::updateOrCreate(
@@ -126,7 +140,7 @@ class DemoInventoryWorkflow
     /**
      * Seed issuances grouped by date and department — one requisition (RIS) per group.
      *
-     * @param  array<int, array{item: string, qty: int, date: string, dept: Department}>  $issuanceRows
+     * @param  array<int, array{item: string, qty: int, date: string, dept: Department, requested_by?: User}>  $issuanceRows
      * @param  array<string, Item>  $itemMap
      */
     public function seedIssuanceBatchesFromGroups(
@@ -142,7 +156,8 @@ class DemoInventoryWorkflow
         $groups = [];
 
         foreach ($issuanceRows as $row) {
-            $key = $row['date'].'|'.$row['dept']->id;
+            $requesterId = ($row['requested_by'] ?? $requestedBy)->id;
+            $key = $row['date'].'|'.$row['dept']->id.'|'.$requesterId;
             $groups[$key][] = $row;
         }
 
@@ -175,7 +190,7 @@ class DemoInventoryWorkflow
                 referenceCode: $referenceCode,
                 office: $office,
                 department: $first['dept'],
-                requestedBy: $requestedBy,
+                requestedBy: $first['requested_by'] ?? $requestedBy,
                 lines: $lines,
                 approvedBy: $approvedBy,
                 approvedAt: Carbon::parse($first['date'])->subDay(),

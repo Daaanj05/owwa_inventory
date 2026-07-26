@@ -2,8 +2,10 @@
 
 namespace App\Providers;
 
+use App\Listeners\LogFailedLogin;
 use App\Listeners\LogUserLogin;
 use App\Listeners\LogUserLogout;
+use Illuminate\Auth\Events\Failed;
 use Illuminate\Auth\Events\Login;
 use Illuminate\Auth\Events\Logout;
 use Illuminate\Foundation\Support\Providers\EventServiceProvider as ServiceProvider;
@@ -16,6 +18,9 @@ class EventServiceProvider extends ServiceProvider
         ],
         Logout::class => [
             LogUserLogout::class,
+        ],
+        Failed::class => [
+            LogFailedLogin::class,
         ],
     ];
 }

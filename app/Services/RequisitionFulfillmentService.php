@@ -210,6 +210,17 @@ class RequisitionFulfillmentService
 
         if ($created > 0) {
             app(RequisitionWorkflowNotificationService::class)->handleCustodianIssued($requisition->fresh());
+            app(UserActivityLogger::class)->record(
+                $custodian,
+                'issued',
+                'Issued '.$created.' line'.($created === 1 ? '' : 's').' for requisition '.$requisition->reference_code,
+                $requisition,
+                [
+                    'created' => $created,
+                    'acknowledged' => $acknowledged,
+                    'categories' => $categoryCounts,
+                ],
+            );
         }
 
         if ($acknowledged > 0) {
@@ -233,5 +244,12 @@ class RequisitionFulfillmentService
         ]);
 
         app(RequisitionWorkflowNotificationService::class)->handleCustodianRejected($requisition->fresh());
+        app(UserActivityLogger::class)->record(
+            $custodian,
+            'rejected',
+            'Rejected requisition '.$requisition->reference_code,
+            $requisition,
+            ['remarks' => $remarks],
+        );
     }
 }

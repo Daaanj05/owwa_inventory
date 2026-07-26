@@ -29,7 +29,6 @@ use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\HtmlString;
 use Illuminate\Support\Str;
 use Livewire\Attributes\Url;
@@ -348,7 +347,7 @@ class StockLevels extends Page
         return app(StockLevelExportService::class)->encodePairKey(
             (int) $row->item_id,
             (int) $row->office_id,
-            isset($row->unit_cost) ? (float) $row->unit_cost : null,
+            null,
         );
     }
 
@@ -526,15 +525,13 @@ class StockLevels extends Page
 
         $rows = $rows->filter(fn (object $row): bool => $this->matchesRestockFilter($row))->values();
 
+        $rows = app(InventoryStockService::class)->summarizeStockLevelsByItemOffice($rows);
+
         if (in_array($this->categoryRecord?->getTemplateSlug(), ['ppe', 'semi_expendable'], true)) {
             $taggedCounts = $this->taggedUnitCountsForRows($rows);
             $rows = $rows->map(function (object $row) use ($taggedCounts): object {
-                $key = UnitCostKey::positionKey(
-                    (int) $row->item_id,
-                    (int) $row->office_id,
-                    isset($row->unit_cost) ? (float) $row->unit_cost : null,
-                );
-                $row->accountable_tags = (int) ($taggedCounts[$key] ?? 0);
+                $pairKey = (int) $row->item_id.'_'.(int) $row->office_id;
+                $row->accountable_tags = (int) ($taggedCounts[$pairKey] ?? 0);
                 $row->tagged_units = $row->accountable_tags;
                 $row->tagged_drift = $row->accountable_tags < (int) $row->stock;
 
@@ -559,20 +556,16 @@ class StockLevels extends Page
         $officeIds = $rows->pluck('office_id')->unique()->values();
 
         $counts = InventoryUnit::query()
-            ->selectRaw('item_id, office_id, COALESCE(unit_cost, 0) as unit_cost, count(*) as tagged_units')
+            ->selectRaw('item_id, office_id, count(*) as tagged_units')
             ->whereIn('item_id', $itemIds)
             ->whereIn('office_id', $officeIds)
             ->whereIn('status', InventoryUnit::accountableStatuses())
-            ->groupBy('item_id', 'office_id', DB::raw('COALESCE(unit_cost, 0)'))
+            ->groupBy('item_id', 'office_id')
             ->get();
 
         $result = [];
         foreach ($counts as $count) {
-            $key = UnitCostKey::positionKey(
-                (int) $count->item_id,
-                (int) $count->office_id,
-                (float) $count->unit_cost,
-            );
+            $key = (int) $count->item_id.'_'.(int) $count->office_id;
             $result[$key] = (int) $count->tagged_units;
         }
 

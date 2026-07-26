@@ -115,7 +115,7 @@
                                         @if($row->is_low)
                                             <span class="owwa-status-badge owwa-status-low">Low</span>
                                         @else
-                                            <span class="owwa-status-badge owwa-status-ok">OK</span>
+                                            <span class="owwa-status-badge owwa-status-ok">Sufficient</span>
                                         @endif
                                     </td>
                                 </tr>

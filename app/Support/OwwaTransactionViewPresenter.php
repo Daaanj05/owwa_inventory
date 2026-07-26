@@ -10,6 +10,7 @@ use App\Models\Item;
 use App\Models\Transfer;
 use App\Models\User;
 use App\Models\UserLog;
+use Illuminate\Support\Str;
 
 class OwwaTransactionViewPresenter
 {
@@ -200,14 +201,40 @@ class OwwaTransactionViewPresenter
      */
     public static function forUser(User $record): array
     {
-        $record->loadMissing(['office', 'department']);
+        $record->loadMissing(['office', 'department', 'assignments.office', 'assignments.department']);
+
+        if ($record->isUnitConsolidator()) {
+            $officeCount = count($record->assignedOfficeIds());
+            $departmentCount = count($record->assignedDepartmentIds());
+            $coverage = $officeCount === 0
+                ? '—'
+                : sprintf(
+                    '%d %s · %d %s',
+                    $officeCount,
+                    Str::plural('office', $officeCount),
+                    $departmentCount,
+                    Str::plural('department', $departmentCount),
+                );
+
+            $hero = OwwaRecordHeroData::make(
+                reference: $record->name ?? '—',
+                statusLabel: 'Unit Consolidator',
+                statusClass: 'owwa-pc-status-badge--progress',
+                meta: [
+                    ['label' => 'Email', 'value' => $record->email ?? '—'],
+                    ['label' => 'Handled coverage', 'value' => $coverage],
+                ],
+            );
+            $hero['referenceLabel'] = 'User';
+
+            return $hero;
+        }
 
         $hero = OwwaRecordHeroData::make(
             reference: $record->name ?? '—',
             statusLabel: match ($record->role) {
                 User::ROLE_SYSTEM_ADMIN => 'System Admin',
                 User::ROLE_SUPPLY_CUSTODIAN => 'Supply Custodian',
-                User::ROLE_UNIT_CONSOLIDATOR => 'Unit Consolidator',
                 User::ROLE_EMPLOYEE => 'Employee',
                 default => ucfirst((string) $record->role),
             },

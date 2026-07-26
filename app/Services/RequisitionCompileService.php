@@ -427,6 +427,17 @@ class RequisitionCompileService
 
         $this->linkCompiledSources($unitConsolidator, $requisition, $employeeRequisitions, $endorsementLines);
 
+        app(UserActivityLogger::class)->record(
+            $unitConsolidator,
+            'compiled',
+            'Compiled requisition '.$requisition->reference_code.' from '.$employeeRequisitions->count().' employee request'.($employeeRequisitions->count() === 1 ? '' : 's'),
+            $requisition,
+            [
+                'source_count' => $employeeRequisitions->count(),
+                'item_count' => count($items),
+            ],
+        );
+
         return $requisition->load(['items', 'sourceEndorsements']);
     }
 }

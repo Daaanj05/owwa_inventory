@@ -73,12 +73,18 @@ class UsersTable
                     ->sortable(),
                 TextColumn::make('office.name')
                     ->label('Office')
+                    ->state(fn (User $record): ?string => $record->assignmentOfficesSummary())
                     ->sortable()
-                    ->placeholder('—'),
+                    ->placeholder('—')
+                    ->limit(40)
+                    ->tooltip(fn (User $record): ?string => $record->assignmentOfficesSummary()),
                 TextColumn::make('department.name')
                     ->label('Department')
+                    ->state(fn (User $record): ?string => $record->assignmentDepartmentsSummary())
                     ->sortable()
-                    ->placeholder('—'),
+                    ->placeholder('—')
+                    ->limit(40)
+                    ->tooltip(fn (User $record): ?string => $record->assignmentDepartmentsSummary()),
             ])
             ->defaultSort('name')
             ->filters([
@@ -135,11 +141,28 @@ class UsersTable
                         UserInfolist::modalDetailSections(),
                     ),
                     [
-                        OwwaFormModalDefaults::editActionForResource(UserResource::class, OwwaFormModalDefaults::WIDTH_STANDARD)
+                        OwwaFormModalDefaults::editActionForResource(UserResource::class, OwwaFormModalDefaults::WIDTH_MEDIUM)
+                            ->modalWidth(fn (User $record): string => $record->isUnitConsolidator()
+                                ? OwwaFormModalDefaults::WIDTH_WIDE
+                                : OwwaFormModalDefaults::WIDTH_MEDIUM)
+                            ->extraModalWindowAttributes(['class' => OwwaFormModalDefaults::MODAL_WINDOW_CLASS.' owwa-user-form-modal'])
                             ->mutateRecordDataUsing(fn (array $data, User $record): array => UserAssignmentActionHooks::fillAssignments($data, $record))
-                            ->mutateDataUsing(fn (array $data, User $record): array => UserAssignmentActionHooks::prepareSaveData($data, $record))
+                            ->mutateDataUsing(function (array $data, User $record): array {
+                                $data = UserAssignmentActionHooks::prepareSaveData($data, $record);
+                                $data['_pending_assignments'] = $data['_assignments'] ?? [];
+                                unset($data['_assignments']);
+
+                                return $data;
+                            })
                             ->after(function (User $record, array $data): void {
-                                UserAssignmentActionHooks::syncAfterSave($record, $data);
+                                if (! $record->isUnitConsolidator()) {
+                                    return;
+                                }
+
+                                $assignments = $data['_pending_assignments'] ?? [];
+                                if ($assignments !== []) {
+                                    $record->syncOfficeAssignments($assignments);
+                                }
                             }),
                         Action::make('resendVerification')
                             ->label('Resend verification email')
@@ -222,11 +245,28 @@ class UsersTable
                     modelLabel: UserResource::getModelLabel(),
                 ),
                 ActionGroup::make([
-                    OwwaFormModalDefaults::editActionForResource(UserResource::class, OwwaFormModalDefaults::WIDTH_STANDARD)
+                    OwwaFormModalDefaults::editActionForResource(UserResource::class, OwwaFormModalDefaults::WIDTH_MEDIUM)
+                        ->modalWidth(fn (User $record): string => $record->isUnitConsolidator()
+                            ? OwwaFormModalDefaults::WIDTH_WIDE
+                            : OwwaFormModalDefaults::WIDTH_MEDIUM)
+                        ->extraModalWindowAttributes(['class' => OwwaFormModalDefaults::MODAL_WINDOW_CLASS.' owwa-user-form-modal'])
                         ->mutateRecordDataUsing(fn (array $data, User $record): array => UserAssignmentActionHooks::fillAssignments($data, $record))
-                        ->mutateDataUsing(fn (array $data, User $record): array => UserAssignmentActionHooks::prepareSaveData($data, $record))
+                        ->mutateDataUsing(function (array $data, User $record): array {
+                            $data = UserAssignmentActionHooks::prepareSaveData($data, $record);
+                            $data['_pending_assignments'] = $data['_assignments'] ?? [];
+                            unset($data['_assignments']);
+
+                            return $data;
+                        })
                         ->after(function (User $record, array $data): void {
-                            UserAssignmentActionHooks::syncAfterSave($record, $data);
+                            if (! $record->isUnitConsolidator()) {
+                                return;
+                            }
+
+                            $assignments = $data['_pending_assignments'] ?? [];
+                            if ($assignments !== []) {
+                                $record->syncOfficeAssignments($assignments);
+                            }
                         }),
                 ])
                     ->label('Actions')

@@ -83,10 +83,10 @@ class RequisitionRestockStatusService
     public function displayLabel(?string $status): ?string
     {
         return match ($status) {
-            self::STATUS_MANUAL => 'Inactive',
+            self::STATUS_ACTIVE => 'Active',
+            self::STATUS_MANUAL, self::STATUS_MIXED => 'Inactive',
             self::STATUS_AUTOMATIC => 'Inactive — no stock for 1 year',
-            self::STATUS_MIXED => 'Some stock positions inactive',
-            default => null,
+            default => 'Active',
         };
     }
 

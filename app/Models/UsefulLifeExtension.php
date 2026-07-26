@@ -2,11 +2,14 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\LogsUserActivity;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class UsefulLifeExtension extends Model
 {
+    use LogsUserActivity;
+
     protected $fillable = [
         'issuance_id',
         'previous_eul',

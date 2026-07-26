@@ -445,8 +445,8 @@ class RequisitionInfolistSchema
                 return $statusService->displayLabel($status);
             })
             ->badge()
-            ->color('warning')
-            ->placeholder('—');
+            ->color(fn (?string $state): string => filled($state) && str_starts_with((string) $state, 'Inactive') ? 'warning' : 'success')
+            ->placeholder('Active');
     }
 
     public static function acceptIssueModalDescription(Requisition $record): string|Htmlable

@@ -408,6 +408,131 @@ class InventoryStockService
     }
 
     /**
+     * Weighted average unit cost across on-hand buckets.
+     */
+    public function weightedAverageUnitCost(int $itemId, int $officeId): ?float
+    {
+        $buckets = $this->getUnitCostBucketsWithStock($itemId, $officeId);
+        if ($buckets === []) {
+            return null;
+        }
+
+        $totalQty = 0;
+        $totalValue = 0.0;
+
+        foreach ($buckets as $unitCost => $qty) {
+            $totalQty += (int) $qty;
+            $totalValue += (float) $unitCost * (int) $qty;
+        }
+
+        if ($totalQty <= 0) {
+            return null;
+        }
+
+        return round($totalValue / $totalQty, 2);
+    }
+
+    public function totalStockValue(int $itemId, int $officeId): float
+    {
+        $buckets = $this->getUnitCostBucketsWithStock($itemId, $officeId);
+        $total = 0.0;
+
+        foreach ($buckets as $unitCost => $qty) {
+            $total += (float) $unitCost * (int) $qty;
+        }
+
+        return round($total, 2);
+    }
+
+    /**
+     * Most recent acquisition unit cost still present in stock buckets, else latest acquisition cost.
+     */
+    public function latestUnitCost(int $itemId, int $officeId): ?float
+    {
+        $buckets = $this->getUnitCostBucketsWithStock($itemId, $officeId);
+        $bucketCosts = array_keys($buckets);
+
+        $latestWithStock = DB::table('acquisitions')
+            ->whereNull('deleted_at')
+            ->where('item_id', $itemId)
+            ->where('office_id', $officeId)
+            ->when($bucketCosts !== [], fn ($q) => $q->whereIn(DB::raw('COALESCE(unit_cost, 0)'), $bucketCosts))
+            ->orderByDesc('acquisition_date')
+            ->orderByDesc('id')
+            ->value('unit_cost');
+
+        if ($latestWithStock !== null) {
+            return (float) $latestWithStock;
+        }
+
+        if ($bucketCosts !== []) {
+            return (float) max($bucketCosts);
+        }
+
+        $latest = DB::table('acquisitions')
+            ->whereNull('deleted_at')
+            ->where('item_id', $itemId)
+            ->where('office_id', $officeId)
+            ->orderByDesc('acquisition_date')
+            ->orderByDesc('id')
+            ->value('unit_cost');
+
+        return $latest !== null ? (float) $latest : null;
+    }
+
+    /**
+     * Collapse per-cost bucket rows into one summary row per item/office (WAC display).
+     *
+     * @param  Collection<int, object>  $bucketRows
+     * @return Collection<int, object>
+     */
+    public function summarizeStockLevelsByItemOffice(Collection $bucketRows): Collection
+    {
+        return $bucketRows
+            ->groupBy(fn (object $row): string => (int) $row->item_id.'_'.(int) $row->office_id)
+            ->map(function (Collection $group): object {
+                /** @var object $first */
+                $first = $group->first();
+                $stock = (int) $group->sum('stock');
+                $value = round($group->sum(fn (object $row): float => (float) ($row->unit_cost ?? 0) * (int) $row->stock), 2);
+                $avg = $stock > 0 ? round($value / $stock, 2) : null;
+                $itemId = (int) $first->item_id;
+                $officeId = (int) $first->office_id;
+                $latest = $this->latestUnitCost($itemId, $officeId) ?? $avg;
+                $anyInactive = $group->contains(fn (object $row): bool => (bool) ($row->is_inactive_for_restock ?? false));
+                $allInactive = $group->every(fn (object $row): bool => (bool) ($row->is_inactive_for_restock ?? false));
+
+                return (object) [
+                    'item_id' => $itemId,
+                    'item_name' => $first->item_name,
+                    'category_name' => $first->category_name,
+                    'office_id' => $officeId,
+                    'office_name' => $first->office_name,
+                    'unit_cost' => $avg,
+                    'avg_unit_cost' => $avg,
+                    'latest_unit_cost' => $latest,
+                    'stock_value' => $value,
+                    'property_number' => $first->property_number ?? null,
+                    'property_class' => $first->property_class ?? null,
+                    'value_type' => SemiExpendableValueCategory::valueTypeForUnitCost($avg ?? 0),
+                    'stock' => $stock,
+                    'reorder_level' => (int) ($first->reorder_level ?? 0),
+                    'is_low' => (int) ($first->reorder_level ?? 0) > 0 && $stock < (int) ($first->reorder_level ?? 0),
+                    'is_inactive_for_restock' => $allInactive,
+                    'inactive_source' => $allInactive ? ($first->inactive_source ?? null) : ($anyInactive ? 'mixed' : null),
+                    'restock_status_label' => $allInactive
+                        ? ($first->restock_status_label ?? 'Inactive')
+                        : ($anyInactive ? 'Inactive' : 'Active'),
+                    'position_key' => UnitCostKey::positionKey($itemId, $officeId, $avg),
+                    'cost_bucket_count' => $group->count(),
+                ];
+            })
+            ->values()
+            ->sortBy(['item_name', 'office_name'])
+            ->values();
+    }
+
+    /**
      * @return array{
      *   acq: array<string, int>,
      *   inTransfers: array<string, int>,

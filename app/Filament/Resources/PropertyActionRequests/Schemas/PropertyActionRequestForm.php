@@ -41,6 +41,7 @@ class PropertyActionRequestForm
     {
         $user = Filament::auth()->user();
         $isUnitConsolidator = $user?->isUnitConsolidator() ?? false;
+        $isEmployee = $user?->isEmployee() ?? false;
 
         return $schema
             ->columns(1)
@@ -189,6 +190,14 @@ class PropertyActionRequestForm
                             ->afterStateUpdated(fn (callable $set): mixed => $set('lines', [
                                 ['issuance_id' => null, 'inventory_unit_id' => null, 'quantity' => 1],
                             ])),
+                        Hidden::make('action_type')
+                            ->default(PropertyActionRequest::ACTION_RETURN)
+                            ->dehydrated()
+                            ->visible(fn (): bool => $isEmployee),
+                        Placeholder::make('action_type_display')
+                            ->label('Action Type')
+                            ->content('Return')
+                            ->visible(fn (): bool => $isEmployee),
                         Select::make('action_type')
                             ->label('Action Type')
                             ->options([
@@ -198,13 +207,18 @@ class PropertyActionRequestForm
                             ])
                             ->required()
                             ->live()
+                            ->visible(fn (): bool => ! $isEmployee)
+                            ->dehydrated(fn (): bool => ! $isEmployee)
                             ->disabled(fn (?PropertyActionRequest $record): bool => $record !== null && $record->status !== PropertyActionRequest::STATUS_DRAFT),
                         Select::make('reason_code')
                             ->label('Reason')
-                            ->options(fn (Get $get): array => config('property_action_reasons.'.$get('action_type'), []))
+                            ->options(fn (Get $get): array => config(
+                                'property_action_reasons.'.($isEmployee ? PropertyActionRequest::ACTION_RETURN : $get('action_type')),
+                                [],
+                            ))
                             ->markAsRequired()
                             ->searchable()
-                            ->visible(fn (Get $get): bool => filled($get('action_type'))),
+                            ->visible(fn (Get $get): bool => $isEmployee || filled($get('action_type'))),
                         Repeater::make('lines')
                             ->relationship('lines')
                             ->label('Items')
@@ -213,7 +227,10 @@ class PropertyActionRequestForm
                                 TableColumn::make('Item')
                                     ->markAsRequired()
                                     ->alignment(Alignment::Start)
-                                    ->width('32%'),
+                                    ->width('28%'),
+                                TableColumn::make('Available')
+                                    ->alignment(Alignment::End)
+                                    ->width('5rem'),
                                 TableColumn::make('Qty')
                                     ->alignment(Alignment::End)
                                     ->width('4rem'),
@@ -285,6 +302,17 @@ class PropertyActionRequestForm
                                         $set('inventory_unit_id', $issuance->inventoryUnit?->id);
                                         $set('quantity', max(1, (int) ($issuance->quantity ?? 1)));
                                     }),
+                                Placeholder::make('available_qty_display')
+                                    ->hiddenLabel()
+                                    ->dehydrated(false)
+                                    ->content(function (Get $get): string {
+                                        $issuance = self::resolveIssuance(self::intOrNull($get('issuance_id')));
+                                        if ($issuance === null) {
+                                            return '—';
+                                        }
+
+                                        return (string) max(1, (int) ($issuance->quantity ?? 1));
+                                    }),
                                 TextInput::make('quantity')
                                     ->hiddenLabel()
                                     ->numeric()
@@ -297,17 +325,7 @@ class PropertyActionRequestForm
                                             return null;
                                         }
 
-                                        $available = max(1, (int) ($issuance->quantity ?? 1));
-
-                                        return $available;
-                                    })
-                                    ->helperText(function (Get $get): ?string {
-                                        $issuance = self::resolveIssuance(self::intOrNull($get('issuance_id')));
-                                        if ($issuance === null) {
-                                            return null;
-                                        }
-
-                                        return 'Available: '.max(1, (int) ($issuance->quantity ?? 1));
+                                        return max(1, (int) ($issuance->quantity ?? 1));
                                     }),
                                 Placeholder::make('asset_identifier_display')
                                     ->hiddenLabel()

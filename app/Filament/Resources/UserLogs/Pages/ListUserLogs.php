@@ -53,7 +53,6 @@ class ListUserLogs extends ListRecords
                             ->orWhere('logged_in_at', '<', $recent);
                     }))
                 ->excludeQueryWhenResolvingRecord(),
-            'all' => Tab::make('All'),
         ];
     }
 

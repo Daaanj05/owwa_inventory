@@ -24,7 +24,6 @@ use Filament\Schemas\Schema;
 use Filament\View\PanelsRenderHook;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\SoftDeletingScope;
 use Illuminate\Support\HtmlString;
 use Livewire\Attributes\Url;
 
@@ -87,9 +86,6 @@ class ListPhysicalInventoryPlans extends ListRecords
                 ->excludeQueryWhenResolvingRecord(),
             'archived' => Tab::make('Archived')
                 ->modifyQueryUsing(fn (Builder $query): Builder => $query->onlyTrashed()),
-            'all' => Tab::make('All')
-                ->modifyQueryUsing(fn (Builder $query): Builder => $query->withoutGlobalScopes([SoftDeletingScope::class]))
-                ->excludeQueryWhenResolvingRecord(),
         ];
     }
 

@@ -25,7 +25,7 @@ class RequisitionRestockStatusServiceTest extends TestCase
         ]);
 
         $this->assertSame(RequisitionRestockStatusService::STATUS_ACTIVE, $service->resolve($item->id));
-        $this->assertNull($service->displayLabel(RequisitionRestockStatusService::STATUS_ACTIVE));
+        $this->assertSame('Active', $service->displayLabel(RequisitionRestockStatusService::STATUS_ACTIVE));
     }
 
     public function test_it_resolves_manual_and_automatic_inactivity(): void
@@ -65,7 +65,7 @@ class RequisitionRestockStatusServiceTest extends TestCase
         $status = $service->resolve($item->id);
 
         $this->assertSame(RequisitionRestockStatusService::STATUS_MIXED, $status);
-        $this->assertSame('Some stock positions inactive', $service->displayLabel($status));
+        $this->assertSame('Inactive', $service->displayLabel($status));
     }
 
     /**

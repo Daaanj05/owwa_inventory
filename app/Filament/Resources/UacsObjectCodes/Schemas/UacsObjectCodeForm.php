@@ -5,7 +5,6 @@ namespace App\Filament\Resources\UacsObjectCodes\Schemas;
 use App\Support\ItemPropertyClass;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
-use Filament\Forms\Components\Toggle;
 use Filament\Schemas\Schema;
 
 class UacsObjectCodeForm
@@ -13,6 +12,7 @@ class UacsObjectCodeForm
     public static function configure(Schema $schema): Schema
     {
         return $schema
+            ->columns(2)
             ->components([
                 TextInput::make('code')
                     ->label('UACS / GL object code')
@@ -28,10 +28,8 @@ class UacsObjectCodeForm
                     ->label('Property class (optional filter)')
                     ->options(ItemPropertyClass::options())
                     ->searchable()
-                    ->nullable(),
-                Toggle::make('is_active')
-                    ->label('Active')
-                    ->default(true),
+                    ->nullable()
+                    ->columnSpanFull(),
             ]);
     }
 }

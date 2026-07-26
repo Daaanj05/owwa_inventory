@@ -188,6 +188,7 @@ class EmployeeStatsWidget extends StatsOverviewWidget implements HasActions
             'status' => ucfirst((string) $requisition->status),
             'purpose' => $requisition->purpose,
             'created' => optional($requisition->created_at)?->format('M j, Y') ?? null,
+            'record_url' => RequisitionResource::viewModalUrl($requisition),
         ])->all();
 
         $columns = $pendingOnly
@@ -255,6 +256,9 @@ class EmployeeStatsWidget extends StatsOverviewWidget implements HasActions
             'quantity' => $distribution->quantity,
             'date' => optional($distribution->distribution_date)?->format('M j, Y'),
             'from' => $distribution->distributedBy?->name,
+            'record_url' => filled($distribution->requisition_id)
+                ? RequisitionResource::viewModalUrl((int) $distribution->requisition_id)
+                : null,
         ])->all();
 
         $totalQty = (int) $distributions->sum('quantity');

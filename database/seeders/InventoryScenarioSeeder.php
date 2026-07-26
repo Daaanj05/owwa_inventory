@@ -18,7 +18,7 @@ use Illuminate\Database\Seeder;
 class InventoryScenarioSeeder extends Seeder
 {
     /**
-     * Seed semi‑expendable, PPE, and other items with acquisitions and
+     * Seed semi‑expendable, property/plant/equipment, and other items with acquisitions and
      * issuances that create realistic stock situations (some healthy,
      * some near reorder, some clearly low) so dashboards and the AI
      * recommendations have good demo data.
@@ -46,7 +46,7 @@ class InventoryScenarioSeeder extends Seeder
             );
         }
 
-        // Ensure base categories exist, including PPE / Safety.
+        // Canonical categories only (no legacy "PPE" / "PPE / Safety" labels).
         $consumablesCat = ItemCategory::firstOrCreate(
             ['name' => 'Consumables'],
             ['description' => 'Office consumables and supplies']
@@ -57,10 +57,12 @@ class InventoryScenarioSeeder extends Seeder
             ['description' => 'Semi-expendable properties']
         );
 
-        $ppeCat = ItemCategory::firstOrCreate(
-            ['name' => 'PPE / Safety'],
-            ['description' => 'Personal protective equipment and safety gear']
+        $propertyPlantEquipmentCat = ItemCategory::firstOrCreate(
+            ['name' => 'Property, Plant and Equipment'],
+            ['description' => 'Property, plant and equipment']
         );
+
+        $this->archiveLegacyPpeCategories($propertyPlantEquipmentCat);
 
         // Define demo items and target scenarios.
         $itemsConfig = [
@@ -118,26 +120,26 @@ class InventoryScenarioSeeder extends Seeder
                 'dept_code' => 'ITD',
             ],
 
-            // PPE / Safety – important but issued less often.
+            // Property, Plant and Equipment – lower volume capital assets.
             [
-                'name' => 'Safety Helmet',
-                'unit' => 'piece',
-                'category' => $ppeCat,
-                'item_code' => 'PPE-HELMET',
-                'reorder_level' => 15,
-                'initial_stock' => 40,
-                'total_issuance' => 30, // leaves 10 – below reorder
+                'name' => 'Laptop ThinkPad',
+                'unit' => 'unit',
+                'category' => $propertyPlantEquipmentCat,
+                'item_code' => 'PPE-LAPTOP-DEMO',
+                'reorder_level' => 2,
+                'initial_stock' => 8,
+                'total_issuance' => 6, // leaves 2 – at reorder
                 'dept_code' => 'OPS',
             ],
             [
-                'name' => 'Safety Shoes',
-                'unit' => 'pair',
-                'category' => $ppeCat,
-                'item_code' => 'PPE-SHOES',
-                'reorder_level' => 10,
-                'initial_stock' => 25,
-                'total_issuance' => 8, // leaves 17 – healthy
-                'dept_code' => 'OPS',
+                'name' => 'Office Desk',
+                'unit' => 'unit',
+                'category' => $propertyPlantEquipmentCat,
+                'item_code' => 'PPE-DESK-DEMO',
+                'reorder_level' => 2,
+                'initial_stock' => 10,
+                'total_issuance' => 3, // leaves 7 – healthy
+                'dept_code' => 'ADM',
             ],
         ];
 
@@ -204,6 +206,28 @@ class InventoryScenarioSeeder extends Seeder
             }
         }
 
-        $this->command?->info('InventoryScenarioSeeder: demo semi‑expendable, PPE, and consumable items created with realistic stock levels.');
+        $this->command?->info('InventoryScenarioSeeder: demo semi‑expendable, Property/Plant/Equipment, and consumable items created with realistic stock levels.');
+    }
+
+    /**
+     * Remove legacy short-label PPE categories; keep Property, Plant and Equipment only.
+     */
+    protected function archiveLegacyPpeCategories(ItemCategory $canonical): void
+    {
+        $legacyIds = ItemCategory::query()
+            ->whereIn('name', ['PPE', 'Power Plant Equipment', 'PPE / Safety'])
+            ->pluck('id');
+
+        if ($legacyIds->isEmpty()) {
+            return;
+        }
+
+        Item::query()
+            ->whereIn('item_category_id', $legacyIds)
+            ->update(['item_category_id' => $canonical->id]);
+
+        ItemCategory::query()
+            ->whereIn('id', $legacyIds)
+            ->delete();
     }
 }

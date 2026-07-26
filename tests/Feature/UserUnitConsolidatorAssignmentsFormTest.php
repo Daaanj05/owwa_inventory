@@ -126,8 +126,8 @@ class UserUnitConsolidatorAssignmentsFormTest extends TestCase
         $this->assertCount(1, $data['office_groups']);
         $this->assertSame($office->id, $data['office_groups'][0]['office_id']);
         $this->assertCount(2, $data['office_groups'][0]['departments']);
-        $this->assertSame($deptA->id, $data['office_groups'][0]['departments'][0]['department_id']);
-        $this->assertSame($deptB->id, $data['office_groups'][0]['departments'][1]['department_id']);
+        $this->assertSame($deptA->id, $data['office_groups'][0]['departments'][0]);
+        $this->assertSame($deptB->id, $data['office_groups'][0]['departments'][1]);
     }
 
     public function test_group_and_flatten_helpers_round_trip(): void

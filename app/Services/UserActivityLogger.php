@@ -10,8 +10,16 @@ use Illuminate\Support\Str;
 
 class UserActivityLogger
 {
+    /** @var list<string> */
+    protected array $sensitiveAttributes = [
+        'password',
+        'remember_token',
+        'two_factor_secret',
+        'two_factor_recovery_codes',
+    ];
+
     public function record(
-        User $user,
+        ?User $user,
         string $action,
         string $summary,
         ?Model $subject = null,
@@ -24,7 +32,7 @@ class UserActivityLogger
         $userLogId = session('audit_user_log_id');
 
         return UserActivityLog::query()->create([
-            'user_id' => $user->id,
+            'user_id' => $user?->id,
             'user_log_id' => is_numeric($userLogId) ? (int) $userLogId : null,
             'action' => $action,
             'subject_type' => $subject?->getMorphClass(),
@@ -32,7 +40,7 @@ class UserActivityLogger
             'summary' => Str::limit($summary, 500),
             'properties' => $properties === [] ? null : $properties,
             'ip_address' => request()->ip(),
-            'panel' => Filament::getCurrentPanel()?->getId(),
+            'panel' => Filament::getCurrentPanel()?->getId() ?? Filament::getCurrentOrDefaultPanel()?->getId(),
         ]);
     }
 
@@ -51,9 +59,26 @@ class UserActivityLogger
         return $this->record($user, $action, $summary, $subject, $properties);
     }
 
+    public function recordGuest(
+        string $action,
+        string $summary,
+        array $properties = [],
+    ): ?UserActivityLog {
+        return $this->record(null, $action, $summary, null, $properties);
+    }
+
     public function recordExport(string $summary, ?Model $subject = null, array $properties = []): ?UserActivityLog
     {
         return $this->recordForAuthenticated('exported', $summary, $subject, $properties);
+    }
+
+    public function recordWorkflow(
+        string $action,
+        string $summary,
+        ?Model $subject = null,
+        array $properties = [],
+    ): ?UserActivityLog {
+        return $this->recordForAuthenticated($action, $summary, $subject, $properties);
     }
 
     public function recordModelEvent(Model $model, string $event): ?UserActivityLog
@@ -70,10 +95,36 @@ class UserActivityLogger
         $properties = [];
 
         if ($event === 'updated' && $model->wasChanged()) {
-            $properties['changed'] = array_keys($model->getChanges());
+            $properties = $this->buildAttributeDiff($model);
         }
 
         return $this->record($user, $action, $summary, $model, $properties);
+    }
+
+    /**
+     * @return array{changed: list<string>, old?: array<string, mixed>, new?: array<string, mixed>}
+     */
+    protected function buildAttributeDiff(Model $model): array
+    {
+        $changes = $model->getChanges();
+        $changedKeys = array_values(array_filter(
+            array_keys($changes),
+            fn (string $key): bool => ! in_array($key, $this->sensitiveAttributes, true) && $key !== 'updated_at',
+        ));
+
+        $old = [];
+        $new = [];
+
+        foreach ($changedKeys as $key) {
+            $old[$key] = $model->getOriginal($key);
+            $new[$key] = $changes[$key] ?? $model->getAttribute($key);
+        }
+
+        return [
+            'changed' => $changedKeys,
+            'old' => $old,
+            'new' => $new,
+        ];
     }
 
     protected function resolveModelAction(Model $model, string $event): string

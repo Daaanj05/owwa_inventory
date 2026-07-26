@@ -44,7 +44,6 @@ class ListOffices extends ListRecords
             'archived' => Tab::make('Archived')
                 ->modifyQueryUsing(fn (Builder $query): Builder => $query->whereNotNull('archived_at'))
                 ->excludeQueryWhenResolvingRecord(),
-            'all' => Tab::make('All'),
         ];
     }
 

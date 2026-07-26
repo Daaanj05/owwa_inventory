@@ -2,11 +2,14 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\LogsUserActivity;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class SupplierAddress extends Model
 {
+    use LogsUserActivity;
+
     protected $fillable = [
         'supplier_id',
         'address',

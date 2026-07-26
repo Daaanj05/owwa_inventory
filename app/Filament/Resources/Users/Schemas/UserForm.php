@@ -27,26 +27,23 @@ class UserForm
         $isUnitConsolidator = $user && $user->isUnitConsolidator();
 
         return $schema
-            ->columns(fn (?string $operation = null, ?string $schemaOperation = null): int => self::isCreateOperation(self::resolvedOperation($operation, $schemaOperation)) ? 3 : 1)
+            ->columns(fn (?string $operation = null, ?string $schemaOperation = null): int => self::isCreateOperation(self::resolvedOperation($operation, $schemaOperation)) ? 2 : 1)
             ->components([
                 self::firstNameField()
                     ->visible(fn (?string $operation = null, ?string $schemaOperation = null): bool => self::showsCreateOrEditFields($operation, $schemaOperation)),
-                self::middleNameField()
-                    ->visible(fn (?string $operation = null, ?string $schemaOperation = null): bool => self::showsCreateOrEditFields($operation, $schemaOperation)),
                 self::lastNameField()
                     ->visible(fn (?string $operation = null, ?string $schemaOperation = null): bool => self::showsCreateOrEditFields($operation, $schemaOperation)),
+                self::middleNameField()
+                    ->visible(fn (?string $operation = null, ?string $schemaOperation = null): bool => self::showsCreateOrEditFields($operation, $schemaOperation)),
                 self::emailField()
-                    ->columnSpan(fn (?string $operation = null, ?string $schemaOperation = null): int => self::isCreateOperation(self::resolvedOperation($operation, $schemaOperation)) ? 2 : 1)
                     ->visible(fn (?string $operation = null, ?string $schemaOperation = null): bool => self::showsCreateOrEditFields($operation, $schemaOperation)),
                 self::roleField($isUnitConsolidator)
-                    ->columnSpan(fn (?string $operation = null, ?string $schemaOperation = null): int => self::isCreateOperation(self::resolvedOperation($operation, $schemaOperation)) ? 1 : 2)
                     ->visible(fn (?string $operation = null, ?string $schemaOperation = null): bool => self::showsCreateOrEditFields($operation, $schemaOperation)),
                 self::passwordField()
                     ->visible(fn (?string $operation = null, ?string $schemaOperation = null): bool => self::isEditOperation(self::resolvedOperation($operation, $schemaOperation))),
                 self::officeField($isUnitConsolidator, $user)
                     ->visible(fn (?string $operation, ?string $schemaOperation, Get $get): bool => self::showsCreateOrEditFields($operation, $schemaOperation)
-                        && ! self::isUnitConsolidatorRole($get))
-                    ->columnSpan(fn (?string $operation = null, ?string $schemaOperation = null): int => self::isCreateOperation(self::resolvedOperation($operation, $schemaOperation)) ? 2 : 1),
+                        && ! self::isUnitConsolidatorRole($get)),
                 self::departmentField($isUnitConsolidator, $user)
                     ->visible(fn (?string $operation, ?string $schemaOperation, Get $get): bool => self::showsCreateOrEditFields($operation, $schemaOperation)
                         && ! self::isUnitConsolidatorRole($get)),
@@ -186,7 +183,7 @@ class UserForm
                     ->searchable()
                     ->selectablePlaceholder(false)
                     ->live()
-                    ->afterStateUpdated(fn (Set $set): mixed => $set('departments', [['department_id' => null]])),
+                    ->afterStateUpdated(fn (Set $set): mixed => $set('departments', [null])),
                 Repeater::make('departments')
                     ->hiddenLabel()
                     ->simple(
@@ -233,9 +230,18 @@ class UserForm
                             $departments = is_array($group['departments'] ?? null) ? $group['departments'] : [];
 
                             return collect($departments)
-                                ->pluck('department_id')
+                                ->map(function (mixed $departmentRow): ?int {
+                                    if (is_array($departmentRow)) {
+                                        $id = (int) ($departmentRow['department_id'] ?? 0);
+
+                                        return $id > 0 ? $id : null;
+                                    }
+
+                                    $id = (int) $departmentRow;
+
+                                    return $id > 0 ? $id : null;
+                                })
                                 ->filter()
-                                ->map(fn (mixed $id): int => (int) $id)
                                 ->all();
                         });
 
