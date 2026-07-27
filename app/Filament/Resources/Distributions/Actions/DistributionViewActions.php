@@ -3,10 +3,8 @@
 namespace App\Filament\Resources\Distributions\Actions;
 
 use App\Models\Distribution;
-use App\Models\User;
 use App\Support\OwwaExportBusyDispatcher;
 use Filament\Actions\Action;
-use Illuminate\Support\Facades\Auth;
 use Livewire\Component as LivewireComponent;
 
 class DistributionViewActions
@@ -26,7 +24,7 @@ class DistributionViewActions
         return Action::make($name)
             ->label($label)
             ->icon($asPdf ? 'heroicon-o-document-text' : 'heroicon-o-document-arrow-down')
-            ->visible(fn (): bool => Auth::user() instanceof User && Auth::user()->isSupplyCustodian())
+            ->visible(false)
             ->action(function (Distribution $record, Action $action) use ($asPdf): void {
                 $url = route('owwa.export.distribution', $record).($asPdf ? '?format=pdf' : '');
                 $livewire = $action->getLivewire();

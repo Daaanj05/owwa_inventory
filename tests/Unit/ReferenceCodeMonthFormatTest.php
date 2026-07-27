@@ -43,6 +43,28 @@ class ReferenceCodeMonthFormatTest extends TestCase
         Carbon::setTestNow();
     }
 
+    public function test_employee_transaction_number_omits_month(): void
+    {
+        Carbon::setTestNow('2026-07-15 10:00:00');
+
+        $this->seed(ReferenceSeriesSeeder::class);
+
+        $service = app(ReferenceCodeService::class);
+
+        $this->assertSame('2026-0001', $service->forEmployeeRequisitionTransaction());
+        $this->assertSame('2026-0002', $service->forEmployeeRequisitionTransaction());
+
+        Carbon::setTestNow('2026-12-01 10:00:00');
+
+        $this->assertSame('2026-0003', $service->forEmployeeRequisitionTransaction());
+
+        Carbon::setTestNow('2027-01-05 10:00:00');
+
+        $this->assertSame('2027-0001', $service->forEmployeeRequisitionTransaction());
+
+        Carbon::setTestNow();
+    }
+
     public function test_acquisition_paperwork_reference_uses_ap_year_series_format(): void
     {
         Carbon::setTestNow('2026-07-17 10:00:00');

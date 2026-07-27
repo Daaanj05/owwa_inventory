@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\PropertyActionRequests;
 
+use App\Filament\Concerns\HasOwwaViewModalUrl;
 use App\Filament\Resources\PropertyActionRequests\Pages\ListPropertyActionRequests;
 use App\Filament\Resources\PropertyActionRequests\Schemas\PropertyActionRequestForm;
 use App\Filament\Resources\PropertyActionRequests\Tables\PropertyActionRequestsTable;
@@ -19,6 +20,8 @@ use UnitEnum;
 
 class PropertyActionRequestResource extends Resource
 {
+    use HasOwwaViewModalUrl;
+
     protected static ?string $model = PropertyActionRequest::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedWrenchScrewdriver;
@@ -55,7 +58,7 @@ class PropertyActionRequestResource extends Resource
         }
 
         if ($user->isSupplyCustodian()) {
-            return $query;
+            return $query->whereNull('compiled_into_property_action_request_id');
         }
 
         return $query->whereRaw('1 = 0');

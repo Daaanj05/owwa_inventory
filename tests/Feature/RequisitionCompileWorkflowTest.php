@@ -126,7 +126,7 @@ class RequisitionCompileWorkflowTest extends TestCase
 
     public function test_eligible_employee_requisition_options_lists_approved_uncompiled_requests(): void
     {
-        $office = Office::factory()->create();
+        $office = Office::factory()->create(['name' => 'Regional Office']);
         $department = Department::query()->create([
             'office_id' => $office->id,
             'name' => 'Operations Division',
@@ -136,6 +136,7 @@ class RequisitionCompileWorkflowTest extends TestCase
             'role' => User::ROLE_EMPLOYEE,
             'office_id' => $office->id,
             'department_id' => $department->id,
+            'name' => 'Ana Reyes',
         ]);
         $uc = User::factory()->create([
             'role' => User::ROLE_UNIT_CONSOLIDATOR,
@@ -153,6 +154,7 @@ class RequisitionCompileWorkflowTest extends TestCase
             'requested_by' => $employee->id,
             'status' => Requisition::STATUS_ACCEPTED,
             'transaction_number' => 'REQ-ELIGIBLE',
+            'purpose' => 'Quarterly operations supplies for field staff',
         ]);
         RequisitionItem::query()->create([
             'requisition_id' => $eligible->id,
@@ -173,6 +175,19 @@ class RequisitionCompileWorkflowTest extends TestCase
 
         $this->assertArrayHasKey($eligible->id, $options);
         $this->assertCount(1, $options);
+        $this->assertStringContainsString('REQ-ELIGIBLE', $options[$eligible->id]);
+        $this->assertStringContainsString('Ana Reyes', $options[$eligible->id]);
+        $this->assertStringContainsString('1 item', $options[$eligible->id]);
+        $this->assertStringNotContainsString('Purpose:', $options[$eligible->id]);
+        $this->assertStringNotContainsString('Status:', $options[$eligible->id]);
+        $this->assertStringNotContainsString('Regional Office / Operations Division', $options[$eligible->id]);
+
+        $formSource = file_get_contents(app_path('Filament/Resources/Requisitions/Schemas/RequisitionForm.php'));
+        $this->assertIsString($formSource);
+        $this->assertStringContainsString("Action::make('selectEmployeeRequisitions')", $formSource);
+        $this->assertStringContainsString('Select requisitions', $formSource);
+        $this->assertStringContainsString('owwa-uc-employee-requisition-picker-list', $formSource);
+        $this->assertStringContainsString('GridDirection::Row', $formSource);
     }
 
     public function test_employee_picker_filters_by_selected_office_and_department(): void
@@ -913,6 +928,9 @@ class RequisitionCompileWorkflowTest extends TestCase
         $tableSource = file_get_contents(app_path('Filament/Resources/Requisitions/Tables/RequisitionsTable.php'));
         $this->assertIsString($tableSource);
         $this->assertStringContainsString("BulkAction::make('compile')", $tableSource);
+        $this->assertStringContainsString("->label('Submit to SC')", $tableSource);
+        $this->assertStringContainsString('ActionGroup::make([', $tableSource);
+        $this->assertStringNotContainsString('Consolidate & submit to SC', $tableSource);
 
         Livewire::test(ListRequisitions::class, [
             'ucTab' => 'received',

@@ -21,6 +21,16 @@ class SemiExpendableUsefulLife
         return (float) config('inventory.semi_min_useful_life_years', 1);
     }
 
+    public static function minMonths(): int
+    {
+        return (int) max(1, (int) round(self::minYears() * 12));
+    }
+
+    public static function nearingPercentRemaining(): float
+    {
+        return (float) config('inventory.eul_nearing_percent_remaining', 20);
+    }
+
     public static function defaultForPropertyClass(?string $propertyClass): ?string
     {
         $class = filled($propertyClass) && array_key_exists($propertyClass, ItemPropertyClass::options())
@@ -45,7 +55,7 @@ class SemiExpendableUsefulLife
         return self::defaultForPropertyClass($item->property_class);
     }
 
-    public static function parseToYears(?string $value): ?float
+    public static function parseToMonths(?string $value): ?int
     {
         if (blank($value)) {
             return null;
@@ -53,15 +63,86 @@ class SemiExpendableUsefulLife
 
         $normalized = strtolower(trim($value));
 
-        if (preg_match('/^([\d.]+)\s*(?:years?|yrs?|y)\b/u', $normalized, $matches) === 1) {
-            return (float) $matches[1];
+        if (preg_match('/^([\d.]+)\s*(?:months?|mos?|m)\b/u', $normalized, $matches) === 1) {
+            return (int) round((float) $matches[1]);
         }
 
-        if (preg_match('/^([\d.]+)\s*(?:months?|mos?|m)\b/u', $normalized, $matches) === 1) {
-            return ((float) $matches[1]) / 12;
+        if (preg_match('/^([\d.]+)\s*(?:years?|yrs?|y)\b/u', $normalized, $matches) === 1) {
+            return (int) round(((float) $matches[1]) * 12);
+        }
+
+        if (preg_match('/^(\d+)$/', $normalized, $matches) === 1) {
+            return (int) $matches[1];
         }
 
         return null;
+    }
+
+    public static function parseToYears(?string $value): ?float
+    {
+        $months = self::parseToMonths($value);
+
+        if ($months === null) {
+            return null;
+        }
+
+        return $months / 12;
+    }
+
+    public static function formatFromMonths(int $months): string
+    {
+        $months = max(0, $months);
+        $years = intdiv($months, 12);
+        $remainder = $months % 12;
+
+        if ($years > 0 && $remainder === 0) {
+            return sprintf(
+                '%d %s (%d %s)',
+                $months,
+                $months === 1 ? 'month' : 'months',
+                $years,
+                $years === 1 ? 'year' : 'years',
+            );
+        }
+
+        if ($years > 0) {
+            return sprintf(
+                '%d months (%d %s %d %s)',
+                $months,
+                $years,
+                $years === 1 ? 'year' : 'years',
+                $remainder,
+                $remainder === 1 ? 'month' : 'months',
+            );
+        }
+
+        return sprintf('%d %s', $months, $months === 1 ? 'month' : 'months');
+    }
+
+    public static function formatDuration(?string $value): string
+    {
+        $months = self::parseToMonths($value);
+
+        if ($months === null) {
+            return filled($value) ? (string) $value : '—';
+        }
+
+        return self::formatFromMonths($months);
+    }
+
+    public static function storeFromMonths(int|string|null $months): ?string
+    {
+        if ($months === null || $months === '') {
+            return null;
+        }
+
+        $value = (int) $months;
+
+        if ($value <= 0) {
+            return null;
+        }
+
+        return $value.' months';
     }
 
     /**
@@ -71,22 +152,23 @@ class SemiExpendableUsefulLife
     {
         if (blank($value)) {
             throw ValidationException::withMessages([
-                'estimated_useful_life' => 'Estimated useful life is required for semi-expendable issuances (ICS column H).',
+                'estimated_useful_life' => 'Estimated useful life (months) is required for semi-expendable issuances (ICS column H).',
             ]);
         }
 
-        $years = self::parseToYears($value);
+        $months = self::parseToMonths($value);
 
-        if ($years === null) {
+        if ($months === null) {
             throw ValidationException::withMessages([
-                'estimated_useful_life' => 'Enter useful life in years or months (e.g. 5 yrs, 36 months).',
+                'estimated_useful_life' => 'Enter useful life in months (e.g. 36). Labels show months and years.',
             ]);
         }
 
-        if ($years <= self::minYears()) {
+        if ($months <= self::minMonths()) {
             throw ValidationException::withMessages([
                 'estimated_useful_life' => sprintf(
-                    'Semi-expendable property must have useful life greater than %s year(s) per COA Circular 2022-004.',
+                    'Semi-expendable property must have useful life greater than %d month(s) (more than %s year(s)) per COA Circular 2022-004.',
+                    self::minMonths(),
                     rtrim(rtrim(number_format(self::minYears(), 2, '.', ''), '0'), '.'),
                 ),
             ]);
@@ -95,7 +177,7 @@ class SemiExpendableUsefulLife
 
     public static function labelSummary(): string
     {
-        return 'Agency-determined per COA Circular 2022-004. Guide: machinery & equipment 5–15 years; furniture & fixtures 2–15 years. Must exceed 1 year for semi-expendable eligibility.';
+        return 'Enter duration in months. Labels show months and years (e.g. 36 months / 3 years). Agency-determined per COA Circular 2022-004. Must exceed 12 months for semi-expendable eligibility.';
     }
 
     public static function computeExpiresAt(?CarbonInterface $issuanceDate, ?string $eul): ?Carbon
@@ -104,13 +186,13 @@ class SemiExpendableUsefulLife
             return null;
         }
 
-        $years = self::parseToYears($eul);
+        $months = self::parseToMonths($eul);
 
-        if ($years === null) {
+        if ($months === null || $months <= 0) {
             return null;
         }
 
-        return Carbon::parse($issuanceDate)->addDays((int) round($years * 365.25));
+        return Carbon::parse($issuanceDate)->addMonthsNoOverflow($months);
     }
 
     public static function syncExpiresAt(Issuance $issuance): void
@@ -136,6 +218,20 @@ class SemiExpendableUsefulLife
         return (int) now()->startOfDay()->diffInDays($issuance->eul_expires_at->startOfDay(), false);
     }
 
+    public static function totalLifeDays(Issuance $issuance): ?int
+    {
+        $months = self::parseToMonths($issuance->estimated_useful_life);
+
+        if ($months === null || $months <= 0 || $issuance->issuance_date === null) {
+            return null;
+        }
+
+        $start = Carbon::parse($issuance->issuance_date)->startOfDay();
+        $end = $start->copy()->addMonthsNoOverflow($months);
+
+        return (int) $start->diffInDays($end);
+    }
+
     public static function statusForIssuance(Issuance $issuance): ?string
     {
         if ($issuance->item?->category?->getTemplateSlug() !== 'semi_expendable') {
@@ -152,9 +248,15 @@ class SemiExpendableUsefulLife
             return self::STATUS_EXPIRED;
         }
 
-        $nearingDays = (int) config('inventory.eul_nearing_days', 90);
+        $totalDays = self::totalLifeDays($issuance);
 
-        if ($days <= $nearingDays) {
+        if ($totalDays === null || $totalDays <= 0) {
+            return self::STATUS_OK;
+        }
+
+        $percentRemaining = ($days / $totalDays) * 100;
+
+        if ($percentRemaining <= self::nearingPercentRemaining()) {
             return self::STATUS_NEARING;
         }
 

@@ -24,17 +24,15 @@ class PropertyActionRequestWorkflowService
 
         $request->update(['status' => PropertyActionRequest::STATUS_PENDING_UC]);
 
+        $request->loadMissing('requestedBy');
+
         app(UserActivityLogger::class)->recordForAuthenticated(
             'submitted',
             'Submitted property action '.$request->reference_code,
             $request,
         );
 
-        $this->notifyAccountableUser(
-            $request,
-            'Property return submitted',
-            sprintf('%s — awaiting your review.', $request->reference_code),
-        );
+        $this->notifyEmployeeSubmitted($request);
     }
 
     public function approveByUnitConsolidator(PropertyActionRequest $request, User $uc, ?string $remarks = null): void
@@ -43,8 +41,13 @@ class PropertyActionRequestWorkflowService
             throw new InvalidArgumentException('Request is not pending UC review.');
         }
 
+        if ($request->compiled_into_property_action_request_id !== null) {
+            throw new InvalidArgumentException('This property return has already been compiled.');
+        }
+
+        // Phase A (2C): mark as UC-reviewed; stays pending_uc until compiled into a SC batch.
         $request->update([
-            'status' => PropertyActionRequest::STATUS_PENDING_SC,
+            'status' => PropertyActionRequest::STATUS_PENDING_UC,
             'uc_approved_by' => $uc->id,
             'uc_approved_at' => now(),
             'uc_remarks' => $remarks,
@@ -53,14 +56,17 @@ class PropertyActionRequestWorkflowService
         app(UserActivityLogger::class)->record(
             $uc,
             'approved',
-            'UC approved property action '.$request->reference_code,
+            'UC approved property action '.$request->reference_code.' for compile',
             $request,
         );
 
-        $this->notifyRegionalCustodians(
+        $this->notifyRequester(
             $request,
-            'Property return awaiting SC approval',
-            sprintf('%s — awaiting Supply Custodian review.', $request->reference_code),
+            'Property return approved for SC',
+            sprintf(
+                '%s was approved by your Unit Consolidator and is ready to be compiled for Supply Custodian review.',
+                $request->reference_code,
+            ),
         );
     }
 
@@ -402,7 +408,11 @@ class PropertyActionRequestWorkflowService
         $requester = $request->requestedBy;
 
         if ($requester instanceof User) {
-            $requester->notify(new RequisitionWorkflowDatabaseNotification($title, $body));
+            $requester->notify(new RequisitionWorkflowDatabaseNotification(
+                $title,
+                $body,
+                propertyActionRequestId: (int) $request->id,
+            ));
         }
     }
 
@@ -412,7 +422,42 @@ class PropertyActionRequestWorkflowService
         $accountable = $request->accountableUser;
 
         if ($accountable instanceof User) {
-            $accountable->notify(new RequisitionWorkflowDatabaseNotification($title, $body));
+            $accountable->notify(new RequisitionWorkflowDatabaseNotification(
+                $title,
+                $body,
+                propertyActionRequestId: (int) $request->id,
+            ));
+        }
+    }
+
+    public function notifyEmployeeSubmitted(PropertyActionRequest $request): void
+    {
+        $request->loadMissing('requestedBy');
+
+        $this->notifyOfficeUnitConsolidators(
+            $request,
+            'Employee property return submitted',
+            sprintf(
+                '%s from %s — awaiting your review.',
+                $request->reference_code,
+                $request->requestedBy?->name ?? 'an employee',
+            ),
+        );
+    }
+
+    protected function notifyOfficeUnitConsolidators(PropertyActionRequest $request, string $title, string $body): void
+    {
+        $recipients = \App\Support\RequisitionNotificationRecipients::unitConsolidatorsForOffice(
+            (int) $request->office_id,
+            $request->department_id ? (int) $request->department_id : null,
+        );
+
+        foreach ($recipients as $user) {
+            $user->notify(new RequisitionWorkflowDatabaseNotification(
+                $title,
+                $body,
+                propertyActionRequestId: (int) $request->id,
+            ));
         }
     }
 
@@ -447,7 +492,11 @@ class PropertyActionRequestWorkflowService
         $custodians = app(\App\Support\NotificationRecipientResolver::class)->supplyCustodiansForRegionalOffice();
 
         foreach ($custodians as $custodian) {
-            $custodian->notify(new RequisitionWorkflowDatabaseNotification($title, $body));
+            $custodian->notify(new RequisitionWorkflowDatabaseNotification(
+                $title,
+                $body,
+                propertyActionRequestId: (int) $request->id,
+            ));
         }
     }
 }

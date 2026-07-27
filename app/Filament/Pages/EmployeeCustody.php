@@ -2,11 +2,13 @@
 
 namespace App\Filament\Pages;
 
+use App\Filament\Concerns\StartsOwwaExportBusy;
 use App\Filament\Resources\PropertyActionRequests\PropertyActionRequestResource;
 use App\Models\Issuance;
 use App\Models\PropertyActionRequest;
 use App\Models\User;
 use App\Services\EmployeeDistributionInventoryService;
+use App\Support\OwwaExportBusyDispatcher;
 use Filament\Actions\Action;
 use Filament\Facades\Filament;
 use Filament\Pages\Page;
@@ -16,10 +18,12 @@ use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Support\HtmlString;
 use Livewire\Attributes\Url;
+use Livewire\Component as LivewireComponent;
 use Livewire\WithPagination;
 
 class EmployeeCustody extends Page
 {
+    use StartsOwwaExportBusy;
     use WithPagination;
 
     protected static bool $shouldRegisterNavigation = false;
@@ -43,6 +47,12 @@ class EmployeeCustody extends Page
 
     #[Url]
     public string $custodyTab = EmployeeDistributionInventoryService::CUSTODY_TAB_ON_HAND;
+
+    #[Url]
+    public ?string $fromDate = null;
+
+    #[Url]
+    public ?string $toDate = null;
 
     public int $ledgerPage = 1;
 
@@ -85,6 +95,16 @@ class EmployeeCustody extends Page
             $this->custodyTab = EmployeeDistributionInventoryService::CUSTODY_TAB_ON_HAND;
         }
 
+        $this->resetPage();
+    }
+
+    public function updatedFromDate(): void
+    {
+        $this->resetPage();
+    }
+
+    public function updatedToDate(): void
+    {
         $this->resetPage();
     }
 
@@ -132,7 +152,13 @@ class EmployeeCustody extends Page
             return ['totalItems' => 0, 'totalQuantity' => 0, 'totalQuantityThisYear' => 0];
         }
 
-        return app(EmployeeDistributionInventoryService::class)->summaryFor($employee, $this->category, $this->custodyTab);
+        return app(EmployeeDistributionInventoryService::class)->summaryFor(
+            $employee,
+            $this->category,
+            $this->custodyTab,
+            $this->fromDate,
+            $this->toDate,
+        );
     }
 
     public function getInventoryRows(): LengthAwarePaginator
@@ -151,6 +177,8 @@ class EmployeeCustody extends Page
             10,
             $this->category,
             $this->custodyTab,
+            $this->fromDate,
+            $this->toDate,
         );
     }
 
@@ -264,11 +292,45 @@ class EmployeeCustody extends Page
         ]);
     }
 
+    public function employeeDistributionExportUrl(?int $itemId = null): string
+    {
+        $employee = $this->resolveSelectedEmployee();
+
+        if (! $employee) {
+            return '#';
+        }
+
+        return route('owwa.export.employee-distribution', array_filter([
+            'employee' => $employee,
+            'category' => $this->category,
+            'custody_tab' => $this->custodyTab,
+            'from' => filled($this->fromDate) ? $this->fromDate : null,
+            'to' => filled($this->toDate) ? $this->toDate : null,
+            'item' => $itemId,
+        ], fn (mixed $value): bool => $value !== null && $value !== ''));
+    }
+
+    public function exportAllItems(): void
+    {
+        $url = $this->employeeDistributionExportUrl();
+
+        if ($url === '#') {
+            return;
+        }
+
+        OwwaExportBusyDispatcher::start(
+            $this,
+            $url,
+            'Preparing Excel export…',
+            'Building one sheet per item for the selected period…',
+        );
+    }
+
     public function viewDistributionLedgerAction(): Action
     {
         return Action::make('viewDistributionLedger')
             ->modalWidth(Width::FiveExtraLarge)
-            ->extraModalWindowAttributes(['class' => 'owwa-view-record-modal'])
+            ->extraModalWindowAttributes(['class' => 'owwa-view-record-modal owwa-employee-custody-ledger-modal'])
             ->modalSubmitAction(false)
             ->modalCancelActionLabel('Close')
             ->modalHeading(function (): string {
@@ -278,8 +340,37 @@ class EmployeeCustody extends Page
             })
             ->modalContent(fn (): HtmlString => new HtmlString(view(
                 'filament.pages.partials.employee-distribution-ledger-modal',
-                ['ledger' => $this->resolveMountedDistributionLedger()],
-            )->render()));
+                [
+                    'ledger' => $this->resolveMountedDistributionLedger(),
+                    'hideDistributedBy' => true,
+                ],
+            )->render()))
+            ->extraModalFooterActions([
+                Action::make('exportThisItem')
+                    ->label('Download this item')
+                    ->icon('heroicon-o-document-arrow-down')
+                    ->action(function (Action $action): void {
+                        $itemId = $this->mountedLedgerItemId();
+
+                        if ($itemId <= 0) {
+                            return;
+                        }
+
+                        $url = $this->employeeDistributionExportUrl($itemId);
+
+                        if ($url === '#') {
+                            return;
+                        }
+
+                        $livewire = $action->getLivewire();
+                        OwwaExportBusyDispatcher::start(
+                            $livewire instanceof LivewireComponent ? $livewire : $this,
+                            $url,
+                            'Preparing Excel export…',
+                            'Building distribution history for this item…',
+                        );
+                    }),
+            ]);
     }
 
     public function viewPropertyItemUnitsAction(): Action
@@ -337,7 +428,7 @@ class EmployeeCustody extends Page
     protected function resolveMountedDistributionLedger(): array
     {
         $employee = $this->resolveSelectedEmployee();
-        $arguments = $this->getMountedAction()?->getArguments() ?? [];
+        $arguments = $this->mountedLedgerActionArguments();
         $itemId = (int) ($arguments['itemId'] ?? 0);
 
         if (! $employee) {
@@ -351,6 +442,8 @@ class EmployeeCustody extends Page
                 max(1, $this->ledgerPage),
                 10,
                 $this->custodyTab,
+                $this->fromDate,
+                $this->toDate,
             );
         }
 
@@ -358,7 +451,35 @@ class EmployeeCustody extends Page
             $employee,
             $itemId,
             max(1, $this->ledgerPage),
+            10,
+            $this->fromDate,
+            $this->toDate,
         );
+    }
+
+    protected function mountedLedgerItemId(): int
+    {
+        $arguments = $this->mountedLedgerActionArguments();
+
+        return (int) ($arguments['itemId'] ?? 0);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function mountedLedgerActionArguments(): array
+    {
+        $parent = $this->getMountedAction(0);
+
+        if ($parent !== null) {
+            $arguments = $parent->getArguments();
+
+            if (isset($arguments['itemId'])) {
+                return $arguments;
+            }
+        }
+
+        return $this->getMountedAction()?->getArguments() ?? [];
     }
 
     /**

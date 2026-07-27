@@ -18,8 +18,11 @@ use App\Models\Requisition;
 use App\Models\Transfer;
 use App\Models\User;
 use App\Services\AcquisitionPaperworkPdfExportService;
+use App\Services\EmployeeDistributionExportService;
+use App\Services\EmployeeDistributionInventoryService;
 use App\Services\OwwaItemReportService;
 use App\Services\OwwaTemplateExportService;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Auth;
@@ -34,6 +37,7 @@ class OwwaExportController extends Controller
         protected OwwaTemplateExportService $owwaExport,
         protected OwwaItemReportService $itemReport,
         protected AcquisitionPaperworkPdfExportService $acquisitionPdfExport,
+        protected EmployeeDistributionExportService $employeeDistributionExport,
     ) {}
 
     public function acquisition(Request $request, Acquisition $acquisition): StreamedResponse|Response
@@ -226,6 +230,48 @@ class OwwaExportController extends Controller
         }
 
         return $this->owwaExport->downloadDistribution($distribution);
+    }
+
+    public function employeeDistribution(Request $request, User $employee): StreamedResponse
+    {
+        $user = Auth::user();
+        abort_unless($user instanceof User && $user->isUnitConsolidator(), 403);
+
+        try {
+            app(EmployeeDistributionInventoryService::class)->assertUnitConsolidatorCanViewEmployee($user, $employee);
+        } catch (AuthorizationException) {
+            abort(403);
+        }
+
+        $category = (string) $request->query('category', EmployeeDistributionInventoryService::CATEGORY_CONSUMABLES);
+        if (! EmployeeDistributionInventoryService::isValidCategory($category)) {
+            $category = EmployeeDistributionInventoryService::CATEGORY_CONSUMABLES;
+        }
+
+        $custodyTab = (string) $request->query('custody_tab', EmployeeDistributionInventoryService::CUSTODY_TAB_ON_HAND);
+        if (! EmployeeDistributionInventoryService::isValidCustodyTab($custodyTab)) {
+            $custodyTab = EmployeeDistributionInventoryService::CUSTODY_TAB_ON_HAND;
+        }
+
+        $item = $request->query('item');
+        $itemId = $item !== null && $item !== '' ? (int) $item : null;
+
+        $this->logExportActivity('Exported employee distribution history '.$employee->name, $employee, [
+            'category' => $category,
+            'custody_tab' => $custodyTab,
+            'from' => $request->query('from'),
+            'to' => $request->query('to'),
+            'item' => $itemId,
+        ]);
+
+        return $this->employeeDistributionExport->download(
+            $employee,
+            $category,
+            $custodyTab,
+            is_string($request->query('from')) ? $request->query('from') : null,
+            is_string($request->query('to')) ? $request->query('to') : null,
+            $itemId,
+        );
     }
 
     public function acquisitionPaperworkPr(AcquisitionPaperwork $acquisitionPaperwork): StreamedResponse

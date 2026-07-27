@@ -177,7 +177,14 @@ class PropertyActionRequestEmployeeActions
 
         PropertyActionRequestDraftValidator::validateRecordReason($record);
 
-        $record->update(['status' => PropertyActionRequest::STATUS_PENDING_UC]);
+        $workflow = app(PropertyActionRequestWorkflowService::class);
+
+        if ($record->status === PropertyActionRequest::STATUS_DRAFT) {
+            $workflow->submit($record);
+        } else {
+            $record->update(['status' => PropertyActionRequest::STATUS_PENDING_UC]);
+            $workflow->notifyEmployeeSubmitted($record->fresh());
+        }
 
         Notification::make()
             ->title('Property return submitted')

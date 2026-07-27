@@ -15,6 +15,7 @@ use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Pagination\LengthAwarePaginator as Paginator;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -64,6 +65,8 @@ class EmployeeDistributionInventoryService
         User $user,
         string $category = self::CATEGORY_CONSUMABLES,
         string $custodyTab = self::CUSTODY_TAB_ON_HAND,
+        ?string $fromDate = null,
+        ?string $toDate = null,
     ): array {
         if (! self::isValidCategory($category)) {
             $category = self::CATEGORY_CONSUMABLES;
@@ -83,6 +86,7 @@ class EmployeeDistributionInventoryService
                 ));
 
             $this->applyPropertyCustodyTabFilter($base, $custodyTab);
+            $this->applyDatePeriodFilter($base, 'issuance_date', $fromDate, $toDate);
 
             return [
                 'totalItems' => (int) (clone $base)->distinct('item_id')->count('item_id'),
@@ -96,6 +100,7 @@ class EmployeeDistributionInventoryService
         $base = Distribution::query()
             ->where('distributed_to', $user->id)
             ->whereIn('item_id', $this->itemIdsForCategorySlug($category));
+        $this->applyDatePeriodFilter($base, 'distribution_date', $fromDate, $toDate);
 
         return [
             'totalItems' => (int) (clone $base)->distinct('item_id')->count('item_id'),
@@ -113,6 +118,8 @@ class EmployeeDistributionInventoryService
         User $user,
         ?string $search = null,
         string $category = self::CATEGORY_CONSUMABLES,
+        ?string $fromDate = null,
+        ?string $toDate = null,
     ): Builder {
         if (! self::isValidCategory($category)) {
             $category = self::CATEGORY_CONSUMABLES;
@@ -134,6 +141,7 @@ class EmployeeDistributionInventoryService
                 'items.name as item_name',
                 'item_categories.name as category_name',
             ]);
+        $this->applyDatePeriodFilter($query, 'distributions.distribution_date', $fromDate, $toDate);
 
         if (filled($search)) {
             $term = '%'.$search.'%';
@@ -154,12 +162,14 @@ class EmployeeDistributionInventoryService
         int $perPage = 10,
         string $category = self::CATEGORY_CONSUMABLES,
         string $custodyTab = self::CUSTODY_TAB_ON_HAND,
+        ?string $fromDate = null,
+        ?string $toDate = null,
     ): LengthAwarePaginator {
         if (self::usesPropertyIssuanceView($category)) {
-            return $this->paginatedPropertyIssuances($user, $search, $sortBy, $sortDir, $perPage, $category, $custodyTab);
+            return $this->paginatedPropertyIssuances($user, $search, $sortBy, $sortDir, $perPage, $category, $custodyTab, $fromDate, $toDate);
         }
 
-        $query = $this->groupedInventoryQuery($user, $search, $category);
+        $query = $this->groupedInventoryQuery($user, $search, $category, $fromDate, $toDate);
 
         $sortColumn = match ($sortBy) {
             'item_name' => 'items.name',
@@ -185,6 +195,8 @@ class EmployeeDistributionInventoryService
         ?string $search,
         string $category,
         string $custodyTab,
+        ?string $fromDate = null,
+        ?string $toDate = null,
     ): Builder {
         if (! self::isValidCustodyTab($custodyTab)) {
             $custodyTab = self::CUSTODY_TAB_ON_HAND;
@@ -210,6 +222,7 @@ class EmployeeDistributionInventoryService
             ]);
 
         $this->applyPropertyCustodyTabFilter($query, $custodyTab);
+        $this->applyDatePeriodFilter($query, 'issuances.issuance_date', $fromDate, $toDate);
 
         if (filled($search)) {
             $term = '%'.$search.'%';
@@ -237,8 +250,10 @@ class EmployeeDistributionInventoryService
         int $perPage = 10,
         string $category = self::CATEGORY_SEMI_EXPENDABLE,
         string $custodyTab = self::CUSTODY_TAB_ON_HAND,
+        ?string $fromDate = null,
+        ?string $toDate = null,
     ): LengthAwarePaginator {
-        $query = $this->groupedPropertyIssuancesQuery($user, $search, $category, $custodyTab);
+        $query = $this->groupedPropertyIssuancesQuery($user, $search, $category, $custodyTab, $fromDate, $toDate);
 
         $sortColumn = match ($sortBy) {
             'item_name' => 'items.name',
@@ -313,6 +328,8 @@ class EmployeeDistributionInventoryService
         User $user,
         int $itemId,
         string $custodyTab = self::CUSTODY_TAB_ON_HAND,
+        ?string $fromDate = null,
+        ?string $toDate = null,
     ): array {
         if (! self::isValidCustodyTab($custodyTab)) {
             $custodyTab = self::CUSTODY_TAB_ON_HAND;
@@ -320,7 +337,7 @@ class EmployeeDistributionInventoryService
 
         $this->assertEmployeeOwnsPropertyItem($user, $itemId, $custodyTab);
 
-        $issuances = $this->propertyIssuancesForItemQuery($user, $itemId, $custodyTab)
+        $issuances = $this->propertyIssuancesForItemQuery($user, $itemId, $custodyTab, $fromDate, $toDate)
             ->with([
                 'item.category',
                 'requisition.requestedBy',
@@ -440,6 +457,9 @@ class EmployeeDistributionInventoryService
                 'item_name' => $item?->name ?? '—',
                 'category_name' => $item?->category?->name ?? '—',
                 'total_on_hand' => (string) $onHandBalance,
+                'total_quantity' => (string) $issuances->sum(fn (Issuance $issuance): int => (int) ($issuance->quantity ?? 1)),
+                'last_received' => $issuances->max('issuance_date')?->format('M j, Y') ?? '—',
+                'distribution_count' => (string) $issuances->count(),
             ],
             'columns' => $columns,
             'rows' => $rows,
@@ -462,8 +482,10 @@ class EmployeeDistributionInventoryService
         int $page = 1,
         int $perPage = 10,
         string $custodyTab = self::CUSTODY_TAB_ON_HAND,
+        ?string $fromDate = null,
+        ?string $toDate = null,
     ): array {
-        $ledger = $this->presentPropertyIssuanceLedger($user, $itemId, $custodyTab);
+        $ledger = $this->presentPropertyIssuanceLedger($user, $itemId, $custodyTab, $fromDate, $toDate);
         $allRows = $ledger['rows'];
         $total = count($allRows);
         $page = max(1, $page);
@@ -701,12 +723,15 @@ class EmployeeDistributionInventoryService
         User $user,
         int $itemId,
         string $custodyTab,
+        ?string $fromDate = null,
+        ?string $toDate = null,
     ): Builder {
         $query = Issuance::query()
             ->where('issued_to', $user->id)
             ->where('item_id', $itemId);
 
         $this->applyPropertyCustodyTabFilter($query, $custodyTab);
+        $this->applyDatePeriodFilter($query, 'issuance_date', $fromDate, $toDate);
 
         return $query;
     }
@@ -868,11 +893,11 @@ class EmployeeDistributionInventoryService
      *     rows: array<int, array<string, mixed>>
      * }
      */
-    public function presentLedger(User $user, int $itemId): array
+    public function presentLedger(User $user, int $itemId, ?string $fromDate = null, ?string $toDate = null): array
     {
         $this->assertEmployeeOwnsItem($user, $itemId);
 
-        $distributions = Distribution::query()
+        $query = Distribution::query()
             ->with([
                 'requisition.endorsedBy',
                 'requisition.requestedBy',
@@ -880,7 +905,10 @@ class EmployeeDistributionInventoryService
                 'item.category',
             ])
             ->where('distributed_to', $user->id)
-            ->where('item_id', $itemId)
+            ->where('item_id', $itemId);
+        $this->applyDatePeriodFilter($query, 'distribution_date', $fromDate, $toDate);
+
+        $distributions = $query
             ->orderBy('distribution_date')
             ->orderBy('id')
             ->get();
@@ -912,6 +940,9 @@ class EmployeeDistributionInventoryService
                 'category_name' => $item?->category?->name ?? '—',
                 'stock_no' => $item?->item_code,
                 'total_on_hand' => (string) $balance,
+                'total_quantity' => (string) $distributions->sum(fn (Distribution $distribution): int => (int) $distribution->quantity),
+                'last_received' => $distributions->max('distribution_date')?->format('M j, Y') ?? '—',
+                'distribution_count' => (string) $distributions->count(),
             ],
             'columns' => [
                 'date' => $this->ledgerColumn(
@@ -956,8 +987,10 @@ class EmployeeDistributionInventoryService
         int $itemId,
         int $page = 1,
         int $perPage = 10,
+        ?string $fromDate = null,
+        ?string $toDate = null,
     ): array {
-        $ledger = $this->presentLedger($user, $itemId);
+        $ledger = $this->presentLedger($user, $itemId, $fromDate, $toDate);
         $allRows = $ledger['rows'];
         $total = count($allRows);
         $page = max(1, $page);
@@ -1165,6 +1198,33 @@ class EmployeeDistributionInventoryService
                     ->orWhereHas('inventoryUnit', fn (Builder $unitQuery): Builder => $unitQuery
                         ->where('status', \App\Models\InventoryUnit::STATUS_ISSUED));
             });
+    }
+
+    protected function applyDatePeriodFilter(Builder $query, string $column, ?string $fromDate, ?string $toDate): void
+    {
+        $from = $this->parseDateFilter($fromDate)?->startOfDay();
+        $to = $this->parseDateFilter($toDate)?->endOfDay();
+
+        if ($from !== null) {
+            $query->where($column, '>=', $from);
+        }
+
+        if ($to !== null) {
+            $query->where($column, '<=', $to);
+        }
+    }
+
+    protected function parseDateFilter(?string $value): ?Carbon
+    {
+        if (blank($value)) {
+            return null;
+        }
+
+        try {
+            return Carbon::parse($value);
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     /**

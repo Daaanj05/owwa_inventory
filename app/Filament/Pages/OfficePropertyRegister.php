@@ -3,6 +3,7 @@
 namespace App\Filament\Pages;
 
 use App\Filament\Resources\PropertyActionRequests\PropertyActionRequestResource;
+use App\Models\ItemCategory;
 use App\Models\PropertyActionRequest;
 use App\Models\User;
 use App\Services\OfficePropertyRegisterService;
@@ -105,12 +106,16 @@ class OfficePropertyRegister extends Page
             return 'Incoming = transferred into your office. Outgoing = transferred out. From/To offices shown on each row.';
         }
 
-        return 'Received = from Supply Custodian into your office. Distributed = to employees. Balance = still in office custody.';
+        return 'Received (SC issuance) - Distributed (to employees) = Balance. Partial distribution versus employee request is OK; office balance follows SC RIS issuance, not employee request qty.';
     }
 
     /** @return array<int, string> */
     public function getCategoryOptions(): array
     {
+        if ($this->tab === self::TAB_TRANSFERS) {
+            return InventoryCategoryOptions::propertyCategoryOptions();
+        }
+
         return InventoryCategoryOptions::allActiveCategoryOptions();
     }
 
@@ -132,8 +137,43 @@ class OfficePropertyRegister extends Page
 
     public function updatedTab(): void
     {
+        if ($this->tab === self::TAB_TRANSFERS
+            && ! InventoryCategoryOptions::isPropertyCategorySlug($this->selectedCategorySlug())) {
+            $propertyOptions = InventoryCategoryOptions::propertyCategoryOptions();
+            $this->category = array_key_first($propertyOptions) ?: $this->category;
+        }
+
         $this->resetPage();
         $this->search = '';
+    }
+
+    public function canShowTransfersTab(): bool
+    {
+        return true;
+    }
+
+    /**
+     * Transfers always list semi-expendable / PPE only.
+     * When On hand has consumables selected, Transfers still opens and ignores that category.
+     */
+    public function transfersCategoryFilterId(): ?int
+    {
+        if (! InventoryCategoryOptions::isPropertyCategorySlug($this->selectedCategorySlug())) {
+            return null;
+        }
+
+        $categoryId = (int) $this->category;
+
+        return $categoryId > 0 ? $categoryId : null;
+    }
+
+    protected function selectedCategorySlug(): string
+    {
+        $categoryId = (int) $this->category;
+
+        return InventoryCategoryOptions::sortedActiveCategories()
+            ->first(fn (ItemCategory $category): bool => (int) $category->id === $categoryId)
+            ?->getTemplateSlug() ?? 'consumables';
     }
 
     public function updatedDirection(): void
@@ -184,7 +224,7 @@ class OfficePropertyRegister extends Page
 
         return app(OfficePropertyRegisterService::class)->paginateTransfersForUser(
             $user,
-            (int) $this->category,
+            $this->transfersCategoryFilterId(),
             $this->direction,
             filled($this->search) ? $this->search : null,
         );

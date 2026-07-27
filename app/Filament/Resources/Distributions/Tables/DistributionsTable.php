@@ -2,22 +2,14 @@
 
 namespace App\Filament\Resources\Distributions\Tables;
 
-use App\Filament\Resources\Distributions\Actions\DistributionViewActions;
 use App\Filament\Resources\Distributions\DistributionResource;
 use App\Filament\Resources\Distributions\Schemas\DistributionInfolist;
 use App\Filament\Support\ConfiguresOwwaViewAction;
 use App\Filament\Support\OwwaModalSchema;
-use App\Models\User;
-use App\Support\OwwaExportBusyDispatcher;
 use App\Support\OwwaTransactionViewPresenter;
-use Filament\Actions\Action;
-use Filament\Actions\BulkActionGroup;
-use Filament\Actions\DeleteBulkAction;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
-use Illuminate\Support\Facades\Auth;
-use Livewire\Component as LivewireComponent;
 
 class DistributionsTable
 {
@@ -69,32 +61,13 @@ class DistributionsTable
                         fn ($record): array => OwwaTransactionViewPresenter::forDistribution($record),
                         DistributionInfolist::modalDetailSections(),
                     ),
-                    [
-                        DistributionViewActions::exportOwwaAction(),
-                        DistributionViewActions::exportPdfAction(),
-                    ],
+                    [],
                     '5xl',
                     modelLabel: DistributionResource::getModelLabel(),
                 ),
-                Action::make('exportOwwa')
-                    ->label('Export OWWA form')
-                    ->icon('heroicon-o-document-arrow-down')
-                    ->visible(fn (): bool => Auth::user() instanceof User && Auth::user()->isSupplyCustodian())
-                    ->action(function ($record, Action $action): void {
-                        $livewire = $action->getLivewire();
-                        OwwaExportBusyDispatcher::start(
-                            $livewire instanceof LivewireComponent ? $livewire : null,
-                            route('owwa.export.distribution', $record),
-                            'Preparing Excel export…',
-                            'Building your OWWA form…',
-                        );
-                    }),
             ])
-            ->toolbarActions([
-                BulkActionGroup::make([
-                    DeleteBulkAction::make(),
-                ]),
-            ])
+            ->toolbarActions([])
+            ->selectable(false)
             ->recordUrl(null)
             ->recordAction('view');
     }

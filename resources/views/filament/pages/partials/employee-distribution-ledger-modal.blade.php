@@ -4,6 +4,11 @@
     $columns = $ledger['columns'];
     $rows = $ledger['rows'];
     $paginator = $ledger['paginator'];
+    $hideDistributedBy = (bool) ($hideDistributedBy ?? false);
+
+    if ($hideDistributedBy) {
+        unset($columns['distributed_by']);
+    }
 @endphp
 
 <div
@@ -40,7 +45,7 @@
     @owwa-header-tooltip-show="showTip($event.detail)"
     @owwa-header-tooltip-hide="hideTip()"
 >
-    <dl class="owwa-stock-ledger-header">
+    <dl class="owwa-stock-ledger-header owwa-employee-distribution-ledger-header">
         <div class="owwa-stock-ledger-header-item">
             <dt>Item</dt>
             <dd>{{ $header['item_name'] }}</dd>
@@ -49,15 +54,17 @@
             <dt>Category</dt>
             <dd>{{ $header['category_name'] }}</dd>
         </div>
-        @if (filled($header['stock_no'] ?? null))
-            <div class="owwa-stock-ledger-header-item">
-                <dt>Stock No.</dt>
-                <dd>{{ $header['stock_no'] }}</dd>
-            </div>
-        @endif
         <div class="owwa-stock-ledger-header-item">
-            <dt>Total on hand</dt>
-            <dd>{{ number_format((int) ($header['total_on_hand'] ?? 0)) }}</dd>
+            <dt>Total qty</dt>
+            <dd>{{ number_format((int) ($header['total_quantity'] ?? $header['total_on_hand'] ?? 0)) }}</dd>
+        </div>
+        <div class="owwa-stock-ledger-header-item">
+            <dt>Last received</dt>
+            <dd>{{ $header['last_received'] ?? '—' }}</dd>
+        </div>
+        <div class="owwa-stock-ledger-header-item">
+            <dt>Distributions</dt>
+            <dd>{{ number_format((int) ($header['distribution_count'] ?? 0)) }}</dd>
         </div>
     </dl>
 

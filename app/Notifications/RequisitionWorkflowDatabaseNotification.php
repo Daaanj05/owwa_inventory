@@ -2,6 +2,7 @@
 
 namespace App\Notifications;
 
+use App\Filament\Resources\PropertyActionRequests\PropertyActionRequestResource;
 use App\Filament\Resources\Requisitions\RequisitionResource;
 use App\Notifications\Concerns\InteractsWithFilamentDatabase;
 use Illuminate\Bus\Queueable;
@@ -16,6 +17,7 @@ class RequisitionWorkflowDatabaseNotification extends Notification
         public string $title,
         public string $body,
         public ?int $requisitionId = null,
+        public ?int $propertyActionRequestId = null,
     ) {}
 
     /**
@@ -31,6 +33,15 @@ class RequisitionWorkflowDatabaseNotification extends Notification
      */
     public function toDatabase(object $notifiable): array
     {
+        if ($this->propertyActionRequestId !== null) {
+            return $this->filamentDatabaseMessage(
+                $this->title,
+                $this->body,
+                PropertyActionRequestResource::viewModalUrl($this->propertyActionRequestId),
+                'View property return',
+            );
+        }
+
         $url = $this->requisitionId !== null
             ? RequisitionResource::viewModalUrl($this->requisitionId)
             : RequisitionResource::getUrl('index');

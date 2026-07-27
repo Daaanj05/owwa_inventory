@@ -70,6 +70,7 @@ Route::middleware(['auth', 'web'])->group(function () {
         Route::get('reports/owwa/procurement/{acquisitionPaperwork}/po', [OwwaExportController::class, 'procurementPo'])->name('owwa.export.procurement.po');
         Route::get('reports/owwa/procurement/{acquisitionPaperwork}/iar', [OwwaExportController::class, 'procurementIar'])->name('owwa.export.procurement.iar');
         Route::get('reports/owwa/distribution/{distribution}', [OwwaExportController::class, 'distribution'])->name('owwa.export.distribution');
+        Route::get('reports/owwa/employee-distribution/{employee}', [OwwaExportController::class, 'employeeDistribution'])->name('owwa.export.employee-distribution');
         Route::get('reports/owwa/bulk/acquisitions', [OwwaBulkExportController::class, 'acquisitions'])->name('owwa.export.bulk.acquisitions');
         Route::get('reports/owwa/bulk/annex-a1', [OwwaBulkExportController::class, 'annexA1'])->name('owwa.export.bulk.annex-a1');
         Route::get('reports/owwa/bulk/annex-a4', [OwwaBulkExportController::class, 'annexA4'])->name('owwa.export.bulk.annex-a4');

@@ -95,7 +95,7 @@ class ReferenceSeriesSeeder extends Seeder
                 'type' => ReferenceSeries::TYPE_EMPLOYEE_REQUISITION_TRANSACTION,
                 'name' => 'Employee requisition transaction no.',
                 'prefix' => 'TXN',
-                'pattern' => '{Y}-{m}-{seq:4}',
+                'pattern' => '{Y}-{seq:4}',
                 'next_sequence' => 1,
                 'reset_period' => ReferenceSeries::RESET_YEARLY,
                 'last_generated_at' => null,

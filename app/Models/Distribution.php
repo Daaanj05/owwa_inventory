@@ -15,6 +15,7 @@ class Distribution extends Model
         'office_id',
         'department_id',
         'requisition_id',
+        'requisition_item_id',
         'item_id',
         'quantity',
         'distributed_to',
@@ -43,6 +44,11 @@ class Distribution extends Model
     public function requisition(): BelongsTo
     {
         return $this->belongsTo(Requisition::class);
+    }
+
+    public function requisitionItem(): BelongsTo
+    {
+        return $this->belongsTo(RequisitionItem::class);
     }
 
     public function item(): BelongsTo

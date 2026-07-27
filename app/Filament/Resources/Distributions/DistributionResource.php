@@ -45,11 +45,20 @@ class DistributionResource extends Resource
         $categoryId = SyncsActiveItemCategory::resolveCategoryIdFromContext();
 
         if ($user instanceof User && $user->isUnitConsolidator()) {
-            if ($user->office_id) {
-                $query->where('office_id', (int) $user->office_id);
-            }
-            if ($user->department_id) {
-                $query->where('department_id', (int) $user->department_id);
+            $assignments = $user->assignments()->get(['office_id', 'department_id']);
+
+            if ($assignments->isEmpty()) {
+                $query->whereRaw('1 = 0');
+            } else {
+                $query->where(function (Builder $assignmentQuery) use ($assignments): void {
+                    foreach ($assignments as $assignment) {
+                        $assignmentQuery->orWhere(function (Builder $pairQuery) use ($assignment): void {
+                            $pairQuery
+                                ->where('office_id', (int) $assignment->office_id)
+                                ->where('department_id', (int) $assignment->department_id);
+                        });
+                    }
+                });
             }
         } else {
             $query->whereRaw('1 = 0');

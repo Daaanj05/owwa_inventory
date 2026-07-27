@@ -225,7 +225,7 @@ class ItemBulkCreateAction
                     ->searchable(),
                 TextInput::make('estimated_useful_life')
                     ->hiddenLabel()
-                    ->placeholder('e.g. 5 yrs'),
+                    ->placeholder('Months, e.g. 36'),
                 TextInput::make('description')
                     ->hiddenLabel()
                     ->maxLength(500),

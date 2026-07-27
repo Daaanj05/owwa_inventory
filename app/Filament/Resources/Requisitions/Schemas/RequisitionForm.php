@@ -25,11 +25,13 @@ use Filament\Forms\Components\Repeater\TableColumn;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
+use Filament\Schemas\Components\Actions as SchemaActions;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
 use Filament\Support\Enums\Alignment;
+use Filament\Support\Enums\GridDirection;
 use Illuminate\Support\HtmlString;
 
 class RequisitionForm
@@ -238,75 +240,15 @@ class RequisitionForm
                         && filled($get('department_id')))
                     ->columnSpanFull()
                     ->schema([
-                        CheckboxList::make('source_requisition_ids')
+                        Hidden::make('source_requisition_ids')
+                            ->default([])
+                            ->dehydrated(),
+                        Placeholder::make('source_requisitions_summary')
                             ->label('Employee requisitions to include')
-                            ->options(function (Get $get) use ($user): array {
-                                if (! $user instanceof User) {
-                                    return [];
-                                }
-
-                                $officeId = filled($get('office_id')) ? (int) $get('office_id') : null;
-                                $departmentId = filled($get('department_id')) ? (int) $get('department_id') : null;
-
-                                $options = app(RequisitionCompileService::class)->eligibleEmployeeRequisitionOptions(
-                                    $user,
-                                    $officeId,
-                                    $departmentId,
+                            ->content(function (Get $get): HtmlString {
+                                return self::selectedEmployeeRequisitionsSummaryHtml(
+                                    $get('source_requisition_ids') ?? [],
                                 );
-
-                                $selectedIds = collect($get('source_requisition_ids') ?? [])
-                                    ->map(fn ($id): int => (int) $id)
-                                    ->filter(fn (int $id): bool => $id > 0)
-                                    ->unique()
-                                    ->values();
-
-                                $missingIds = $selectedIds
-                                    ->reject(fn (int $id): bool => array_key_exists($id, $options))
-                                    ->all();
-
-                                if ($missingIds !== []) {
-                                    $extra = Requisition::query()
-                                        ->whereIn('id', $missingIds)
-                                        ->with('requestedBy')
-                                        ->get()
-                                        ->mapWithKeys(function (Requisition $requisition): array {
-                                            $ref = $requisition->transaction_number ?? "#{$requisition->id}";
-                                            $requester = $requisition->requestedBy?->name ?? 'Employee';
-
-                                            return [$requisition->id => "{$ref} — {$requester}"];
-                                        })
-                                        ->all();
-
-                                    $options = $options + $extra;
-                                }
-
-                                return $options;
-                            })
-                            ->columns([
-                                'default' => 1,
-                                'md' => 2,
-                                'xl' => 4,
-                            ])
-                            ->live()
-                            ->afterStateUpdated(function (?array $state, Set $set): void {
-                                if (blank($state)) {
-                                    $set('endorsement_lines', []);
-                                    $set('items', []);
-
-                                    return;
-                                }
-
-                                $requisitions = Requisition::query()
-                                    ->whereIn('id', $state)
-                                    ->with(['items.item.category', 'requestedBy'])
-                                    ->get();
-
-                                $compileService = app(RequisitionCompileService::class);
-                                $endorsementLines = $compileService->buildEndorsementLines($requisitions);
-                                $set('endorsement_lines', $endorsementLines);
-                                $set('items', $compileService->mergedLineItemsAsRepeaterState(
-                                    $compileService->mergedLineItemsFromEndorsements($endorsementLines),
-                                ));
                             })
                             ->helperText(function (Get $get): string {
                                 $officeId = filled($get('office_id')) ? (int) $get('office_id') : null;
@@ -316,11 +258,69 @@ class RequisitionForm
                                 $departmentName = $departmentId ? Department::query()->find($departmentId)?->name : null;
 
                                 if ($officeName && $departmentName) {
-                                    return "Showing accepted requests for {$officeName} / {$departmentName} only.";
+                                    return "Use Select requisitions to choose reviewed employee requests. Showing accepted requests for {$officeName} / {$departmentName} only.";
                                 }
 
-                                return 'Only accepted (reviewed) employee requests that have not yet been sent to the Supply Custodian are listed.';
+                                return 'Use Select requisitions to choose reviewed employee requests that have not yet been sent to the Supply Custodian.';
                             }),
+                        SchemaActions::make([
+                            Action::make('selectEmployeeRequisitions')
+                                ->label(fn (Get $get): string => filled($get('source_requisition_ids'))
+                                    ? 'Change selection'
+                                    : 'Select requisitions')
+                                ->icon('heroicon-o-queue-list')
+                                ->color('primary')
+                                ->modalHeading('Select employee requisitions')
+                                ->modalDescription('Pick reviewed employee requests for the selected office and department.')
+                                ->modalWidth('3xl')
+                                ->modalSubmitActionLabel('Apply selection')
+                                ->fillForm(fn (Get $get): array => [
+                                    'picked_source_requisition_ids' => collect($get('source_requisition_ids') ?? [])
+                                        ->map(fn ($id): int => (int) $id)
+                                        ->filter(fn (int $id): bool => $id > 0)
+                                        ->values()
+                                        ->all(),
+                                    'picker_office_id' => $get('office_id'),
+                                    'picker_department_id' => $get('department_id'),
+                                ])
+                                ->schema([
+                                    Hidden::make('picker_office_id'),
+                                    Hidden::make('picker_department_id'),
+                                    CheckboxList::make('picked_source_requisition_ids')
+                                        ->hiddenLabel()
+                                        ->searchable()
+                                        ->bulkToggleable()
+                                        ->columns(1)
+                                        ->gridDirection(GridDirection::Row)
+                                        ->extraAttributes([
+                                            'class' => 'owwa-uc-employee-requisition-picker-list',
+                                        ])
+                                        ->options(function (Get $get) use ($user): array {
+                                            if (! $user instanceof User) {
+                                                return [];
+                                            }
+
+                                            $officeId = filled($get('picker_office_id')) ? (int) $get('picker_office_id') : null;
+                                            $departmentId = filled($get('picker_department_id')) ? (int) $get('picker_department_id') : null;
+
+                                            return app(RequisitionCompileService::class)->eligibleEmployeeRequisitionOptions(
+                                                $user,
+                                                $officeId,
+                                                $departmentId,
+                                            );
+                                        }),
+                                ])
+                                ->action(function (array $data, Set $schemaSet): void {
+                                    $selectedIds = collect($data['picked_source_requisition_ids'] ?? [])
+                                        ->map(fn ($id): int => (int) $id)
+                                        ->filter(fn (int $id): bool => $id > 0)
+                                        ->unique()
+                                        ->values()
+                                        ->all();
+
+                                    self::applySelectedSourceRequisitions($schemaSet, $selectedIds);
+                                }),
+                        ]),
                     ]),
                 Section::make('Review & endorse employee requests')
                     ->description('Adjust endorsed quantities per employee line. Add remarks when endorsing less than requested.')
@@ -335,21 +335,6 @@ class RequisitionForm
                             ->hiddenLabel()
                             ->content(fn (Get $get): HtmlString => self::consolidatedTotalsSummaryHtml($get('items') ?? []))
                             ->columnSpanFull(),
-                    ]),
-                Section::make()
-                    ->heading(null)
-                    ->compact()
-                    ->extraAttributes(['class' => 'owwa-uc-purpose-section'])
-                    ->visible(fn (): bool => $isUnitConsolidator)
-                    ->columnSpanFull()
-                    ->schema([
-                        Textarea::make('purpose')
-                            ->label('Purpose')
-                            ->rows(2)
-                            ->required()
-                            ->columnSpanFull()
-                            ->extraFieldWrapperAttributes(['class' => 'owwa-uc-compile-purpose-wrp'])
-                            ->extraAttributes(['class' => 'owwa-uc-compile-purpose-field']),
                     ]),
                 Section::make('Request Items')
                     ->extraAttributes(['class' => 'owwa-requisition-items-section'])
@@ -370,12 +355,100 @@ class RequisitionForm
                             ->extraAlpineAttributes(['@input' => 'resize()'])
                             ->visible(fn (string $operation): bool => $isEmployee && in_array($operation, ['create', 'edit'], true)),
                     ]),
+                Section::make()
+                    ->heading(null)
+                    ->compact()
+                    ->extraAttributes(['class' => 'owwa-uc-purpose-section'])
+                    ->visible(fn (): bool => $isUnitConsolidator)
+                    ->columnSpanFull()
+                    ->schema([
+                        Textarea::make('purpose')
+                            ->label('Purpose')
+                            ->rows(2)
+                            ->required()
+                            ->columnSpanFull()
+                            ->extraFieldWrapperAttributes(['class' => 'owwa-uc-compile-purpose-wrp'])
+                            ->extraAttributes(['class' => 'owwa-uc-compile-purpose-field']),
+                    ]),
             ]);
     }
 
     /**
      * @param  array<int|string, mixed>  $items
      */
+    /**
+     * @param  list<int|string>|array<int, int|string>  $selectedIds
+     */
+    private static function applySelectedSourceRequisitions(Set $set, array $selectedIds): void
+    {
+        $selectedIds = collect($selectedIds)
+            ->map(fn ($id): int => (int) $id)
+            ->filter(fn (int $id): bool => $id > 0)
+            ->unique()
+            ->values()
+            ->all();
+
+        $set('source_requisition_ids', $selectedIds);
+
+        if ($selectedIds === []) {
+            $set('endorsement_lines', []);
+            $set('items', []);
+
+            return;
+        }
+
+        $requisitions = Requisition::query()
+            ->whereIn('id', $selectedIds)
+            ->with(['items.item.category', 'requestedBy'])
+            ->get();
+
+        $compileService = app(RequisitionCompileService::class);
+        $endorsementLines = $compileService->buildEndorsementLines($requisitions);
+        $set('endorsement_lines', $endorsementLines);
+        $set('items', $compileService->mergedLineItemsAsRepeaterState(
+            $compileService->mergedLineItemsFromEndorsements($endorsementLines),
+        ));
+    }
+
+    private static function selectedEmployeeRequisitionsSummaryHtml(array $selectedIds): HtmlString
+    {
+        $ids = collect($selectedIds)
+            ->map(fn ($id): int => (int) $id)
+            ->filter(fn (int $id): bool => $id > 0)
+            ->unique()
+            ->values();
+
+        if ($ids->isEmpty()) {
+            return new HtmlString(
+                '<p class="text-sm text-gray-500 dark:text-gray-400">No requisitions selected yet. Use <strong>Select requisitions</strong> to choose reviewed employee requests.</p>'
+            );
+        }
+
+        $labels = Requisition::query()
+            ->whereIn('id', $ids->all())
+            ->with(['requestedBy'])
+            ->withCount('items')
+            ->get()
+            ->sortBy(fn (Requisition $requisition): int => (int) array_search($requisition->id, $ids->all(), true))
+            ->map(fn (Requisition $requisition): string => e(
+                app(RequisitionCompileService::class)->employeeRequisitionOptionLabel($requisition)
+            ))
+            ->values();
+
+        $count = $labels->count();
+        $list = $labels
+            ->map(fn (string $label): string => '<li>'.$label.'</li>')
+            ->implode('');
+
+        return new HtmlString(
+            '<div class="owwa-uc-source-req-summary">'
+            .'<p class="text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">'
+            .$count.' '.($count === 1 ? 'requisition' : 'requisitions').' selected</p>'
+            .'<ul class="text-sm text-gray-600 dark:text-gray-300 list-disc ps-5 space-y-0.5">'.$list.'</ul>'
+            .'</div>'
+        );
+    }
+
     private static function consolidatedTotalsSummaryHtml(array $items): HtmlString
     {
         $rows = collect($items)

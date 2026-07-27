@@ -115,16 +115,19 @@ return [
     'semi_min_useful_life_years' => 1,
 
     'semi_useful_life_defaults' => [
-        'information_technology' => '5 yrs',
-        'furniture_fixtures' => '5 yrs',
-        'office_equipment' => '5 yrs',
-        'communication_equipment' => '5 yrs',
-        'appliances' => '5 yrs',
-        'machinery_equipment' => '5 yrs',
-        'transportation_equipment' => '5 yrs',
-        'medical_equipment' => '5 yrs',
+        'information_technology' => '60 months',
+        'furniture_fixtures' => '60 months',
+        'office_equipment' => '60 months',
+        'communication_equipment' => '60 months',
+        'appliances' => '60 months',
+        'machinery_equipment' => '60 months',
+        'transportation_equipment' => '60 months',
+        'medical_equipment' => '60 months',
     ],
 
+    'eul_nearing_percent_remaining' => (float) env('INVENTORY_EUL_NEARING_PERCENT_REMAINING', 20),
+
+    // Legacy absolute-day threshold (unused; kept for env compatibility).
     'eul_nearing_days' => (int) env('INVENTORY_EUL_NEARING_DAYS', 90),
 
     'eul_warning_days' => (int) env('INVENTORY_EUL_WARNING_DAYS', 30),

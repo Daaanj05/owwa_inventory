@@ -9,6 +9,7 @@ use App\Filament\Resources\Transfers\TransferResource;
 use App\Filament\Support\OwwaFormModalDefaults;
 use App\Models\PropertyActionRequest;
 use App\Models\User;
+use App\Services\PropertyActionRequestCompileService;
 use App\Services\PropertyActionRequestWorkflowService;
 use Filament\Actions\Action;
 use Filament\Facades\Filament;
@@ -32,6 +33,7 @@ class PropertyActionRequestTableActions
                     && $record->status === PropertyActionRequest::STATUS_PENDING_SC),
             self::ucApproveAction(),
             self::ucRejectAction(),
+            self::ucCompileAndSendAction(),
             self::scApproveAction(),
             self::scRejectAction(),
             self::scReceiveAndRouteAction(),
@@ -49,7 +51,9 @@ class PropertyActionRequestTableActions
             ->requiresConfirmation()
             ->visible(fn (PropertyActionRequest $record): bool => ($user = Filament::auth()->user()) instanceof User
                 && $user->isUnitConsolidator()
-                && $record->status === PropertyActionRequest::STATUS_PENDING_UC)
+                && $record->status === PropertyActionRequest::STATUS_PENDING_UC
+                && $record->uc_approved_at === null
+                && $record->compiled_into_property_action_request_id === null)
             ->action(function (PropertyActionRequest $record, Action $action): void {
                 $user = Filament::auth()->user();
                 if (! $user instanceof User) {
@@ -57,8 +61,7 @@ class PropertyActionRequestTableActions
                 }
 
                 app(PropertyActionRequestWorkflowService::class)->approveByUnitConsolidator($record, $user);
-                Notification::make()->title('Request endorsed to SC')->success()->send();
-                SwitchesUcSentTab::switchLivewireUcTabToSent($action->getLivewire());
+                Notification::make()->title('Property return approved — ready to compile')->success()->send();
             });
     }
 
@@ -75,7 +78,8 @@ class PropertyActionRequestTableActions
             ])
             ->visible(fn (PropertyActionRequest $record): bool => ($user = Filament::auth()->user()) instanceof User
                 && $user->isUnitConsolidator()
-                && $record->status === PropertyActionRequest::STATUS_PENDING_UC)
+                && $record->status === PropertyActionRequest::STATUS_PENDING_UC
+                && $record->compiled_into_property_action_request_id === null)
             ->action(function (PropertyActionRequest $record, array $data): void {
                 $user = Filament::auth()->user();
                 if (! $user instanceof User) {
@@ -91,6 +95,50 @@ class PropertyActionRequestTableActions
             });
     }
 
+    public static function ucCompileAndSendAction(): Action
+    {
+        return Action::make('ucCompileAndSend')
+            ->label('Compile & send to SC')
+            ->icon('heroicon-o-paper-airplane')
+            ->color('primary')
+            ->requiresConfirmation()
+            ->modalHeading('Compile & send to Supply Custodian')
+            ->modalDescription('This creates one UC property-return batch from this approved employee return and submits it to SC.')
+            ->schema([
+                Textarea::make('remarks')
+                    ->label('Remarks (optional)')
+                    ->rows(2),
+            ])
+            ->visible(fn (PropertyActionRequest $record): bool => ($user = Filament::auth()->user()) instanceof User
+                && $user->isUnitConsolidator()
+                && $record->isUcApprovedForCompile())
+            ->action(function (PropertyActionRequest $record, Action $action, array $data): void {
+                $user = Filament::auth()->user();
+                if (! $user instanceof User) {
+                    return;
+                }
+
+                try {
+                    app(PropertyActionRequestCompileService::class)->createCompiledSubmission(
+                        $user,
+                        [$record],
+                        $data['remarks'] ?? null,
+                    );
+                } catch (\InvalidArgumentException $exception) {
+                    Notification::make()
+                        ->title('Unable to compile')
+                        ->body($exception->getMessage())
+                        ->danger()
+                        ->send();
+
+                    return;
+                }
+
+                Notification::make()->title('Compiled and sent to SC')->success()->send();
+                SwitchesUcSentTab::switchLivewireUcTabToSent($action->getLivewire());
+            });
+    }
+
     public static function ucApproveFromViewAction(): Action
     {
         return Action::make('approveFromView')
@@ -99,13 +147,15 @@ class PropertyActionRequestTableActions
             ->color('success')
             ->requiresConfirmation()
             ->modalHeading('Approve property return')
-            ->modalDescription('This will endorse the request to the Supply Custodian.')
+            ->modalDescription('Approve this employee return so it can be compiled into a UC submission to the Supply Custodian.')
             ->visible(function (PropertyActionRequest $record): bool {
                 $user = Filament::auth()->user();
 
                 return $user instanceof User
                     && $user->isUnitConsolidator()
-                    && $record->status === PropertyActionRequest::STATUS_PENDING_UC;
+                    && $record->status === PropertyActionRequest::STATUS_PENDING_UC
+                    && $record->uc_approved_at === null
+                    && $record->compiled_into_property_action_request_id === null;
             })
             ->action(function (PropertyActionRequest $record, Action $action): void {
                 $user = Filament::auth()->user();
@@ -114,7 +164,50 @@ class PropertyActionRequestTableActions
                 }
 
                 app(PropertyActionRequestWorkflowService::class)->approveByUnitConsolidator($record, $user);
-                Notification::make()->title('Request endorsed to SC')->success()->send();
+                Notification::make()->title('Property return approved — ready to compile')->success()->send();
+            });
+    }
+
+    public static function ucCompileFromViewAction(): Action
+    {
+        return Action::make('compileFromView')
+            ->label('Compile & send to SC')
+            ->icon('heroicon-o-paper-airplane')
+            ->color('primary')
+            ->requiresConfirmation()
+            ->modalHeading('Compile & send to Supply Custodian')
+            ->modalDescription('This creates one UC property-return batch and submits it to SC.')
+            ->schema([
+                Textarea::make('remarks')
+                    ->label('Remarks (optional)')
+                    ->rows(2),
+            ])
+            ->visible(fn (PropertyActionRequest $record): bool => ($user = Filament::auth()->user()) instanceof User
+                && $user->isUnitConsolidator()
+                && $record->isUcApprovedForCompile())
+            ->action(function (PropertyActionRequest $record, Action $action, array $data): void {
+                $user = Filament::auth()->user();
+                if (! $user instanceof User) {
+                    return;
+                }
+
+                try {
+                    app(PropertyActionRequestCompileService::class)->createCompiledSubmission(
+                        $user,
+                        [$record],
+                        $data['remarks'] ?? null,
+                    );
+                } catch (\InvalidArgumentException $exception) {
+                    Notification::make()
+                        ->title('Unable to compile')
+                        ->body($exception->getMessage())
+                        ->danger()
+                        ->send();
+
+                    return;
+                }
+
+                Notification::make()->title('Compiled and sent to SC')->success()->send();
                 SwitchesUcSentTab::switchLivewireUcTabToSent($action->getLivewire());
             });
     }
@@ -141,7 +234,8 @@ class PropertyActionRequestTableActions
 
                 return $user instanceof User
                     && $user->isUnitConsolidator()
-                    && $record->status === PropertyActionRequest::STATUS_PENDING_UC;
+                    && $record->status === PropertyActionRequest::STATUS_PENDING_UC
+                    && $record->compiled_into_property_action_request_id === null;
             })
             ->action(function (PropertyActionRequest $record, array $data): void {
                 $user = Filament::auth()->user();
@@ -233,9 +327,9 @@ class PropertyActionRequestTableActions
                     ->live()
                     ->default(fn (PropertyActionRequest $record): string => $record->suggestedReceiveOutcome()),
                 TextInput::make('new_estimated_useful_life')
-                    ->label('New estimated useful life')
-                    ->placeholder('e.g. 3 years')
-                    ->helperText('Optional. Resets catalog EUL for reissue after return to stock.')
+                    ->label('New estimated useful life (months)')
+                    ->placeholder('e.g. 36')
+                    ->helperText('Optional. Resets catalog EUL for reissue after return to stock. Enter months; labels show months and years.')
                     ->visible(function (Get $get, PropertyActionRequest $record): bool {
                         if ($get('outcome') !== PropertyActionRequest::OUTCOME_RETURN_TO_STOCK) {
                             return false;

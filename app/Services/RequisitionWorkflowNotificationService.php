@@ -117,7 +117,7 @@ class RequisitionWorkflowNotificationService
 
         $this->notifyUser(
             $requester,
-            'Stock issued for your requisition',
+            'Requisition fulfilled by Supply Custodian',
             $this->bodyFor($requisition),
             $requisition,
         );

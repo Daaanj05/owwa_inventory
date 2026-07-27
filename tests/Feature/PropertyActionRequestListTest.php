@@ -321,29 +321,9 @@ class PropertyActionRequestListTest extends TestCase
         $this->assertStringContainsString('->selectablePlaceholder(false)', $source);
     }
 
-    public function test_uc_endorse_switches_to_sent_tab(): void
+    public function test_uc_approve_keeps_received_then_compile_sends_to_sc(): void
     {
-        $office = Office::factory()->create();
-        $department = Department::query()->create([
-            'office_id' => $office->id,
-            'name' => 'Operations',
-            'code' => 'OPS',
-        ]);
-
-        $employee = User::factory()->create([
-            'role' => User::ROLE_EMPLOYEE,
-            'office_id' => $office->id,
-            'department_id' => $department->id,
-        ]);
-
-        $uc = User::factory()->create([
-            'role' => User::ROLE_UNIT_CONSOLIDATOR,
-            'office_id' => $office->id,
-            'department_id' => $department->id,
-        ]);
-        $uc->syncOfficeAssignments([
-            ['office_id' => $office->id, 'department_id' => $department->id],
-        ]);
+        [$employee, $uc, $custodian, $issuance] = $this->seedPropertyContext();
 
         $pending = PropertyActionRequest::query()->create([
             'reference_code' => 'PAREQ-ENDORSE',
@@ -351,23 +331,53 @@ class PropertyActionRequestListTest extends TestCase
             'reason_code' => 'good_condition',
             'requested_by' => $employee->id,
             'accountable_user_id' => $uc->id,
-            'office_id' => $office->id,
-            'department_id' => $department->id,
+            'office_id' => $issuance->office_id,
+            'department_id' => $issuance->department_id,
             'status' => PropertyActionRequest::STATUS_PENDING_UC,
+        ]);
+
+        PropertyActionRequestLine::query()->create([
+            'property_action_request_id' => $pending->id,
+            'issuance_id' => $issuance->id,
+            'sort_order' => 0,
+            'quantity' => 1,
         ]);
 
         Livewire::actingAs($uc)
             ->test(ListPropertyActionRequests::class, [
                 'ucTab' => 'received',
-                'ucOfficeId' => $office->id,
-                'ucDepartmentId' => $department->id,
+                'ucOfficeId' => $issuance->office_id,
+                'ucDepartmentId' => $issuance->department_id,
             ])
             ->callAction(TestAction::make('ucApprove')->table($pending))
             ->assertNotified()
-            ->assertSet('ucTab', 'sent')
-            ->assertCanSeeTableRecords([$pending->fresh()]);
+            ->assertSet('ucTab', 'received');
 
-        $this->assertSame(PropertyActionRequest::STATUS_PENDING_SC, $pending->fresh()->status);
+        $pending->refresh();
+        $this->assertSame(PropertyActionRequest::STATUS_PENDING_UC, $pending->status);
+        $this->assertNotNull($pending->uc_approved_at);
+
+        Livewire::actingAs($uc)
+            ->test(ListPropertyActionRequests::class, [
+                'ucTab' => 'received',
+                'ucOfficeId' => $issuance->office_id,
+                'ucDepartmentId' => $issuance->department_id,
+            ])
+            ->callAction(TestAction::make('ucCompileAndSend')->table($pending), [
+                'remarks' => 'Batch for SC',
+            ])
+            ->assertNotified()
+            ->assertSet('ucTab', 'sent');
+
+        $pending->refresh();
+        $this->assertSame(PropertyActionRequest::STATUS_PENDING_SC, $pending->status);
+        $this->assertNotNull($pending->compiled_into_property_action_request_id);
+
+        $batch = PropertyActionRequest::query()->find($pending->compiled_into_property_action_request_id);
+        $this->assertNotNull($batch);
+        $this->assertSame(PropertyActionRequest::STATUS_PENDING_SC, $batch->status);
+        $this->assertSame($uc->id, $batch->requested_by);
+        $this->assertSame($custodian->role, User::ROLE_SUPPLY_CUSTODIAN);
     }
 
     public function test_send_to_supply_custodian_workflow_service(): void
@@ -483,6 +493,9 @@ class PropertyActionRequestListTest extends TestCase
             'role' => User::ROLE_UNIT_CONSOLIDATOR,
             'office_id' => $issuance->office_id,
             'department_id' => $issuance->department_id,
+        ]);
+        $uc->syncOfficeAssignments([
+            ['office_id' => $issuance->office_id, 'department_id' => $issuance->department_id],
         ]);
         $custodian = User::factory()->create([
             'role' => User::ROLE_SUPPLY_CUSTODIAN,

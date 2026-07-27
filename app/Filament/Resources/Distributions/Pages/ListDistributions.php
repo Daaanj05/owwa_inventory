@@ -7,14 +7,17 @@ use App\Filament\Concerns\SyncsActiveItemCategory;
 use App\Filament\Pages\InventoryCategoryDashboard;
 use App\Filament\Resources\Distributions\DistributionResource;
 use App\Filament\Support\OwwaFormModalDefaults;
+use App\Models\Distribution;
 use App\Models\ItemCategory;
 use App\Models\User;
+use App\Services\DistributionCompileService;
 use Filament\Facades\Filament;
 use Filament\Resources\Pages\ListRecords;
 use Filament\Schemas\Schema;
 use Filament\Support\Facades\FilamentView;
 use Filament\Tables\View\TablesRenderHook;
 use Illuminate\Contracts\Support\Htmlable;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\HtmlString;
 use Livewire\Attributes\Url;
 
@@ -130,23 +133,27 @@ class ListDistributions extends ListRecords
     protected function getHeaderActions(): array
     {
         return [
-            OwwaFormModalDefaults::createActionForResource(DistributionResource::class, OwwaFormModalDefaults::WIDTH_COMPACT)
-                ->mutateDataUsing(function (array $data): array {
+            OwwaFormModalDefaults::createActionForResource(DistributionResource::class, OwwaFormModalDefaults::WIDTH_STANDARD)
+                ->modalHeading('New Distribution')
+                ->modalDescription('Select accepted employee requisitions, review each line, and distribute available office stock.')
+                ->using(function (array $data): Model {
+                    /** @var User|null $user */
                     $user = Filament::auth()->user();
 
-                    if ($user) {
-                        $data['distributed_by'] = $user->id;
+                    abort_unless($user?->isUnitConsolidator(), 403);
 
-                        if ($user->office_id) {
-                            $data['office_id'] = (int) $user->office_id;
-                        }
+                    $distributions = app(DistributionCompileService::class)->createDistributions(
+                        $user,
+                        (int) $data['office_id'],
+                        (int) $data['department_id'],
+                        (string) $data['distribution_date'],
+                        array_values($data['distribution_lines'] ?? []),
+                    );
 
-                        if ($user->department_id) {
-                            $data['department_id'] = (int) $user->department_id;
-                        }
-                    }
+                    /** @var Distribution $distribution */
+                    $distribution = $distributions->firstOrFail();
 
-                    return $data;
+                    return $distribution;
                 })
                 ->visible(fn (): bool => DistributionResource::canCreate()),
         ];

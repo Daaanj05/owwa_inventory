@@ -21,6 +21,7 @@ use App\Support\RequisitionLineFulfillmentState;
 use App\Support\RequisitionStatus;
 use App\Support\RequisitionViewPresenter;
 use Filament\Actions\Action;
+use Filament\Actions\ActionGroup;
 use Filament\Actions\BulkAction;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
@@ -39,6 +40,7 @@ class RequisitionsTable
         /** @var User|null $viewer */
         $viewer = Auth::user();
         $isEmployeeViewer = $viewer?->isEmployee() ?? false;
+        $isUnitConsolidatorViewer = $viewer?->isUnitConsolidator() ?? false;
 
         $table = $table
             ->columns([
@@ -73,7 +75,20 @@ class RequisitionsTable
                     ->label('Requested by')
                     ->placeholder('—')
                     ->searchable()
-                    ->visible(! $isEmployeeViewer),
+                    ->visible(function () use ($table, $isEmployeeViewer, $isUnitConsolidatorViewer): bool {
+                        if ($isEmployeeViewer) {
+                            return false;
+                        }
+
+                        if (! $isUnitConsolidatorViewer) {
+                            return true;
+                        }
+
+                        $livewire = $table->getLivewire();
+
+                        return ! $livewire instanceof ListRequisitions
+                            || ($livewire->ucTab ?? 'received') !== 'sent';
+                    }),
                 TextColumn::make('office.name')
                     ->label('Office')
                     ->searchable()
@@ -183,10 +198,20 @@ class RequisitionsTable
                                 ]);
                                 Notification::make()->title('Requisition rejected')->danger()->send();
                             }),
+                        self::submitToScAction($table),
                     ],
                     '5xl',
                     modelLabel: RequisitionResource::getModelLabel(),
                 ),
+                ActionGroup::make([
+                    self::submitToScAction($table),
+                ])
+                    ->label('Actions')
+                    ->icon('heroicon-m-ellipsis-vertical')
+                    ->color('gray')
+                    ->visible(function (Requisition $record) use ($table): bool {
+                        return self::canSubmitReviewedEmployeeRequisitionToSc($record, $table);
+                    }),
                 EmployeeRequisitionActions::tableActionGroup(),
             ])
             ->toolbarActions([
@@ -256,13 +281,50 @@ class RequisitionsTable
                             ], ['schemaComponent' => 'content']);
                         }),
                     DeleteBulkAction::make()
-                        ->visible(fn (): bool => ! $isEmployeeViewer),
+                        ->visible(fn (): bool => ! $isEmployeeViewer && ! $isUnitConsolidatorViewer),
                 ]),
             ])
+            ->selectable(! $isUnitConsolidatorViewer)
             ->recordUrl(null)
             ->recordAction('view');
 
         return OwwaTableDefaults::hideRedundantToolbarIcons($table);
+    }
+
+    protected static function submitToScAction(Table $table): Action
+    {
+        return Action::make('submitToSc')
+            ->label('Submit to SC')
+            ->icon('heroicon-o-paper-airplane')
+            ->color('primary')
+            ->visible(fn (Requisition $record): bool => self::canSubmitReviewedEmployeeRequisitionToSc($record, $table))
+            ->action(function (Requisition $record, Action $action): void {
+                $livewire = $action->getLivewire();
+
+                if (! $livewire instanceof ListRequisitions) {
+                    return;
+                }
+
+                $livewire->replaceMountedAction('create', [
+                    'office_id' => (int) $record->office_id,
+                    'department_id' => (int) $record->department_id,
+                    'prefillSourceRequisitionIds' => [$record->getKey()],
+                ], ['schemaComponent' => 'content']);
+            });
+    }
+
+    protected static function canSubmitReviewedEmployeeRequisitionToSc(Requisition $record, Table $table): bool
+    {
+        $viewer = Auth::user();
+        $livewire = $table->getLivewire();
+
+        return $viewer instanceof User
+            && $viewer->isUnitConsolidator()
+            && $livewire instanceof ListRequisitions
+            && ($livewire->ucTab ?? 'received') === 'received'
+            && $record->status === Requisition::STATUS_ACCEPTED
+            && $record->compiled_into_requisition_id === null
+            && $record->requestedBy?->role === User::ROLE_EMPLOYEE;
     }
 
     protected static function workflowStateLabel(Requisition $record): string

@@ -36,8 +36,44 @@
             />
         </div>
 
+        <div class="owwa-search-wrap owwa-employee-custody-period-row" style="display:flex;gap:0.75rem;flex-wrap:wrap;align-items:center;justify-content:space-between;margin-top:0.75rem;">
+            <div style="display:flex;gap:0.75rem;flex-wrap:wrap;align-items:center;">
+                <label class="owwa-pa-filter-label" for="custody-from-date">From</label>
+                <input
+                    id="custody-from-date"
+                    type="date"
+                    wire:model.live="fromDate"
+                    class="owwa-search-bar"
+                    style="max-width:11rem;"
+                    aria-label="From date"
+                    @disabled(! $hasEmployee)
+                />
+                <label class="owwa-pa-filter-label" for="custody-to-date">To</label>
+                <input
+                    id="custody-to-date"
+                    type="date"
+                    wire:model.live="toDate"
+                    class="owwa-search-bar"
+                    style="max-width:11rem;"
+                    aria-label="To date"
+                    @disabled(! $hasEmployee)
+                />
+            </div>
+            @if ($hasEmployee)
+                <button
+                    type="button"
+                    wire:click="exportAllItems"
+                    class="owwa-pa-export-btn"
+                    style="display:inline-flex;align-items:center;gap:0.4rem;"
+                >
+                    <x-filament::icon icon="heroicon-o-document-arrow-down" class="h-4 w-4" />
+                    Export All Item
+                </button>
+            @endif
+        </div>
+
         @if ($hasEmployee && $propertyView)
-            <div class="owwa-search-wrap" style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+            <div class="owwa-search-wrap" style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-top:0.75rem;">
                 <button
                     type="button"
                     wire:click="$set('custodyTab', 'on_hand')"

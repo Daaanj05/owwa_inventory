@@ -34,6 +34,7 @@ class EmployeeCustodyTest extends TestCase
     public function test_unit_consolidator_can_access_employee_custody_page(): void
     {
         $uc = User::factory()->create(['role' => User::ROLE_UNIT_CONSOLIDATOR]);
+        $this->assertInstanceOf(User::class, $uc);
 
         $this->actingAs($uc)
             ->get(EmployeeCustody::getUrl())
@@ -41,6 +42,35 @@ class EmployeeCustodyTest extends TestCase
             ->assertSee('Employee Custody')
             ->assertDontSee('Distinct items')
             ->assertDontSee('Total on hand');
+    }
+
+    public function test_employee_custody_shows_export_all_item_and_period_filters_below_employee(): void
+    {
+        [$uc, $employee] = $this->seedEmployeeDistributions();
+
+        Livewire::actingAs($uc)
+            ->test(EmployeeCustody::class, [
+                'employee' => $employee->id,
+            ])
+            ->assertSee('Export All Item')
+            ->assertSeeHtml('id="custody-from-date"')
+            ->assertSeeHtml('id="custody-to-date"')
+            ->assertDontSee('Download all for period');
+    }
+
+    public function test_distribution_history_modal_has_download_this_item_footer_only(): void
+    {
+        $source = file_get_contents(app_path('Filament/Pages/EmployeeCustody.php'));
+
+        $this->assertStringContainsString("->label('Download this item')", $source);
+        $this->assertStringContainsString('extraModalFooterActions', $source);
+        $this->assertStringContainsString('owwa-employee-custody-ledger-modal', $source);
+        $this->assertStringContainsString('mountedLedgerActionArguments', $source);
+        $this->assertStringNotContainsString('exportAllUrl', $source);
+
+        $modal = file_get_contents(resource_path('views/filament/pages/partials/employee-distribution-ledger-modal.blade.php'));
+        $this->assertStringNotContainsString('Download all for period', $modal);
+        $this->assertStringNotContainsString('Download this item', $modal);
     }
 
     public function test_employee_custody_uses_inventory_page_header_class(): void
@@ -112,6 +142,38 @@ class EmployeeCustodyTest extends TestCase
             ->test(EmployeeCustody::class, ['employee' => $employee->id])
             ->assertSee('Test Item')
             ->assertSee('8');
+    }
+
+    public function test_uc_can_filter_employee_custody_by_distribution_period(): void
+    {
+        [$uc, $employee, $item] = $this->seedEmployeeDistributions();
+
+        /** @var Distribution $oldDistribution */
+        $oldDistribution = Distribution::query()
+            ->where('distributed_to', $employee->id)
+            ->where('item_id', $item->id)
+            ->orderBy('id')
+            ->firstOrFail();
+
+        /** @var Distribution $newDistribution */
+        $newDistribution = Distribution::query()
+            ->where('distributed_to', $employee->id)
+            ->where('item_id', $item->id)
+            ->orderByDesc('id')
+            ->firstOrFail();
+
+        $oldDistribution->update(['distribution_date' => now()->subMonth()]);
+        $newDistribution->update(['distribution_date' => now()]);
+
+        Livewire::actingAs($uc)
+            ->test(EmployeeCustody::class, [
+                'employee' => $employee->id,
+                'fromDate' => now()->startOfMonth()->toDateString(),
+                'toDate' => now()->endOfMonth()->toDateString(),
+            ])
+            ->assertSee('Test Item')
+            ->assertSeeHtml('<td class="owwa-num owwa-cell-primary">3</td>')
+            ->assertDontSeeHtml('<td class="owwa-num owwa-cell-primary">8</td>');
     }
 
     public function test_uc_cannot_open_ledger_for_employee_outside_scope(): void

@@ -4,13 +4,19 @@ namespace App\Services;
 
 use App\Models\Issuance;
 use App\Models\User;
-use App\Notifications\IssuanceCreatedDatabaseNotification;
+use App\Notifications\RequisitionWorkflowDatabaseNotification;
 
 class IssuanceNotificationService
 {
     public function handleCreated(Issuance $issuance): void
     {
         $issuance->loadMissing(['item.category', 'issuedTo', 'office', 'requisition']);
+
+        // Requisition fulfillment already notifies via requisition modal URLs.
+        // Skip SC-only IssuanceResource deep links (Forbidden for UC/employees).
+        if ($issuance->requisition_id !== null) {
+            return;
+        }
 
         $recipients = collect();
 
@@ -26,23 +32,16 @@ class IssuanceNotificationService
             return;
         }
 
-        $title = 'Stock issued';
+        $title = 'Requisition stock updated';
         $body = sprintf(
-            '%s — %s (%s)',
+            '%s — %s (%s). Open Requisitions to track fulfillment.',
             $issuance->reference_code ?? 'Issuance',
             $issuance->item?->name ?? 'Item',
             $issuance->office?->name ?? 'Office',
         );
 
-        $categoryId = $issuance->item?->item_category_id;
-
         foreach ($recipients as $user) {
-            $user->notify(new IssuanceCreatedDatabaseNotification(
-                $title,
-                $body,
-                (int) $issuance->id,
-                $categoryId !== null ? (int) $categoryId : null,
-            ));
+            $user->notify(new RequisitionWorkflowDatabaseNotification($title, $body));
         }
     }
 }

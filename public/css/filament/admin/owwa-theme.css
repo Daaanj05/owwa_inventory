@@ -4554,6 +4554,46 @@ select.owwa-search-bar {
     max-width: 100%;
 }
 
+/* Select employee requisitions: single-column list with vertical scroll only */
+.fi-fo-checkbox-list-options.owwa-uc-employee-requisition-picker-list {
+    display: flex !important;
+    flex-direction: column !important;
+    flex-wrap: nowrap !important;
+    gap: 0.5rem;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    max-height: min(50vh, 22rem);
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    overscroll-behavior: contain;
+    padding-inline-end: 0.35rem;
+    scrollbar-width: thin;
+    columns: unset !important;
+    column-count: 1 !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    grid-auto-flow: row !important;
+}
+
+.fi-fo-checkbox-list-options.owwa-uc-employee-requisition-picker-list > .fi-fo-checkbox-list-option-ctn {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    break-inside: avoid;
+}
+
+.fi-fo-checkbox-list-options.owwa-uc-employee-requisition-picker-list .fi-fo-checkbox-list-option,
+.fi-fo-checkbox-list-options.owwa-uc-employee-requisition-picker-list .fi-fo-checkbox-list-option-text {
+    max-width: 100%;
+    min-width: 0;
+}
+
+.fi-fo-checkbox-list-options.owwa-uc-employee-requisition-picker-list .fi-fo-checkbox-list-option-label {
+    white-space: normal;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
 .fi-modal-window.owwa-record-modal.owwa-requisition-uc-modal .owwa-uc-endorsement-repeater.fi-fo-table-repeater,
 .fi-modal-window.owwa-record-modal.owwa-requisition-uc-modal .owwa-uc-endorsement-repeater.fi-fo-table-repeater > table,
 .fi-modal-window.owwa-record-modal.owwa-requisition-uc-modal .owwa-consolidated-totals-summary {
@@ -6465,6 +6505,17 @@ body.owwa-busy-active .fi-topbar a {
     padding-bottom: 0.65rem;
 }
 
+/* Employee custody ledger: Close left, Download this item right
+ * Filament renders extra footer actions before Cancel; reverse so Close is left. */
+.fi-modal-window.owwa-employee-custody-ledger-modal .fi-modal-footer-actions {
+    display: flex !important;
+    width: 100%;
+    flex-direction: row-reverse;
+    justify-content: space-between !important;
+    align-items: center;
+    gap: 0.75rem;
+}
+
 /*
  * Bottom whitespace under Description was from content flex-growing to fill the
  * tall record-modal shell while the sticky footer stayed at the bottom.
@@ -6577,6 +6628,17 @@ body.owwa-busy-active .fi-topbar a {
 
 .owwa-stock-ledger-header-item--wide {
     grid-column: 1 / -1;
+}
+
+.owwa-employee-distribution-ledger-header {
+    grid-template-columns: minmax(12rem, 2fr) minmax(10rem, 1.4fr) repeat(3, minmax(7rem, 0.8fr));
+}
+
+.owwa-ledger-modal-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    justify-content: flex-end;
 }
 
 .owwa-stock-ledger-header-item dt {

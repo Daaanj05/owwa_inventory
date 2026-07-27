@@ -10,6 +10,7 @@ use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Collection as SupportCollection;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use InvalidArgumentException;
 
@@ -30,19 +31,32 @@ class RequisitionCompileService
         return $this->eligibleEmployeeRequisitionsQuery($unitConsolidator, $officeId, $departmentId)
             ->orderByDesc('created_at')
             ->get()
-            ->mapWithKeys(function (Requisition $requisition): array {
-                $ref = $requisition->transaction_number ?? "#{$requisition->id}";
-                $requester = $requisition->requestedBy?->name ?? 'Employee';
-                $backorderHint = $this->backorderHintForRequisition($requisition);
-                $label = "{$ref} — {$requester}";
-
-                if ($backorderHint !== null) {
-                    $label .= " ({$backorderHint})";
-                }
-
-                return [$requisition->id => $label];
-            })
+            ->mapWithKeys(fn (Requisition $requisition): array => [
+                $requisition->id => $this->employeeRequisitionOptionLabel($requisition),
+            ])
             ->all();
+    }
+
+    public function employeeRequisitionOptionLabel(Requisition $requisition): string
+    {
+        $requisition->loadMissing(['requestedBy']);
+
+        if (! isset($requisition->items_count)) {
+            $requisition->loadCount('items');
+        }
+
+        $transactionNumber = $requisition->transaction_number ?? "#{$requisition->id}";
+        $employeeName = $requisition->requestedBy?->name ?? 'Employee';
+        $itemCount = (int) $requisition->items_count;
+        $itemLabel = Str::plural('item', $itemCount);
+        $backorderHint = $this->backorderHintForRequisition($requisition);
+        $label = "{$transactionNumber} — {$employeeName} · {$itemCount} {$itemLabel}";
+
+        if ($backorderHint !== null) {
+            $label .= " ({$backorderHint})";
+        }
+
+        return $label;
     }
 
     public function backorderHintForRequisition(Requisition $requisition): ?string
@@ -75,7 +89,8 @@ class RequisitionCompileService
             ->where('status', Requisition::STATUS_ACCEPTED)
             ->whereNull('compiled_into_requisition_id')
             ->whereHas('requestedBy', fn (Builder $query): Builder => $query->where('role', User::ROLE_EMPLOYEE))
-            ->with('requestedBy');
+            ->with(['requestedBy', 'office', 'department'])
+            ->withCount('items');
 
         if ($officeId !== null && $officeId > 0) {
             $query->where('office_id', $officeId);

@@ -298,6 +298,7 @@ class ListPropertyActionRequests extends ListRecords
 
             $query = $query
                 ->where('status', PropertyActionRequest::STATUS_PENDING_UC)
+                ->whereNull('compiled_into_property_action_request_id')
                 ->whereHas('requestedBy', fn (Builder $q): Builder => $q->where('role', User::ROLE_EMPLOYEE));
 
             if (! $this->ucListScopeIsComplete()) {

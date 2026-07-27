@@ -2,15 +2,18 @@
 
 namespace App\Filament\Resources\Distributions\Schemas;
 
-use App\Models\Item;
-use App\Models\ItemCategory;
+use App\Models\Department;
+use App\Models\Office;
 use App\Models\Requisition;
 use App\Models\User;
-use App\Services\OfficeDistributionBalanceService;
-use App\Support\EmployeeRequisitionStatus;
+use App\Services\DistributionCompileService;
 use Filament\Facades\Filament;
+use Filament\Forms\Components\CheckboxList;
 use Filament\Forms\Components\DatePicker;
+use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Placeholder;
+use Filament\Forms\Components\Repeater;
+use Filament\Forms\Components\Repeater\TableColumn;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
@@ -18,26 +21,29 @@ use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
+use Filament\Support\Enums\Alignment;
 
 class DistributionForm
 {
     public static function configure(Schema $schema): Schema
     {
+        /** @var User|null $user */
         $user = Filament::auth()->user();
 
         return $schema
             ->columns(1)
             ->components([
-                Section::make()
-                    ->heading(null)
+                Section::make('Distribution details')
+                    ->description('Choose an assigned office and department, then select accepted employee requests.')
                     ->compact()
                     ->columnSpanFull()
                     ->columns(2)
                     ->schema([
-                        Select::make('item_category_id')
-                            ->label('Category')
-                            ->options(fn (): array => ItemCategory::query()
-                                ->whereNull('archived_at')
+                        Select::make('office_id')
+                            ->label('Office')
+                            ->options(fn (): array => Office::query()
+                                ->active()
+                                ->whereIn('id', $user?->assignedOfficeIds() ?? [])
                                 ->orderBy('name')
                                 ->pluck('name', 'id')
                                 ->all())
@@ -46,172 +52,194 @@ class DistributionForm
                             ->live()
                             ->required()
                             ->selectablePlaceholder(false)
-                            ->dehydrated(false)
-                            ->afterStateUpdated(fn (Set $set): mixed => $set('item_id', null))
-                            ->afterStateHydrated(function (Select $component, $state, $record): void {
-                                if (filled($state) || $record === null) {
+                            ->default(fn (): ?int => $user?->hasSingleOfficeAssignment()
+                                ? ($user->assignedOfficeIds()[0] ?? null)
+                                : $user?->office_id)
+                            ->afterStateUpdated(function (mixed $state, mixed $old, Get $get, Set $set) use ($user): void {
+                                if ((int) ($state ?? 0) === (int) ($old ?? 0)) {
                                     return;
                                 }
 
-                                $record->loadMissing('item');
-                                $component->state($record->item?->item_category_id);
-                            }),
-                        Select::make('item_id')
-                            ->label('Item')
-                            ->options(function (Get $get): array {
-                                $categoryId = $get('item_category_id');
+                                $set('source_requisition_ids', []);
+                                $set('distribution_lines', []);
 
-                                if (blank($categoryId)) {
+                                if (! $user instanceof User || blank($state)) {
+                                    $set('department_id', null);
+
+                                    return;
+                                }
+
+                                $departmentIds = $user->assignedDepartmentIdsForOffice((int) $state);
+                                $currentDepartmentId = (int) ($get('department_id') ?? 0);
+
+                                if (count($departmentIds) === 1) {
+                                    $set('department_id', $departmentIds[0]);
+                                } elseif (! in_array($currentDepartmentId, $departmentIds, true)) {
+                                    $set('department_id', null);
+                                }
+                            }),
+                        Select::make('department_id')
+                            ->label('Department')
+                            ->options(function (Get $get) use ($user): array {
+                                $officeId = (int) ($get('office_id') ?? 0);
+
+                                if (! $user instanceof User || $officeId <= 0) {
                                     return [];
                                 }
 
-                                return Item::query()
+                                return Department::query()
                                     ->active()
-                                    ->where('item_category_id', (int) $categoryId)
+                                    ->where('office_id', $officeId)
+                                    ->whereIn('id', $user->assignedDepartmentIdsForOffice($officeId))
                                     ->orderBy('name')
                                     ->pluck('name', 'id')
                                     ->all();
                             })
-                            ->required()
                             ->searchable()
                             ->preload()
                             ->live()
+                            ->required()
                             ->selectablePlaceholder(false)
-                            ->disabled(fn (Get $get): bool => blank($get('item_category_id')))
-                            ->placeholder(fn (Get $get): string => blank($get('item_category_id'))
-                                ? 'Select a category first'
-                                : 'Select an item')
-                            ->afterStateUpdated(function (Get $get, Set $set) use ($user): void {
-                                $set('requisition_id', null);
+                            ->default(function (Get $get) use ($user): ?int {
+                                $officeId = (int) ($get('office_id') ?? 0);
 
-                                if (! $get('item_id') || ! ($user?->office_id ?? null)) {
+                                if (! $user instanceof User || $officeId <= 0) {
+                                    return $user?->department_id;
+                                }
+
+                                $departmentIds = $user->assignedDepartmentIdsForOffice($officeId);
+
+                                return count($departmentIds) === 1 ? $departmentIds[0] : $user->department_id;
+                            })
+                            ->disabled(fn (Get $get): bool => blank($get('office_id')))
+                            ->afterStateUpdated(function (mixed $state, mixed $old, Set $set): void {
+                                if ((int) ($state ?? 0) === (int) ($old ?? 0)) {
                                     return;
                                 }
 
-                                $available = app(OfficeDistributionBalanceService::class)->availableQuantity(
-                                    (int) $get('item_id'),
-                                    (int) $user->office_id,
-                                );
-
-                                if ($available <= 0) {
-                                    return;
-                                }
-
-                                $currentQty = (int) ($get('quantity') ?? 0);
-                                if ($currentQty <= 0 || $currentQty > $available) {
-                                    $set('quantity', $available);
-                                }
+                                $set('source_requisition_ids', []);
+                                $set('distribution_lines', []);
                             }),
-                        Placeholder::make('available_from_sc')
-                            ->label('Available from SC issuance')
-                            ->content(function (Get $get) use ($user): string {
-                                $itemId = (int) ($get('item_id') ?? 0);
-                                $officeId = (int) ($user?->office_id ?? 0);
-
-                                if ($itemId <= 0 || $officeId <= 0) {
-                                    return 'Select an item to see how many units SC issued to your office that are not yet distributed.';
-                                }
-
-                                $service = app(OfficeDistributionBalanceService::class);
-                                $available = $service->availableQuantity($itemId, $officeId);
-                                $issued = $service->issuedQuantity($itemId, $officeId);
-                                $distributed = $service->distributedQuantity($itemId, $officeId);
-
-                                return "{$available} available ({$issued} issued − {$distributed} already distributed)";
-                            })
-                            ->columnSpanFull(),
-                        TextInput::make('quantity')
-                            ->label('Quantity')
-                            ->required()
-                            ->numeric()
-                            ->minValue(1)
-                            ->rules([
-                                function (Get $get) use ($user): \Closure {
-                                    return function (string $attribute, mixed $value, \Closure $fail) use ($get, $user): void {
-                                        $itemId = (int) ($get('item_id') ?? 0);
-                                        $officeId = (int) ($user?->office_id ?? 0);
-                                        $quantity = (int) $value;
-
-                                        if ($itemId <= 0 || $officeId <= 0 || $quantity <= 0) {
-                                            return;
-                                        }
-
-                                        $available = app(OfficeDistributionBalanceService::class)->availableQuantity($itemId, $officeId);
-
-                                        if ($quantity > $available) {
-                                            $fail("Only {$available} unit(s) remain from SC issuance for this item.");
-                                        }
-                                    };
-                                },
-                            ]),
-                        Select::make('distributed_to')
-                            ->label('Distribute to (Employee)')
-                            ->options(function () use ($user): array {
-                                $query = User::query()->where('role', User::ROLE_EMPLOYEE);
-
-                                if ($user?->office_id) {
-                                    $query->where('office_id', $user->office_id);
-                                }
-
-                                if ($user?->department_id) {
-                                    $query->where('department_id', $user->department_id);
-                                }
-
-                                return $query->orderBy('name')->pluck('name', 'id')->toArray();
-                            })
-                            ->required()
-                            ->searchable()
-                            ->live()
-                            ->afterStateUpdated(fn (Set $set): mixed => $set('requisition_id', null)),
-                        Select::make('requisition_id')
-                            ->label('Employee requisition')
-                            ->options(fn (Get $get): array => self::employeeRequisitionOptions(
-                                $get('distributed_to') ? (int) $get('distributed_to') : null,
-                                $get('item_id') ? (int) $get('item_id') : null,
-                            ))
-                            ->searchable()
-                            ->live()
-                            ->placeholder('Auto-match if left blank')
-                            ->helperText('Optional. Open accepted employee requests for this employee and item (not yet closed). Leave blank to auto-match the latest with remaining endorsed qty.'),
                         DatePicker::make('distribution_date')
                             ->label('Date')
                             ->required()
-                            ->default(now()),
-                        Textarea::make('remarks')
+                            ->default(now())
+                            ->columnSpanFull(),
+                    ]),
+                Section::make('Employee requisitions')
+                    ->description('Only accepted employee requests with quantities still to distribute are listed.')
+                    ->visible(fn (Get $get): bool => filled($get('office_id')) && filled($get('department_id')))
+                    ->columnSpanFull()
+                    ->schema([
+                        CheckboxList::make('source_requisition_ids')
+                            ->label('Employee requisitions to include')
+                            ->options(function (Get $get) use ($user): array {
+                                if (! $user instanceof User) {
+                                    return [];
+                                }
+
+                                return app(DistributionCompileService::class)->eligibleEmployeeRequisitionOptions(
+                                    $user,
+                                    filled($get('office_id')) ? (int) $get('office_id') : null,
+                                    filled($get('department_id')) ? (int) $get('department_id') : null,
+                                );
+                            })
+                            ->required()
+                            ->columns(['default' => 1, 'md' => 2, 'xl' => 3])
+                            ->live()
+                            ->afterStateUpdated(function (?array $state, Get $get, Set $set): void {
+                                if (blank($state)) {
+                                    $set('distribution_lines', []);
+
+                                    return;
+                                }
+
+                                $requisitions = Requisition::query()
+                                    ->whereIn('id', $state)
+                                    ->with(['items.item', 'requestedBy'])
+                                    ->get();
+
+                                $set('distribution_lines', app(DistributionCompileService::class)->buildDistributionLines(
+                                    $requisitions,
+                                    (int) $get('office_id'),
+                                ));
+                            })
                             ->columnSpanFull()
-                            ->rows(2),
+                            ->helperText('Available is your office balance from SC issuance after prior distributions.'),
+                    ]),
+                Section::make('Distribution lines')
+                    ->description('Adjust each quantity for a partial distribution when needed.')
+                    ->visible(fn (Get $get): bool => filled($get('source_requisition_ids')))
+                    ->columnSpanFull()
+                    ->schema([
+                        self::distributionLinesRepeater(),
                     ]),
             ]);
     }
 
-    /**
-     * @return array<int, string>
-     */
-    protected static function employeeRequisitionOptions(?int $employeeId, ?int $itemId): array
+    private static function distributionLinesRepeater(): Repeater
     {
-        if (! $employeeId || ! $itemId) {
-            return [];
-        }
-
-        return Requisition::query()
-            ->where('requested_by', $employeeId)
-            ->where('status', Requisition::STATUS_ACCEPTED)
-            ->whereNull('closed_at')
-            ->whereHas('requestedBy', fn ($query) => $query->where('role', User::ROLE_EMPLOYEE))
-            ->whereHas('items', fn ($query) => $query->where('item_id', $itemId))
-            ->latest('created_at')
-            ->get()
-            ->filter(fn (Requisition $requisition): bool => EmployeeRequisitionStatus::remainingToFulfillForItem($requisition, $itemId) > 0)
-            ->mapWithKeys(function (Requisition $requisition) use ($itemId): array {
-                $remaining = EmployeeRequisitionStatus::remainingToFulfillForItem($requisition, $itemId);
-                $target = EmployeeRequisitionStatus::fulfillmentTargetForItem($requisition, $itemId);
-                $ref = $requisition->transaction_number ?? "#{$requisition->id}";
-                $purpose = $requisition->purpose ?: 'No purpose';
-
-                return [
-                    $requisition->id => "{$ref} — {$purpose} (remaining {$remaining} of {$target})",
-                ];
-            })
-            ->all();
+        return Repeater::make('distribution_lines')
+            ->hiddenLabel()
+            ->addable(false)
+            ->deletable(false)
+            ->reorderable(false)
+            ->minItems(1)
+            ->table([
+                TableColumn::make('Employee')->width('16%'),
+                TableColumn::make('Purpose')->width('16%'),
+                TableColumn::make('Item')->width('18%'),
+                TableColumn::make('Available')->alignment(Alignment::End)->width('5rem'),
+                TableColumn::make('Req. qty')->alignment(Alignment::End)->width('5rem'),
+                TableColumn::make('Qty to distribute')->markAsRequired()->alignment(Alignment::End)->width('7rem'),
+                TableColumn::make('Remarks')->width('18%'),
+            ])
+            ->compact()
+            ->schema([
+                Placeholder::make('employee_display')
+                    ->hiddenLabel()
+                    ->content(fn (Get $get): string => sprintf(
+                        '%s — %s',
+                        $get('transaction_number') ?? 'Requisition',
+                        $get('employee_name') ?? 'Employee',
+                    )),
+                Placeholder::make('purpose_display')
+                    ->hiddenLabel()
+                    ->content(fn (Get $get): string => filled($get('purpose')) ? (string) $get('purpose') : '—'),
+                Placeholder::make('item_display')
+                    ->hiddenLabel()
+                    ->content(fn (Get $get): string => (string) ($get('item_name') ?? '—')),
+                Placeholder::make('available_display')
+                    ->hiddenLabel()
+                    ->content(fn (Get $get): string => (string) ((int) ($get('available_quantity') ?? 0))),
+                Placeholder::make('requested_display')
+                    ->hiddenLabel()
+                    ->content(fn (Get $get): string => (string) ((int) ($get('requested_quantity') ?? 0))),
+                TextInput::make('quantity')
+                    ->label('Qty to distribute')
+                    ->hiddenLabel()
+                    ->numeric()
+                    ->integer()
+                    ->minValue(1)
+                    ->maxValue(fn (Get $get): int => min(
+                        (int) ($get('available_quantity') ?? 0),
+                        (int) ($get('remaining_quantity') ?? 0),
+                    ))
+                    ->required(),
+                Textarea::make('remarks')
+                    ->hiddenLabel()
+                    ->rows(1),
+                Hidden::make('source_requisition_id'),
+                Hidden::make('requisition_item_id'),
+                Hidden::make('employee_id'),
+                Hidden::make('employee_name'),
+                Hidden::make('transaction_number'),
+                Hidden::make('purpose'),
+                Hidden::make('item_id'),
+                Hidden::make('item_name'),
+                Hidden::make('available_quantity'),
+                Hidden::make('requested_quantity'),
+                Hidden::make('remaining_quantity'),
+            ]);
     }
 }

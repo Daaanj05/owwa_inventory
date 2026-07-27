@@ -358,11 +358,17 @@ class IssuanceForm
                             ))
                             ->helperText(SemiExpendableValueCategory::tierRuleSummary()),
                         TextInput::make('estimated_useful_life')
-                            ->label('Estimated useful life')
-                            ->placeholder('e.g. 5 yrs')
+                            ->label('Estimated useful life (months)')
+                            ->placeholder('e.g. 36')
+                            ->numeric()
+                            ->minValue(1)
                             ->required(fn (Get $get): bool => self::isSemiExpendableCategory($get('item_category_filter')))
                             ->helperText(SemiExpendableUsefulLife::labelSummary())
                             ->visible(fn (Get $get): bool => self::isSemiExpendableCategory($get('item_category_filter')))
+                            ->dehydrateStateUsing(fn ($state): ?string => SemiExpendableUsefulLife::storeFromMonths($state))
+                            ->formatStateUsing(fn ($state): ?string => SemiExpendableUsefulLife::parseToMonths($state) !== null
+                                ? (string) SemiExpendableUsefulLife::parseToMonths($state)
+                                : (filled($state) ? (string) $state : null))
                             ->rule(function (Get $get) {
                                 return function (string $attribute, $value, \Closure $fail) use ($get): void {
                                     if (! self::isSemiExpendableCategory($get('item_category_filter'))) {
@@ -370,7 +376,9 @@ class IssuanceForm
                                     }
 
                                     try {
-                                        SemiExpendableUsefulLife::assertEligibleForSemi($value);
+                                        SemiExpendableUsefulLife::assertEligibleForSemi(
+                                            SemiExpendableUsefulLife::storeFromMonths($value) ?? (string) $value,
+                                        );
                                     } catch (\Illuminate\Validation\ValidationException $exception) {
                                         $fail($exception->validator->errors()->first('estimated_useful_life'));
                                     }

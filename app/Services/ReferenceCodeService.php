@@ -220,14 +220,25 @@ class ReferenceCodeService
             return $code;
         }
 
+        $year = now()->format('Y');
+        $serial = str_pad((string) max(1, $sequence), 4, '0', STR_PAD_LEFT);
+
+        // Employee transaction numbers: YYYY-#### (no month), yearly reset.
+        if ($type === ReferenceSeries::TYPE_EMPLOYEE_REQUISITION_TRANSACTION) {
+            if (preg_match('/^\d{4}-(\d{4})$/', strtoupper(trim($code)), $matches) === 1) {
+                return $year.'-'.$matches[1];
+            }
+
+            return "{$year}-{$serial}";
+        }
+
         $normalized = strtoupper(trim($code));
         if (preg_match('/^\d{4}-\d{2}-(\d{4})$/', $normalized, $matches) === 1) {
-            return now()->format('Y').'-'.now()->format('m').'-'.$matches[1];
+            return $year.'-'.now()->format('m').'-'.$matches[1];
         }
 
         $typesRequiringControlFormat = [
             ReferenceSeries::TYPE_REQUISITION,
-            ReferenceSeries::TYPE_EMPLOYEE_REQUISITION_TRANSACTION,
             ReferenceSeries::TYPE_PROPERTY_ACTION_REQUEST,
             ReferenceSeries::TYPE_ISSUANCE,
             ReferenceSeries::TYPE_ISSUANCE_CONSUMABLES,
@@ -244,9 +255,7 @@ class ReferenceCodeService
             return $code;
         }
 
-        $year = now()->format('Y');
         $middle = now()->format('m');
-        $serial = str_pad((string) $sequence, 4, '0', STR_PAD_LEFT);
 
         return "{$year}-{$middle}-{$serial}";
     }

@@ -56,6 +56,7 @@ class PropertyActionRequest extends Model
         'offline_approval_attachment',
         'offline_signatories',
         'replacement_requisition_id',
+        'compiled_into_property_action_request_id',
         'executed_at',
         'archived_at',
     ];
@@ -110,6 +111,23 @@ class PropertyActionRequest extends Model
     public function replacementRequisition(): BelongsTo
     {
         return $this->belongsTo(Requisition::class, 'replacement_requisition_id');
+    }
+
+    public function compiledIntoPropertyActionRequest(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'compiled_into_property_action_request_id');
+    }
+
+    public function compiledSourcePropertyActionRequests(): HasMany
+    {
+        return $this->hasMany(self::class, 'compiled_into_property_action_request_id');
+    }
+
+    public function isUcApprovedForCompile(): bool
+    {
+        return $this->status === self::STATUS_PENDING_UC
+            && $this->uc_approved_at !== null
+            && $this->compiled_into_property_action_request_id === null;
     }
 
     public function propertyCount(): int
@@ -241,6 +259,10 @@ class PropertyActionRequest extends Model
 
     public function statusLabel(): string
     {
+        if ($this->status === self::STATUS_PENDING_UC && $this->uc_approved_at !== null) {
+            return 'Approved — ready to compile';
+        }
+
         return match ($this->status) {
             self::STATUS_APPROVED => 'Approved — awaiting item',
             self::STATUS_EXECUTED => 'Received & routed',

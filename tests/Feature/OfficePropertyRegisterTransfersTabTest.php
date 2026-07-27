@@ -78,4 +78,45 @@ class OfficePropertyRegisterTransfersTabTest extends TestCase
             ->call('openTransfer', Transfer::query()->where('reference_code', 'PTR-OUT-1')->value('id'))
             ->assertActionMounted('viewOfficeTransfer');
     }
+
+    public function test_transfers_tab_is_always_visible_and_lists_property_items_when_consumables_selected(): void
+    {
+        $home = Office::factory()->create(['name' => 'Home Office']);
+        $other = Office::factory()->create(['name' => 'Other Office']);
+        $uc = User::factory()->create([
+            'role' => User::ROLE_UNIT_CONSOLIDATOR,
+            'office_id' => $home->id,
+        ]);
+        $consumables = ItemCategory::factory()->create(['name' => 'Consumables']);
+        $semi = ItemCategory::factory()->create(['name' => 'Semi-Expendable']);
+        $item = Item::factory()->create([
+            'item_category_id' => $semi->id,
+            'name' => 'Filing Cabinet',
+        ]);
+        $custodian = User::factory()->create(['role' => User::ROLE_SUPPLY_CUSTODIAN]);
+
+        Transfer::withoutEvents(function () use ($home, $other, $item, $custodian): void {
+            Transfer::query()->create([
+                'reference_code' => 'PTR-SEMI-1',
+                'item_id' => $item->id,
+                'from_office_id' => $other->id,
+                'to_office_id' => $home->id,
+                'quantity' => 1,
+                'transfer_date' => now()->toDateString(),
+                'recorded_by' => $custodian->id,
+            ]);
+        });
+
+        Livewire::actingAs($uc)
+            ->test(OfficePropertyRegister::class, [
+                'category' => $consumables->id,
+                'tab' => OfficePropertyRegister::TAB_ON_HAND,
+            ])
+            ->assertSee('Transfers')
+            ->set('tab', OfficePropertyRegister::TAB_TRANSFERS)
+            ->assertSet('tab', OfficePropertyRegister::TAB_TRANSFERS)
+            ->assertDontSeeHtml('>Consumables</option>')
+            ->assertSee('PTR-SEMI-1')
+            ->assertSee('Filing Cabinet');
+    }
 }

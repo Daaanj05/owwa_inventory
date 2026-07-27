@@ -386,7 +386,7 @@ class OfficePropertyRegisterService
 
     public function paginateTransfersForUser(
         User $user,
-        int $categoryId,
+        ?int $categoryId = null,
         string $direction = 'all',
         ?string $search = null,
         int $perPage = 10,
@@ -397,14 +397,19 @@ class OfficePropertyRegisterService
             return new Paginator([], 0, $perPage, 1);
         }
 
+        $propertyCategoryNames = $this->propertyCategoryNames();
+
         $query = Transfer::query()
             ->with(['item.category', 'fromOffice', 'toOffice'])
             ->where(function (Builder $scope) use ($officeId): void {
                 $scope->where('from_office_id', $officeId)
                     ->orWhere('to_office_id', $officeId);
             })
+            ->whereHas('item.category', function (Builder $categoryQuery) use ($propertyCategoryNames): void {
+                $categoryQuery->whereIn('name', $propertyCategoryNames);
+            })
             ->when(
-                $categoryId > 0,
+                $categoryId !== null && $categoryId > 0,
                 fn (Builder $q): Builder => $q->whereHas(
                     'item',
                     fn (Builder $itemQuery): Builder => $itemQuery->where('item_category_id', $categoryId),

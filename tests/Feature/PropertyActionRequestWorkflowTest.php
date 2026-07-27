@@ -35,6 +35,7 @@ class PropertyActionRequestWorkflowTest extends TestCase
             'requested_by' => $employee->id,
             'accountable_user_id' => $uc->id,
             'office_id' => $issuance->office_id,
+            'department_id' => $issuance->department_id,
             'status' => PropertyActionRequest::STATUS_DRAFT,
         ], $issuance, $unit);
 
@@ -44,19 +45,26 @@ class PropertyActionRequestWorkflowTest extends TestCase
         $this->assertSame(PropertyActionRequest::STATUS_PENDING_UC, $request->fresh()->status);
 
         $workflow->approveByUnitConsolidator($request->fresh(), $uc);
+        $this->assertSame(PropertyActionRequest::STATUS_PENDING_UC, $request->fresh()->status);
+        $this->assertNotNull($request->fresh()->uc_approved_at);
+
+        $batch = app(\App\Services\PropertyActionRequestCompileService::class)
+            ->createCompiledSubmission($uc, [$request->fresh()]);
+        $this->assertSame(PropertyActionRequest::STATUS_PENDING_SC, $batch->status);
+        $this->assertSame($batch->id, $request->fresh()->compiled_into_property_action_request_id);
         $this->assertSame(PropertyActionRequest::STATUS_PENDING_SC, $request->fresh()->status);
 
-        $workflow->approveBySupplyCustodian($request->fresh(), $custodian);
-        $this->assertSame(PropertyActionRequest::STATUS_APPROVED, $request->fresh()->status);
+        $workflow->approveBySupplyCustodian($batch->fresh(), $custodian);
+        $this->assertSame(PropertyActionRequest::STATUS_APPROVED, $batch->fresh()->status);
 
         $propertyNumber = $issuance->property_number;
 
-        $workflow->execute($request->fresh(), $custodian);
+        $workflow->execute($batch->fresh(), $custodian);
 
-        $request->refresh();
-        $line = $request->lines()->first();
+        $batch->refresh();
+        $line = $batch->lines()->first();
         $this->assertNotNull($line);
-        $this->assertSame(PropertyActionRequest::STATUS_EXECUTED, $request->status);
+        $this->assertSame(PropertyActionRequest::STATUS_EXECUTED, $batch->status);
         $this->assertNotNull($line->disposal_id);
         $this->assertSame(InventoryUnit::STATUS_DISPOSED, $unit->fresh()->status);
         $this->assertSame($propertyNumber, $issuance->fresh()->property_number);
@@ -64,7 +72,7 @@ class PropertyActionRequestWorkflowTest extends TestCase
         $this->assertSame('disposal', $issuance->fresh()->custody_end_type);
         $this->assertSame($unit->id, Disposal::query()->find($line->disposal_id)?->inventory_unit_id);
         $this->assertSame('Approved — awaiting item', (new PropertyActionRequest(['status' => PropertyActionRequest::STATUS_APPROVED]))->statusLabel());
-        $this->assertSame('Received & routed', $request->statusLabel());
+        $this->assertSame('Received & routed', $batch->statusLabel());
     }
 
     public function test_receive_and_route_dispose_overrides_return_action_type(): void
@@ -223,6 +231,10 @@ class PropertyActionRequestWorkflowTest extends TestCase
         $uc = User::factory()->create([
             'role' => User::ROLE_UNIT_CONSOLIDATOR,
             'office_id' => $office->id,
+            'department_id' => $department->id,
+        ]);
+        $uc->syncOfficeAssignments([
+            ['office_id' => $office->id, 'department_id' => $department->id],
         ]);
         $custodian = User::factory()->create([
             'role' => User::ROLE_SUPPLY_CUSTODIAN,
