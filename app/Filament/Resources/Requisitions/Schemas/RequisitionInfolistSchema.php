@@ -156,11 +156,32 @@ class RequisitionInfolistSchema
                 ->visible(fn (): bool => ! $forModal),
             TextEntry::make('approvedBy.name')
                 ->label('Actioned by')
-                ->placeholder('—'),
+                ->placeholder('—')
+                ->state(function (Requisition $record): ?string {
+                    if ($record->approved_at === null || $record->created_at === null) {
+                        return $record->approvedBy?->name;
+                    }
+
+                    if ($record->approved_at->lt($record->created_at)) {
+                        return null;
+                    }
+
+                    return $record->approvedBy?->name;
+                }),
             TextEntry::make('approved_at')
                 ->label('Actioned on')
-                ->dateTime('M d, Y h:i A')
-                ->placeholder('—'),
+                ->placeholder('—')
+                ->state(function (Requisition $record): ?string {
+                    if ($record->approved_at === null) {
+                        return null;
+                    }
+
+                    if ($record->created_at !== null && $record->approved_at->lt($record->created_at)) {
+                        return null;
+                    }
+
+                    return $record->approved_at->format('M d, Y h:i A');
+                }),
             TextEntry::make('purpose')
                 ->label(fn (Requisition $record): string => $record->isEmployeeRequest() && $record->compiled_into_requisition_id === null
                     ? 'Purpose'

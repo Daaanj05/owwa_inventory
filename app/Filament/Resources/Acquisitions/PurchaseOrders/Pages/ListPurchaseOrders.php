@@ -3,7 +3,9 @@
 namespace App\Filament\Resources\Acquisitions\PurchaseOrders\Pages;
 
 use App\Filament\Concerns\HasSystemAdminWizardHeading;
+use App\Filament\Concerns\StartsOwwaExportBusy;
 use App\Filament\Concerns\SyncsActiveItemCategory;
+use App\Filament\Resources\Acquisitions\Concerns\AcquisitionProcurementExportAction;
 use App\Filament\Resources\Acquisitions\Concerns\HasAcquisitionDocumentTabs;
 use App\Filament\Resources\Acquisitions\PurchaseOrders\PurchaseOrderResource;
 use App\Filament\Support\OwwaFormModalDefaults;
@@ -29,6 +31,7 @@ class ListPurchaseOrders extends ListRecords
 {
     use HasAcquisitionDocumentTabs;
     use HasSystemAdminWizardHeading;
+    use StartsOwwaExportBusy;
     use SyncsActiveItemCategory;
 
     #[Url]
@@ -95,13 +98,14 @@ class ListPurchaseOrders extends ListRecords
     public function content(Schema $schema): Schema
     {
         $actionsComponent = Actions::make([
+            AcquisitionProcurementExportAction::make('po'),
             OwwaFormModalDefaults::apply(
                 Action::make('createPo')
                     ->label('Create PO')
                     ->icon('heroicon-o-plus')
                     ->color('primary')
                     ->modalHeading('Choose purchase request')
-                    ->modalDescription('Select an offline-approved PR that does not yet have a purchase order.')
+                    ->modalDescription('Select an approved PR that does not yet have a purchase order.')
                     ->modalSubmitActionLabel('Create PO')
                     ->form([
                         Select::make('acquisition_paperwork_id')

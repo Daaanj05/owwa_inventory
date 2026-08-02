@@ -58,10 +58,10 @@ trait StartsOwwaExportBusy
                 'title' => $title,
                 'message' => $message,
                 'token' => $token,
+                'url' => $downloadUrl,
                 'autoClearMs' => $autoClearMs,
             ], JSON_UNESCAPED_SLASHES)
             .'}));'
-            .'window.setTimeout(() => { window.location.assign('.json_encode($downloadUrl, JSON_UNESCAPED_SLASHES).'); }, 50);'
             .'})();'
         );
     }

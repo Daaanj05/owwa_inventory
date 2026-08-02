@@ -29,7 +29,7 @@ class ConfiguresOwwaViewAction
             ->label('')
             ->tableIcon(null)
             ->extraAttributes(['class' => 'sr-only'])
-            ->extraModalWindowAttributes(['class' => $windowClass])
+            ->extraModalWindowAttributes(['class' => $windowClass], merge: true)
             ->closeModalByClickingAway(false)
             ->closeModalByEscaping(false)
             ->modalSubmitAction(false)

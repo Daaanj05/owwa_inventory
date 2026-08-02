@@ -201,8 +201,8 @@ class RequisitionFulfillmentService
                 $requisition->load('items');
 
                 $requisition->update([
-                    'approved_by' => $requisition->approved_by ?? $custodian->id,
-                    'approved_at' => $requisition->approved_at ?? now(),
+                    'approved_by' => $custodian->id,
+                    'approved_at' => now(),
                     'status' => $this->resolveStatusAfterIssue($requisition),
                 ]);
             }

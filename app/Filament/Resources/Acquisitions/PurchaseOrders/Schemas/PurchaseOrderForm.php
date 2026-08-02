@@ -7,7 +7,6 @@ use App\Models\Supplier;
 use App\Models\SupplierAddress;
 use App\Support\ModeOfProcurementOptions;
 use App\Support\SupplyOfficeResolver;
-use Filament\Forms\Components\Checkbox;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Repeater;
@@ -15,11 +14,13 @@ use Filament\Forms\Components\Repeater\TableColumn;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
+use Filament\Notifications\Notification;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\HtmlString;
 
 class PurchaseOrderForm
@@ -30,25 +31,51 @@ class PurchaseOrderForm
             ->columns(1)
             ->components([
                 Section::make('Purchase request')
-                    ->description('Linked approved PR details (read-only).')
+                    ->description('Linked approved PR.')
                     ->columns(2)
                     ->schema([
                         Placeholder::make('pr_number_display')
                             ->label('PR No.')
                             ->content(fn (?PurchaseOrder $record): string => $record?->purchaseRequest?->pr_number ?: '—'),
+                    ]),
+                Section::make('Line items')
+                    ->description('Set quantities and unit costs for each PR line to include on this PO.')
+                    ->schema([
+                        self::linesRepeater()->columnSpanFull(),
+                        Placeholder::make('grand_total_amount')
+                            ->label('Total Amount')
+                            ->content(function (Get $get): string {
+                                $total = collect($get('lines') ?? [])
+                                    ->sum(function (mixed $line): float {
+                                        if (! is_array($line)) {
+                                            return 0.0;
+                                        }
+
+                                        $qty = (int) ($line['po_quantity'] ?? 0);
+                                        $cost = $line['unit_cost'] ?? null;
+
+                                        if ($qty <= 0 || blank($cost)) {
+                                            return 0.0;
+                                        }
+
+                                        return (float) $cost * $qty;
+                                    });
+
+                                return $total > 0
+                                    ? '₱'.number_format($total, 2)
+                                    : '—';
+                            })
+                            ->extraAttributes(['class' => 'owwa-po-grand-total']),
+                    ]),
+                Section::make('Purpose and purchase order details')
+                    ->description('Purpose from the PR, then supplier and delivery details. Save to get a PO No., export for signature, then mark Approved.')
+                    ->columns(2)
+                    ->schema([
                         Placeholder::make('pr_purpose_display')
                             ->label('Purpose')
                             ->content(fn (?PurchaseOrder $record): string => $record?->purchaseRequest?->purpose ?: '—')
                             ->columnSpanFull(),
-                    ]),
-                Section::make('Purchase order')
-                    ->description('Fill supplier and delivery details, then save and submit for export.')
-                    ->columns(2)
-                    ->schema(self::headerFields()),
-                Section::make('Line items')
-                    ->description('Select which PR lines and quantities to order. Unordered lines stay visible for reference.')
-                    ->schema([
-                        self::linesRepeater()->columnSpanFull(),
+                        ...self::headerFields(),
                     ]),
             ]);
     }
@@ -62,6 +89,7 @@ class PurchaseOrderForm
             Placeholder::make('po_number_display')
                 ->label('PO No.')
                 ->content(fn (?PurchaseOrder $record): string => filled($record?->number) ? (string) $record->number : '—')
+                ->hintIcon(Heroicon::QuestionMarkCircle, 'Assigned automatically when the purchase order is saved.')
                 ->visible(fn (?PurchaseOrder $record): bool => filled($record?->number)),
             DatePicker::make('po_date')
                 ->label('PO date')
@@ -131,24 +159,39 @@ class PurchaseOrderForm
                 ->disabled(fn (?PurchaseOrder $record): bool => ! self::isEditable($record)),
             DatePicker::make('date_of_delivery')
                 ->label('Date of delivery')
-                ->minDate(fn (Get $get): ?\Illuminate\Support\Carbon => filled($get('po_date'))
-                    ? \Illuminate\Support\Carbon::parse((string) $get('po_date'))->addDay()
-                    : now()->addDay())
+                ->required()
+                ->native(false)
+                ->displayFormat('Y-m-d')
+                ->minDate(fn (Get $get): Carbon => self::minDeliveryDate($get('po_date')))
+                ->maxDate(fn (): Carbon => now()->addYears(5)->startOfDay())
                 ->rule(fn (Get $get): \Closure => function (string $attribute, $value, \Closure $fail) use ($get): void {
-                    if (blank($value) || blank($get('po_date'))) {
+                    if (blank($value)) {
                         return;
                     }
 
-                    $delivery = \Illuminate\Support\Carbon::parse((string) $value)->startOfDay();
-                    $poDate = \Illuminate\Support\Carbon::parse((string) $get('po_date'))->startOfDay();
+                    try {
+                        $delivery = Carbon::parse((string) $value)->startOfDay();
+                    } catch (\Throwable) {
+                        $fail('Enter a valid date of delivery.');
 
-                    if ($delivery->lessThanOrEqualTo($poDate)) {
-                        $fail('Date of delivery must be after the PO date.');
+                        return;
+                    }
+
+                    if ($delivery->year < now()->year || $delivery->year > now()->year + 5) {
+                        $fail('Date of delivery year must be between '.now()->year.' and '.(now()->year + 5).'.');
+
+                        return;
+                    }
+
+                    $minDate = self::minDeliveryDate($get('po_date'));
+                    if ($delivery->lt($minDate)) {
+                        $fail('Date of delivery cannot be in the past and must be after the PO date.');
                     }
                 })
                 ->disabled(fn (?PurchaseOrder $record): bool => ! self::isEditable($record)),
             TextInput::make('payment_term')
                 ->label('Payment term')
+                ->required()
                 ->disabled(fn (?PurchaseOrder $record): bool => ! self::isEditable($record)),
             Textarea::make('technical_specifications')
                 ->label('Technical specification / Remarks')
@@ -163,33 +206,38 @@ class PurchaseOrderForm
         ];
     }
 
+    protected static function minDeliveryDate(mixed $poDate): Carbon
+    {
+        $afterPo = filled($poDate)
+            ? Carbon::parse((string) $poDate)->startOfDay()->addDay()
+            : now()->startOfDay()->addDay();
+
+        $today = now()->startOfDay();
+
+        return $afterPo->greaterThan($today) ? $afterPo : $today;
+    }
+
     protected static function linesRepeater(): Repeater
     {
         return Repeater::make('lines')
             ->relationship()
             ->hiddenLabel()
-            ->extraAttributes(['class' => 'owwa-acquisition-lines-repeater fi-fixed-positioning-context'])
+            ->extraAttributes(['class' => 'owwa-acquisition-lines-repeater owwa-po-lines-repeater fi-fixed-positioning-context'])
             ->addable(false)
             ->deletable(false)
             ->reorderable(false)
             ->table([
-                TableColumn::make('Order')->width('7%'),
-                TableColumn::make('Item')->width('18%'),
+                TableColumn::make('Item')->width('20%'),
                 TableColumn::make('Stock No.')->width('12%'),
-                TableColumn::make('Description')->width('16%'),
+                TableColumn::make('Description')->width('18%'),
                 TableColumn::make('Unit')->width('8%'),
-                TableColumn::make('PR qty')->width('8%'),
-                TableColumn::make('PO qty')->markAsRequired()->width('8%'),
-                TableColumn::make('Unit cost')->markAsRequired()->width('12%'),
-                TableColumn::make('Total')->width('11%'),
+                TableColumn::make('Requested Qty')->width('8%'),
+                TableColumn::make('Ordered Qty')->markAsRequired()->width('8%'),
+                TableColumn::make('Unit cost')->markAsRequired()->width('14%'),
+                TableColumn::make('Total Amount')->width('12%'),
             ])
             ->compact()
             ->schema([
-                Checkbox::make('is_ordered')
-                    ->hiddenLabel()
-                    ->live()
-                    ->disabled(fn (mixed $record): bool => ! self::isEditable($record))
-                    ->dehydrated(),
                 Placeholder::make('item_name')
                     ->hiddenLabel()
                     ->content(fn (Get $get): string => \App\Models\Item::query()->whereKey($get('item_id'))->value('name') ?? '—'),
@@ -222,37 +270,46 @@ class PurchaseOrderForm
                     ->hiddenLabel()
                     ->numeric()
                     ->minValue(0)
-                    ->required(fn (Get $get): bool => (bool) $get('is_ordered'))
+                    ->required()
+                    ->live(onBlur: true)
                     ->rule(fn (Get $get): \Closure => function (string $attribute, $value, \Closure $fail) use ($get): void {
-                        if (! $get('is_ordered')) {
+                        $prQty = (int) ($get('pr_quantity') ?? 0);
+                        if ((int) $value < 1 || (int) $value > $prQty) {
+                            $fail('Max '.$prQty);
+                        }
+                    })
+                    ->disabled(fn (mixed $record): bool => ! self::isEditable($record))
+                    ->dehydrated()
+                    ->afterStateUpdated(function (mixed $state, Get $get): void {
+                        $prQty = (int) ($get('pr_quantity') ?? 0);
+                        if ($prQty < 1 || blank($state)) {
                             return;
                         }
 
-                        $prQty = (int) ($get('pr_quantity') ?? 0);
-                        if ((int) $value < 1 || (int) $value > $prQty) {
-                            $fail('PO quantity must be between 1 and PR quantity.');
+                        $qty = (int) $state;
+                        if ($qty >= 1 && $qty <= $prQty) {
+                            return;
                         }
+
+                        Notification::make()
+                            ->danger()
+                            ->title('Ordered Qty must be between 1 and Requested Qty ('.$prQty.')')
+                            ->send();
                     })
-                    ->disabled(fn (Get $get, mixed $record): bool => ! self::isEditable($record) || ! $get('is_ordered'))
-                    ->dehydrated()
-                    ->live(onBlur: true)
                     ->extraInputAttributes(['class' => 'owwa-acquisition-line-qty', 'inputmode' => 'numeric']),
                 TextInput::make('unit_cost')
                     ->hiddenLabel()
                     ->numeric()
                     ->prefix('₱')
-                    ->required(fn (Get $get): bool => (bool) $get('is_ordered'))
-                    ->disabled(fn (Get $get, mixed $record): bool => ! self::isEditable($record) || ! $get('is_ordered'))
+                    ->required()
+                    ->disabled(fn (mixed $record): bool => ! self::isEditable($record))
                     ->dehydrated()
-                    ->live(onBlur: true)
+                    ->live()
                     ->extraInputAttributes(['class' => 'owwa-acquisition-line-unit-cost', 'inputmode' => 'decimal']),
                 Placeholder::make('line_total')
                     ->hiddenLabel()
+                    ->extraAttributes(['class' => 'owwa-acquisition-line-total'])
                     ->content(function (Get $get): string {
-                        if (! $get('is_ordered')) {
-                            return '—';
-                        }
-
                         $qty = (int) ($get('po_quantity') ?? 0);
                         $cost = $get('unit_cost');
                         if ($qty <= 0 || blank($cost)) {
@@ -261,6 +318,9 @@ class PurchaseOrderForm
 
                         return '₱'.number_format((float) $cost * $qty, 2);
                     }),
+                \Filament\Forms\Components\Hidden::make('is_ordered')
+                    ->default(true)
+                    ->dehydrated(),
                 \Filament\Forms\Components\Hidden::make('pr_quantity')->dehydrated(),
                 \Filament\Forms\Components\Hidden::make('item_id')->dehydrated(),
                 \Filament\Forms\Components\Hidden::make('description')->dehydrated(),

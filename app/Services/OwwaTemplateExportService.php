@@ -1439,16 +1439,30 @@ class OwwaTemplateExportService
      * Serialize a spreadsheet to PDF bytes.
      * Prefers LibreOffice headless (Excel-like layout); falls back to Dompdf.
      */
-    public function spreadsheetToPdfBinary(Spreadsheet $spreadsheet): string
+    public function spreadsheetToPdfBinary(Spreadsheet $spreadsheet, ?int $libreOfficeTimeoutSeconds = null): string
     {
         $xlsxBinary = $this->spreadsheetToXlsxBinary($spreadsheet);
 
-        $libreOfficePdf = app(LibreOfficePdfConverter::class)->convertXlsxBinary($xlsxBinary);
+        $libreOfficePdf = app(LibreOfficePdfConverter::class)->convertXlsxBinary(
+            $xlsxBinary,
+            $libreOfficeTimeoutSeconds,
+        );
         if (is_string($libreOfficePdf) && str_starts_with($libreOfficePdf, '%PDF')) {
             return $libreOfficePdf;
         }
 
         return $this->spreadsheetToDompdfBinary($spreadsheet);
+    }
+
+    /**
+     * LibreOffice-only PDF (Excel-like OWWA layout). Returns null when unavailable.
+     */
+    public function spreadsheetToLibreOfficePdfBinary(Spreadsheet $spreadsheet, ?int $timeoutSeconds = null): ?string
+    {
+        $xlsxBinary = $this->spreadsheetToXlsxBinary($spreadsheet);
+        $pdf = app(LibreOfficePdfConverter::class)->convertXlsxBinary($xlsxBinary, $timeoutSeconds);
+
+        return is_string($pdf) && str_starts_with($pdf, '%PDF') ? $pdf : null;
     }
 
     /**
@@ -1474,7 +1488,7 @@ class OwwaTemplateExportService
         }
 
         $writer = new \PhpOffice\PhpSpreadsheet\Writer\Pdf\Dompdf($spreadsheet);
-        $writer->setSheetIndex(0);
+        $writer->writeAllSheets();
 
         ob_start();
         $writer->save('php://output');
@@ -2566,7 +2580,7 @@ class OwwaTemplateExportService
         $rsmiMap = OwwaCellMapping::form('RSMI');
         $values = [];
         OwwaCellMapping::applyHeader($values, (array) ($rsmiMap['header'] ?? []), [
-            'entity_name' => $office?->name ?? '',
+            'entity_name' => (string) config('owwa_export_standards.entity_name', 'OWWA-4A'),
             'serial_no' => $rsmiSerial,
             'fund_cluster' => '',
             'date' => $reportDate,
@@ -2719,7 +2733,7 @@ class OwwaTemplateExportService
 
         $values = [];
         OwwaCellMapping::applyHeader($values, (array) ($parMap['header'] ?? []), [
-            'entity_name' => $office?->name ?? '',
+            'entity_name' => (string) config('owwa_export_standards.entity_name', 'OWWA-4A'),
             'fund_cluster' => '',
             'par_no' => $this->ensureControlNumberFormat($first->controlNumber(), $first->issuance_date?->format('Y-m-d'), 'yearly'),
         ]);
@@ -2830,7 +2844,7 @@ class OwwaTemplateExportService
 
         $values = [];
         OwwaCellMapping::applyHeader($values, (array) ($icsMap['header'] ?? []), [
-            'entity_name' => $office?->name ?? '',
+            'entity_name' => (string) config('owwa_export_standards.entity_name', 'OWWA-4A'),
             'fund_cluster' => '',
             'ics_no' => $this->ensureControlNumberFormat($first->controlNumber(), $first->issuance_date?->format('Y-m-d'), 'yearly'),
         ]);
@@ -2945,7 +2959,7 @@ class OwwaTemplateExportService
 
         $values = [];
         OwwaCellMapping::applyHeader($values, (array) ($scMap['header'] ?? []), [
-            'entity_name' => $office?->name ?? '',
+            'entity_name' => (string) config('owwa_export_standards.entity_name', 'OWWA-4A'),
             'fund_cluster' => '',
             'item' => $item?->name ?? '',
             'stock_no' => $item?->item_code ?? '',
@@ -3011,7 +3025,7 @@ class OwwaTemplateExportService
 
         return [
             'header' => [
-                'entity_name' => $office?->name ?? '',
+                'entity_name' => (string) config('owwa_export_standards.entity_name', 'OWWA-4A'),
                 'fund_cluster' => '',
                 'property_type' => \App\Support\ItemPropertyClass::propertyTypeLabel($propertyClass),
                 'property_number' => $item?->resolvedSemiExpendablePropertyNumber() ?? $item?->item_code ?? '',
@@ -3064,7 +3078,7 @@ class OwwaTemplateExportService
 
         $values = [];
         OwwaCellMapping::applyHeader($values, (array) ($ptrMap['header'] ?? []), [
-            'entity_name' => $from?->name ?? $to?->name ?? '',
+            'entity_name' => (string) config('owwa_export_standards.entity_name', 'OWWA-4A'),
             'fund_cluster' => '',
             'from_accountable' => $transfer->from_accountable_officer ?? $from?->name ?? '',
             'ptr_no' => $this->ensureControlNumberFormat($transfer->reference_code, $transfer->transfer_date?->format('Y-m-d'), 'yearly'),
@@ -3107,7 +3121,7 @@ class OwwaTemplateExportService
 
         $values = [];
         OwwaCellMapping::applyHeader($values, (array) ($rsmiMap['header'] ?? []), [
-            'entity_name' => $from?->name ?? $to?->name ?? '',
+            'entity_name' => (string) config('owwa_export_standards.entity_name', 'OWWA-4A'),
             'serial_no' => $this->ensureControlNumberFormat($transfer->reference_code, $transfer->transfer_date?->format('Y-m-d'), 'monthly'),
             'fund_cluster' => '',
             'date' => $transfer->transfer_date?->format('Y-m-d') ?? '',
@@ -3236,7 +3250,7 @@ class OwwaTemplateExportService
 
         $values = [];
         OwwaCellMapping::applyHeader($values, (array) ($risMap['header'] ?? []), [
-            'entity_name' => $office?->name ?? '',
+            'entity_name' => (string) config('owwa_export_standards.entity_name', 'OWWA-4A'),
             'fund_cluster' => '',
             'division' => $department?->name ?? '',
             'responsibility_center_code' => $responsibilityCenterCode,
@@ -3273,9 +3287,9 @@ class OwwaTemplateExportService
                 $noCol = $columns['stock_no_col'] ?? 'F';
                 $stockLevel = $itemLine->stock_available ?? $itemLine->stock_at_request;
                 if ((int) $stockLevel > 0) {
-                    $values[OwwaCellMapping::columnCell($yesCol, $row)] = 'X';
+                    $values[OwwaCellMapping::columnCell($yesCol, $row)] = '✓';
                 } else {
-                    $values[OwwaCellMapping::columnCell($noCol, $row)] = 'X';
+                    $values[OwwaCellMapping::columnCell($noCol, $row)] = '✓';
                 }
             }
 
@@ -3968,6 +3982,15 @@ class OwwaTemplateExportService
         return $this->cellValuesForIssuanceRsmi($pseudoIssuance);
     }
 
+    public function acquisitionPaperworkFilledSpreadsheet(AcquisitionPaperwork $paperwork, string $formSlug): Spreadsheet
+    {
+        $paperwork->loadMissing(['office', 'department', 'itemCategory', 'lines.item']);
+        $templateFilename = $this->getTemplatePathForCategory('acquisition_paperwork', $paperwork->itemCategory, $formSlug);
+        $this->requireTemplatePath($templateFilename);
+
+        return $this->buildProcurementSpreadsheet($paperwork, $formSlug, $templateFilename);
+    }
+
     public function downloadAcquisitionPaperworkPr(AcquisitionPaperwork $paperwork): StreamedResponse
     {
         return $this->downloadAcquisitionPaperworkForm($paperwork, 'pr');
@@ -4075,7 +4098,7 @@ class OwwaTemplateExportService
         ).$this->procurementContinuationSuffix($continuationPageIndex, $continuationPageCount);
 
         OwwaCellMapping::applyHeader($values, $headerMap, [
-            'entity_name' => $office?->name ?? '',
+            'entity_name' => (string) config('owwa_export_standards.entity_name', 'OWWA-4A'),
             'fund_cluster' => '',
             'pr_no' => $prNumber,
             'date' => $case->pr_date?->format('Y-m-d') ?? '',
@@ -4188,7 +4211,7 @@ class OwwaTemplateExportService
         $values = [];
 
         OwwaCellMapping::applyHeader($values, (array) ($iarMap['header'] ?? []), [
-            'entity_name' => $office?->name ?? '',
+            'entity_name' => (string) config('owwa_export_standards.entity_name', 'OWWA-4A'),
             'fund_cluster' => '',
             'supplier' => $case->supplier ?? '',
             'iar_no' => $this->ensureControlNumberFormat(

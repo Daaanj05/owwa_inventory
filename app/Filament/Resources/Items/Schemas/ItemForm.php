@@ -100,7 +100,19 @@ class ItemForm
                             ->required()
                             ->default('piece')
                             ->maxLength(50)
-                            ->helperText('How quantity is counted on OWWA forms (e.g. piece, ream, box).'),
+                            ->datalist(fn (): array => Item::query()
+                                ->whereNotNull('unit')
+                                ->where('unit', '!=', '')
+                                ->distinct()
+                                ->orderBy('unit')
+                                ->limit(50)
+                                ->pluck('unit')
+                                ->merge(['piece', 'ream', 'box'])
+                                ->unique()
+                                ->filter()
+                                ->values()
+                                ->all())
+                            ->helperText('How quantity is counted (e.g. piece, ream, box).'),
                         TextInput::make('value_type_display')
                             ->label('Value category (COA)')
                             ->disabled()
@@ -127,7 +139,6 @@ class ItemForm
                             ->options(ConsumableInventoryType::options())
                             ->required(fn (Get $get): bool => self::isConsumablesCategory($get('item_category_id')))
                             ->searchable()
-                            ->helperText('Printed on Appendix 66 RPCI as Type of Inventory Item.')
                             ->visible(fn (Get $get): bool => self::isConsumablesCategory($get('item_category_id')))
                             ->dehydrated(fn (Get $get): bool => self::isConsumablesCategory($get('item_category_id'))),
                         Select::make('property_class')

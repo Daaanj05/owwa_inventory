@@ -33,8 +33,8 @@
             <td><strong>Invoice Date:</strong> {{ optional($iar->invoice_date)->format('Y-m-d') }}</td>
         </tr>
         <tr>
-            <td><strong>Date Inspected:</strong> {{ optional($iar->date_inspected)->format('Y-m-d') }}</td>
-            <td><strong>Date Received:</strong> {{ optional($iar->date_received)->format('Y-m-d') }}</td>
+            <td><strong>Inspection Date:</strong> {{ optional($iar->date_inspected)->format('Y-m-d') }}</td>
+            <td><strong>Receive Date:</strong> {{ optional($iar->date_received)->format('Y-m-d') }}</td>
         </tr>
     </table>
 
@@ -44,9 +44,9 @@
                 <th>Stock No.</th>
                 <th>Description</th>
                 <th>Unit</th>
-                <th>PR Qty</th>
-                <th>PO Qty</th>
-                <th>IAR Qty</th>
+                <th>Requested Qty</th>
+                <th>Ordered Qty</th>
+                <th>Received Qty</th>
             </tr>
         </thead>
         <tbody>

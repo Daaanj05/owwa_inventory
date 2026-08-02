@@ -3546,6 +3546,15 @@ select.owwa-search-bar {
 .owwa-data-table th.owwa-num        { text-align: right; }
 .owwa-data-table th.owwa-status     { text-align: right; }
 
+.owwa-stock-ledger-modal .owwa-data-table tbody td.owwa-ledger-data-cell {
+    text-align: center;
+    vertical-align: middle;
+}
+
+.owwa-stock-ledger-modal .owwa-data-table tbody td.owwa-ledger-data-cell.owwa-num {
+    text-align: center;
+}
+
 .owwa-data-table--zebra tbody tr:nth-child(even):not(.owwa-row-low) {
     background-color: #fafafa;
 }
@@ -7497,16 +7506,79 @@ body.owwa-busy-active .fi-topbar a {
     background-clip: padding-box;
 }
 
-.fi-modal-window.owwa-record-modal .fi-modal-content,
+/*
+ * Stretch content only for generic record modals.
+ * PO/PR/IAR must hug fields — flex-grow leaves a white void above the footer.
+ */
+.fi-modal-window.owwa-record-modal:not(.owwa-acquisition-paperwork-modal):not(.owwa-po-modal) .fi-modal-content,
 .fi-modal-window.owwa-physical-count-modal .fi-modal-content {
     flex: 1 1 auto;
     overflow-y: auto;
     min-height: 0;
 }
 
-/* Compact create/edit forms: do not stretch empty space above sticky footer */
-.fi-modal-window.owwa-record-modal.owwa-view-record-modal:not(.owwa-acquisition-paperwork-modal):not(.owwa-requisition-employee-modal) .fi-modal-content {
+/* Compact create/edit forms: do not stretch empty space above sticky footer. */
+.fi-modal-window.owwa-record-modal.owwa-view-record-modal .fi-modal-content {
     flex: 0 1 auto !important;
+    flex-grow: 0 !important;
+}
+
+/*
+ * PO/PR/IAR white-space root cause:
+ * Filament validation scrollIntoView still scrolls overflow:hidden shells in Chrome,
+ * shifting the white card and leaving empty space under the footer.
+ * overflow:clip creates no scroll container, so the shell cannot move.
+ * Only .fi-modal-content remains scrollable.
+ */
+.fi-modal:has(.owwa-acquisition-paperwork-modal) > .fi-modal-window-ctn,
+.fi-modal:has(.owwa-po-modal) > .fi-modal-window-ctn {
+    overflow: clip !important;
+    overflow-x: clip !important;
+    overflow-y: clip !important;
+    overscroll-behavior: none !important;
+    align-content: center !important;
+    justify-items: center !important;
+    grid-template-rows: minmax(0, 1fr) auto minmax(0, 1fr) !important;
+    max-height: 100dvh !important;
+}
+
+.fi-modal.fi-modal-has-sticky-footer:has(.owwa-acquisition-paperwork-modal) > .fi-modal-window-ctn > .fi-modal-window,
+.fi-modal.fi-modal-has-sticky-footer:has(.owwa-po-modal) > .fi-modal-window-ctn > .fi-modal-window,
+.fi-modal-window.owwa-record-modal.owwa-acquisition-paperwork-modal,
+.fi-modal-window.owwa-record-modal.owwa-po-modal {
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: min(90vh, calc(100dvh - 2rem)) !important;
+    overflow: clip !important;
+    overflow-x: clip !important;
+    overflow-y: clip !important;
+    overscroll-behavior: none !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: flex-start !important;
+    align-self: center !important;
+}
+
+.fi-modal-window.owwa-record-modal.owwa-acquisition-paperwork-modal .fi-modal-header,
+.fi-modal-window.owwa-record-modal.owwa-po-modal .fi-modal-header,
+.fi-modal-window.owwa-record-modal.owwa-acquisition-paperwork-modal .fi-modal-footer,
+.fi-modal-window.owwa-record-modal.owwa-po-modal .fi-modal-footer {
+    flex: 0 0 auto !important;
+    position: relative !important;
+}
+
+.fi-modal-window.owwa-record-modal.owwa-acquisition-paperwork-modal .fi-modal-content,
+.fi-modal-window.owwa-record-modal.owwa-po-modal .fi-modal-content {
+    flex: 0 1 auto !important;
+    flex-grow: 0 !important;
+    flex-shrink: 1 !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: min(65vh, calc(100dvh - 12rem)) !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    overflow-anchor: none !important;
+    overscroll-behavior: contain !important;
 }
 
 .fi-modal-window.owwa-record-modal .fi-modal-footer,
@@ -7522,6 +7594,13 @@ body.owwa-busy-active .fi-topbar a {
     justify-content: flex-end;
     border-bottom-left-radius: 0.75rem !important;
     border-bottom-right-radius: 0.75rem !important;
+}
+
+/* PO/PR/IAR: footer must stay in normal flow (override sticky above). */
+.fi-modal-window.owwa-record-modal.owwa-acquisition-paperwork-modal .fi-modal-footer,
+.fi-modal-window.owwa-record-modal.owwa-po-modal .fi-modal-footer {
+    position: relative !important;
+    bottom: auto !important;
 }
 
 .dark .fi-modal-window.owwa-record-modal .fi-modal-footer,
@@ -7813,20 +7892,51 @@ body.owwa-busy-active .fi-topbar a {
 
 .fi-modal-window.owwa-record-modal .owwa-acquisition-lines-repeater > table > thead > tr > th,
 .fi-modal-window.owwa-record-modal .owwa-acquisition-lines-repeater > table > tbody > tr > td {
-    vertical-align: top;
+    vertical-align: top !important;
     word-break: break-word;
     overflow-wrap: anywhere;
 }
 
-/* Inventory item no. — wrap long codes instead of stealing Unit/Unit cost space */
-.fi-modal-window.owwa-record-modal .owwa-acquisition-lines-repeater > table > thead > tr > th:nth-child(2),
-.fi-modal-window.owwa-record-modal .owwa-acquisition-lines-repeater > table > tbody > tr > td:nth-child(2) {
+/* Keep field wrappers constrained inside table cells. */
+.fi-modal-window.owwa-record-modal .owwa-acquisition-lines-repeater .fi-fo-field,
+.fi-modal-window.owwa-record-modal .owwa-acquisition-lines-repeater .fi-fo-field-wrp {
+    min-width: 0;
+    max-width: 100%;
+}
+
+/*
+ * In-flow errors only (short). Absolute tips were expanding fi-modal-content
+ * scrollHeight, which created dead white space below the real form + footer
+ * that was not part of the table's horizontal scroll.
+ */
+.fi-modal-window.owwa-record-modal .owwa-acquisition-lines-repeater > table > tbody > tr > td [data-validation-error],
+.fi-modal-window.owwa-record-modal .owwa-acquisition-lines-repeater > table > tbody > tr > td .fi-fo-field-wrp-error-message,
+.fi-modal-window.owwa-record-modal .owwa-acquisition-lines-repeater > table > tbody > tr > td .fi-fo-field-wrp-error-list {
+    display: block;
+    position: static;
+    margin-top: 0.2rem;
+    max-width: 100%;
+    font-size: 0.6875rem;
+    line-height: 1.2;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
+/* Acquisition PO/PR/IAR edit modals: header stays compact. */
+.fi-modal-window.owwa-record-modal.owwa-acquisition-paperwork-modal .fi-modal-header,
+.fi-modal-window.owwa-record-modal.owwa-po-modal .fi-modal-header {
+    flex-shrink: 0;
+}
+
+/* PR line items only (column indices differ on PO/IAR). */
+.fi-modal-window.owwa-record-modal .owwa-pr-lines-repeater > table > thead > tr > th:nth-child(2),
+.fi-modal-window.owwa-record-modal .owwa-pr-lines-repeater > table > tbody > tr > td:nth-child(2) {
     overflow: hidden;
 }
 
-/* Unit */
-.fi-modal-window.owwa-record-modal .owwa-acquisition-lines-repeater > table > thead > tr > th:nth-child(4),
-.fi-modal-window.owwa-record-modal .owwa-acquisition-lines-repeater > table > tbody > tr > td:nth-child(4) {
+.fi-modal-window.owwa-record-modal .owwa-pr-lines-repeater > table > thead > tr > th:nth-child(4),
+.fi-modal-window.owwa-record-modal .owwa-pr-lines-repeater > table > tbody > tr > td:nth-child(4) {
     width: 5.5rem;
     min-width: 5.5rem;
     max-width: 5.5rem;
@@ -7835,9 +7945,8 @@ body.owwa-busy-active .fi-topbar a {
     padding-right: 0.35rem;
 }
 
-/* Qty — contain input so number spinners cannot overlay Unit */
-.fi-modal-window.owwa-record-modal .owwa-acquisition-lines-repeater > table > thead > tr > th:nth-child(5),
-.fi-modal-window.owwa-record-modal .owwa-acquisition-lines-repeater > table > tbody > tr > td:nth-child(5) {
+.fi-modal-window.owwa-record-modal .owwa-pr-lines-repeater > table > thead > tr > th:nth-child(5),
+.fi-modal-window.owwa-record-modal .owwa-pr-lines-repeater > table > tbody > tr > td:nth-child(5) {
     width: 4.5rem;
     min-width: 4.5rem;
     max-width: 4.5rem;
@@ -7846,9 +7955,8 @@ body.owwa-busy-active .fi-topbar a {
     padding-right: 0.35rem;
 }
 
-/* Unit cost */
-.fi-modal-window.owwa-record-modal .owwa-acquisition-lines-repeater > table > thead > tr > th:nth-child(6),
-.fi-modal-window.owwa-record-modal .owwa-acquisition-lines-repeater > table > tbody > tr > td:nth-child(6) {
+.fi-modal-window.owwa-record-modal .owwa-pr-lines-repeater > table > thead > tr > th:nth-child(6),
+.fi-modal-window.owwa-record-modal .owwa-pr-lines-repeater > table > tbody > tr > td:nth-child(6) {
     width: 8.25rem;
     min-width: 8.25rem;
     max-width: 8.25rem;
@@ -7857,13 +7965,89 @@ body.owwa-busy-active .fi-topbar a {
     padding-right: 0.35rem;
 }
 
-/* Total */
-.fi-modal-window.owwa-record-modal .owwa-acquisition-lines-repeater > table > thead > tr > th:nth-child(7),
-.fi-modal-window.owwa-record-modal .owwa-acquisition-lines-repeater > table > tbody > tr > td:nth-child(7) {
+.fi-modal-window.owwa-record-modal .owwa-pr-lines-repeater > table > thead > tr > th:nth-child(7),
+.fi-modal-window.owwa-record-modal .owwa-pr-lines-repeater > table > tbody > tr > td:nth-child(7) {
     width: 7rem;
     min-width: 7rem;
     white-space: nowrap;
     overflow: hidden;
+}
+
+/* PO: Item, Stock No., Description, Unit, PR qty, PO qty, Unit cost, Total */
+.fi-modal-window.owwa-record-modal .owwa-po-lines-repeater > table > thead > tr > th:nth-child(4),
+.fi-modal-window.owwa-record-modal .owwa-po-lines-repeater > table > tbody > tr > td:nth-child(4),
+.fi-modal-window.owwa-record-modal .owwa-po-lines-repeater > table > thead > tr > th:nth-child(5),
+.fi-modal-window.owwa-record-modal .owwa-po-lines-repeater > table > tbody > tr > td:nth-child(5) {
+    width: 5rem;
+    min-width: 4.75rem;
+    max-width: 5.5rem;
+    overflow: hidden;
+    padding-left: 0.35rem;
+}
+
+.fi-modal-window.owwa-record-modal .owwa-po-lines-repeater > table > thead > tr > th:nth-child(6),
+.fi-modal-window.owwa-record-modal .owwa-po-lines-repeater > table > tbody > tr > td:nth-child(6) {
+    width: 7.25rem;
+    min-width: 6.75rem;
+    max-width: 8rem;
+    overflow: visible;
+    padding-left: 0.25rem;
+    padding-right: 0.35rem;
+}
+
+.fi-modal-window.owwa-record-modal .owwa-po-lines-repeater > table > thead > tr > th:nth-child(7),
+.fi-modal-window.owwa-record-modal .owwa-po-lines-repeater > table > tbody > tr > td:nth-child(7) {
+    width: 8rem;
+    min-width: 7.5rem;
+    max-width: 8.5rem;
+    overflow: hidden;
+    padding-left: 0.35rem;
+    padding-right: 0.35rem;
+}
+
+.fi-modal-window.owwa-record-modal .owwa-po-lines-repeater > table > thead > tr > th:nth-child(8),
+.fi-modal-window.owwa-record-modal .owwa-po-lines-repeater > table > tbody > tr > td:nth-child(8) {
+    width: 7rem;
+    min-width: 6.5rem;
+    white-space: nowrap;
+    overflow: hidden;
+}
+
+/* Editable qty/cost cells — allow short in-flow error text. */
+.fi-modal-window.owwa-record-modal .owwa-po-lines-repeater > table > tbody > tr > td:nth-child(6),
+.fi-modal-window.owwa-record-modal .owwa-po-lines-repeater > table > tbody > tr > td:nth-child(7),
+.fi-modal-window.owwa-record-modal .owwa-iar-lines-repeater > table > tbody > tr > td:nth-child(6),
+.fi-modal-window.owwa-record-modal .owwa-pr-lines-repeater > table > tbody > tr > td:nth-child(5),
+.fi-modal-window.owwa-record-modal .owwa-pr-lines-repeater > table > tbody > tr > td:nth-child(6) {
+    overflow: visible;
+}
+
+/* IAR: Item, Stock No., Unit, PR qty, PO qty, IAR qty, Unit cost, Amount */
+.fi-modal-window.owwa-record-modal .owwa-iar-lines-repeater > table > thead > tr > th:nth-child(3),
+.fi-modal-window.owwa-record-modal .owwa-iar-lines-repeater > table > tbody > tr > td:nth-child(3),
+.fi-modal-window.owwa-record-modal .owwa-iar-lines-repeater > table > thead > tr > th:nth-child(4),
+.fi-modal-window.owwa-record-modal .owwa-iar-lines-repeater > table > tbody > tr > td:nth-child(4),
+.fi-modal-window.owwa-record-modal .owwa-iar-lines-repeater > table > thead > tr > th:nth-child(5),
+.fi-modal-window.owwa-record-modal .owwa-iar-lines-repeater > table > tbody > tr > td:nth-child(5),
+.fi-modal-window.owwa-record-modal .owwa-iar-lines-repeater > table > thead > tr > th:nth-child(6),
+.fi-modal-window.owwa-record-modal .owwa-iar-lines-repeater > table > tbody > tr > td:nth-child(6) {
+    width: 5rem;
+    min-width: 4.75rem;
+    max-width: 5.5rem;
+    overflow: hidden;
+    padding-left: 0.35rem;
+    padding-right: 0.35rem;
+}
+
+.fi-modal-window.owwa-record-modal .owwa-iar-lines-repeater > table > thead > tr > th:nth-child(7),
+.fi-modal-window.owwa-record-modal .owwa-iar-lines-repeater > table > tbody > tr > td:nth-child(7),
+.fi-modal-window.owwa-record-modal .owwa-iar-lines-repeater > table > thead > tr > th:nth-child(8),
+.fi-modal-window.owwa-record-modal .owwa-iar-lines-repeater > table > tbody > tr > td:nth-child(8) {
+    width: 7.5rem;
+    min-width: 7rem;
+    overflow: hidden;
+    padding-left: 0.35rem;
+    padding-right: 0.35rem;
 }
 
 .fi-modal-window.owwa-record-modal .owwa-acquisition-lines-repeater .fi-input-wrp,
@@ -7875,16 +8059,28 @@ body.owwa-busy-active .fi-topbar a {
     box-sizing: border-box;
 }
 
-/* Hide native number spinners — they were painting over the Unit column */
-.fi-modal-window.owwa-record-modal .owwa-acquisition-lines-repeater input[type='number'] {
+/* Hide native number spinners on cost fields — keep them on qty steppers */
+.fi-modal-window.owwa-record-modal .owwa-acquisition-lines-repeater input[type='number']:not(.owwa-acquisition-line-qty) {
     -moz-appearance: textfield;
     appearance: textfield;
 }
 
-.fi-modal-window.owwa-record-modal .owwa-acquisition-lines-repeater input[type='number']::-webkit-outer-spin-button,
-.fi-modal-window.owwa-record-modal .owwa-acquisition-lines-repeater input[type='number']::-webkit-inner-spin-button {
+.fi-modal-window.owwa-record-modal .owwa-acquisition-lines-repeater input[type='number']:not(.owwa-acquisition-line-qty)::-webkit-outer-spin-button,
+.fi-modal-window.owwa-record-modal .owwa-acquisition-lines-repeater input[type='number']:not(.owwa-acquisition-line-qty)::-webkit-inner-spin-button {
     -webkit-appearance: none;
     margin: 0;
+}
+
+.fi-modal-window.owwa-record-modal .owwa-acquisition-lines-repeater input.owwa-acquisition-line-qty {
+    -moz-appearance: auto;
+    appearance: auto;
+}
+
+.fi-modal-window.owwa-record-modal .owwa-acquisition-lines-repeater input.owwa-acquisition-line-qty::-webkit-outer-spin-button,
+.fi-modal-window.owwa-record-modal .owwa-acquisition-lines-repeater input.owwa-acquisition-line-qty::-webkit-inner-spin-button {
+    -webkit-appearance: auto;
+    margin: 0;
+    opacity: 1;
 }
 
 .fi-modal-window.owwa-record-modal .owwa-acquisition-lines-repeater .owwa-acquisition-line-unit {
@@ -7894,9 +8090,12 @@ body.owwa-busy-active .fi-topbar a {
     text-overflow: ellipsis;
 }
 
-.fi-modal-window.owwa-record-modal .owwa-acquisition-lines-repeater td:nth-child(6) .fi-input-wrp-prefix,
-.fi-modal-window.owwa-record-modal .owwa-acquisition-lines-repeater td:nth-child(6) .fi-input-wrp > .fi-icon,
-.fi-modal-window.owwa-record-modal .owwa-acquisition-lines-repeater td:nth-child(6) [data-slot='prefix'] {
+.fi-modal-window.owwa-record-modal .owwa-pr-lines-repeater td:nth-child(6) .fi-input-wrp-prefix,
+.fi-modal-window.owwa-record-modal .owwa-pr-lines-repeater td:nth-child(6) .fi-input-wrp > .fi-icon,
+.fi-modal-window.owwa-record-modal .owwa-pr-lines-repeater td:nth-child(6) [data-slot='prefix'],
+.fi-modal-window.owwa-record-modal .owwa-po-lines-repeater td:nth-child(7) .fi-input-wrp-prefix,
+.fi-modal-window.owwa-record-modal .owwa-po-lines-repeater td:nth-child(7) .fi-input-wrp > .fi-icon,
+.fi-modal-window.owwa-record-modal .owwa-po-lines-repeater td:nth-child(7) [data-slot='prefix'] {
     padding-inline: 0.2rem 0.15rem !important;
     font-size: 0.8125rem;
 }
@@ -7904,6 +8103,12 @@ body.owwa-busy-active .fi-topbar a {
 .fi-modal-window.owwa-record-modal .owwa-acquisition-lines-repeater .owwa-acquisition-line-unit-cost,
 .fi-modal-window.owwa-record-modal .owwa-acquisition-lines-repeater .owwa-acquisition-line-qty {
     padding-inline: 0.2rem !important;
+}
+
+.fi-modal-window.owwa-record-modal .owwa-po-grand-total {
+    margin-top: 0.5rem;
+    font-weight: 600;
+    font-size: 0.9375rem;
 }
 
 .fi-modal-window.owwa-record-modal .owwa-acquisition-lines-repeater textarea.owwa-acquisition-line-desc,

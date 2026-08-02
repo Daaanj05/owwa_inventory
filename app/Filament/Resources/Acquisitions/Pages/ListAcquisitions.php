@@ -3,8 +3,10 @@
 namespace App\Filament\Resources\Acquisitions\Pages;
 
 use App\Filament\Concerns\HasSystemAdminWizardHeading;
+use App\Filament\Concerns\StartsOwwaExportBusy;
 use App\Filament\Concerns\SyncsActiveItemCategory;
 use App\Filament\Resources\Acquisitions\AcquisitionResource;
+use App\Filament\Resources\Acquisitions\Concerns\AcquisitionProcurementExportAction;
 use App\Filament\Resources\Acquisitions\Concerns\HasAcquisitionDocumentTabs;
 use App\Filament\Support\OwwaFormModalDefaults;
 use App\Models\AcquisitionPaperwork;
@@ -31,6 +33,7 @@ class ListAcquisitions extends ListRecords
 {
     use HasAcquisitionDocumentTabs;
     use HasSystemAdminWizardHeading;
+    use StartsOwwaExportBusy;
     use SyncsActiveItemCategory;
 
     #[Url]
@@ -120,6 +123,7 @@ class ListAcquisitions extends ListRecords
     public function content(Schema $schema): Schema
     {
         $actionsComponent = Actions::make([
+            AcquisitionProcurementExportAction::make('pr'),
             OwwaFormModalDefaults::createActionForResource(AcquisitionResource::class, OwwaFormModalDefaults::WIDTH_WIDE)
                 ->label('New PR')
                 ->mountUsing(function (CreateAction $action, ?Schema $schema): void {

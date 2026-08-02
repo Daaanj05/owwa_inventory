@@ -59,6 +59,9 @@ class ItemsTable
                     Action::make('restore')
                         ->label('Restore')
                         ->icon('heroicon-o-arrow-uturn-left')
+                        ->requiresConfirmation()
+                        ->modalHeading('Restore item?')
+                        ->modalDescription('This item will return to the Active list.')
                         ->visible(fn (Item $record): bool => $record->archived_at !== null)
                         ->action(fn (Item $record) => $record->update(['archived_at' => null])),
                 ])
@@ -75,6 +78,7 @@ class ItemsTable
                         ->icon('heroicon-o-archive-box')
                         ->requiresConfirmation()
                         ->deselectRecordsAfterCompletion()
+                        ->visible(fn ($livewire): bool => ($livewire->activeTab ?? 'active') !== 'archived')
                         ->action(fn ($records) => $records->each(function (Item $record): void {
                             if ($record->archived_at === null) {
                                 $record->update(['archived_at' => now()]);
@@ -83,7 +87,10 @@ class ItemsTable
                     BulkAction::make('restore')
                         ->label('Restore selected')
                         ->icon('heroicon-o-arrow-uturn-left')
+                        ->requiresConfirmation()
+                        ->modalHeading('Restore selected items?')
                         ->deselectRecordsAfterCompletion()
+                        ->visible(fn ($livewire): bool => ($livewire->activeTab ?? 'active') === 'archived')
                         ->action(fn ($records) => $records->each(function (Item $record): void {
                             if ($record->archived_at !== null) {
                                 $record->update(['archived_at' => null]);

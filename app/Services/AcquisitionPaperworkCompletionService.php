@@ -92,12 +92,17 @@ class AcquisitionPaperworkCompletionService
             ]);
         }
 
-        $paperwork->update([
-            'pr_status' => AcquisitionPaperwork::STATUS_PENDING_APPROVAL,
-            'pr_submitted_at' => now(),
-        ]);
+        $payload = [
+            'pr_submitted_at' => $paperwork->pr_submitted_at ?? now(),
+        ];
 
-        return $paperwork;
+        if (blank($paperwork->pr_number)) {
+            $payload['pr_number'] = $this->referenceCodes->forAcquisitionPaperworkPr();
+        }
+
+        $paperwork->update($payload);
+
+        return $paperwork->fresh() ?? $paperwork;
     }
 
     public function approvePr(AcquisitionPaperwork $paperwork): AcquisitionPaperwork
@@ -110,18 +115,35 @@ class AcquisitionPaperworkCompletionService
             throw ValidationException::withMessages(['phase' => 'PR is already approved.']);
         }
 
-        if ($paperwork->pr_status !== AcquisitionPaperwork::STATUS_PENDING_APPROVAL) {
-            throw ValidationException::withMessages(['phase' => 'Submit PR for approval before marking approved.']);
+        if (! in_array($paperwork->pr_status, [
+            AcquisitionPaperwork::STATUS_DRAFT,
+            AcquisitionPaperwork::STATUS_PENDING_APPROVAL,
+        ], true)) {
+            throw ValidationException::withMessages(['phase' => 'PR cannot be approved in its current status.']);
         }
 
-        $paperwork->update([
-            'pr_number' => $this->referenceCodes->forAcquisitionPaperworkPr(),
+        $evaluation = $this->evaluatePr($paperwork);
+
+        if (! $evaluation['can_submit']) {
+            throw ValidationException::withMessages([
+                'phase' => 'Missing: '.implode(', ', $evaluation['missing_fields']).'.',
+            ]);
+        }
+
+        $payload = [
             'pr_status' => AcquisitionPaperwork::STATUS_APPROVED,
             'phase' => AcquisitionPaperwork::PHASE_PR,
             'pr_completed_at' => now(),
-        ]);
+            'pr_submitted_at' => $paperwork->pr_submitted_at ?? now(),
+        ];
 
-        return $paperwork;
+        if (blank($paperwork->pr_number)) {
+            $payload['pr_number'] = $this->referenceCodes->forAcquisitionPaperworkPr();
+        }
+
+        $paperwork->update($payload);
+
+        return $paperwork->fresh() ?? $paperwork;
     }
 
     public function archive(AcquisitionPaperwork $paperwork): AcquisitionPaperwork

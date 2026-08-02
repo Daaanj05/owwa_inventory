@@ -235,6 +235,8 @@ class AcquisitionPaperworkQrLabelsTest extends TestCase
             'supplier_address' => '123 Main St',
             'mode_of_procurement' => 'Shopping',
             'place_of_delivery' => 'OWWA RO',
+            'date_of_delivery' => now()->addDays(7)->toDateString(),
+            'payment_term' => '30 days',
             'technical_specifications' => 'N/A',
             'po_date' => now()->toDateString(),
         ]);
@@ -254,7 +256,7 @@ class AcquisitionPaperworkQrLabelsTest extends TestCase
         $this->assertNotNull($po);
 
         $iar = $iarService->createFromApprovedPo($po->fresh());
-        $iarDate = now()->startOfDay();
+        $iarDate = now()->subDays(4)->startOfDay();
         $iar->update([
             'invoice_number' => 'INV'.(string) $paperwork->id,
             'invoice_date' => $iarDate->copy()->addDay()->toDateString(),

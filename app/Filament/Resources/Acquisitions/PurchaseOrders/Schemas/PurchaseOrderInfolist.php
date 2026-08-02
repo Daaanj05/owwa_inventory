@@ -84,17 +84,13 @@ class PurchaseOrderInfolist
                         RepeatableEntry::make('lines')
                             ->hiddenLabel()
                             ->table([
-                                TableColumn::make('Ordered')->width('8%'),
                                 TableColumn::make('Item'),
-                                TableColumn::make('PR Qty')->width('10%'),
-                                TableColumn::make('PO Qty')->width('10%'),
-                                TableColumn::make('Unit Cost')->width('14%'),
-                                TableColumn::make('Amount')->width('14%'),
+                                TableColumn::make('Requested Qty')->width('12%'),
+                                TableColumn::make('Ordered Qty')->width('12%'),
+                                TableColumn::make('Unit Cost')->width('16%'),
+                                TableColumn::make('Amount')->width('16%'),
                             ])
                             ->schema([
-                                TextEntry::make('is_ordered')
-                                    ->hiddenLabel()
-                                    ->formatStateUsing(fn ($state): string => $state ? 'Yes' : 'No'),
                                 TextEntry::make('item.name')->hiddenLabel()->placeholder('—'),
                                 TextEntry::make('pr_quantity')->hiddenLabel(),
                                 TextEntry::make('po_quantity')->hiddenLabel(),

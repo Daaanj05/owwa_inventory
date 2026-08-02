@@ -1,12 +1,46 @@
 @php
-    /** @var array{title: string, header: array<string, string|null>, columns: array<string, string>, rows: array<int, array<string, mixed>>} $ledger */
+    /** @var array{title: string, header: array<string, string|null>, columns: array<string, array{label: string, tooltip?: string}|string>, rows: array<int, array<string, mixed>>} $ledger */
     $header = $ledger['header'];
     $columns = $ledger['columns'];
     $rows = $ledger['rows'];
     $isConsumable = isset($header['stock_no']);
+    $numericKeys = ['receipt_qty', 'issue_qty', 'balance', 'days_to_consume'];
 @endphp
 
-<div class="owwa-stock-ledger-modal">
+<div
+    class="owwa-stock-ledger-modal"
+    x-data="{
+        tipOpen: false,
+        tipText: '',
+        tipStyle: '',
+        showTip(detail) {
+            const el = detail?.target;
+            if (! el || ! detail?.text) {
+                return;
+            }
+
+            this.tipText = detail.text;
+            this.tipOpen = true;
+            this.$nextTick(() => {
+                const rect = el.getBoundingClientRect();
+                const left = rect.left + (rect.width / 2);
+                const top = rect.top - 8;
+                this.tipStyle = `left:${left}px;top:${top}px;`;
+            });
+        },
+        hideTip() {
+            this.tipOpen = false;
+        },
+    }"
+    x-init="
+        const wrap = $el.querySelector('.owwa-stock-ledger-table-wrap');
+        if (wrap) {
+            wrap.addEventListener('scroll', () => hideTip(), { passive: true });
+        }
+    "
+    @owwa-header-tooltip-show="showTip($event.detail)"
+    @owwa-header-tooltip-hide="hideTip()"
+>
     <dl class="owwa-stock-ledger-header">
         <div class="owwa-stock-ledger-header-item">
             <dt>Entity</dt>
@@ -47,9 +81,9 @@
         <table class="owwa-data-table">
             <thead>
                 <tr>
-                    @foreach ($columns as $key => $label)
-                        <th class="{{ in_array($key, ['receipt_qty', 'issue_qty', 'balance', 'days_to_consume'], true) ? 'owwa-num' : '' }}">
-                            {{ $label }}
+                    @foreach ($columns as $key => $column)
+                        <th class="{{ in_array($key, $numericKeys, true) ? 'owwa-num' : '' }}">
+                            @include('filament.partials.owwa-column-header', ['label' => $column])
                         </th>
                     @endforeach
                 </tr>
@@ -57,8 +91,8 @@
             <tbody>
                 @forelse ($rows as $row)
                     <tr>
-                        @foreach ($columns as $key => $label)
-                            <td class="{{ in_array($key, ['receipt_qty', 'issue_qty', 'balance', 'days_to_consume'], true) ? 'owwa-num' : '' }}">
+                        @foreach ($columns as $key => $column)
+                            <td class="owwa-ledger-data-cell {{ in_array($key, $numericKeys, true) ? 'owwa-num' : '' }}">
                                 @php
                                     $value = $row[$key] ?? null;
                                 @endphp
@@ -85,4 +119,15 @@
             </tbody>
         </table>
     </div>
+
+    <template x-teleport="body">
+        <div
+            x-cloak
+            x-show="tipOpen"
+            x-bind:style="tipStyle"
+            class="owwa-th-tooltip--portal"
+            x-text="tipText"
+            role="tooltip"
+        ></div>
+    </template>
 </div>

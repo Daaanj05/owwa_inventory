@@ -178,17 +178,8 @@ class ListRequisitions extends ListRecords
             ];
         }
 
-        return [
-            'active' => Tab::make('Active')
-                ->modifyQueryUsing(fn (Builder $query): Builder => $query->whereIn('status', [
-                    Requisition::STATUS_PENDING,
-                    Requisition::STATUS_ACCEPTED,
-                ]))
-                ->excludeQueryWhenResolvingRecord(),
-            'archived' => Tab::make('Archived')
-                ->modifyQueryUsing(fn (Builder $query): Builder => $query->where('status', Requisition::STATUS_REJECTED))
-                ->excludeQueryWhenResolvingRecord(),
-        ];
+        // Supply Custodian: single list (no Active/Archived tabs; SC does not reject).
+        return [];
     }
 
     protected function getHeaderActions(): array
@@ -230,7 +221,7 @@ class ListRequisitions extends ListRecords
             $this->coaExportReportAction(
                 'coaRequisition',
                 'owwa.export.bulk.requisitions',
-                'Export RIS — selected rows',
+                'Export RIS',
             )->visible(fn (): bool => RequisitionExportActions::userCanExportRis(
                 Filament::auth()->user() instanceof User ? Filament::auth()->user() : null,
             )),

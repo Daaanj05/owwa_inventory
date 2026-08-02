@@ -48,12 +48,13 @@ class AcquisitionPaperworkViewPresenter
                 'statusLabel' => $paperwork->phaseStatusLabel(AcquisitionPaperwork::PHASE_PR),
                 'description' => $paperwork->isPrApproved()
                     ? 'PR '.$paperwork->pr_number.' — approved'
-                    : ($paperwork->pr_status === AcquisitionPaperwork::STATUS_PENDING_APPROVAL
-                        ? 'PR submitted — record offline approval when signed'
-                        : ($prEval['can_submit'] ? 'Fill PR and save for export' : 'Fill PR header and item lines')),
+                    : (filled($paperwork->pr_number)
+                        ? 'PR '.$paperwork->pr_number.' — export for signature, then mark Approved'
+                        : ($prEval['can_submit'] ? 'Fill PR and save to assign PR No.' : 'Fill PR header and item lines')),
                 'state' => $prState,
                 'actionKey' => 'viewPr',
                 'navigable' => $paperwork->isPrApproved()
+                    || filled($paperwork->pr_number)
                     || $paperwork->pr_status === AcquisitionPaperwork::STATUS_PENDING_APPROVAL,
                 'url' => $paperwork->isPrApproved() ? route('owwa.export.acquisition-paperwork.pr', $paperwork) : null,
             ],
@@ -64,10 +65,15 @@ class AcquisitionPaperworkViewPresenter
                 'statusLabel' => $paperwork->phaseStatusLabel(AcquisitionPaperwork::PHASE_PO),
                 'description' => $paperwork->isPoApproved()
                     ? 'PO '.$paperwork->po_number.' — approved'
-                    : ($paperwork->isPrApproved() ? 'Enter supplier and costs' : 'Unlocks after PR approval'),
+                    : ($paperwork->isPrApproved()
+                        ? (filled($paperwork->po_number)
+                            ? 'PO '.$paperwork->po_number.' — export for signature, then mark Approved'
+                            : 'Enter supplier and costs')
+                        : 'Unlocks after PR approval'),
                 'state' => $poState,
                 'actionKey' => 'viewPo',
                 'navigable' => $paperwork->isPoApproved()
+                    || filled($paperwork->po_number)
                     || $paperwork->po_status === AcquisitionPaperwork::STATUS_PENDING_APPROVAL,
                 'url' => $paperwork->isPoApproved() ? route('owwa.export.acquisition-paperwork.po', $paperwork) : null,
             ],
@@ -78,10 +84,15 @@ class AcquisitionPaperworkViewPresenter
                 'statusLabel' => $paperwork->phaseStatusLabel(AcquisitionPaperwork::PHASE_IAR),
                 'description' => $paperwork->isIarApproved()
                     ? 'IAR '.$paperwork->iar_number.' — approved'
-                    : ($paperwork->isPoApproved() ? 'Record inspection signatories' : 'Unlocks after PO approval'),
+                    : ($paperwork->isPoApproved()
+                        ? (filled($paperwork->iar_number)
+                            ? 'IAR '.$paperwork->iar_number.' — export for signature, then mark Approved'
+                            : 'Record inspection signatories')
+                        : 'Unlocks after PO approval'),
                 'state' => $iarState,
                 'actionKey' => 'viewIar',
                 'navigable' => $paperwork->isIarApproved()
+                    || filled($paperwork->iar_number)
                     || $paperwork->iar_status === AcquisitionPaperwork::STATUS_PENDING_APPROVAL,
                 'url' => $paperwork->isIarApproved() ? route('owwa.export.acquisition-paperwork.iar', $paperwork) : null,
             ],

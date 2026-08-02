@@ -111,7 +111,7 @@ class AdminPanelProvider extends PanelProvider
                         'message' => 'Your file is being prepared. Please stay on this page until the download finishes.',
                         'leaveMessage' => 'Your export is still preparing. Are you sure you want to leave this page?',
                     ])->render();
-            }, scopes: ['authenticated'])
+            })
             ->navigationGroups([
                 NavigationGroup::make('My items'),
                 NavigationGroup::make('Office'),

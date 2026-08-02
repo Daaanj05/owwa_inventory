@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Acquisitions\InspectionAcceptanceReports\Tables;
 
+use App\Filament\Resources\Acquisitions\Concerns\AcquisitionDateRangeFilter;
 use App\Filament\Resources\Acquisitions\InspectionAcceptanceReports\Actions\InspectionAcceptanceReportActions;
 use App\Filament\Resources\Acquisitions\InspectionAcceptanceReports\Schemas\InspectionAcceptanceReportInfolist;
 use App\Filament\Support\ConfiguresOwwaViewAction;
@@ -51,10 +52,11 @@ class InspectionAcceptanceReportsTable
                         InspectionAcceptanceReport::STATUS_PENDING_APPROVAL => 'Pending approval',
                         InspectionAcceptanceReport::STATUS_APPROVED => 'Approved',
                     ]),
+                AcquisitionDateRangeFilter::make('iar_date', 'IAR date'),
             ])
             ->defaultSort('created_at', 'desc')
             ->emptyStateHeading('No inspection reports yet')
-            ->emptyStateDescription('Create an IAR by choosing an offline-approved purchase order.')
+            ->emptyStateDescription('Create an IAR by choosing an approved purchase order.')
             ->recordActions([
                 ConfiguresOwwaViewAction::make(
                     schema: InspectionAcceptanceReportInfolist::modalComponents(),

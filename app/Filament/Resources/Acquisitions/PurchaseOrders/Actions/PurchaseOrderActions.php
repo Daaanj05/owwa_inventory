@@ -22,7 +22,9 @@ class PurchaseOrderActions
             ->tableIcon(null)
             ->extraAttributes(['class' => 'sr-only'])
             ->visible(fn (PurchaseOrder $record): bool => $record->isEditable())
-            ->extraModalWindowAttributes(['class' => OwwaFormModalDefaults::MODAL_WINDOW_CLASS.' owwa-acquisition-paperwork-modal'])
+            ->extraModalWindowAttributes([
+                'class' => OwwaFormModalDefaults::MODAL_WINDOW_CLASS.' owwa-acquisition-paperwork-modal owwa-po-modal',
+            ], merge: true)
             ->modalHeading(fn (PurchaseOrder $record): string => filled($record->number)
                 ? 'Edit PO '.$record->number
                 : 'Edit purchase order')
@@ -39,8 +41,8 @@ class PurchaseOrderActions
                     $record->fresh() ?? $record,
                     fn (PurchaseOrder $po) => app(PurchaseOrderWorkflowService::class)->submit($po),
                     $action,
-                    'PO submitted',
-                    'Export the purchase order for offline approval.',
+                    'PO saved',
+                    'Export the purchase order for signature, then mark Approved when signed.',
                 );
             })
             ->extraModalFooterActions(fn (EditAction $editAction): array => [
@@ -58,12 +60,15 @@ class PurchaseOrderActions
     public static function approveAction(): Action
     {
         return Action::make('approvePo')
-            ->label('Record Offline Approval')
+            ->label('Approved')
             ->icon('heroicon-o-check')
             ->color('success')
-            ->visible(fn (PurchaseOrder $record): bool => $record->isPendingApproval() && ! $record->isArchived())
+            ->visible(fn (PurchaseOrder $record): bool => filled($record->submitted_at)
+                && ($record->isDraft() || $record->isPendingApproval())
+                && ! $record->isArchived())
             ->requiresConfirmation()
-            ->modalDescription('Assigns PO No. after offline approval is recorded.')
+            ->modalHeading('Mark purchase order as approved?')
+            ->modalDescription('Confirm after the printed PO has been signed. This unlocks IAR creation.')
             ->action(function (PurchaseOrder $record, Action $action): void {
                 self::runWorkflow(
                     $record,
@@ -108,7 +113,7 @@ class PurchaseOrderActions
         return Action::make('exportPoExcel')
             ->label('Export Excel')
             ->icon('heroicon-o-document-arrow-down')
-            ->visible(fn (PurchaseOrder $record): bool => ! $record->isDraft() || filled($record->number))
+            ->visible(fn (PurchaseOrder $record): bool => $record->missingFields() === [])
             ->action(function (PurchaseOrder $record, Action $action): void {
                 self::startExport($action, route('owwa.export.purchase-order.excel', $record));
             });
@@ -119,7 +124,7 @@ class PurchaseOrderActions
         return Action::make('exportPoPdf')
             ->label('Export PDF')
             ->icon('heroicon-o-document-text')
-            ->visible(fn (PurchaseOrder $record): bool => ! $record->isDraft() || filled($record->number))
+            ->visible(fn (PurchaseOrder $record): bool => $record->missingFields() === [])
             ->action(function (PurchaseOrder $record, Action $action): void {
                 self::startExport($action, route('owwa.export.purchase-order.pdf', $record));
             });

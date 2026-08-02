@@ -10,6 +10,7 @@ use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Repeater\TableColumn;
 use Filament\Forms\Components\TextInput;
+use Filament\Notifications\Notification;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
@@ -73,7 +74,7 @@ class InspectionAcceptanceReportForm
                 ->rule(fn (Get $get): \Closure => self::afterIarDateRule($get))
                 ->disabled(fn (?InspectionAcceptanceReport $record): bool => ! self::isEditable($record)),
             DatePicker::make('date_inspected')
-                ->label('Date inspected')
+                ->label('Inspection Date')
                 ->required()
                 ->minDate(fn (Get $get): ?\Illuminate\Support\Carbon => filled($get('iar_date'))
                     ? \Illuminate\Support\Carbon::parse((string) $get('iar_date'))->addDay()
@@ -81,12 +82,24 @@ class InspectionAcceptanceReportForm
                 ->rule(fn (Get $get): \Closure => self::afterIarDateRule($get))
                 ->disabled(fn (?InspectionAcceptanceReport $record): bool => ! self::isEditable($record)),
             DatePicker::make('date_received')
-                ->label('Date received')
+                ->label('Receive Date')
                 ->required()
                 ->minDate(fn (Get $get): ?\Illuminate\Support\Carbon => filled($get('iar_date'))
-                    ? \Illuminate\Support\Carbon::parse((string) $get('iar_date'))->addDay()
-                    : now()->addDay())
-                ->rule(fn (Get $get): \Closure => self::afterIarDateRule($get))
+                    ? \Illuminate\Support\Carbon::parse((string) $get('iar_date'))
+                    : null)
+                ->maxDate(now())
+                ->rule(fn (Get $get): \Closure => self::onOrAfterIarDateRule($get))
+                ->rule(function (): \Closure {
+                    return function (string $attribute, mixed $value, \Closure $fail): void {
+                        if (blank($value)) {
+                            return;
+                        }
+
+                        if (\Illuminate\Support\Carbon::parse((string) $value)->startOfDay()->isFuture()) {
+                            $fail('Receive Date must be today or earlier.');
+                        }
+                    };
+                })
                 ->disabled(fn (?InspectionAcceptanceReport $record): bool => ! self::isEditable($record)),
             TextInput::make('inspection_officer_name')
                 ->label('Inspection officer')
@@ -106,7 +119,7 @@ class InspectionAcceptanceReportForm
         return Repeater::make('lines')
             ->relationship()
             ->hiddenLabel()
-            ->extraAttributes(['class' => 'owwa-acquisition-lines-repeater fi-fixed-positioning-context'])
+            ->extraAttributes(['class' => 'owwa-acquisition-lines-repeater owwa-iar-lines-repeater fi-fixed-positioning-context'])
             ->addable(false)
             ->deletable(false)
             ->reorderable(false)
@@ -114,9 +127,9 @@ class InspectionAcceptanceReportForm
                 TableColumn::make('Item')->width('20%'),
                 TableColumn::make('Stock No.')->width('12%'),
                 TableColumn::make('Unit')->width('8%'),
-                TableColumn::make('PR qty')->width('10%'),
-                TableColumn::make('PO qty')->width('10%'),
-                TableColumn::make('IAR qty')->markAsRequired()->width('12%'),
+                TableColumn::make('Requested Qty')->width('10%'),
+                TableColumn::make('Ordered Qty')->width('10%'),
+                TableColumn::make('Received Qty')->markAsRequired()->width('12%'),
                 TableColumn::make('Unit cost')->width('14%'),
                 TableColumn::make('Amount')->width('14%'),
             ])
@@ -156,11 +169,27 @@ class InspectionAcceptanceReportForm
                     ->rule(fn (Get $get): \Closure => function (string $attribute, $value, \Closure $fail) use ($get): void {
                         $poQty = (int) ($get('po_quantity') ?? 0);
                         if ((int) $value < 0 || (int) $value > $poQty) {
-                            $fail('IAR quantity must be between 0 and PO quantity.');
+                            $fail('Max '.$poQty);
                         }
                     })
                     ->disabled(fn (mixed $record): bool => ! self::isEditable($record))
                     ->live(onBlur: true)
+                    ->afterStateUpdated(function (mixed $state, Get $get): void {
+                        $poQty = (int) ($get('po_quantity') ?? 0);
+                        if ($poQty < 0 || blank($state)) {
+                            return;
+                        }
+
+                        $qty = (int) $state;
+                        if ($qty >= 0 && $qty <= $poQty) {
+                            return;
+                        }
+
+                        Notification::make()
+                            ->danger()
+                            ->title('Received Qty must be between 0 and Ordered Qty ('.$poQty.')')
+                            ->send();
+                    })
                     ->extraInputAttributes(['class' => 'owwa-acquisition-line-qty', 'inputmode' => 'numeric']),
                 Placeholder::make('unit_cost_display')
                     ->hiddenLabel()
@@ -199,6 +228,21 @@ class InspectionAcceptanceReportForm
 
             if (! \Illuminate\Support\Carbon::parse((string) $value)->greaterThan(\Illuminate\Support\Carbon::parse((string) $get('iar_date')))) {
                 $fail('This date must be after the IAR date.');
+            }
+        };
+    }
+
+    protected static function onOrAfterIarDateRule(Get $get): \Closure
+    {
+        return function (string $attribute, $value, \Closure $fail) use ($get): void {
+            if (blank($value) || blank($get('iar_date'))) {
+                return;
+            }
+
+            if (\Illuminate\Support\Carbon::parse((string) $value)->startOfDay()->lt(
+                \Illuminate\Support\Carbon::parse((string) $get('iar_date'))->startOfDay()
+            )) {
+                $fail('Receive Date must be on or after the IAR date.');
             }
         };
     }

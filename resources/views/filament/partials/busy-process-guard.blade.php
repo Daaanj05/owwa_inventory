@@ -75,13 +75,10 @@
                     title,
                     message,
                     token,
+                    url: downloadUrl,
                     autoClearMs,
                 },
             }));
-
-            window.setTimeout(() => {
-                window.location.assign(downloadUrl);
-            }, 50);
 
             return token;
         };
@@ -172,9 +169,16 @@
                         return;
                     }
 
-                    // Redirect-driven downloads: poll the done-cookie and fail-safe clear.
+                    // Redirect-driven downloads (PO/PR/IAR export): location.assign fires
+                    // beforeunload — allow that intentional navigation, then re-arm the guard.
                     if (detail.token) {
                         this.expectedToken = detail.token;
+                        this.allowUnload = true;
+                        setTimeout(() => {
+                            if (this.busy) {
+                                this.allowUnload = false;
+                            }
+                        }, 1500);
                     }
 
                     this.watchDownloadCompletion(detail.autoClearMs || 120000);

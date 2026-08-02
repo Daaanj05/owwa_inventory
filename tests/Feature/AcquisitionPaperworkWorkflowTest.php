@@ -29,8 +29,13 @@ class AcquisitionPaperworkWorkflowTest extends TestCase
             $this->markTestSkipped('OWWA acquisition paperwork templates are not installed.');
         }
 
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+
         $paperwork = $this->createCompletedPaperwork();
-        $user = User::factory()->create();
+        $user = User::factory()->create([
+            'role' => User::ROLE_SUPPLY_CUSTODIAN,
+            'office_id' => $paperwork->office_id,
+        ]);
 
         $this->actingAs($user)
             ->get(route('owwa.export.acquisition-paperwork.pr', $paperwork))
@@ -52,8 +57,13 @@ class AcquisitionPaperworkWorkflowTest extends TestCase
             $this->markTestSkipped('OWWA acquisition paperwork templates are not installed.');
         }
 
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+
         $paperwork = $this->createCompletedPaperwork();
-        $user = User::factory()->create();
+        $user = User::factory()->create([
+            'role' => User::ROLE_SUPPLY_CUSTODIAN,
+            'office_id' => $paperwork->office_id,
+        ]);
 
         $this->actingAs($user)
             ->get(route('owwa.export.procurement.pr', $paperwork))
@@ -495,7 +505,8 @@ class AcquisitionPaperworkWorkflowTest extends TestCase
         $startRow = OwwaCellMapping::detailRowBase('PO');
         $maxRows = (int) OwwaCellMapping::form('PO')['detail']['max_rows'];
 
-        $this->assertSame(2, $spreadsheet->getSheetCount());
+        $this->assertSame(3, $spreadsheet->getSheetCount());
+        $this->assertSame('Technical Specification', $spreadsheet->getSheet(2)->getTitle());
         $this->assertStringContainsString(
             'Overflow line 15',
             (string) $spreadsheet->getSheet(1)->getCell('C'.($startRow))->getValue(),
@@ -581,7 +592,7 @@ class AcquisitionPaperworkWorkflowTest extends TestCase
         ]);
     }
 
-    public function test_pr_header_fields_are_locked_after_submit(): void
+    public function test_pr_header_fields_are_locked_after_approve(): void
     {
         Filament::setCurrentPanel(Filament::getPanel('admin'));
 
@@ -593,7 +604,7 @@ class AcquisitionPaperworkWorkflowTest extends TestCase
             'office_id' => $office->id,
         ]);
 
-        app(AcquisitionPaperworkCompletionService::class)->submitPr($paperwork->fresh());
+        app(AcquisitionPaperworkCompletionService::class)->approvePr($paperwork->fresh());
 
         session()->put('active_item_category_id', $category->id);
         $this->actingAs($custodian);
@@ -615,10 +626,13 @@ class AcquisitionPaperworkWorkflowTest extends TestCase
         $poService = app(\App\Services\PurchaseOrderWorkflowService::class);
         $iarService = app(\App\Services\InspectionAcceptanceReportWorkflowService::class);
 
+        $this->assertNotNull($paperwork->pr_number);
+        $this->assertSame(AcquisitionPaperwork::STATUS_DRAFT, $paperwork->pr_status);
+
         $service->submitPr($paperwork->fresh());
         $paperwork = $paperwork->fresh();
-        $this->assertSame(AcquisitionPaperwork::STATUS_PENDING_APPROVAL, $paperwork->pr_status);
-        $this->assertNull($paperwork->pr_number);
+        $this->assertSame(AcquisitionPaperwork::STATUS_DRAFT, $paperwork->pr_status);
+        $this->assertNotNull($paperwork->pr_number);
 
         $service->approvePr($paperwork);
         $paperwork = $paperwork->fresh();
@@ -627,11 +641,14 @@ class AcquisitionPaperworkWorkflowTest extends TestCase
         $this->assertSame(AcquisitionPaperwork::PHASE_PR, $paperwork->phase);
 
         $po = $poService->createFromApprovedPr($paperwork->fresh());
+        $this->assertNotNull($po->number);
         $po->update([
             'supplier_name' => 'Supplier Co.',
             'supplier_address' => '123 Main St',
             'mode_of_procurement' => 'Shopping',
             'place_of_delivery' => 'OWWA RO',
+            'date_of_delivery' => now()->addDays(7)->toDateString(),
+            'payment_term' => '30 days',
             'technical_specifications' => 'N/A',
             'po_date' => now()->toDateString(),
         ]);
@@ -640,16 +657,18 @@ class AcquisitionPaperworkWorkflowTest extends TestCase
         $poService->approve($po->fresh());
         $po = $po->fresh();
         $this->assertNotNull($po->number);
+        $this->assertTrue($po->isApproved());
 
         $iar = $iarService->createFromApprovedPo($po);
+        $this->assertNotNull($iar->number);
         $iar->update([
             'invoice_number' => 'INV100',
-            'invoice_date' => now()->addDay()->toDateString(),
-            'date_inspected' => now()->addDay()->toDateString(),
-            'date_received' => now()->addDays(2)->toDateString(),
+            'invoice_date' => now()->subDays(2)->toDateString(),
+            'date_inspected' => now()->subDay()->toDateString(),
+            'date_received' => now()->toDateString(),
             'inspection_officer_name' => 'Inspector',
             'custodian_name' => 'Custodian',
-            'iar_date' => now()->toDateString(),
+            'iar_date' => now()->subDays(3)->toDateString(),
         ]);
         $iarService->submit($iar->fresh(['lines']));
         $iarService->approve($iar->fresh());
@@ -665,7 +684,7 @@ class AcquisitionPaperworkWorkflowTest extends TestCase
         $paperwork = $this->createPaperworkDraft();
         $service = app(AcquisitionPaperworkCompletionService::class);
 
-        $service->submitPr($paperwork->fresh());
+        $this->assertNotNull($paperwork->pr_number);
 
         $service->approvePr($paperwork->fresh());
 
@@ -708,7 +727,8 @@ class AcquisitionPaperworkWorkflowTest extends TestCase
         $service->submitPr($paperwork->fresh());
 
         $paperwork = $paperwork->fresh();
-        $this->assertSame(AcquisitionPaperwork::STATUS_PENDING_APPROVAL, $paperwork->pr_status);
+        $this->assertSame(AcquisitionPaperwork::STATUS_DRAFT, $paperwork->pr_status);
+        $this->assertNotNull($paperwork->pr_number);
         $this->assertTrue($paperwork->lines()->whereNull('unit_cost')->exists());
     }
 
@@ -725,6 +745,8 @@ class AcquisitionPaperworkWorkflowTest extends TestCase
             'supplier_address' => '123 Main',
             'mode_of_procurement' => 'Shopping',
             'place_of_delivery' => 'RO',
+            'date_of_delivery' => now()->addDays(7)->toDateString(),
+            'payment_term' => '30 days',
             'technical_specifications' => 'N/A',
             'po_date' => now()->toDateString(),
         ]);
@@ -782,6 +804,8 @@ class AcquisitionPaperworkWorkflowTest extends TestCase
             'supplier_address' => '123 Main St',
             'mode_of_procurement' => 'Shopping',
             'place_of_delivery' => 'OWWA RO',
+            'date_of_delivery' => now()->addDays(7)->toDateString(),
+            'payment_term' => '30 days',
             'technical_specifications' => 'N/A',
             'po_date' => now()->toDateString(),
         ]);
@@ -795,7 +819,8 @@ class AcquisitionPaperworkWorkflowTest extends TestCase
         app(\App\Services\PurchaseOrderWorkflowService::class)->submit($po->fresh(['lines']));
 
         $po->refresh();
-        $this->assertSame(\App\Models\PurchaseOrder::STATUS_PENDING_APPROVAL, $po->status);
+        $this->assertSame(\App\Models\PurchaseOrder::STATUS_DRAFT, $po->status);
+        $this->assertNotNull($po->number);
         $this->assertSame('Acme Supplies', $po->supplier_name);
         $this->assertNotNull($po->po_date);
     }
@@ -908,6 +933,8 @@ class AcquisitionPaperworkWorkflowTest extends TestCase
             'mode_of_procurement' => 'Shopping',
             'place_of_delivery' => 'OWWA RO',
             'delivery_term' => 'FOB Destination',
+            'date_of_delivery' => now()->addDays(7)->toDateString(),
+            'payment_term' => '30 days',
             'technical_specifications' => 'N/A',
             'po_date' => now()->toDateString(),
         ]);
@@ -924,12 +951,12 @@ class AcquisitionPaperworkWorkflowTest extends TestCase
         $iar = $iarService->createFromApprovedPo($po->fresh());
         $iar->update([
             'invoice_number' => 'INV100',
-            'invoice_date' => now()->addDay()->toDateString(),
-            'date_inspected' => now()->addDay()->toDateString(),
-            'date_received' => now()->addDays(2)->toDateString(),
+            'invoice_date' => now()->subDays(2)->toDateString(),
+            'date_inspected' => now()->subDay()->toDateString(),
+            'date_received' => now()->toDateString(),
             'inspection_officer_name' => 'Inspector',
             'custodian_name' => 'Custodian',
-            'iar_date' => now()->toDateString(),
+            'iar_date' => now()->subDays(3)->toDateString(),
         ]);
         $iarService->submit($iar->fresh(['lines']));
         $iarService->approve($iar->fresh());

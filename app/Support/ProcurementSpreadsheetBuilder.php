@@ -58,40 +58,49 @@ class ProcurementSpreadsheetBuilder
                 1,
             );
             $this->exportService->applyFilledProcurementSheet($masterSheet, $templateFilename, $cellValues);
+        } else {
+            $templateSheet = $this->cloneProcurementWorksheet($spreadsheet, $masterSheet);
+            $spreadsheet->removeSheetByIndex($spreadsheet->getIndex($masterSheet));
 
-            return $spreadsheet;
-        }
+            foreach ($chunks as $pageIndex => $chunkLines) {
+                $isLastPage = $pageIndex === ($pageCount - 1);
+                $sheet = $pageIndex === 0 ? $templateSheet : $this->cloneProcurementWorksheet($spreadsheet, $templateSheet);
+                $sheet->setTitle($this->exportService->procurementSheetTitle($formCode, $pageIndex, $pageCount));
+                $spreadsheet->addSheet($sheet);
 
-        $templateSheet = $this->cloneProcurementWorksheet($spreadsheet, $masterSheet);
-        $spreadsheet->removeSheetByIndex($spreadsheet->getIndex($masterSheet));
+                $cellValues = $this->exportService->buildProcurementSheetCellValues(
+                    $paperwork,
+                    $formSlug,
+                    $chunkLines,
+                    $isLastPage,
+                    $pageIndex,
+                    $pageCount,
+                );
 
-        foreach ($chunks as $pageIndex => $chunkLines) {
-            $isLastPage = $pageIndex === ($pageCount - 1);
-            $sheet = $pageIndex === 0 ? $templateSheet : $this->cloneProcurementWorksheet($spreadsheet, $templateSheet);
-            $sheet->setTitle($this->exportService->procurementSheetTitle($formCode, $pageIndex, $pageCount));
-            $spreadsheet->addSheet($sheet);
+                $this->exportService->applyFilledProcurementSheet($sheet, $templateFilename, $cellValues);
 
-            $cellValues = $this->exportService->buildProcurementSheetCellValues(
-                $paperwork,
-                $formSlug,
-                $chunkLines,
-                $isLastPage,
-                $pageIndex,
-                $pageCount,
-            );
+                if (! $isLastPage) {
+                    $this->exportService->clearProcurementFooterValues($sheet, $formCode);
 
-            $this->exportService->applyFilledProcurementSheet($sheet, $templateFilename, $cellValues);
-
-            if (! $isLastPage) {
-                $this->exportService->clearProcurementFooterValues($sheet, $formCode);
-
-                if ($formCode === 'IAR') {
-                    OwwaSpreadsheetLayoutHelper::ensureIarAcceptanceCheckboxes($sheet);
+                    if ($formCode === 'IAR') {
+                        OwwaSpreadsheetLayoutHelper::ensureIarAcceptanceCheckboxes($sheet);
+                    }
                 }
             }
+
+            $spreadsheet->setActiveSheetIndex(0);
         }
 
-        $spreadsheet->setActiveSheetIndex(0);
+        if ($formCode === 'PO') {
+            $poData = (array) ($paperwork->po_data ?? []);
+            $specs = $paperwork->purchaseOrder?->technical_specifications
+                ?? ($poData['technical_specifications'] ?? null);
+            PurchaseOrderTechnicalSpecificationSheet::append(
+                $spreadsheet,
+                is_string($specs) ? $specs : null,
+                $paperwork->po_number ?? $paperwork->purchaseOrder?->number,
+            );
+        }
 
         return $spreadsheet;
     }

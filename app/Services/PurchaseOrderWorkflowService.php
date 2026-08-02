@@ -29,7 +29,7 @@ class PurchaseOrderWorkflowService
             }
 
             if (! $paperwork->isPrApproved()) {
-                throw ValidationException::withMessages(['purchase_request' => 'Choose an offline-approved purchase request.']);
+                throw ValidationException::withMessages(['purchase_request' => 'Choose an approved purchase request.']);
             }
 
             if ($paperwork->purchaseOrder()->exists()) {
@@ -44,9 +44,12 @@ class PurchaseOrderWorkflowService
 
             $placeOfDelivery = app(SupplyOfficeResolver::class)->resolveOfficeName();
 
+            $poNumber = $this->referenceCodes->forAcquisitionPaperworkPo();
+
             $purchaseOrder = PurchaseOrder::query()->create([
                 'acquisition_paperwork_id' => $paperwork->id,
                 'recorded_by' => auth()->id(),
+                'number' => $poNumber,
                 'status' => PurchaseOrder::STATUS_DRAFT,
                 'po_date' => now()->toDateString(),
                 'place_of_delivery' => $placeOfDelivery,
@@ -74,6 +77,7 @@ class PurchaseOrderWorkflowService
                 'phase' => AcquisitionPaperwork::PHASE_PO,
                 'po_status' => AcquisitionPaperwork::STATUS_DRAFT,
                 'po_date' => $purchaseOrder->po_date,
+                'po_number' => $poNumber,
             ]);
 
             return $purchaseOrder->fresh(['lines', 'purchaseRequest']) ?? $purchaseOrder;
@@ -120,14 +124,19 @@ class PurchaseOrderWorkflowService
             ]);
         }
 
+        $number = $purchaseOrder->number;
+        if (blank($number)) {
+            $number = $this->referenceCodes->forAcquisitionPaperworkPo();
+        }
+
         $purchaseOrder->update([
-            'status' => PurchaseOrder::STATUS_PENDING_APPROVAL,
-            'submitted_at' => now(),
+            'number' => $number,
+            'submitted_at' => $purchaseOrder->submitted_at ?? now(),
         ]);
 
         $purchaseOrder->purchaseRequest?->update([
-            'po_status' => AcquisitionPaperwork::STATUS_PENDING_APPROVAL,
-            'po_submitted_at' => now(),
+            'po_number' => $number,
+            'po_submitted_at' => $purchaseOrder->submitted_at ?? now(),
             'supplier' => $purchaseOrder->supplier_name,
             'po_date' => $purchaseOrder->po_date,
             'po_data' => [
@@ -155,21 +164,49 @@ class PurchaseOrderWorkflowService
             throw ValidationException::withMessages(['phase' => 'PO is already approved.']);
         }
 
-        if (! $purchaseOrder->isPendingApproval()) {
-            throw ValidationException::withMessages(['phase' => 'Submit PO for approval before marking approved.']);
+        if (! $purchaseOrder->isDraft() && ! $purchaseOrder->isPendingApproval()) {
+            throw ValidationException::withMessages(['phase' => 'PO cannot be approved in its current status.']);
+        }
+
+        $this->rememberSupplier($purchaseOrder);
+
+        $missing = $purchaseOrder->fresh()?->missingFields() ?? $purchaseOrder->missingFields();
+
+        if ($missing !== []) {
+            throw ValidationException::withMessages([
+                'phase' => 'Missing: '.implode(', ', $missing).'.',
+            ]);
+        }
+
+        $number = $purchaseOrder->number;
+        if (blank($number)) {
+            $number = $this->referenceCodes->forAcquisitionPaperworkPo();
         }
 
         $purchaseOrder->update([
-            'number' => $this->referenceCodes->forAcquisitionPaperworkPo(),
+            'number' => $number,
             'status' => PurchaseOrder::STATUS_APPROVED,
             'approved_at' => now(),
+            'submitted_at' => $purchaseOrder->submitted_at ?? now(),
         ]);
 
         $purchaseOrder->purchaseRequest?->update([
-            'po_number' => $purchaseOrder->number,
+            'po_number' => $number,
             'po_status' => AcquisitionPaperwork::STATUS_APPROVED,
             'po_completed_at' => now(),
             'phase' => AcquisitionPaperwork::PHASE_PO,
+            'supplier' => $purchaseOrder->supplier_name,
+            'po_date' => $purchaseOrder->po_date,
+            'po_data' => [
+                'address' => $purchaseOrder->supplier_address,
+                'tin' => $purchaseOrder->supplier_tin,
+                'mode_of_procurement' => $purchaseOrder->mode_of_procurement,
+                'place_of_delivery' => $purchaseOrder->place_of_delivery,
+                'delivery_term' => $purchaseOrder->delivery_term,
+                'date_of_delivery' => $purchaseOrder->date_of_delivery?->toDateString(),
+                'payment_term' => $purchaseOrder->payment_term,
+                'technical_specifications' => $purchaseOrder->technical_specifications,
+            ],
         ]);
 
         return $purchaseOrder->fresh() ?? $purchaseOrder;

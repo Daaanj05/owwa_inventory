@@ -42,10 +42,12 @@ RUN install-php-extensions \
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         libreoffice-calc \
+        ghostscript \
         fonts-liberation \
         fonts-dejavu-core \
     && rm -rf /var/lib/apt/lists/* \
-    && (soffice --version || true)
+    && (soffice --version || true) \
+    && (gs --version || true)
 
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 

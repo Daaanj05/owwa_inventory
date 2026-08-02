@@ -4,6 +4,8 @@ namespace App\Listeners;
 
 use App\Services\UserActivityLogger;
 use Illuminate\Auth\Events\Failed;
+use Illuminate\Support\Facades\Log;
+use Throwable;
 
 class LogFailedLogin
 {
@@ -16,15 +18,22 @@ class LogFailedLogin
             ? 'Failed login attempt for '.$email
             : 'Failed login attempt';
 
-        app(UserActivityLogger::class)->record(
-            $user instanceof \App\Models\User ? $user : null,
-            'login_failed',
-            $summary,
-            $user instanceof \App\Models\User ? $user : null,
-            [
+        try {
+            app(UserActivityLogger::class)->record(
+                $user instanceof \App\Models\User ? $user : null,
+                'login_failed',
+                $summary,
+                $user instanceof \App\Models\User ? $user : null,
+                [
+                    'email' => $email !== '' ? $email : null,
+                    'guard' => $event->guard,
+                ],
+            );
+        } catch (Throwable $exception) {
+            Log::warning('Failed to persist login_failed activity log.', [
                 'email' => $email !== '' ? $email : null,
-                'guard' => $event->guard,
-            ],
-        );
+                'message' => $exception->getMessage(),
+            ]);
+        }
     }
 }

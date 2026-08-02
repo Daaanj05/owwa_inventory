@@ -49,9 +49,9 @@ class InspectionAcceptanceReportInfolist
                             TextEntry::make('iar_date')->label('IAR Date')->date('M d, Y')->placeholder('—'),
                             TextEntry::make('invoice_number')->label('Invoice No.')->placeholder('—'),
                             TextEntry::make('invoice_date')->label('Invoice Date')->date('M d, Y')->placeholder('—'),
-                            TextEntry::make('date_inspected')->label('Date Inspected')->date('M d, Y')->placeholder('—'),
+                            TextEntry::make('date_inspected')->label('Inspection Date')->date('M d, Y')->placeholder('—'),
                             TextEntry::make('date_received')
-                                ->label('Date Received')
+                                ->label('Receive Date')
                                 ->date('M d, Y')
                                 ->placeholder('—')
                                 ->columnSpanFull(),
@@ -72,9 +72,9 @@ class InspectionAcceptanceReportInfolist
                             ->hiddenLabel()
                             ->table([
                                 TableColumn::make('Item'),
-                                TableColumn::make('PR Qty'),
-                                TableColumn::make('PO Qty'),
-                                TableColumn::make('IAR Qty'),
+                                TableColumn::make('Requested Qty'),
+                                TableColumn::make('Ordered Qty'),
+                                TableColumn::make('Received Qty'),
                                 TableColumn::make('Unit Cost'),
                                 TableColumn::make('Amount'),
                             ])

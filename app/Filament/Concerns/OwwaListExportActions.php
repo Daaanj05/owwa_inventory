@@ -24,30 +24,55 @@ final class OwwaListExportActions
         ?string $label = null,
         ?string $selectionHint = null,
     ): Action {
+        $isRisExport = $routeName === 'owwa.export.bulk.requisitions';
+
         return Action::make($name)
             ->label($label ?? 'Export Report')
             ->icon('heroicon-o-document-arrow-down')
             ->color('gray')
-            ->modal(fn ($livewire): bool => self::hasMoreThanOneSelectedRecord($livewire))
-            ->modalHeading(fn ($livewire): ?string => self::hasMoreThanOneSelectedRecord($livewire) ? 'Export options' : null)
-            ->form(fn ($livewire): array => self::hasMoreThanOneSelectedRecord($livewire)
-                ? array_filter([
+            ->modal(fn ($livewire): bool => $isRisExport || self::hasMoreThanOneSelectedRecord($livewire))
+            ->modalHeading(fn ($livewire): ?string => ($isRisExport || self::hasMoreThanOneSelectedRecord($livewire))
+                ? 'Export options'
+                : null)
+            ->form(function ($livewire) use ($isRisExport, $selectionHint): array {
+                if (! $isRisExport && ! self::hasMoreThanOneSelectedRecord($livewire)) {
+                    return [];
+                }
+
+                $showLayout = self::hasMoreThanOneSelectedRecord($livewire);
+
+                return array_values(array_filter([
                     filled($selectionHint)
                         ? \Filament\Forms\Components\Placeholder::make('export_hint')
                             ->label('')
                             ->content($selectionHint)
                             ->columnSpanFull()
                         : null,
+                    Select::make('export_format')
+                        ->label('Format')
+                        ->options([
+                            'xlsx' => 'Excel',
+                            'pdf' => 'PDF',
+                        ])
+                        ->default('xlsx')
+                        ->required()
+                        ->visible($isRisExport),
                     Select::make('export_layout')
                         ->label('When more than one row is selected')
-                        ->options([
-                            'workbook' => 'One Excel file (all rows on one form — RSMI for consumables)',
-                            'individual' => 'Separate Excel per transaction (page with download links)',
-                        ])
+                        ->options($isRisExport
+                            ? [
+                                'workbook' => 'One Excel file (separate sheet per RIS)',
+                                'individual' => 'Separate file per RIS (page with download links)',
+                            ]
+                            : [
+                                'workbook' => 'One Excel file (all rows on one form)',
+                                'individual' => 'Separate Excel per transaction (page with download links)',
+                            ])
                         ->default('workbook')
-                        ->required(),
-                ])
-                : [])
+                        ->required()
+                        ->visible($showLayout),
+                ]));
+            })
             ->action(function (array $data, Action $action) use ($routeName, $exportSource): void {
                 $livewire = $action->getLivewire();
                 if (! $livewire instanceof HasTable) {
@@ -65,6 +90,7 @@ final class OwwaListExportActions
                     $exportSource,
                     $action->getName(),
                     (string) ($data['export_layout'] ?? 'workbook'),
+                    (string) ($data['export_format'] ?? 'xlsx'),
                 );
             });
     }
@@ -110,24 +136,49 @@ final class OwwaListExportActions
 
     public static function bulkAction(string $routeName): BulkAction
     {
+        $isRisExport = $routeName === 'owwa.export.bulk.requisitions';
+
         return BulkAction::make('owwa_export_selected')
             ->label('Export report (Excel)')
             ->icon('heroicon-o-document-arrow-down')
             ->color('gray')
-            ->modal(fn ($livewire): bool => self::hasMoreThanOneSelectedRecord($livewire))
-            ->modalHeading(fn ($livewire): ?string => self::hasMoreThanOneSelectedRecord($livewire) ? 'Export options' : null)
-            ->form(fn ($livewire): array => self::hasMoreThanOneSelectedRecord($livewire)
-                ? [
+            ->modal(fn ($livewire): bool => $isRisExport || self::hasMoreThanOneSelectedRecord($livewire))
+            ->modalHeading(fn ($livewire): ?string => ($isRisExport || self::hasMoreThanOneSelectedRecord($livewire))
+                ? 'Export options'
+                : null)
+            ->form(function ($livewire) use ($isRisExport): array {
+                if (! $isRisExport && ! self::hasMoreThanOneSelectedRecord($livewire)) {
+                    return [];
+                }
+
+                $showLayout = self::hasMoreThanOneSelectedRecord($livewire);
+
+                return array_values(array_filter([
+                    Select::make('export_format')
+                        ->label('Format')
+                        ->options([
+                            'xlsx' => 'Excel',
+                            'pdf' => 'PDF',
+                        ])
+                        ->default('xlsx')
+                        ->required()
+                        ->visible($isRisExport),
                     Select::make('export_layout')
                         ->label('When more than one row is selected')
-                        ->options([
-                            'workbook' => 'One Excel file (all rows on one form — RSMI for consumables)',
-                            'individual' => 'Separate Excel per transaction (page with download links)',
-                        ])
+                        ->options($isRisExport
+                            ? [
+                                'workbook' => 'One Excel file (separate sheet per RIS)',
+                                'individual' => 'Separate file per RIS (page with download links)',
+                            ]
+                            : [
+                                'workbook' => 'One Excel file (all rows on one form)',
+                                'individual' => 'Separate Excel per transaction (page with download links)',
+                            ])
                         ->default('workbook')
-                        ->required(),
-                ]
-                : [])
+                        ->required()
+                        ->visible($showLayout),
+                ]));
+            })
             ->action(function (array $data, Action $action) use ($routeName): void {
                 $livewire = $action->getLivewire();
                 if (! $livewire instanceof HasTable) {
@@ -145,6 +196,7 @@ final class OwwaListExportActions
                     'bulk',
                     $action->getName(),
                     (string) ($data['export_layout'] ?? 'workbook'),
+                    (string) ($data['export_format'] ?? 'xlsx'),
                 );
             });
     }
@@ -155,6 +207,7 @@ final class OwwaListExportActions
         string $source = 'unknown',
         ?string $actionName = null,
         string $exportLayout = 'workbook',
+        string $exportFormat = 'xlsx',
     ): void {
         $baseContext = [
             'owwa_export' => true,
@@ -221,8 +274,11 @@ final class OwwaListExportActions
         }
 
         $query = ['ids' => $ids];
-        if ($exportLayout === 'individual') {
+        if ($exportLayout === 'individual' || ($exportFormat === 'pdf' && count($ids) > 1)) {
             $query['export_layout'] = 'individual';
+        }
+        if ($exportFormat === 'pdf') {
+            $query['format'] = 'pdf';
         }
         $query['back_url'] = url()->previous();
 
@@ -231,10 +287,13 @@ final class OwwaListExportActions
             'ids' => $ids,
             'ids_count' => count($ids),
             'export_layout' => $exportLayout,
+            'export_format' => $exportFormat,
             'redirect_url' => $redirectUrl,
         ]);
 
-        if ($exportLayout === 'individual') {
+        $isIndividual = ($query['export_layout'] ?? null) === 'individual';
+
+        if ($isIndividual) {
             $livewire->redirect($redirectUrl);
 
             return;
@@ -243,8 +302,10 @@ final class OwwaListExportActions
         \App\Support\OwwaExportBusyDispatcher::start(
             $livewire,
             $redirectUrl,
-            'Preparing Excel export…',
-            'Building your OWWA workbook. Large selections can take a little while.',
+            $exportFormat === 'pdf' ? 'Preparing PDF export…' : 'Preparing Excel export…',
+            $exportFormat === 'pdf'
+                ? 'Building your OWWA PDF…'
+                : 'Building your OWWA workbook. Large selections can take a little while.',
         );
     }
 

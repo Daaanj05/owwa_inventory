@@ -13,7 +13,6 @@ use App\Models\User;
 use App\Services\CatalogAssetNumberService;
 use App\Services\InventoryStockService;
 use App\Support\InventoryCategoryOptions;
-use App\Support\OwwaReferenceLabels;
 use Filament\Actions\Action;
 use Filament\Actions\Concerns\InteractsWithActions;
 use Filament\Actions\Contracts\HasActions;
@@ -147,7 +146,7 @@ class LowStockWidget extends StatsOverviewWidget implements HasActions
     protected function buildSupplyCustodianStats(int $lowStockCount, string $scopeLabel): array
     {
         $itemsInTotal = Item::query()->active()->count();
-        $pendingCount = $this->pendingRequisitionsQuery()->count();
+        $pendingCount = $this->pendingActionRows()->count();
 
         return [
             Stat::make('Items in total', number_format($itemsInTotal))
@@ -170,10 +169,10 @@ class LowStockWidget extends StatsOverviewWidget implements HasActions
                     'title' => 'Click to view details',
                 ], merge: true),
 
-            Stat::make('Pending requisitions', $pendingCount)
+            Stat::make('Pending', $pendingCount)
                 ->description($pendingCount > 0
-                    ? $pendingCount.' '.str('requisition')->plural($pendingCount).' awaiting your action'
-                    : 'No pending requisitions')
+                    ? $pendingCount.' '.str('item')->plural($pendingCount).' awaiting your action'
+                    : 'No pending items')
                 ->descriptionIcon($pendingCount > 0 ? 'heroicon-o-bell-alert' : 'heroicon-o-check-circle')
                 ->color($pendingCount > 0 ? 'warning' : 'success')
                 ->extraAttributes([
@@ -210,8 +209,8 @@ class LowStockWidget extends StatsOverviewWidget implements HasActions
     {
         return $this->detailModalAction(
             'viewPendingRequisitions',
-            'Pending requisitions',
-            fn (): array => $this->pendingRequisitionsDetail(),
+            'Pending',
+            fn (): array => $this->pendingActionsDetail(),
             RequisitionResource::getUrl('index'),
             'Open Requisitions',
         );
@@ -428,41 +427,106 @@ class LowStockWidget extends StatsOverviewWidget implements HasActions
     /**
      * @return array<string, mixed>
      */
-    protected function pendingRequisitionsDetail(): array
+    protected function pendingActionsDetail(): array
     {
-        $paginator = $this->pendingRequisitionsQuery()
-            ->with(['requestedBy', 'office', 'compiledIntoRequisition'])
-            ->latest('created_at')
-            ->paginate(self::KPI_PER_PAGE, ['*'], 'page', $this->kpiPendingPage);
-
-        $rows = $paginator->getCollection()->map(fn (Requisition $requisition): array => [
-            'ris_number' => $requisition->displayRisNumber(),
-            'office' => $requisition->office?->name,
-            'requested_by' => $requisition->requestedBy?->name,
-            'purpose' => $requisition->purpose,
-            'created' => optional($requisition->created_at)?->format('M j, Y'),
-        ])->all();
+        $rows = $this->pendingActionRows();
+        $total = $rows->count();
+        $lastPage = max(1, (int) ceil($total / self::KPI_PER_PAGE));
+        $page = min(max(1, $this->kpiPendingPage), $lastPage);
+        $slice = $rows->forPage($page, self::KPI_PER_PAGE)->values();
 
         return [
-            'summary' => number_format($paginator->total()).' pending UC requisition'.($paginator->total() === 1 ? '' : 's').'.',
-            'empty_title' => 'No pending requisitions',
-            'empty_desc' => 'There are no unit consolidator requisitions awaiting your action.',
+            'summary' => number_format($total).' pending item'.($total === 1 ? '' : 's').' awaiting your action.',
+            'empty_title' => 'No pending items',
+            'empty_desc' => 'There are no transactions awaiting Supply Custodian action.',
             'columns' => [
-                'ris_number' => OwwaReferenceLabels::requisition(),
+                'reference' => 'Reference',
+                'transaction_type' => 'Transaction',
                 'office' => 'Office',
                 'requested_by' => 'Requested by',
-                'purpose' => 'Purpose',
                 'created' => 'Submitted',
             ],
             'numeric_keys' => [],
-            'rows' => $rows,
+            'rows' => $slice->all(),
             'pagination' => [
                 'key' => 'pending',
-                'current' => $paginator->currentPage(),
-                'last' => max(1, $paginator->lastPage()),
-                'total' => $paginator->total(),
+                'current' => $page,
+                'last' => $lastPage,
+                'total' => $total,
             ],
         ];
+    }
+
+    /**
+     * @return Collection<int, array{reference: string, transaction_type: string, office: ?string, requested_by: ?string, created: ?string, record_url: string}>
+     */
+    protected function pendingActionRows(): Collection
+    {
+        $rows = collect();
+
+        $pendingRequisitions = $this->pendingRequisitionsQuery()
+            ->with(['requestedBy', 'office'])
+            ->latest('created_at')
+            ->get();
+
+        foreach ($pendingRequisitions as $requisition) {
+            $rows->push([
+                'reference' => $requisition->displayRisNumber() ?? $requisition->reference_code ?? '#'.$requisition->id,
+                'transaction_type' => 'Requisition',
+                'office' => $requisition->office?->name,
+                'requested_by' => $requisition->requestedBy?->name,
+                'created' => optional($requisition->created_at)?->format('M j, Y'),
+                'record_url' => RequisitionResource::getUrl('index', [
+                    'tableSearch' => $requisition->reference_code,
+                ]),
+            ]);
+        }
+
+        $remainderRequisitions = Requisition::query()
+            ->where('status', Requisition::STATUS_ACCEPTED)
+            ->whereHas('requestedBy', function (Builder $q): void {
+                $q->where('role', User::ROLE_UNIT_CONSOLIDATOR);
+            })
+            ->with(['requestedBy', 'office', 'items'])
+            ->latest('created_at')
+            ->get()
+            ->filter(fn (Requisition $requisition): bool => $requisition->hasRemainingToIssue());
+
+        foreach ($remainderRequisitions as $requisition) {
+            $rows->push([
+                'reference' => $requisition->displayRisNumber() ?? $requisition->reference_code ?? '#'.$requisition->id,
+                'transaction_type' => 'Issue remainder',
+                'office' => $requisition->office?->name,
+                'requested_by' => $requisition->requestedBy?->name,
+                'created' => optional($requisition->created_at)?->format('M j, Y'),
+                'record_url' => RequisitionResource::getUrl('index', [
+                    'tableSearch' => $requisition->reference_code,
+                ]),
+            ]);
+        }
+
+        $propertyReturns = \App\Models\PropertyActionRequest::query()
+            ->where('status', \App\Models\PropertyActionRequest::STATUS_PENDING_SC)
+            ->with(['requestedBy', 'office'])
+            ->latest('created_at')
+            ->get();
+
+        foreach ($propertyReturns as $request) {
+            $rows->push([
+                'reference' => $request->reference_code ?? '#'.$request->id,
+                'transaction_type' => 'Property return',
+                'office' => $request->office?->name,
+                'requested_by' => $request->requestedBy?->name,
+                'created' => optional($request->created_at)?->format('M j, Y'),
+                'record_url' => \App\Filament\Resources\PropertyActionRequests\PropertyActionRequestResource::getUrl('index', [
+                    'tableSearch' => $request->reference_code,
+                ]),
+            ]);
+        }
+
+        return $rows
+            ->sortByDesc(fn (array $row): string => (string) ($row['created'] ?? ''))
+            ->values();
     }
 
     /**

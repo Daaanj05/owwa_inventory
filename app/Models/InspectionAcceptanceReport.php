@@ -121,8 +121,8 @@ class InspectionAcceptanceReport extends Model
             'iar_date' => 'iar date',
             'invoice_number' => 'invoice no.',
             'invoice_date' => 'invoice date',
-            'date_inspected' => 'date inspected',
-            'date_received' => 'date received',
+            'date_inspected' => 'inspection date',
+            'date_received' => 'receive date',
             'inspection_officer_name' => 'inspection officer',
             'custodian_name' => 'supply and/or property custodian',
         ] as $field => $label) {
@@ -135,10 +135,22 @@ class InspectionAcceptanceReport extends Model
             $missing[] = 'invoice no. (alphanumeric only)';
         }
 
-        foreach (['invoice_date', 'date_inspected', 'date_received'] as $dateField) {
+        foreach (['invoice_date', 'date_inspected'] as $dateField) {
             if ($this->iar_date && $this->{$dateField} && ! $this->{$dateField}->greaterThan($this->iar_date)) {
-                $missing[] = str_replace('_', ' ', $dateField).' must be after IAR date';
+                $label = match ($dateField) {
+                    'date_inspected' => 'inspection date',
+                    default => str_replace('_', ' ', $dateField),
+                };
+                $missing[] = $label.' must be after IAR date';
             }
+        }
+
+        if ($this->iar_date && $this->date_received && $this->date_received->copy()->startOfDay()->lt($this->iar_date->copy()->startOfDay())) {
+            $missing[] = 'receive date must be on or after IAR date';
+        }
+
+        if ($this->date_received !== null && $this->date_received->copy()->startOfDay()->isFuture()) {
+            $missing[] = 'receive date must be today or earlier';
         }
 
         if ($this->lines()->where('iar_quantity', '>', 0)->count() === 0) {

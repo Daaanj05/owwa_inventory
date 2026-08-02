@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AiProcurementRunPrintController;
 use App\Http\Controllers\AuditSessionController;
+use App\Http\Controllers\ClientLayoutLogController;
 use App\Http\Controllers\CoaReportController;
 use App\Http\Controllers\GuestEmailVerificationController;
 use App\Http\Controllers\InventoryQrLabelController;
@@ -42,6 +43,10 @@ Route::middleware(['auth', 'web'])->group(function () {
 
     Route::post('audit/idle-logout', [AuditSessionController::class, 'idleLogout'])->name('audit.idle-logout');
 
+    Route::post('owwa/client-layout-log', ClientLayoutLogController::class)
+        ->middleware('throttle:30,1')
+        ->name('owwa.client-layout-log');
+
     Route::get('reports/coa/stock-level', [CoaReportController::class, 'stockLevelReport'])->name('reports.coa.stock-level');
     Route::get('reports/coa/issuance', [CoaReportController::class, 'issuanceReport'])->name('reports.coa.issuance');
     Route::get('reports/coa/acquisition', [CoaReportController::class, 'acquisitionReport'])->name('reports.coa.acquisition');
@@ -81,6 +86,7 @@ Route::middleware(['auth', 'web'])->group(function () {
         Route::get('reports/owwa/bulk/transfers', [OwwaBulkExportController::class, 'transfers'])->name('owwa.export.bulk.transfers');
         Route::get('reports/owwa/bulk/disposals', [OwwaBulkExportController::class, 'disposals'])->name('owwa.export.bulk.disposals');
         Route::get('reports/owwa/bulk/requisitions', [OwwaBulkExportController::class, 'requisitions'])->name('owwa.export.bulk.requisitions');
+        Route::get('reports/owwa/bulk/procurement', [OwwaBulkExportController::class, 'procurement'])->name('owwa.export.bulk.procurement');
     });
 
     Route::get('reports/owwa/acquisition/{acquisition}/qr-labels', [InventoryQrLabelController::class, 'acquisition'])->name('owwa.qr-labels.acquisition');

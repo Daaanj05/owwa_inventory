@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Acquisitions\Tables;
 
+use App\Filament\Resources\Acquisitions\Concerns\AcquisitionDateRangeFilter;
 use App\Filament\Resources\Acquisitions\Paperwork\Actions\AcquisitionPaperworkActions;
 use App\Filament\Resources\Acquisitions\Paperwork\Schemas\AcquisitionPaperworkModalSchema;
 use App\Filament\Support\ConfiguresOwwaViewAction;
@@ -46,6 +47,9 @@ class ReceivedAcquisitionsTable
                 TextColumn::make('lines_count')
                     ->counts('lines')
                     ->label('Lines'),
+            ])
+            ->filters([
+                AcquisitionDateRangeFilter::make('received_at', 'Received date'),
             ])
             ->defaultSort('received_at', 'desc')
             ->emptyStateHeading('No received acquisitions yet')

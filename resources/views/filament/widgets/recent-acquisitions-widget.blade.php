@@ -16,7 +16,7 @@
                 <table class="owwa-data-table">
                     <thead>
                         <tr>
-                            <th>Date received</th>
+                            <th>Receive Date</th>
                             <th>Reference</th>
                             <th>Supplier</th>
                             <th>Office</th>

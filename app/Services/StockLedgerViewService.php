@@ -18,20 +18,6 @@ class StockLedgerViewService
     ) {}
 
     /**
-     * @return array{
-     *     title: string,
-     *     exportForm: string,
-     *     exportLabel: string,
-     *     exportUrl: string,
-     *     exportPdfLabel: string,
-     *     exportPdfUrl: string,
-     *     header: array<string, string|null>,
-     *     columns: array<string, string>,
-     *     rows: array<int, array<string, mixed>>,
-     *     unit_cost: float|null
-     * }
-     */
-    /**
      * Lightweight export metadata (no transaction history). Safe for Livewire props / footer actions.
      *
      * @return array{
@@ -75,6 +61,20 @@ class StockLedgerViewService
         ];
     }
 
+    /**
+     * @return array{
+     *     title: string,
+     *     exportForm: string,
+     *     exportLabel: string,
+     *     exportUrl: string,
+     *     exportPdfLabel: string,
+     *     exportPdfUrl: string,
+     *     header: array<string, string|null>,
+     *     columns: array<string, array{label: string, tooltip?: string}|string>,
+     *     rows: array<int, array<string, mixed>>,
+     *     unit_cost: float|null
+     * }
+     */
     public function present(Item $item, Office $office, ?float $unitCost = null): array
     {
         $item->loadMissing('category');
@@ -136,14 +136,19 @@ class StockLedgerViewService
      *     exportForm: string,
      *     exportLabel: string,
      *     exportPdfLabel: string,
-     *     columns: array<string, string>
+     *     columns: array<string, array{label: string, tooltip?: string}|string>
      * }
      */
     protected function categoryConfig(string $slug): array
     {
+        $referenceColumn = [
+            'label' => 'Reference',
+            'tooltip' => 'Receipt: acquisition number. Issue: issuance control number. Transfer/disposal: transaction reference.',
+        ];
+
         $propertyColumns = [
             'date' => 'Date',
-            'reference' => 'Reference',
+            'reference' => $referenceColumn,
             'type_label' => 'Type',
             'receipt_qty' => 'Receipt',
             'issue_qty' => 'Issue',
@@ -154,32 +159,33 @@ class StockLedgerViewService
 
         return match ($slug) {
             'ppe' => [
-                'title' => 'Property Card (Appendix 69)',
+                'title' => 'Property Card',
                 'exportForm' => 'pc',
                 'exportLabel' => 'Export Property Card (Excel)',
                 'exportPdfLabel' => 'Export Property Card (PDF)',
                 'columns' => $propertyColumns,
             ],
             'semi_expendable' => [
-                'title' => 'Semi-Expendable Property Card (Annex A.1)',
+                'title' => 'Semi-Expendable Property Card',
                 'exportForm' => 'annex_a1',
                 'exportLabel' => 'Export Annex A.1 (Excel)',
                 'exportPdfLabel' => 'Export Annex A.1 (PDF)',
                 'columns' => $propertyColumns,
             ],
             default => [
-                'title' => 'Stock Card (Appendix 58)',
+                'title' => 'Stock Card',
                 'exportForm' => 'sc',
                 'exportLabel' => 'Export Stock Card (Excel)',
                 'exportPdfLabel' => 'Export Stock Card (PDF)',
                 'columns' => [
                     'date' => 'Date',
-                    'reference' => 'Reference',
+                    'reference' => $referenceColumn,
                     'type_label' => 'Type',
                     'receipt_qty' => 'Receipt',
                     'issue_qty' => 'Issue',
                     'issue_office' => 'Issue office',
                     'balance' => 'Balance',
+                    'remarks' => 'Remarks',
                     'days_to_consume' => 'Days to consume',
                 ],
             ],
@@ -192,7 +198,7 @@ class StockLedgerViewService
     protected function buildHeader(Item $item, Office $office, string $slug, ?float $unitCost = null): array
     {
         $base = [
-            'entity_name' => $office->name,
+            'entity_name' => (string) config('owwa_export_standards.entity_name', 'OWWA-4A'),
             'fund_cluster' => '',
             'item_name' => $item->name,
             'description' => $item->description,

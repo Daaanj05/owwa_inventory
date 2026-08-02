@@ -11,6 +11,7 @@ use App\Support\OwwaSpreadsheetLayoutHelper;
 use App\Support\OwwaTemplateLoader;
 use App\Support\PesoAmountInWords;
 use App\Support\PhpExtensionGuard;
+use App\Support\PurchaseOrderTechnicalSpecificationSheet;
 use Illuminate\Http\Response;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -73,7 +74,7 @@ class AcquisitionPaperworkPdfExportService
 
     public function downloadPoExcel(PurchaseOrder $purchaseOrder): StreamedResponse
     {
-        $spreadsheet = $this->buildPurchaseOrderSpreadsheet($purchaseOrder);
+        $spreadsheet = $this->purchaseOrderFilledSpreadsheet($purchaseOrder);
         $binary = $this->excelExport->spreadsheetToXlsxBinary($spreadsheet);
         $spreadsheet->disconnectWorksheets();
         $filename = $this->excelExport->buildOwwaExportFilename('PO', $purchaseOrder->number ?? (string) $purchaseOrder->id);
@@ -85,6 +86,11 @@ class AcquisitionPaperworkPdfExportService
             $filename,
             ['Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'],
         );
+    }
+
+    public function purchaseOrderFilledSpreadsheet(PurchaseOrder $purchaseOrder): Spreadsheet
+    {
+        return $this->buildPurchaseOrderSpreadsheet($purchaseOrder);
     }
 
     public function downloadIarExcel(InspectionAcceptanceReport $iar): StreamedResponse
@@ -143,10 +149,16 @@ class AcquisitionPaperworkPdfExportService
 
         $this->excelExport->applyFilledProcurementSheet($sheet, $templateFilename, $cellValues);
 
+        PurchaseOrderTechnicalSpecificationSheet::append(
+            $spreadsheet,
+            $purchaseOrder->technical_specifications,
+            $purchaseOrder->number,
+        );
+
         return $spreadsheet;
     }
 
-    protected function paperworkFromIar(InspectionAcceptanceReport $iar): AcquisitionPaperwork
+    public function paperworkFromIar(InspectionAcceptanceReport $iar): AcquisitionPaperwork
     {
         $iar->loadMissing([
             'purchaseOrder.purchaseRequest.office',

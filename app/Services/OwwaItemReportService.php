@@ -125,7 +125,7 @@ class OwwaItemReportService
             });
 
         Issuance::query()
-            ->with(['office', 'issuedTo', 'requisition'])
+            ->with(['office', 'issuedTo'])
             ->whereIn('item_id', $itemIds)
             ->when($normalizedOfficeIds !== [], fn ($q) => $q->whereIn('office_id', $normalizedOfficeIds))
             ->orderBy('issuance_date')
@@ -142,7 +142,7 @@ class OwwaItemReportService
                     'office_id' => $issuance->office_id,
                     'sort_date' => $issuance->issuance_date,
                     'date' => $issuance->issuance_date?->format('Y-m-d'),
-                    'reference' => $issuance->requisition?->reference_code ?? $issuance->controlNumber(),
+                    'reference' => $issuance->controlNumber(),
                     'type' => 'issue',
                     'receipt_qty' => null,
                     'issue_qty' => $issuance->quantity,

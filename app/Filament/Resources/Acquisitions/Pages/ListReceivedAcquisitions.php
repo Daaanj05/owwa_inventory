@@ -3,12 +3,16 @@
 namespace App\Filament\Resources\Acquisitions\Pages;
 
 use App\Filament\Concerns\HasSystemAdminWizardHeading;
+use App\Filament\Concerns\StartsOwwaExportBusy;
 use App\Filament\Concerns\SyncsActiveItemCategory;
 use App\Filament\Resources\Acquisitions\AcquisitionResource;
+use App\Filament\Resources\Acquisitions\Concerns\AcquisitionProcurementExportAction;
 use App\Filament\Resources\Acquisitions\Concerns\HasAcquisitionDocumentTabs;
 use App\Filament\Resources\Acquisitions\Tables\ReceivedAcquisitionsTable;
 use Filament\Resources\Pages\ListRecords;
+use Filament\Schemas\Components\Actions;
 use Filament\Schemas\Components\EmbeddedTable;
+use Filament\Schemas\Components\Flex;
 use Filament\Schemas\Components\RenderHook;
 use Filament\Schemas\Schema;
 use Filament\Tables\Table;
@@ -21,6 +25,7 @@ class ListReceivedAcquisitions extends ListRecords
 {
     use HasAcquisitionDocumentTabs;
     use HasSystemAdminWizardHeading;
+    use StartsOwwaExportBusy;
     use SyncsActiveItemCategory;
 
     #[Url]
@@ -81,7 +86,16 @@ class ListReceivedAcquisitions extends ListRecords
     {
         $this->registerAcquisitionDocumentTabsBelowSearch('received');
 
+        $actionsComponent = Actions::make([
+            AcquisitionProcurementExportAction::make('pr'),
+        ])->alignEnd();
+
+        $flexComponent = Flex::make([
+            $actionsComponent,
+        ])->alignEnd();
+
         return $schema->components([
+            $flexComponent,
             RenderHook::make(PanelsRenderHook::RESOURCE_PAGES_LIST_RECORDS_TABLE_BEFORE),
             EmbeddedTable::make(),
             RenderHook::make(PanelsRenderHook::RESOURCE_PAGES_LIST_RECORDS_TABLE_AFTER),

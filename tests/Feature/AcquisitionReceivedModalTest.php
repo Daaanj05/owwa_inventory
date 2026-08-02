@@ -191,6 +191,8 @@ class AcquisitionReceivedModalTest extends TestCase
             'supplier_address' => '123 Main St',
             'mode_of_procurement' => 'Shopping',
             'place_of_delivery' => 'OWWA RO',
+            'date_of_delivery' => now()->addDays(7)->toDateString(),
+            'payment_term' => '30 days',
             'technical_specifications' => 'N/A',
             'po_date' => now()->toDateString(),
         ]);
@@ -207,12 +209,12 @@ class AcquisitionReceivedModalTest extends TestCase
         $iar = $iarService->createFromApprovedPo($po->fresh());
         $iar->update([
             'invoice_number' => 'INV100',
-            'invoice_date' => now()->addDay()->toDateString(),
-            'date_inspected' => now()->addDay()->toDateString(),
-            'date_received' => now()->addDays(2)->toDateString(),
+            'invoice_date' => now()->subDays(2)->toDateString(),
+            'date_inspected' => now()->subDay()->toDateString(),
+            'date_received' => now()->toDateString(),
             'inspection_officer_name' => 'Inspector',
             'custodian_name' => 'Custodian',
-            'iar_date' => now()->toDateString(),
+            'iar_date' => now()->subDays(3)->toDateString(),
         ]);
         $iarService->submit($iar->fresh(['lines']));
         $iarService->approve($iar->fresh());

@@ -1,6 +1,8 @@
 <?php
 
 return [
+    'entity_name' => 'OWWA-4A',
+
     'currency' => [
         'excel_format_code' => '"₱"#,##0.00',
     ],
@@ -20,6 +22,7 @@ return [
             'reference' => 'left',
             'text' => 'left',
             'qty' => 'center',
+            'mark' => 'center',
             'unit_cost' => 'center',
             'amount' => 'right',
             'balance' => 'right',

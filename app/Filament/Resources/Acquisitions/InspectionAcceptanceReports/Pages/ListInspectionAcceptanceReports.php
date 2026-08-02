@@ -3,7 +3,9 @@
 namespace App\Filament\Resources\Acquisitions\InspectionAcceptanceReports\Pages;
 
 use App\Filament\Concerns\HasSystemAdminWizardHeading;
+use App\Filament\Concerns\StartsOwwaExportBusy;
 use App\Filament\Concerns\SyncsActiveItemCategory;
+use App\Filament\Resources\Acquisitions\Concerns\AcquisitionProcurementExportAction;
 use App\Filament\Resources\Acquisitions\Concerns\HasAcquisitionDocumentTabs;
 use App\Filament\Resources\Acquisitions\InspectionAcceptanceReports\InspectionAcceptanceReportResource;
 use App\Filament\Support\OwwaFormModalDefaults;
@@ -30,6 +32,7 @@ class ListInspectionAcceptanceReports extends ListRecords
 {
     use HasAcquisitionDocumentTabs;
     use HasSystemAdminWizardHeading;
+    use StartsOwwaExportBusy;
     use SyncsActiveItemCategory;
 
     #[Url]
@@ -98,13 +101,14 @@ class ListInspectionAcceptanceReports extends ListRecords
         $categoryId = $this->activeItemCategoryId();
 
         $actionsComponent = Actions::make([
+            AcquisitionProcurementExportAction::make('iar'),
             OwwaFormModalDefaults::apply(
                 Action::make('createIar')
                     ->label('Create IAR')
                     ->icon('heroicon-o-plus')
                     ->color('primary')
                     ->modalHeading('Choose purchase order')
-                    ->modalDescription('Select an offline-approved PO that does not yet have an IAR.')
+                    ->modalDescription('Select an approved PO that does not yet have an IAR.')
                     ->modalSubmitActionLabel('Create IAR')
                     ->form([
                         Select::make('purchase_order_id')

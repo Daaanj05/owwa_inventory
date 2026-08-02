@@ -52,8 +52,8 @@ class AcquisitionPaperworkActions
                     $record->fresh(),
                     fn (AcquisitionPaperwork $paperwork) => app(AcquisitionPaperworkCompletionService::class)->submitPr($paperwork),
                     $action,
-                    'PR submitted',
-                    'Export the purchase request and route for offline approval.',
+                    'PR saved',
+                    'Export the purchase request for signature, then mark Approved when signed.',
                     AcquisitionPaperwork::PHASE_PR,
                 );
             })
@@ -65,12 +65,12 @@ class AcquisitionPaperworkActions
         return self::workflowAction(
             name: 'submitPr',
             label: 'Save PR',
-            description: 'Saves your entries, locks PR fields, and prepares the form for offline export.',
+            description: 'Validates PR fields and keeps the form ready to export for signature.',
             visible: fn (AcquisitionPaperwork $record): bool => ! $record->isPrApproved()
                 && $record->pr_status === AcquisitionPaperwork::STATUS_DRAFT,
             handler: fn (AcquisitionPaperwork $record) => app(AcquisitionPaperworkCompletionService::class)->submitPr($record),
-            successTitle: 'PR submitted',
-            successBody: 'Export the purchase request and route for offline approval.',
+            successTitle: 'PR saved',
+            successBody: 'Export the purchase request for signature, then mark Approved when signed.',
             phase: AcquisitionPaperwork::PHASE_PR,
             fromEditModal: $fromEditModal,
         );
@@ -80,9 +80,15 @@ class AcquisitionPaperworkActions
     {
         return self::workflowAction(
             name: 'approvePr',
-            label: 'Record Offline Approval',
-            description: 'Assigns PR No. and unlocks PO after offline approval is recorded.',
-            visible: fn (AcquisitionPaperwork $record): bool => $record->pr_status === AcquisitionPaperwork::STATUS_PENDING_APPROVAL,
+            label: 'Approved',
+            description: 'Marks this purchase request as approved after wet-ink signature.',
+            visible: fn (AcquisitionPaperwork $record): bool => ! $record->isPrApproved()
+                && filled($record->pr_submitted_at)
+                && in_array($record->pr_status, [
+                    AcquisitionPaperwork::STATUS_DRAFT,
+                    AcquisitionPaperwork::STATUS_PENDING_APPROVAL,
+                ], true)
+                && ! $record->isArchived(),
             handler: fn (AcquisitionPaperwork $record) => app(AcquisitionPaperworkCompletionService::class)->approvePr($record),
             successTitle: 'PR approved',
             successBody: 'Create a purchase order from the PO tab by choosing this PR.',
@@ -137,9 +143,16 @@ class AcquisitionPaperworkActions
     {
         return self::workflowAction(
             name: 'approvePo',
-            label: 'Record Offline Approval',
-            description: 'Assigns PO No. and unlocks IAR.',
-            visible: fn (AcquisitionPaperwork $record): bool => $record->po_status === AcquisitionPaperwork::STATUS_PENDING_APPROVAL,
+            label: 'Approved',
+            description: 'Marks this purchase order as approved after wet-ink signature.',
+            visible: fn (AcquisitionPaperwork $record): bool => ! $record->isPoApproved()
+                && $record->purchaseOrder !== null
+                && filled($record->purchaseOrder->submitted_at)
+                && in_array($record->po_status, [
+                    AcquisitionPaperwork::STATUS_DRAFT,
+                    AcquisitionPaperwork::STATUS_PENDING_APPROVAL,
+                ], true)
+                && ! $record->isArchived(),
             handler: fn (AcquisitionPaperwork $record) => app(AcquisitionPaperworkCompletionService::class)->approvePo($record),
             successTitle: 'PO approved',
             successBody: 'IAR phase is now unlocked.',
@@ -152,13 +165,13 @@ class AcquisitionPaperworkActions
         return self::workflowAction(
             name: 'submitIar',
             label: 'Save IAR',
-            description: 'Saves your entries, locks IAR fields, and prepares the form for offline export.',
+            description: 'Validates IAR fields and keeps the form ready to export for signature.',
             visible: fn (AcquisitionPaperwork $record): bool => $record->isPoApproved()
                 && ! $record->isIarApproved()
                 && $record->iar_status === AcquisitionPaperwork::STATUS_DRAFT,
             handler: fn (AcquisitionPaperwork $record) => app(AcquisitionPaperworkCompletionService::class)->submitIar($record),
-            successTitle: 'IAR submitted',
-            successBody: 'Export the inspection report and file with records.',
+            successTitle: 'IAR saved',
+            successBody: 'Export the inspection report for signature, then mark Approved when signed.',
             phase: AcquisitionPaperwork::PHASE_IAR,
             fromEditModal: $fromEditModal,
         );
@@ -168,9 +181,16 @@ class AcquisitionPaperworkActions
     {
         return self::workflowAction(
             name: 'approveIar',
-            label: 'Record Offline Approval',
-            description: 'Assigns IAR No. You can then record custodian receipt when goods arrive.',
-            visible: fn (AcquisitionPaperwork $record): bool => $record->iar_status === AcquisitionPaperwork::STATUS_PENDING_APPROVAL,
+            label: 'Approved',
+            description: 'Marks this IAR as approved after wet-ink signature.',
+            visible: fn (AcquisitionPaperwork $record): bool => ! $record->isIarApproved()
+                && $record->purchaseOrder?->inspectionAcceptanceReport !== null
+                && filled($record->purchaseOrder->inspectionAcceptanceReport->submitted_at)
+                && in_array($record->iar_status, [
+                    AcquisitionPaperwork::STATUS_DRAFT,
+                    AcquisitionPaperwork::STATUS_PENDING_APPROVAL,
+                ], true)
+                && ! $record->isArchived(),
             handler: fn (AcquisitionPaperwork $record) => app(AcquisitionPaperworkCompletionService::class)->approveIar($record),
             successTitle: 'IAR approved',
             successBody: 'Record custodian receipt when stock is received.',
@@ -184,7 +204,18 @@ class AcquisitionPaperworkActions
             ->label('Record custodian receipt')
             ->icon('heroicon-o-check')
             ->color('primary')
-            ->visible(fn (AcquisitionPaperwork $record): bool => $record->isIarApproved() && ! $record->isReceived())
+            ->visible(function (AcquisitionPaperwork $record): bool {
+                if (! $record->isIarApproved() || $record->isReceived()) {
+                    return false;
+                }
+
+                $iar = $record->purchaseOrder?->inspectionAcceptanceReport;
+                if ($iar === null || $iar->date_received === null) {
+                    return false;
+                }
+
+                return ! $iar->date_received->copy()->startOfDay()->isFuture();
+            })
             ->requiresConfirmation()
             ->modalDescription('Creates one custodian receipt per line and updates stock levels.')
             ->action(function (AcquisitionPaperwork $record, Action $action): void {
@@ -249,8 +280,7 @@ class AcquisitionPaperworkActions
         return Action::make('exportPr')
             ->label('Export Excel')
             ->icon('heroicon-o-document-arrow-down')
-            ->visible(fn (AcquisitionPaperwork $record): bool => filled($record->pr_number)
-                || $record->pr_status !== AcquisitionPaperwork::STATUS_DRAFT)
+            ->visible(fn (AcquisitionPaperwork $record): bool => $record->missingPrFields() === [])
             ->action(function (AcquisitionPaperwork $record, Action $action): void {
                 self::startOwwaExport($action, route('owwa.export.acquisition-paperwork.pr', $record));
             });
@@ -261,8 +291,7 @@ class AcquisitionPaperworkActions
         return Action::make('exportPrPdf')
             ->label('Export PDF')
             ->icon('heroicon-o-document-text')
-            ->visible(fn (AcquisitionPaperwork $record): bool => filled($record->pr_number)
-                || $record->pr_status !== AcquisitionPaperwork::STATUS_DRAFT)
+            ->visible(fn (AcquisitionPaperwork $record): bool => $record->missingPrFields() === [])
             ->action(function (AcquisitionPaperwork $record, Action $action): void {
                 self::startOwwaExport($action, route('owwa.export.acquisition-paperwork.pr-pdf', $record));
             });
@@ -274,7 +303,7 @@ class AcquisitionPaperworkActions
             ->label('Export PO')
             ->icon('heroicon-o-document-arrow-down')
             ->visible(fn (AcquisitionPaperwork $record): bool => $record->purchaseOrder !== null
-                && ! $record->purchaseOrder->isDraft())
+                && $record->purchaseOrder->missingFields() === [])
             ->action(function (AcquisitionPaperwork $record, Action $action): void {
                 self::startOwwaExport($action, route('owwa.export.purchase-order.excel', $record->purchaseOrder));
             });
@@ -286,7 +315,7 @@ class AcquisitionPaperworkActions
             ->label('Export IAR')
             ->icon('heroicon-o-document-arrow-down')
             ->visible(fn (AcquisitionPaperwork $record): bool => $record->purchaseOrder?->inspectionAcceptanceReport !== null
-                && ! $record->purchaseOrder->inspectionAcceptanceReport->isDraft())
+                && $record->purchaseOrder->inspectionAcceptanceReport->missingFields() === [])
             ->action(function (AcquisitionPaperwork $record, Action $action): void {
                 self::startOwwaExport(
                     $action,

@@ -30,7 +30,7 @@ class InspectionAcceptanceReportWorkflowService
             }
 
             if (! $purchaseOrder->isApproved()) {
-                throw ValidationException::withMessages(['purchase_order' => 'Choose an offline-approved purchase order.']);
+                throw ValidationException::withMessages(['purchase_order' => 'Choose an approved purchase order.']);
             }
 
             if ($purchaseOrder->inspectionAcceptanceReport()->exists()) {
@@ -43,9 +43,12 @@ class InspectionAcceptanceReportWorkflowService
                 throw ValidationException::withMessages(['purchase_order' => 'The selected PO has no ordered line items.']);
             }
 
+            $iarNumber = $this->referenceCodes->forAcquisitionPaperworkIar();
+
             $iar = InspectionAcceptanceReport::query()->create([
                 'purchase_order_id' => $purchaseOrder->id,
                 'recorded_by' => auth()->id(),
+                'number' => $iarNumber,
                 'status' => InspectionAcceptanceReport::STATUS_DRAFT,
                 'iar_date' => now()->toDateString(),
             ]);
@@ -72,6 +75,7 @@ class InspectionAcceptanceReportWorkflowService
                 'phase' => AcquisitionPaperwork::PHASE_IAR,
                 'iar_status' => AcquisitionPaperwork::STATUS_DRAFT,
                 'iar_date' => $iar->iar_date,
+                'iar_number' => $iarNumber,
             ]);
 
             return $iar->fresh(['lines', 'purchaseOrder.purchaseRequest']) ?? $iar;
@@ -96,14 +100,19 @@ class InspectionAcceptanceReportWorkflowService
             ]);
         }
 
+        $number = $iar->number;
+        if (blank($number)) {
+            $number = $this->referenceCodes->forAcquisitionPaperworkIar();
+        }
+
         $iar->update([
-            'status' => InspectionAcceptanceReport::STATUS_PENDING_APPROVAL,
-            'submitted_at' => now(),
+            'number' => $number,
+            'submitted_at' => $iar->submitted_at ?? now(),
         ]);
 
         $iar->purchaseOrder?->purchaseRequest?->update([
-            'iar_status' => AcquisitionPaperwork::STATUS_PENDING_APPROVAL,
-            'iar_submitted_at' => now(),
+            'iar_number' => $number,
+            'iar_submitted_at' => $iar->submitted_at ?? now(),
             'iar_date' => $iar->iar_date,
             'inspection_officer_name' => $iar->inspection_officer_name,
             'custodian_name' => $iar->custodian_name,
@@ -128,21 +137,44 @@ class InspectionAcceptanceReportWorkflowService
             throw ValidationException::withMessages(['phase' => 'IAR is already approved.']);
         }
 
-        if (! $iar->isPendingApproval()) {
-            throw ValidationException::withMessages(['phase' => 'Submit IAR for approval before marking approved.']);
+        if (! $iar->isDraft() && ! $iar->isPendingApproval()) {
+            throw ValidationException::withMessages(['phase' => 'IAR cannot be approved in its current status.']);
+        }
+
+        $missing = $iar->fresh(['lines'])?->missingFields() ?? $iar->missingFields();
+
+        if ($missing !== []) {
+            throw ValidationException::withMessages([
+                'phase' => 'Missing: '.implode(', ', $missing).'.',
+            ]);
+        }
+
+        $number = $iar->number;
+        if (blank($number)) {
+            $number = $this->referenceCodes->forAcquisitionPaperworkIar();
         }
 
         $iar->update([
-            'number' => $this->referenceCodes->forAcquisitionPaperworkIar(),
+            'number' => $number,
             'status' => InspectionAcceptanceReport::STATUS_APPROVED,
             'approved_at' => now(),
+            'submitted_at' => $iar->submitted_at ?? now(),
         ]);
 
         $iar->purchaseOrder?->purchaseRequest?->update([
-            'iar_number' => $iar->number,
+            'iar_number' => $number,
             'iar_status' => AcquisitionPaperwork::STATUS_APPROVED,
             'iar_completed_at' => now(),
             'phase' => AcquisitionPaperwork::PHASE_IAR,
+            'iar_date' => $iar->iar_date,
+            'inspection_officer_name' => $iar->inspection_officer_name,
+            'custodian_name' => $iar->custodian_name,
+            'iar_data' => [
+                'invoice_no' => $iar->invoice_number,
+                'invoice_date' => $iar->invoice_date?->toDateString(),
+                'date_inspected' => $iar->date_inspected?->toDateString(),
+                'date_received' => $iar->date_received?->toDateString(),
+            ],
         ]);
 
         return $iar->fresh() ?? $iar;
@@ -166,6 +198,14 @@ class InspectionAcceptanceReportWorkflowService
 
             if ($iar->isReceived()) {
                 throw ValidationException::withMessages(['phase' => 'Custodian receipts already recorded for this IAR.']);
+            }
+
+            if ($iar->date_received === null) {
+                throw ValidationException::withMessages(['phase' => 'Receive Date is required before recording custodian receipt.']);
+            }
+
+            if ($iar->date_received->copy()->startOfDay()->isFuture()) {
+                throw ValidationException::withMessages(['phase' => 'Receive Date must be today or earlier before recording custodian receipt.']);
             }
 
             $lines = $iar->lines->filter(fn (InspectionAcceptanceReportLine $line): bool => $line->iar_quantity > 0);

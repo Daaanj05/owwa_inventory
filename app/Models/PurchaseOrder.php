@@ -164,6 +164,8 @@ HTML;
             'supplier_address' => 'supplier address',
             'mode_of_procurement' => 'mode of procurement',
             'place_of_delivery' => 'place of delivery',
+            'date_of_delivery' => 'date of delivery',
+            'payment_term' => 'payment term',
             'technical_specifications' => 'technical specification',
         ] as $field => $label) {
             if (blank($this->{$field})) {

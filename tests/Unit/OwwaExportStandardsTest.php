@@ -28,6 +28,7 @@ class OwwaExportStandardsTest extends TestCase
             'C' => 'qty',
             'D' => 'amount',
             'E' => 'balance',
+            'F' => 'mark',
         ]);
 
         $this->assertSame(Alignment::HORIZONTAL_CENTER, $alignments['A']);
@@ -35,5 +36,6 @@ class OwwaExportStandardsTest extends TestCase
         $this->assertSame(Alignment::HORIZONTAL_CENTER, $alignments['C']);
         $this->assertSame(Alignment::HORIZONTAL_RIGHT, $alignments['D']);
         $this->assertSame(Alignment::HORIZONTAL_RIGHT, $alignments['E']);
+        $this->assertSame(Alignment::HORIZONTAL_CENTER, $alignments['F']);
     }
 }

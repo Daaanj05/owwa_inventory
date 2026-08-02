@@ -30,7 +30,7 @@ class StockLedgerViewServiceTest extends TestCase
 
         $present = app(StockLedgerViewService::class)->present($item, $office);
 
-        $this->assertSame('Stock Card (Appendix 58)', $present['title']);
+        $this->assertSame('Stock Card', $present['title']);
         $this->assertSame('sc', $present['exportForm']);
         $this->assertStringContainsString('owwa/bulk/stock-cards', $present['exportUrl']);
         $this->assertStringContainsString('pairs=', $present['exportUrl']);
@@ -50,7 +50,7 @@ class StockLedgerViewServiceTest extends TestCase
 
         $present = app(StockLedgerViewService::class)->present($item, $office);
 
-        $this->assertSame('Property Card (Appendix 69)', $present['title']);
+        $this->assertSame('Property Card', $present['title']);
         $this->assertSame('pc', $present['exportForm']);
         $this->assertArrayHasKey('office_officer', $present['columns']);
     }
@@ -63,7 +63,7 @@ class StockLedgerViewServiceTest extends TestCase
 
         $present = app(StockLedgerViewService::class)->present($item, $office);
 
-        $this->assertSame('Semi-Expendable Property Card (Annex A.1)', $present['title']);
+        $this->assertSame('Semi-Expendable Property Card', $present['title']);
         $this->assertSame('annex_a1', $present['exportForm']);
     }
 
@@ -127,6 +127,42 @@ class StockLedgerViewServiceTest extends TestCase
 
         $this->assertContains(10, $balances);
         $this->assertContains(7, $balances);
+    }
+
+    public function test_issue_rows_use_control_number_as_reference_and_remarks_exclude_serial(): void
+    {
+        $category = ItemCategory::factory()->create(['name' => 'Consumables']);
+        $item = Item::factory()->create(['item_category_id' => $category->id]);
+        $office = Office::factory()->create();
+
+        $this->createAcquisition($item->id, $office->id, 10);
+
+        $controlNumber = '2026-07-0001';
+        DB::table('issuances')->insert([
+            'reference_code' => $controlNumber,
+            'item_id' => $item->id,
+            'office_id' => $office->id,
+            'quantity' => 2,
+            'issuance_date' => now()->toDateString(),
+            'remarks' => 'Partial issue for training',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $present = app(StockLedgerViewService::class)->present($item, $office);
+
+        $this->assertSame(
+            [
+                'label' => 'Reference',
+                'tooltip' => 'Receipt: acquisition number. Issue: issuance control number. Transfer/disposal: transaction reference.',
+            ],
+            $present['columns']['reference'],
+        );
+
+        $issueRow = collect($present['rows'])->firstWhere('type_label', 'Issue');
+        $this->assertNotNull($issueRow);
+        $this->assertSame($controlNumber, $issueRow['reference']);
+        $this->assertSame('Partial issue for training', $issueRow['remarks']);
     }
 
     public function test_assert_visible_in_stock_list_rejects_unknown_pairs(): void

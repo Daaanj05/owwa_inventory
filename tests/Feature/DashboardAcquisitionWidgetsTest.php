@@ -11,6 +11,8 @@ use App\Models\ItemCategory;
 use App\Models\Office;
 use App\Models\User;
 use App\Services\AcquisitionPaperworkCompletionService;
+use App\Services\InspectionAcceptanceReportWorkflowService;
+use App\Services\PurchaseOrderWorkflowService;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
@@ -72,7 +74,7 @@ class DashboardAcquisitionWidgetsTest extends TestCase
 
     protected function createReceivedPaperwork(): AcquisitionPaperwork
     {
-        $office = Office::factory()->create();
+        $office = Office::factory()->create(['is_regional_supply' => true]);
         $requestingOffice = Office::factory()->create([
             'name' => 'OWWA Satellite Office — Laguna',
             'code' => 'OWWA-LAG',
@@ -97,13 +99,8 @@ class DashboardAcquisitionWidgetsTest extends TestCase
             'recorded_by' => $user->id,
             'purpose' => 'Office supplies',
             'pr_date' => now(),
-            'supplier' => 'Supplier Co.',
-            'po_date' => now(),
-            'iar_date' => now(),
             'requested_by_name' => 'Requester',
             'approved_by_name' => 'Approver',
-            'inspection_officer_name' => 'Inspector',
-            'custodian_name' => 'Custodian',
         ]);
 
         AcquisitionPaperworkLine::query()->create([
@@ -116,11 +113,44 @@ class DashboardAcquisitionWidgetsTest extends TestCase
             'amount' => 500,
         ]);
 
-        $service = app(AcquisitionPaperworkCompletionService::class);
-        $service->completePr($paperwork->fresh());
-        $service->completePo($paperwork->fresh());
-        $service->completeIar($paperwork->fresh());
-        $service->recordCustodyReceipts($paperwork->fresh());
+        $completion = app(AcquisitionPaperworkCompletionService::class);
+        $completion->completePr($paperwork->fresh());
+
+        $poService = app(PurchaseOrderWorkflowService::class);
+        $po = $poService->createFromApprovedPr($paperwork->fresh());
+        $po->update([
+            'supplier_name' => 'Supplier Co.',
+            'supplier_address' => '123 Main St',
+            'mode_of_procurement' => 'Shopping',
+            'place_of_delivery' => 'OWWA RO',
+            'date_of_delivery' => now()->addDays(7)->toDateString(),
+            'payment_term' => '30 days',
+            'technical_specifications' => 'N/A',
+            'po_date' => now()->toDateString(),
+        ]);
+        $po->lines()->update([
+            'is_ordered' => true,
+            'po_quantity' => 1,
+            'unit_cost' => 500,
+            'amount' => 500,
+        ]);
+        $poService->submit($po->fresh(['lines']));
+        $poService->approve($po->fresh());
+
+        $iarService = app(InspectionAcceptanceReportWorkflowService::class);
+        $iar = $iarService->createFromApprovedPo($po->fresh());
+        $iar->update([
+            'invoice_number' => 'INV100',
+            'invoice_date' => now()->subDays(2)->toDateString(),
+            'date_inspected' => now()->subDay()->toDateString(),
+            'date_received' => now()->toDateString(),
+            'inspection_officer_name' => 'Inspector',
+            'custodian_name' => 'Custodian',
+            'iar_date' => now()->subDays(3)->toDateString(),
+        ]);
+        $iarService->submit($iar->fresh(['lines']));
+        $iarService->approve($iar->fresh());
+        $iarService->recordCustodyReceipts($iar->fresh());
 
         return $paperwork->fresh(['lines.item']);
     }

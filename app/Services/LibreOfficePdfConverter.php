@@ -91,7 +91,7 @@ class LibreOfficePdfConverter
      * Convert XLSX bytes to PDF via LibreOffice headless.
      * Returns null when LibreOffice is unavailable or conversion fails.
      */
-    public function convertXlsxBinary(string $xlsxBinary): ?string
+    public function convertXlsxBinary(string $xlsxBinary, ?int $timeoutSeconds = null): ?string
     {
         if ($xlsxBinary === '' || ! $this->isEnabled()) {
             return null;
@@ -111,7 +111,7 @@ class LibreOfficePdfConverter
                 return null;
             }
 
-            $timeout = max(15, (int) config('services.libreoffice.timeout', 90));
+            $timeout = max(15, $timeoutSeconds ?? (int) config('services.libreoffice.timeout', 90));
 
             $profileUri = 'file:///'.str_replace('\\', '/', $workDir.'/lo_profile');
 

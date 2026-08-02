@@ -64,7 +64,8 @@ class LowStockWidgetTest extends TestCase
             ->assertSee('Items in total')
             ->assertDontSee('Stocks in hand')
             ->assertSee('Low stock')
-            ->assertSee('Pending requisitions')
+            ->assertSee('Pending')
+            ->assertDontSee('Pending requisitions')
             ->assertSee('2');
     }
 

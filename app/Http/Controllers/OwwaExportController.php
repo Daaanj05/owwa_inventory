@@ -77,8 +77,16 @@ class OwwaExportController extends Controller
 
         $asPdf = $request->query('format') === 'pdf';
 
+        $formLabel = match (true) {
+            in_array(strtolower((string) $formSlug), ['par'], true),
+            ($formSlug === null || $formSlug === '') && $issuance->item?->category?->getTemplateSlug() === 'ppe' => 'PAR',
+            in_array(strtolower((string) $formSlug), ['ics'], true),
+            ($formSlug === null || $formSlug === '') && $issuance->item?->category?->getTemplateSlug() === 'semi_expendable' => 'ICS',
+            default => 'RSMI',
+        };
+
         $this->logExportActivity(
-            ($asPdf ? 'Exported OWWA issuance PDF ' : 'Exported OWWA issuance report ').$issuance->reference_code,
+            ($asPdf ? "Exported {$formLabel} PDF for issuance " : "Exported {$formLabel} for issuance ").$issuance->reference_code,
             $issuance,
             ['form' => $formSlug, 'format' => $asPdf ? 'pdf' : 'xlsx'],
         );
@@ -154,7 +162,7 @@ class OwwaExportController extends Controller
         $asPdf = $request->query('format') === 'pdf';
 
         $this->logExportActivity(
-            ($asPdf ? 'Exported OWWA requisition PDF ' : 'Exported OWWA requisition report ').$requisition->reference_code,
+            ($asPdf ? 'Exported RIS PDF ' : 'Exported RIS ').$requisition->reference_code,
             $requisition,
             ['format' => $asPdf ? 'pdf' : 'xlsx'],
         );
@@ -386,20 +394,20 @@ class OwwaExportController extends Controller
     }
 
     /** @deprecated */
-    public function procurementPr(AcquisitionPaperwork $procurementCase): StreamedResponse
+    public function procurementPr(AcquisitionPaperwork $acquisitionPaperwork): StreamedResponse
     {
-        return $this->acquisitionPaperworkPr($procurementCase);
+        return $this->acquisitionPaperworkPr($acquisitionPaperwork);
     }
 
     /** @deprecated */
-    public function procurementPo(AcquisitionPaperwork $procurementCase): StreamedResponse
+    public function procurementPo(AcquisitionPaperwork $acquisitionPaperwork): StreamedResponse
     {
-        return $this->acquisitionPaperworkPo($procurementCase);
+        return $this->acquisitionPaperworkPo($acquisitionPaperwork);
     }
 
     /** @deprecated */
-    public function procurementIar(AcquisitionPaperwork $procurementCase): StreamedResponse
+    public function procurementIar(AcquisitionPaperwork $acquisitionPaperwork): StreamedResponse
     {
-        return $this->acquisitionPaperworkIar($procurementCase);
+        return $this->acquisitionPaperworkIar($acquisitionPaperwork);
     }
 }

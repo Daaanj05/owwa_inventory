@@ -71,6 +71,10 @@ class PropertyActionRequestTableActions
             ->label('Reject')
             ->icon('heroicon-o-x-mark')
             ->color('danger')
+            ->requiresConfirmation()
+            ->modalHeading('Reject this property return?')
+            ->modalDescription('The requestor will see your remarks. This cannot be undone from the Active list.')
+            ->modalSubmitActionLabel('Yes, reject')
             ->schema([
                 Textarea::make('remarks')
                     ->label('Remarks')

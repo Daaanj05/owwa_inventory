@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Acquisitions\PurchaseOrders\Tables;
 
+use App\Filament\Resources\Acquisitions\Concerns\AcquisitionDateRangeFilter;
 use App\Filament\Resources\Acquisitions\PurchaseOrders\Actions\PurchaseOrderActions;
 use App\Filament\Resources\Acquisitions\PurchaseOrders\Schemas\PurchaseOrderInfolist;
 use App\Filament\Support\ConfiguresOwwaViewAction;
@@ -52,16 +53,17 @@ class PurchaseOrdersTable
                         PurchaseOrder::STATUS_PENDING_APPROVAL => 'Pending approval',
                         PurchaseOrder::STATUS_APPROVED => 'Approved',
                     ]),
+                AcquisitionDateRangeFilter::make('po_date', 'PO date'),
             ])
             ->defaultSort('created_at', 'desc')
             ->emptyStateHeading('No purchase orders yet')
-            ->emptyStateDescription('Create a PO by choosing an offline-approved purchase request.')
+            ->emptyStateDescription('Create a PO by choosing an approved purchase request.')
             ->recordActions([
                 ConfiguresOwwaViewAction::make(
                     schema: PurchaseOrderInfolist::modalComponents(),
                     footerActions: PurchaseOrderActions::viewModalFooterActions(),
                     modalWidth: OwwaFormModalDefaults::WIDTH_WIDE,
-                    extraModalClass: 'owwa-acquisition-paperwork-modal',
+                    extraModalClass: 'owwa-acquisition-paperwork-modal owwa-po-modal',
                     modalHeading: 'View Purchase Order',
                 ),
                 PurchaseOrderActions::configureEditAction(),

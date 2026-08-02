@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Acquisitions\Tables;
 
+use App\Filament\Resources\Acquisitions\Concerns\AcquisitionDateRangeFilter;
 use App\Filament\Resources\Acquisitions\Paperwork\Actions\AcquisitionPaperworkActions;
 use App\Filament\Resources\Acquisitions\Paperwork\Schemas\AcquisitionPaperworkModalSchema;
 use App\Filament\Support\ConfiguresOwwaViewAction;
@@ -59,6 +60,7 @@ class AcquisitionsTable
                         AcquisitionPaperwork::STATUS_PENDING_APPROVAL => 'Pending approval',
                         AcquisitionPaperwork::STATUS_APPROVED => 'Approved',
                     ]),
+                AcquisitionDateRangeFilter::make('pr_date', 'PR date'),
             ])
             ->defaultSort('created_at', 'desc')
             ->emptyStateHeading('No purchase requests yet')

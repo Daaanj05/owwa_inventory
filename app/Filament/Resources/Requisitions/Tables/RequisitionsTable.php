@@ -24,7 +24,6 @@ use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\BulkAction;
 use Filament\Actions\BulkActionGroup;
-use Filament\Actions\DeleteBulkAction;
 use Filament\Forms\Components\Textarea;
 use Filament\Notifications\Notification;
 use Filament\Tables\Columns\TextColumn;
@@ -220,6 +219,9 @@ class RequisitionsTable
                         ->label('Compile / Consolidate')
                         ->icon('heroicon-o-rectangle-stack')
                         ->color('primary')
+                        ->requiresConfirmation()
+                        ->modalHeading('Compile selected requisitions?')
+                        ->modalDescription('Eligible reviewed employee requests will be used to start a new consolidated requisition to Supply Custodian.')
                         ->deselectRecordsAfterCompletion()
                         ->visible(function () use ($table): bool {
                             $viewer = Auth::user();
@@ -280,11 +282,18 @@ class RequisitionsTable
                                 'prefillSourceRequisitionIds' => $eligible->modelKeys(),
                             ], ['schemaComponent' => 'content']);
                         }),
-                    DeleteBulkAction::make()
-                        ->visible(fn (): bool => ! $isEmployeeViewer && ! $isUnitConsolidatorViewer),
                 ]),
             ])
-            ->selectable(! $isUnitConsolidatorViewer)
+            ->selectable(function () use ($isUnitConsolidatorViewer): bool {
+                if ($isUnitConsolidatorViewer) {
+                    return true;
+                }
+
+                $viewer = Auth::user();
+
+                // Supply Custodian keeps row selection for Export RIS only (no bulk toolbar actions).
+                return $viewer instanceof User && $viewer->isSupplyCustodian();
+            })
             ->recordUrl(null)
             ->recordAction('view');
 
@@ -297,6 +306,9 @@ class RequisitionsTable
             ->label('Submit to SC')
             ->icon('heroicon-o-paper-airplane')
             ->color('primary')
+            ->requiresConfirmation()
+            ->modalHeading('Submit to Supply Custodian?')
+            ->modalDescription('This will start a consolidated requisition using the selected employee request.')
             ->visible(fn (Requisition $record): bool => self::canSubmitReviewedEmployeeRequisitionToSc($record, $table))
             ->action(function (Requisition $record, Action $action): void {
                 $livewire = $action->getLivewire();

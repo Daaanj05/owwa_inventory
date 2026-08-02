@@ -37,8 +37,8 @@ class InspectionAcceptanceReportActions
                     $record->fresh() ?? $record,
                     fn (InspectionAcceptanceReport $iar) => app(InspectionAcceptanceReportWorkflowService::class)->submit($iar),
                     $action,
-                    'IAR submitted',
-                    'Export the inspection report for offline approval.',
+                    'IAR saved',
+                    'Export the inspection report for signature, then mark Approved when signed.',
                 );
             })
             ->extraModalFooterActions(fn (EditAction $editAction): array => [
@@ -57,12 +57,15 @@ class InspectionAcceptanceReportActions
     public static function approveAction(): Action
     {
         return Action::make('approveIar')
-            ->label('Record Offline Approval')
+            ->label('Approved')
             ->icon('heroicon-o-check')
             ->color('success')
-            ->visible(fn (InspectionAcceptanceReport $record): bool => $record->isPendingApproval() && ! $record->isArchived())
+            ->visible(fn (InspectionAcceptanceReport $record): bool => filled($record->submitted_at)
+                && ($record->isDraft() || $record->isPendingApproval())
+                && ! $record->isArchived())
             ->requiresConfirmation()
-            ->modalDescription('Assigns IAR No. after offline approval is recorded.')
+            ->modalHeading('Mark IAR as approved?')
+            ->modalDescription('Confirm after the printed IAR has been signed. You can then record custodian receipt.')
             ->action(function (InspectionAcceptanceReport $record, Action $action): void {
                 self::runWorkflow(
                     $record,
@@ -80,7 +83,17 @@ class InspectionAcceptanceReportActions
             ->label('Record custodian receipt')
             ->icon('heroicon-o-check')
             ->color('primary')
-            ->visible(fn (InspectionAcceptanceReport $record): bool => $record->isApproved() && ! $record->isReceived() && ! $record->isArchived())
+            ->visible(function (InspectionAcceptanceReport $record): bool {
+                if (! $record->isApproved() || $record->isReceived() || $record->isArchived()) {
+                    return false;
+                }
+
+                if ($record->date_received === null) {
+                    return false;
+                }
+
+                return ! $record->date_received->copy()->startOfDay()->isFuture();
+            })
             ->requiresConfirmation()
             ->modalDescription('Creates stock receipts using IAR quantities.')
             ->action(function (InspectionAcceptanceReport $record, Action $action): void {
@@ -134,7 +147,7 @@ class InspectionAcceptanceReportActions
         return Action::make('exportIarExcel')
             ->label('Export Excel')
             ->icon('heroicon-o-document-arrow-down')
-            ->visible(fn (InspectionAcceptanceReport $record): bool => ! $record->isDraft() || filled($record->number))
+            ->visible(fn (InspectionAcceptanceReport $record): bool => $record->missingFields() === [])
             ->action(function (InspectionAcceptanceReport $record, Action $action): void {
                 self::startExport($action, route('owwa.export.inspection-acceptance-report.excel', $record));
             });
@@ -145,7 +158,7 @@ class InspectionAcceptanceReportActions
         return Action::make('exportIarPdf')
             ->label('Export PDF')
             ->icon('heroicon-o-document-text')
-            ->visible(fn (InspectionAcceptanceReport $record): bool => ! $record->isDraft() || filled($record->number))
+            ->visible(fn (InspectionAcceptanceReport $record): bool => $record->missingFields() === [])
             ->action(function (InspectionAcceptanceReport $record, Action $action): void {
                 self::startExport($action, route('owwa.export.inspection-acceptance-report.pdf', $record));
             });

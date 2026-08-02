@@ -47,6 +47,6 @@ class RequisitionRisStockExportTest extends TestCase
         $startRow = (int) ($detail['start_row'] ?? 12);
         $noCol = $columns['stock_no_col'] ?? 'F';
 
-        $this->assertSame('X', $values[OwwaCellMapping::columnCell($noCol, $startRow)] ?? null);
+        $this->assertSame('✓', $values[OwwaCellMapping::columnCell($noCol, $startRow)] ?? null);
     }
 }

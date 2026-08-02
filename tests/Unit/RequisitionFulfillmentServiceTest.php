@@ -186,6 +186,59 @@ class RequisitionFulfillmentServiceTest extends TestCase
         ], '2026-04-01');
     }
 
+    public function test_issue_lines_overwrites_stale_approved_at_and_approved_by(): void
+    {
+        $office = Office::factory()->create();
+        $category = ItemCategory::factory()->create(['name' => 'Consumables']);
+        $item = Item::factory()->create(['item_category_id' => $category->id]);
+
+        DB::table('acquisitions')->insert([
+            'reference_code' => 'ACQ-TEST-STALE',
+            'item_id' => $item->id,
+            'office_id' => $office->id,
+            'quantity' => 100,
+            'acquisition_date' => now()->toDateString(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        /** @var User $custodian */
+        $custodian = User::factory()->create(['role' => User::ROLE_SUPPLY_CUSTODIAN]);
+        /** @var User $uc */
+        $uc = User::factory()->create(['role' => User::ROLE_UNIT_CONSOLIDATOR, 'office_id' => $office->id]);
+        /** @var User $unitHead */
+        $unitHead = User::factory()->create(['role' => User::ROLE_UNIT_CONSOLIDATOR, 'name' => 'Unit Head']);
+
+        $requisition = Requisition::query()->create([
+            'reference_code' => '2026-07-0132',
+            'office_id' => $office->id,
+            'requested_by' => $uc->id,
+            'status' => Requisition::STATUS_PENDING,
+            'approved_by' => $unitHead->id,
+            'approved_at' => '2026-03-11 00:00:00',
+            'created_at' => '2026-07-21 10:00:00',
+            'updated_at' => '2026-07-21 10:00:00',
+        ]);
+
+        $line = RequisitionItem::query()->create([
+            'requisition_id' => $requisition->id,
+            'item_id' => $item->id,
+            'quantity' => 5,
+        ]);
+
+        $this->service->issueLines($requisition, $custodian, [
+            [
+                'requisition_item_id' => $line->id,
+                'quantity_to_issue' => 5,
+            ],
+        ], now()->toDateString());
+
+        $requisition->refresh();
+
+        $this->assertSame($custodian->id, $requisition->approved_by);
+        $this->assertTrue($requisition->approved_at->gte($requisition->created_at));
+    }
+
     public function test_reject_sets_status_and_remarks(): void
     {
         /** @var User $custodian */

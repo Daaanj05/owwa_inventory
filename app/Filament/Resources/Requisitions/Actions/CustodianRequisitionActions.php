@@ -34,7 +34,11 @@ class CustodianRequisitionActions
             return false;
         }
 
-        return $record->isPendingCustodianReview();
+        if (! $record->isPendingCustodianReview()) {
+            return false;
+        }
+
+        return self::hasActionableIssueLines($record);
     }
 
     public static function canIssueRemainder(Requisition $record): bool
@@ -43,16 +47,53 @@ class CustodianRequisitionActions
             return false;
         }
 
-        return $record->isAccepted() && $record->hasRemainingToIssue();
+        if (! $record->isAccepted() || ! $record->hasRemainingToIssue()) {
+            return false;
+        }
+
+        return self::hasActionableIssueLines($record, requireStock: true);
     }
 
     public static function canReject(Requisition $record): bool
     {
-        if (! self::isCustodianReviewTarget($record)) {
-            return false;
+        return false;
+    }
+
+    /**
+     * True when at least one remaining line can be issued (has stock) or still needs
+     * a first-time zero-stock acknowledgement (no issue remarks yet).
+     */
+    public static function hasActionableIssueLines(Requisition $record, bool $requireStock = false): bool
+    {
+        $record->loadMissing('items');
+        $fulfillment = app(RequisitionFulfillmentService::class);
+        $stockService = app(\App\Services\InventoryStockService::class);
+        $officeId = (int) $record->office_id;
+
+        foreach ($record->items as $line) {
+            $remaining = $fulfillment->remainingQuantity($line);
+            if ($remaining <= 0) {
+                continue;
+            }
+
+            $stock = $officeId > 0
+                ? max(0, $stockService->getStock((int) $line->item_id, $officeId))
+                : 0;
+
+            if ($stock > 0) {
+                return true;
+            }
+
+            if ($requireStock) {
+                continue;
+            }
+
+            if (blank($line->issue_remarks)) {
+                return true;
+            }
         }
 
-        return $record->isPendingCustodianReview();
+        return false;
     }
 
     public static function acceptAndIssueAction(): Action
@@ -61,13 +102,15 @@ class CustodianRequisitionActions
             ->label('Accept & issue')
             ->icon('heroicon-o-check-circle')
             ->color('success')
-            ->modalHeading('Accept requisition and issue stock')
+            ->requiresConfirmation()
+            ->modalHeading('Accept Requisition And Issue Stock')
             ->modalDescription(fn (Requisition $record): string|\Illuminate\Contracts\Support\Htmlable => RequisitionInfolistSchema::acceptIssueModalDescription($record))
+            ->modalSubmitActionLabel('Yes, accept & issue')
             ->visible(fn (Requisition $record): bool => self::canAcceptAndIssue($record))
             ->fillForm(fn (Requisition $record): array => RequisitionIssuanceFormSchema::defaultFormState($record, remainderOnly: false))
             ->form(fn (Requisition $record): array => RequisitionIssuanceFormSchema::issueModalFields($record, remainderOnly: false))
             ->action(function (Requisition $record, array $data): void {
-                self::runIssueAction($record, $data, 'Requisition accepted and stock issued');
+                self::runIssueAction($record, $data, 'Requisition accepted');
             });
     }
 
@@ -77,13 +120,15 @@ class CustodianRequisitionActions
             ->label('Issue remainder')
             ->icon('heroicon-o-arrow-up-tray')
             ->color('primary')
-            ->modalHeading('Issue remainder from requisition')
+            ->requiresConfirmation()
+            ->modalHeading('Issue Remainder From Requisition')
             ->modalDescription(fn (Requisition $record): string|\Illuminate\Contracts\Support\Htmlable => RequisitionInfolistSchema::acceptIssueModalDescription($record))
+            ->modalSubmitActionLabel('Yes, issue remainder')
             ->visible(fn (Requisition $record): bool => self::canIssueRemainder($record))
             ->fillForm(fn (Requisition $record): array => RequisitionIssuanceFormSchema::defaultFormState($record, remainderOnly: true))
             ->form(fn (Requisition $record): array => RequisitionIssuanceFormSchema::issueModalFields($record, remainderOnly: true))
             ->action(function (Requisition $record, array $data): void {
-                self::runIssueAction($record, $data, 'Remainder issued');
+                self::runIssueAction($record, $data, 'Stock issued');
             });
     }
 

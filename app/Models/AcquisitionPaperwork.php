@@ -97,6 +97,10 @@ class AcquisitionPaperwork extends Model
                 $paperwork->reference_code = app(ReferenceCodeService::class)->forAcquisitionPaperwork();
             }
 
+            if (blank($paperwork->pr_number)) {
+                $paperwork->pr_number = app(ReferenceCodeService::class)->forAcquisitionPaperworkPr();
+            }
+
             if (blank($paperwork->recorded_by) && auth()->id()) {
                 $paperwork->recorded_by = auth()->id();
             }
