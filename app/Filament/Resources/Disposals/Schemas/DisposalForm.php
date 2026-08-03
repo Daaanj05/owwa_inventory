@@ -6,6 +6,7 @@ use App\Filament\Concerns\SyncsActiveItemCategory;
 use App\Models\InventoryUnit;
 use App\Models\Item;
 use App\Models\ItemCategory;
+use App\Models\Office;
 use App\Services\DisposalInventoryUnitService;
 use App\Services\InventoryStockService;
 use App\Support\CustodianOfficeScope;
@@ -25,6 +26,7 @@ use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\HtmlString;
 
 class DisposalForm
 {
@@ -69,14 +71,10 @@ class DisposalForm
                         TextInput::make('reference_code')
                             ->label(fn (): string => OwwaReferenceLabels::disposal(self::activeCategorySlug()))
                             ->disabled()
+                            ->dehydrated(false)
                             ->visible(fn (string $operation): bool => $operation === 'edit')
                             ->columnSpanFull(),
-                        DatePicker::make('disposal_date')
-                            ->label(fn (): string => self::activeCategorySlug() === 'consumables'
-                                ? 'Report preparation date'
-                                : 'As at (report date)')
-                            ->required()
-                            ->default(now()),
+
                         Select::make('item_category_filter')
                             ->label('Category')
                             ->options(fn (): array => InventoryCategoryOptions::allActiveCategoryOptions())
@@ -88,7 +86,20 @@ class DisposalForm
                             ->afterStateUpdated(function (Set $set) use ($unitService): void {
                                 $set('item_id', null);
                                 $unitService->clearUnitLinkedFields($set);
-                            }),
+                            })
+                            ->columnSpanFull(),
+
+                        Hidden::make('disposal_date')
+                            ->default(fn (): string => now()->toDateString())
+                            ->dehydrated()
+                            ->dehydrateStateUsing(fn (): string => now()->toDateString()),
+
+                        Placeholder::make('disposal_date_display')
+                            ->label('Date')
+                            ->content(fn (): string => now()->format('M d, Y')),
+
+                        ...self::officeFields($syncItemOffice),
+
                         Select::make('item_id')
                             ->label('Item')
                             ->relationship(
@@ -109,15 +120,26 @@ class DisposalForm
                             ->preload()
                             ->live()
                             ->afterStateUpdated($syncItemOffice),
-                        ...self::officeFields($syncItemOffice),
+
                         TextInput::make('quantity')
                             ->label('Quantity')
                             ->required()
                             ->numeric()
                             ->minValue(1)
-                            ->helperText(fn (): ?string => self::activeCategorySlug() === 'consumables'
-                                ? 'WMR applies only to remaining stock at the regional Supply Custodian warehouse. Once issued to an office/UC, consumables are treated as consumed and cannot be written off here.'
-                                : null)
+                            ->dehydrated()
+                            ->extraFieldWrapperAttributes(fn (Get $get): array => filled($get('item_id'))
+                                ? []
+                                : ['x-data' => '{ showSelectItemError: false }'])
+                            ->extraInputAttributes(fn (Get $get): array => filled($get('item_id'))
+                                ? []
+                                : [
+                                    'x-on:focus' => 'showSelectItemError = true; $event.target.blur()',
+                                ])
+                            ->belowContent(fn (Get $get): ?HtmlString => filled($get('item_id'))
+                                ? null
+                                : new HtmlString(
+                                    '<p x-show="showSelectItemError" x-cloak class="fi-fo-field-wrp-error-message text-sm text-danger-600 dark:text-danger-400">Please select an item first.</p>'
+                                ))
                             ->rules([
                                 fn (Get $get): Closure => function (string $attribute, mixed $value, Closure $fail) use ($get): void {
                                     if (self::activeCategorySlug() !== 'consumables') {
@@ -140,10 +162,7 @@ class DisposalForm
                                     }
                                 },
                             ]),
-                        TextInput::make('reason')
-                            ->label('Reason')
-                            ->placeholder('Why this item was disposed')
-                            ->columnSpanFull(),
+
                     ])
                     ->columns(2),
 
@@ -267,16 +286,11 @@ class DisposalForm
                     ])
                     ->columns(2),
 
-                Section::make('Form details')
+                Section::make('Disposal details')
                     ->columnSpanFull()
                     ->compact()
                     ->visible(fn (): bool => filled(self::activeCategorySlug()))
                     ->schema([
-                        TextInput::make('place_of_storage')
-                            ->label('Place of storage')
-                            ->maxLength(255)
-                            ->required(fn (): bool => self::activeCategorySlug() === 'consumables')
-                            ->visible(fn (): bool => self::activeCategorySlug() === 'consumables'),
                         Select::make('disposal_mode')
                             ->label('Disposal mode')
                             ->options([
@@ -289,11 +303,10 @@ class DisposalForm
                             ->required(fn (): bool => self::activeCategorySlug() === 'consumables')
                             ->live()
                             ->visible(fn (): bool => self::activeCategorySlug() === 'consumables'),
-                        TextInput::make('wmr_inspection_item_no')
-                            ->label('Inspection item number')
-                            ->numeric()
-                            ->minValue(1)
-                            ->default(1)
+                        TextInput::make('place_of_storage')
+                            ->label('Place of storage')
+                            ->maxLength(255)
+                            ->required(fn (): bool => self::activeCategorySlug() === 'consumables')
                             ->visible(fn (): bool => self::activeCategorySlug() === 'consumables'),
                         Select::make('iirup_disposal_mode')
                             ->label('Disposal mode')
@@ -319,17 +332,28 @@ class DisposalForm
                             ->maxLength(255)
                             ->required(fn (Get $get): bool => $get('iirup_disposal_mode') === 'others')
                             ->visible(fn (Get $get): bool => self::isIirupCategory()
-                                && $get('iirup_disposal_mode') === 'others'),
+                                && $get('iirup_disposal_mode') === 'others')
+                            ->columnSpanFull(),
                         TextInput::make('accountable_officer_designation')
                             ->label('Accountable officer designation')
                             ->maxLength(255)
+                            ->datalist(fn (): array => \App\Models\ProcurementSignatoryName::suggestionsForRole(
+                                \App\Models\ProcurementSignatoryName::ROLE_DISPOSAL_ACCOUNTABLE_DESIGNATION
+                            ))
                             ->required(fn (): bool => self::isIirupCategory())
                             ->visible(fn (): bool => self::isIirupCategory()),
                         TextInput::make('accountable_officer_station')
                             ->label('Station / office')
                             ->maxLength(255)
+                            ->datalist(fn (): array => \App\Models\ProcurementSignatoryName::suggestionsForRole(
+                                \App\Models\ProcurementSignatoryName::ROLE_DISPOSAL_ACCOUNTABLE_STATION
+                            ))
                             ->required(fn (): bool => self::isIirupCategory())
                             ->visible(fn (): bool => self::isIirupCategory()),
+                        TextInput::make('reason')
+                            ->label('Reason')
+                            ->placeholder('Why this item was disposed')
+                            ->columnSpanFull(),
                     ])
                     ->columns(2),
 
@@ -367,6 +391,9 @@ class DisposalForm
                             })
                             ->maxLength(255)
                             ->required()
+                            ->datalist(fn (): array => \App\Models\ProcurementSignatoryName::suggestionsForRole(
+                                \App\Models\ProcurementSignatoryName::ROLE_CUSTODIAN
+                            ))
                             ->placeholder('Full name'),
                         TextInput::make('approved_by_printed_name')
                             ->label(fn (): string => self::activeCategorySlug() === 'consumables'
@@ -374,21 +401,33 @@ class DisposalForm
                                 : 'Approved by — Authorized Official')
                             ->maxLength(255)
                             ->required()
+                            ->datalist(fn (): array => \App\Models\ProcurementSignatoryName::suggestionsForRole(
+                                \App\Models\ProcurementSignatoryName::ROLE_APPROVED
+                            ))
                             ->placeholder('Full name'),
                         TextInput::make('authorized_official_designation')
                             ->label('Designation of authorized official')
                             ->maxLength(255)
+                            ->datalist(fn (): array => \App\Models\ProcurementSignatoryName::suggestionsForRole(
+                                \App\Models\ProcurementSignatoryName::ROLE_DISPOSAL_AUTHORIZED_DESIGNATION
+                            ))
                             ->required(fn (): bool => self::isIirupCategory())
                             ->visible(fn (): bool => self::isIirupCategory()),
                         TextInput::make('inspection_officer_printed_name')
                             ->label('Certified correct — Inspection Officer')
                             ->maxLength(255)
                             ->required()
+                            ->datalist(fn (): array => \App\Models\ProcurementSignatoryName::suggestionsForRole(
+                                \App\Models\ProcurementSignatoryName::ROLE_INSPECTION_OFFICER
+                            ))
                             ->placeholder('Full name'),
                         TextInput::make('witness_printed_name')
                             ->label('Witness to disposal')
                             ->maxLength(255)
                             ->required()
+                            ->datalist(fn (): array => \App\Models\ProcurementSignatoryName::suggestionsForRole(
+                                \App\Models\ProcurementSignatoryName::ROLE_DISPOSAL_WITNESS
+                            ))
                             ->placeholder('Full name'),
                     ])
                     ->columns(2),
@@ -418,6 +457,17 @@ class DisposalForm
                 Hidden::make('office_id')
                     ->default(fn (): ?int => CustodianOfficeScope::inventoryOfficeId())
                     ->dehydrated(),
+                Placeholder::make('fixed_office_display')
+                    ->label('Office')
+                    ->content(function (): string {
+                        $officeId = CustodianOfficeScope::inventoryOfficeId();
+
+                        if ($officeId === null) {
+                            return '—';
+                        }
+
+                        return Office::query()->whereKey($officeId)->value('name') ?? '—';
+                    }),
             ];
         }
 

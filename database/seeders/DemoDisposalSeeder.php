@@ -364,6 +364,8 @@ class DemoDisposalSeeder extends Seeder
      */
     protected function upsertBatch(string $referenceCode, array $attributes): DisposalBatch
     {
+        $attributes['confirmed_at'] = $attributes['confirmed_at'] ?? now();
+
         return DisposalBatch::query()->updateOrCreate(
             ['reference_code' => $referenceCode],
             $attributes,

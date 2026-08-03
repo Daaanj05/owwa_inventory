@@ -4,7 +4,6 @@ namespace App\Observers;
 
 use App\Models\Disposal;
 use App\Models\DisposalBatch;
-use App\Services\DisposalInventoryUnitService;
 use App\Services\InventoryStockService;
 
 class DisposalObserver
@@ -49,8 +48,8 @@ class DisposalObserver
 
     public function created(Disposal $disposal): void
     {
+        // Stock / unit effects apply only after Confirm (see DisposalWorkflowService).
         app(InventoryStockService::class)->forgetMovementTotalsCache();
-        app(DisposalInventoryUnitService::class)->markUnitDisposed($disposal);
     }
 
     public function deleted(Disposal $disposal): void

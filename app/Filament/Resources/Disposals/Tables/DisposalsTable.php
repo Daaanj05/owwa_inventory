@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Disposals\Tables;
 
+use App\Filament\Resources\Acquisitions\Concerns\AcquisitionDateRangeFilter;
 use App\Filament\Resources\Disposals\Actions\DisposalViewActions;
 use App\Filament\Resources\Disposals\DisposalResource;
 use App\Filament\Support\ConfiguresOwwaViewAction;
@@ -70,6 +71,9 @@ class DisposalsTable
                     ->toggleable(isToggledHiddenByDefault: false),
             ])
             ->defaultSort('disposal_date', 'desc')
+            ->filters([
+                AcquisitionDateRangeFilter::make('disposal_date', 'Date'),
+            ])
             ->emptyStateHeading('No disposals recorded')
             ->emptyStateDescription('Items written off, damaged, or expired will be listed here.')
             ->emptyStateIcon('heroicon-o-trash')
@@ -80,10 +84,10 @@ class DisposalsTable
                         DisposalResource::modalDetailSections(),
                     ),
                     [
+                        DisposalViewActions::confirmAction(),
                         DisposalViewActions::editAction(),
                         DisposalViewActions::exportOwwaAction(),
                         DisposalViewActions::exportPdfAction(),
-                        DisposalViewActions::printViewAction(),
                     ],
                     '3xl',
                     modelLabel: DisposalResource::getModelLabel(),
@@ -101,6 +105,8 @@ class DisposalsTable
             ->recordUrl(null)
             ->recordAction('view');
 
-        return OwwaTableDefaults::hideRedundantToolbarIcons($table);
+        return AcquisitionDateRangeFilter::applyBesideSearch(
+            OwwaTableDefaults::hideRedundantToolbarIcons($table),
+        );
     }
 }

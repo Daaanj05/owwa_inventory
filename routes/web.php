@@ -82,9 +82,11 @@ Route::middleware(['auth', 'web'])->group(function () {
         Route::get('reports/owwa/bulk/property-cards', [OwwaBulkExportController::class, 'propertyCards'])->name('owwa.export.bulk.property-cards');
         Route::get('reports/owwa/bulk/stock-cards', [OwwaBulkExportController::class, 'stockCards'])->name('owwa.export.bulk.stock-cards');
         Route::get('reports/owwa/issuances/today-rsmi', [OwwaBulkExportController::class, 'issuancesTodayRsmi'])->name('owwa.export.issuances.today-rsmi');
+        Route::get('reports/owwa/bulk/issuances/rsmi', [OwwaBulkExportController::class, 'issuancesRsmi'])->name('owwa.export.bulk.issuances.rsmi');
         Route::get('reports/owwa/bulk/issuances', [OwwaBulkExportController::class, 'issuances'])->name('owwa.export.bulk.issuances');
         Route::get('reports/owwa/bulk/transfers', [OwwaBulkExportController::class, 'transfers'])->name('owwa.export.bulk.transfers');
         Route::get('reports/owwa/bulk/disposals', [OwwaBulkExportController::class, 'disposals'])->name('owwa.export.bulk.disposals');
+        Route::get('reports/owwa/bulk/disposals/report', [OwwaBulkExportController::class, 'disposalsReport'])->name('owwa.export.bulk.disposals.report');
         Route::get('reports/owwa/bulk/requisitions', [OwwaBulkExportController::class, 'requisitions'])->name('owwa.export.bulk.requisitions');
         Route::get('reports/owwa/bulk/procurement', [OwwaBulkExportController::class, 'procurement'])->name('owwa.export.bulk.procurement');
     });

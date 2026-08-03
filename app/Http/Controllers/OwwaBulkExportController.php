@@ -317,29 +317,70 @@ class OwwaBulkExportController extends Controller
         );
     }
 
-    public function issuancesTodayRsmi(Request $request): StreamedResponse
+    public function issuancesTodayRsmi(Request $request): StreamedResponse|Response
+    {
+        $request->query->set('date_from', today()->toDateString());
+        $request->query->set('date_to', today()->toDateString());
+
+        return $this->issuancesRsmi($request);
+    }
+
+    public function issuancesRsmi(Request $request): StreamedResponse|Response
     {
         abort_unless(IssuanceResource::canViewAny(), 403);
 
-        $records = IssuanceResource::getEloquentQuery()
-            ->whereDate('issuance_date', today())
+        $format = (string) $request->query('format', 'xlsx');
+        abort_unless(in_array($format, ['xlsx', 'pdf'], true), 422);
+
+        $dateFrom = (string) $request->query('date_from', '');
+        $dateTo = (string) $request->query('date_to', '');
+        abort_unless(filled($dateFrom) && filled($dateTo), 422);
+        abort_unless($dateFrom <= $dateTo, 422);
+
+        $categoryId = (int) $request->query('category', 0);
+
+        $query = IssuanceResource::getEloquentQuery()
+            ->with(['requisition', 'item.category', 'office', 'department', 'batch'])
+            ->whereDate('issuance_date', '>=', $dateFrom)
+            ->whereDate('issuance_date', '<=', $dateTo)
             ->orderBy('issuance_date')
-            ->orderBy('id')
-            ->get();
+            ->orderBy('id');
 
-        abort_if($records->isEmpty(), 404);
+        if ($categoryId > 0) {
+            $query->whereHas('item', fn (Builder $builder): Builder => $builder->where('item_category_id', $categoryId));
+        }
 
-        $this->logExportActivity('Exported today RSMI report', properties: ['count' => $records->count()]);
+        $records = $query->limit(self::MAX_IDS + 1)->get();
+
+        abort_if($records->isEmpty(), 404, 'No issuances found for the selected date range.');
+        abort_if($records->count() > self::MAX_IDS, 422, 'Too many records (max '.self::MAX_IDS.'). Narrow the date range.');
+
+        $this->logExportActivity('Exported RSMI report', properties: [
+            'count' => $records->count(),
+            'date_from' => $dateFrom,
+            'date_to' => $dateTo,
+            'format' => $format,
+            'category' => $categoryId > 0 ? $categoryId : null,
+        ]);
+
+        abort_unless($this->owwaExport->canExportIssuancesAsRsmiWorkbook($records), 422, 'Issuances cannot be exported as RSMI workbook.');
+
+        if ($format === 'pdf') {
+            $spreadsheet = $this->owwaExport->issuancesRsmiFilledSpreadsheet($records);
+            $binary = $this->owwaExport->spreadsheetToPdfBinary($spreadsheet);
+            $spreadsheet->disconnectWorksheets();
+
+            return response($binary, 200, [
+                'Content-Type' => 'application/pdf',
+                'Content-Disposition' => 'attachment; filename="'.OwwaExportFilename::batch('RSMI', ext: 'pdf').'"',
+            ]);
+        }
 
         if ($records->count() === 1) {
             return $this->owwaExport->downloadIssuance($records->first());
         }
 
-        if ($this->owwaExport->canExportIssuancesAsRsmiWorkbook($records)) {
-            return $this->owwaExport->downloadIssuancesRsmiWorkbook($records);
-        }
-
-        abort(422, 'Today\'s issuances cannot be exported as RSMI workbook.');
+        return $this->owwaExport->downloadIssuancesRsmiCombined($records);
     }
 
     public function issuances(Request $request): BinaryFileResponse|StreamedResponse|Response
@@ -457,6 +498,83 @@ class OwwaBulkExportController extends Controller
                 'Download disposals',
                 $this->resolveBackUrl($request, DisposalResource::getUrl()),
             );
+        }
+
+        if ($records->count() === 1) {
+            return $this->owwaExport->downloadDisposal($records->first());
+        }
+
+        return $this->mergedOwwaWorkbookResponse(
+            $records,
+            fn (Disposal $record): Spreadsheet => $this->owwaExport->disposalFilledSpreadsheet($record),
+            'disposals',
+        );
+    }
+
+    public function disposalsReport(Request $request): StreamedResponse|Response
+    {
+        abort_unless(DisposalResource::canViewAny(), 403);
+
+        $format = (string) $request->query('format', 'xlsx');
+        abort_unless(in_array($format, ['xlsx', 'pdf'], true), 422);
+
+        $dateFrom = (string) $request->query('date_from', '');
+        $dateTo = (string) $request->query('date_to', '');
+        abort_unless(filled($dateFrom) && filled($dateTo), 422);
+        abort_unless($dateFrom <= $dateTo, 422);
+
+        $categoryId = (int) $request->query('category', 0);
+
+        $query = DisposalResource::getEloquentQuery()
+            ->with(['item.category', 'office', 'batch'])
+            ->whereDate('disposal_date', '>=', $dateFrom)
+            ->whereDate('disposal_date', '<=', $dateTo)
+            ->whereHas('batch', fn (Builder $builder): Builder => $builder->whereNotNull('confirmed_at'))
+            ->orderBy('disposal_date')
+            ->orderBy('id');
+
+        if ($categoryId > 0) {
+            $query->whereHas('item', fn (Builder $builder): Builder => $builder->where('item_category_id', $categoryId));
+        }
+
+        $records = $query->limit(self::MAX_IDS + 1)->get();
+
+        abort_if($records->isEmpty(), 404, 'No confirmed disposals found for the selected date range.');
+        abort_if($records->count() > self::MAX_IDS, 422, 'Too many records (max '.self::MAX_IDS.'). Narrow the date range.');
+
+        $this->logExportActivity('Exported disposal date-range report', properties: [
+            'count' => $records->count(),
+            'date_from' => $dateFrom,
+            'date_to' => $dateTo,
+            'format' => $format,
+            'category' => $categoryId > 0 ? $categoryId : null,
+        ]);
+
+        if ($format === 'pdf') {
+            if ($records->count() === 1) {
+                $spreadsheet = $this->owwaExport->disposalFilledSpreadsheet($records->first());
+                $binary = $this->owwaExport->spreadsheetToPdfBinary($spreadsheet);
+                $spreadsheet->disconnectWorksheets();
+
+                return response($binary, 200, [
+                    'Content-Type' => 'application/pdf',
+                    'Content-Disposition' => 'attachment; filename="'.OwwaExportFilename::batch('Disposal', ext: 'pdf').'"',
+                ]);
+            }
+
+            $merged = $this->buildMergedOwwaWorkbookAllSheets(
+                $records,
+                fn (Disposal $record): Spreadsheet => $this->owwaExport->disposalFilledSpreadsheet($record),
+                'disposals',
+                fn (Disposal $record): string => (string) ($record->reference_code ?? ('Disposal_'.$record->getKey())),
+            );
+            $binary = $this->owwaExport->spreadsheetToPdfBinary($merged, max(90, 45 * $merged->getSheetCount()));
+            $merged->disconnectWorksheets();
+
+            return response($binary, 200, [
+                'Content-Type' => 'application/pdf',
+                'Content-Disposition' => 'attachment; filename="'.OwwaExportFilename::batch('Disposal', ext: 'pdf').'"',
+            ]);
         }
 
         if ($records->count() === 1) {

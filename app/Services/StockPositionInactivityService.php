@@ -143,15 +143,29 @@ class StockPositionInactivityService
         $rows = collect();
 
         foreach ($sources as $source) {
-            $query = DB::table($source['table'])
-                ->select(
-                    $source['date'].' as movement_date',
-                    $source['cost'].' as movement_cost',
-                    'quantity',
-                )
-                ->where('item_id', $itemId)
-                ->where($source['office'], $officeId)
-                ->whereNull('deleted_at');
+            if ($source['table'] === 'disposals') {
+                $query = DB::table('disposals')
+                    ->join('disposal_batches', 'disposals.disposal_batch_id', '=', 'disposal_batches.id')
+                    ->select(
+                        'disposals.'.$source['date'].' as movement_date',
+                        'disposals.'.$source['cost'].' as movement_cost',
+                        'disposals.quantity',
+                    )
+                    ->where('disposals.item_id', $itemId)
+                    ->where('disposals.'.$source['office'], $officeId)
+                    ->whereNull('disposals.deleted_at')
+                    ->whereNotNull('disposal_batches.confirmed_at');
+            } else {
+                $query = DB::table($source['table'])
+                    ->select(
+                        $source['date'].' as movement_date',
+                        $source['cost'].' as movement_cost',
+                        'quantity',
+                    )
+                    ->where('item_id', $itemId)
+                    ->where($source['office'], $officeId)
+                    ->whereNull('deleted_at');
+            }
 
             foreach ($query->get() as $row) {
                 $rowCostKey = UnitCostKey::normalize(

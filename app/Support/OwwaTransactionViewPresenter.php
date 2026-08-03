@@ -117,21 +117,24 @@ class OwwaTransactionViewPresenter
      */
     public static function forDisposal(Disposal $record): array
     {
-        $record->loadMissing(['item', 'office']);
+        $record->loadMissing(['item', 'office', 'batch']);
+
+        $confirmed = $record->isConfirmed();
 
         $hero = OwwaRecordHeroData::make(
             reference: $record->reference_code ?? '—',
-            statusLabel: match ($record->disposal_type) {
-                'waste_sale' => 'Waste / Sale',
-                'unserviceable' => 'Unserviceable',
-                'lost_stolen_damaged' => 'Lost / Damaged',
-                default => 'Disposed',
-            },
-            statusClass: 'owwa-pc-status-badge--incomplete',
+            statusLabel: $confirmed ? 'Confirmed' : 'Draft',
+            statusClass: $confirmed ? 'owwa-pc-status-badge--complete' : 'owwa-pc-status-badge--incomplete',
             meta: [
                 ['label' => 'Item', 'value' => $record->item?->name ?? '—'],
                 ['label' => 'Date', 'value' => $record->disposal_date?->format('M j, Y') ?? '—'],
                 ['label' => 'Office', 'value' => $record->office?->name ?? '—'],
+                ['label' => 'Type', 'value' => match ($record->disposal_type) {
+                    'waste_sale' => 'Waste / Sale',
+                    'unserviceable' => 'Unserviceable',
+                    'lost_stolen_damaged' => 'Lost / Damaged',
+                    default => 'Disposed',
+                }],
             ],
             kpis: [
                 ['label' => 'Quantity', 'value' => (string) $record->quantity],

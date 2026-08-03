@@ -12,7 +12,6 @@ use App\Models\AcquisitionPaperwork;
 use App\Support\OwwaReferenceLabels;
 use Filament\Actions\ActionGroup;
 use Filament\Tables\Columns\TextColumn;
-use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 
 class AcquisitionsTable
@@ -53,14 +52,7 @@ class AcquisitionsTable
                     ->label('Lines'),
             ])
             ->filters([
-                SelectFilter::make('pr_status')
-                    ->label('PR status')
-                    ->options([
-                        AcquisitionPaperwork::STATUS_DRAFT => 'Draft',
-                        AcquisitionPaperwork::STATUS_PENDING_APPROVAL => 'Pending approval',
-                        AcquisitionPaperwork::STATUS_APPROVED => 'Approved',
-                    ]),
-                AcquisitionDateRangeFilter::make('pr_date', 'PR date'),
+                AcquisitionDateRangeFilter::make('pr_date', 'Date'),
             ])
             ->defaultSort('created_at', 'desc')
             ->emptyStateHeading('No purchase requests yet')
@@ -87,6 +79,8 @@ class AcquisitionsTable
             ->recordUrl(null)
             ->recordAction(fn (AcquisitionPaperwork $record): string => $record->isPrEditable() ? 'edit' : 'view');
 
-        return OwwaTableDefaults::hideRedundantToolbarIcons($table);
+        return AcquisitionDateRangeFilter::applyBesideSearch(
+            OwwaTableDefaults::hideRedundantToolbarIcons($table),
+        );
     }
 }

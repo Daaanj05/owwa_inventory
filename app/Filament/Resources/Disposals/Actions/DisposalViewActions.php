@@ -5,17 +5,49 @@ namespace App\Filament\Resources\Disposals\Actions;
 use App\Filament\Resources\Disposals\DisposalResource;
 use App\Filament\Support\OwwaFormModalDefaults;
 use App\Models\Disposal;
+use App\Services\DisposalWorkflowService;
 use App\Services\OwwaTemplateExportService;
 use App\Support\OwwaExportBusyDispatcher;
 use Filament\Actions\Action;
 use Filament\Actions\EditAction;
+use Filament\Notifications\Notification;
 use Livewire\Component as LivewireComponent;
+use Throwable;
 
 class DisposalViewActions
 {
     public static function editAction(): EditAction
     {
-        return OwwaFormModalDefaults::editActionForResource(DisposalResource::class, OwwaFormModalDefaults::WIDTH_STANDARD);
+        return OwwaFormModalDefaults::editActionForResource(DisposalResource::class, OwwaFormModalDefaults::WIDTH_STANDARD)
+            ->visible(fn (Disposal $record): bool => $record->isEditable());
+    }
+
+    public static function confirmAction(): Action
+    {
+        return Action::make('confirmDisposal')
+            ->label('Confirm Disposal')
+            ->icon('heroicon-o-check-circle')
+            ->color('success')
+            ->requiresConfirmation()
+            ->modalHeading('Confirm disposal?')
+            ->modalDescription('This applies the stock write-off and locks the record from further edits.')
+            ->modalSubmitActionLabel('Confirm')
+            ->visible(fn (Disposal $record): bool => ! $record->isConfirmed())
+            ->action(function (Disposal $record): void {
+                try {
+                    app(DisposalWorkflowService::class)->confirm($record);
+                    Notification::make()
+                        ->title('Disposal confirmed')
+                        ->success()
+                        ->send();
+                } catch (Throwable $exception) {
+                    Notification::make()
+                        ->title('Could not confirm disposal')
+                        ->body($exception->getMessage())
+                        ->danger()
+                        ->send();
+                }
+            });
     }
 
     public static function exportOwwaAction(): Action
@@ -49,21 +81,5 @@ class DisposalViewActions
                     $asPdf ? 'Building your OWWA PDF…' : 'Building your OWWA form…',
                 );
             });
-    }
-
-    public static function printViewAction(): Action
-    {
-        return Action::make('printView')
-            ->label('Print Preview')
-            ->icon('heroicon-o-printer')
-            ->url(function (Disposal $record): string {
-                $form = app(OwwaTemplateExportService::class)->resolveDisposalFormSlug($record);
-
-                return route('owwa.export.disposal', $record).'?'.http_build_query([
-                    'form' => $form,
-                    'format' => 'pdf',
-                ]);
-            })
-            ->openUrlInNewTab();
     }
 }

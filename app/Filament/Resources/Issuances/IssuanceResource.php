@@ -189,15 +189,6 @@ class IssuanceResource extends Resource
                 ])
                 ->columns(2)
                 ->columnSpanFull(),
-            Section::make('Employee distributions')
-                ->description('Employees who received stock from the Unit Consolidator for this RIS.')
-                ->schema([
-                    SchemaView::make('filament.resources.issuances.partials.distribution-summary')
-                        ->viewData(fn (Issuance $record): array => [
-                            'record' => $record,
-                        ]),
-                ])
-                ->columnSpanFull(),
             Section::make('Useful life')
                 ->schema([
                     TextEntry::make('estimated_useful_life')

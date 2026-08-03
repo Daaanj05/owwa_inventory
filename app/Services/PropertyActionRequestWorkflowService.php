@@ -288,6 +288,8 @@ class PropertyActionRequestWorkflowService
             'iirup_disposal_mode' => $request->reason_code,
         ]);
 
+        app(DisposalWorkflowService::class)->confirm($disposal->fresh(['batch']));
+
         $line->update(['disposal_id' => $disposal->id]);
 
         if ($lineQuantity >= $issuanceQuantity) {

@@ -44,6 +44,14 @@ class ProcurementSignatoryName extends Model
 
     public const ROLE_PHYSICAL_COUNT_VERIFIED = 'physical_count_verified';
 
+    public const ROLE_DISPOSAL_WITNESS = 'disposal_witness';
+
+    public const ROLE_DISPOSAL_AUTHORIZED_DESIGNATION = 'disposal_authorized_designation';
+
+    public const ROLE_DISPOSAL_ACCOUNTABLE_DESIGNATION = 'disposal_accountable_designation';
+
+    public const ROLE_DISPOSAL_ACCOUNTABLE_STATION = 'disposal_accountable_station';
+
     protected $fillable = [
         'name',
         'role',

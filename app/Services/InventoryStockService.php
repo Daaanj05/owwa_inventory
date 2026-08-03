@@ -179,7 +179,16 @@ class InventoryStockService
 
         $addKeys(DB::table('acquisitions')->whereNull('deleted_at')->select('item_id', 'office_id', 'unit_cost')->distinct()->get(), 'office_id');
         $addKeys(DB::table('issuances')->whereNull('deleted_at')->select('item_id', 'office_id', 'unit_cost')->distinct()->get(), 'office_id');
-        $addKeys(DB::table('disposals')->whereNull('deleted_at')->select('item_id', 'office_id', 'acquisition_cost as unit_cost')->distinct()->get(), 'office_id');
+        $addKeys(
+            DB::table('disposals')
+                ->join('disposal_batches', 'disposals.disposal_batch_id', '=', 'disposal_batches.id')
+                ->whereNull('disposals.deleted_at')
+                ->whereNotNull('disposal_batches.confirmed_at')
+                ->select('disposals.item_id', 'disposals.office_id', 'disposals.acquisition_cost as unit_cost')
+                ->distinct()
+                ->get(),
+            'office_id',
+        );
         $addKeys(
             DB::table('transfers')->whereNull('deleted_at')->select('item_id', 'from_office_id as office_id', 'unit_cost')->distinct()->get(),
             'office_id',
@@ -548,7 +557,7 @@ class InventoryStockService
             'inTransfers' => $this->buildMovementMap('transfers', 'to_office_id', 'unit_cost'),
             'issuances' => $this->buildMovementMap('issuances', 'office_id', 'unit_cost'),
             'outTransfers' => $this->buildMovementMap('transfers', 'from_office_id', 'unit_cost'),
-            'disposals' => $this->buildMovementMap('disposals', 'office_id', 'acquisition_cost'),
+            'disposals' => $this->buildConfirmedDisposalMovementMap(),
         ];
     }
 
@@ -563,6 +572,37 @@ class InventoryStockService
                 DB::raw('SUM(quantity) as total'),
             )
             ->groupBy('item_id', $officeColumn, DB::raw("COALESCE({$costColumn}, 0)"))
+            ->get()
+            ->mapWithKeys(function ($row): array {
+                $key = UnitCostKey::positionKey(
+                    (int) $row->item_id,
+                    (int) $row->office_id,
+                    (float) $row->unit_cost,
+                );
+
+                return [$key => (int) $row->total];
+            })
+            ->all();
+    }
+
+    /**
+     * Only confirmed disposals reduce stock (draft disposals are excluded).
+     *
+     * @return array<string, int>
+     */
+    protected function buildConfirmedDisposalMovementMap(): array
+    {
+        return DB::table('disposals')
+            ->join('disposal_batches', 'disposals.disposal_batch_id', '=', 'disposal_batches.id')
+            ->whereNull('disposals.deleted_at')
+            ->whereNotNull('disposal_batches.confirmed_at')
+            ->select(
+                'disposals.item_id',
+                'disposals.office_id',
+                DB::raw('COALESCE(disposals.acquisition_cost, 0) as unit_cost'),
+                DB::raw('SUM(disposals.quantity) as total'),
+            )
+            ->groupBy('disposals.item_id', 'disposals.office_id', DB::raw('COALESCE(disposals.acquisition_cost, 0)'))
             ->get()
             ->mapWithKeys(function ($row): array {
                 $key = UnitCostKey::positionKey(

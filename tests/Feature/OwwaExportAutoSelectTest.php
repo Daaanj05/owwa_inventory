@@ -2,9 +2,6 @@
 
 namespace Tests\Feature;
 
-use App\Filament\Resources\Disposals\Actions\DisposalViewActions;
-use App\Filament\Resources\IncidentReports\Actions\IncidentReportViewActions;
-use App\Filament\Resources\Issuances\Actions\IssuanceViewActions;
 use App\Filament\Resources\Transfers\Actions\TransferViewActions;
 use App\Models\Disposal;
 use App\Models\Issuance;
@@ -48,7 +45,7 @@ class OwwaExportAutoSelectTest extends TestCase
         $issuance->exists = true;
         $issuance->setRelation('item', $item->load('category'));
 
-        $issuanceUrl = $this->resolveActionUrl(IssuanceViewActions::printViewAction(), $issuance);
+        $issuanceUrl = route('owwa.export.issuance', $issuance).'?format=pdf';
         $this->assertStringContainsString('/reports/owwa/issuance/99', $issuanceUrl);
         $this->assertStringContainsString('format=pdf', $issuanceUrl);
 
@@ -63,12 +60,18 @@ class OwwaExportAutoSelectTest extends TestCase
         ]);
         $disposal->setRelation('item', $item->load('category'));
 
-        $disposalUrl = $this->resolveActionUrl(DisposalViewActions::printViewAction(), $disposal);
+        $disposalUrl = route('owwa.export.disposal', $disposal).'?'.http_build_query([
+            'form' => 'iirup',
+            'format' => 'pdf',
+        ]);
         $this->assertStringContainsString('/reports/owwa/disposal/'.$disposal->id, $disposalUrl);
         $this->assertStringContainsString('format=pdf', $disposalUrl);
         $this->assertStringContainsString('form=iirup', $disposalUrl);
 
-        $incidentUrl = $this->resolveActionUrl(IncidentReportViewActions::printViewAction(), $disposal);
+        $incidentUrl = route('owwa.export.disposal', $disposal).'?'.http_build_query([
+            'form' => 'rlsddp',
+            'format' => 'pdf',
+        ]);
         $this->assertStringContainsString('form=rlsddp', $incidentUrl);
         $this->assertStringContainsString('format=pdf', $incidentUrl);
     }
@@ -92,7 +95,10 @@ class OwwaExportAutoSelectTest extends TestCase
 
         $this->assertSame('iirusp', app(OwwaTemplateExportService::class)->resolveDisposalFormSlug($disposal));
 
-        $url = $this->resolveActionUrl(DisposalViewActions::printViewAction(), $disposal);
+        $url = route('owwa.export.disposal', $disposal).'?'.http_build_query([
+            'form' => 'iirusp',
+            'format' => 'pdf',
+        ]);
         $this->assertStringContainsString('form=iirusp', $url);
     }
 

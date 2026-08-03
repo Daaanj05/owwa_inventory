@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Issuances\Tables;
 
 use App\Filament\Concerns\OwwaListExportActions;
+use App\Filament\Resources\Acquisitions\Concerns\AcquisitionDateRangeFilter;
 use App\Filament\Resources\Issuances\Actions\IssuanceViewActions;
 use App\Filament\Resources\Issuances\IssuanceResource;
 use App\Filament\Support\ConfiguresOwwaViewAction;
@@ -131,6 +132,9 @@ class IssuancesTable
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->defaultSort('issuance_date', 'desc')
+            ->filters([
+                AcquisitionDateRangeFilter::make('issuance_date', 'Date'),
+            ])
             ->emptyStateHeading('No issuances recorded')
             ->emptyStateDescription('Issuances are created from Requisitions → Accept & issue (or Issue remainder). Export RSMI here after issue; export RIS from Requisitions.')
             ->emptyStateIcon('heroicon-o-arrow-up-tray')
@@ -144,7 +148,6 @@ class IssuancesTable
                         IssuanceViewActions::exportOwwaAction(),
                         IssuanceViewActions::exportPdfAction(),
                         IssuanceViewActions::printQrLabelAction(),
-                        IssuanceViewActions::printViewAction(),
                     ],
                     '4xl',
                     modelLabel: IssuanceResource::getModelLabel(),
@@ -183,6 +186,8 @@ class IssuancesTable
             ->recordUrl(null)
             ->recordAction('view');
 
-        return OwwaTableDefaults::hideRedundantToolbarIcons($table);
+        return AcquisitionDateRangeFilter::applyBesideSearch(
+            OwwaTableDefaults::hideRedundantToolbarIcons($table),
+        );
     }
 }

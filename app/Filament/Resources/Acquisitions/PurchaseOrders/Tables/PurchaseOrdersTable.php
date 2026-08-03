@@ -11,7 +11,6 @@ use App\Filament\Support\OwwaTableDefaults;
 use App\Models\PurchaseOrder;
 use Filament\Actions\ActionGroup;
 use Filament\Tables\Columns\TextColumn;
-use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 
 class PurchaseOrdersTable
@@ -47,13 +46,7 @@ class PurchaseOrdersTable
                     ->label('Lines'),
             ])
             ->filters([
-                SelectFilter::make('status')
-                    ->options([
-                        PurchaseOrder::STATUS_DRAFT => 'Draft',
-                        PurchaseOrder::STATUS_PENDING_APPROVAL => 'Pending approval',
-                        PurchaseOrder::STATUS_APPROVED => 'Approved',
-                    ]),
-                AcquisitionDateRangeFilter::make('po_date', 'PO date'),
+                AcquisitionDateRangeFilter::make('po_date', 'Date'),
             ])
             ->defaultSort('created_at', 'desc')
             ->emptyStateHeading('No purchase orders yet')
@@ -79,6 +72,8 @@ class PurchaseOrdersTable
             ->recordUrl(null)
             ->recordAction(fn (PurchaseOrder $record): string => $record->isEditable() ? 'edit' : 'view');
 
-        return OwwaTableDefaults::hideRedundantToolbarIcons($table);
+        return AcquisitionDateRangeFilter::applyBesideSearch(
+            OwwaTableDefaults::hideRedundantToolbarIcons($table),
+        );
     }
 }

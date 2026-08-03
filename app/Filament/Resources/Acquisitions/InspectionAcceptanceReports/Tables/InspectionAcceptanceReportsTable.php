@@ -11,7 +11,6 @@ use App\Filament\Support\OwwaTableDefaults;
 use App\Models\InspectionAcceptanceReport;
 use Filament\Actions\ActionGroup;
 use Filament\Tables\Columns\TextColumn;
-use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 
 class InspectionAcceptanceReportsTable
@@ -46,13 +45,7 @@ class InspectionAcceptanceReportsTable
                     ->label('Lines'),
             ])
             ->filters([
-                SelectFilter::make('status')
-                    ->options([
-                        InspectionAcceptanceReport::STATUS_DRAFT => 'Draft',
-                        InspectionAcceptanceReport::STATUS_PENDING_APPROVAL => 'Pending approval',
-                        InspectionAcceptanceReport::STATUS_APPROVED => 'Approved',
-                    ]),
-                AcquisitionDateRangeFilter::make('iar_date', 'IAR date'),
+                AcquisitionDateRangeFilter::make('iar_date', 'Date'),
             ])
             ->defaultSort('created_at', 'desc')
             ->emptyStateHeading('No inspection reports yet')
@@ -78,6 +71,8 @@ class InspectionAcceptanceReportsTable
             ->recordUrl(null)
             ->recordAction(fn (InspectionAcceptanceReport $record): string => $record->isEditable() ? 'edit' : 'view');
 
-        return OwwaTableDefaults::hideRedundantToolbarIcons($table);
+        return AcquisitionDateRangeFilter::applyBesideSearch(
+            OwwaTableDefaults::hideRedundantToolbarIcons($table),
+        );
     }
 }

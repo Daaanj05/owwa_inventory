@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Filament\Resources\Acquisitions\Concerns;
+namespace App\Filament\Resources\Disposals\Concerns;
 
 use App\Filament\Concerns\StartsOwwaExportBusy;
 use App\Filament\Concerns\SyncsActiveItemCategory;
@@ -14,13 +14,13 @@ use Filament\Support\Enums\Width;
 use Livewire\Component as LivewireComponent;
 
 /**
- * Shared date-range PR/PO/IAR export for acquisition document list pages.
+ * Date-range disposal export (Excel / PDF), scoped by active category.
  */
-final class AcquisitionProcurementExportAction
+final class DisposalExportReportAction
 {
-    public static function make(string $defaultDocumentType = 'pr'): Action
+    public static function make(): Action
     {
-        return Action::make('exportProcurementReport')
+        return Action::make('exportDisposalReport')
             ->label('Export Report')
             ->icon('heroicon-o-document-arrow-down')
             ->color('gray')
@@ -30,16 +30,6 @@ final class AcquisitionProcurementExportAction
             ->form([
                 Grid::make(2)
                     ->schema([
-                        Select::make('document_type')
-                            ->label('Document')
-                            ->options([
-                                'pr' => 'Purchase Request (PR)',
-                                'po' => 'Purchase Order (PO)',
-                                'iar' => 'Inspection & Acceptance (IAR)',
-                            ])
-                            ->default($defaultDocumentType)
-                            ->required()
-                            ->selectablePlaceholder(false),
                         Select::make('export_format')
                             ->label('Format')
                             ->options([
@@ -48,7 +38,8 @@ final class AcquisitionProcurementExportAction
                             ])
                             ->default('xlsx')
                             ->required()
-                            ->selectablePlaceholder(false),
+                            ->selectablePlaceholder(false)
+                            ->columnSpanFull(),
                         DatePicker::make('date_from')
                             ->label('From')
                             ->required(),
@@ -59,15 +50,11 @@ final class AcquisitionProcurementExportAction
                     ]),
             ])
             ->action(function (array $data, Action $action): void {
-                $documentType = (string) ($data['document_type'] ?? '');
                 $format = (string) ($data['export_format'] ?? 'xlsx');
                 $dateFrom = (string) ($data['date_from'] ?? '');
                 $dateTo = (string) ($data['date_to'] ?? '');
 
-                if (! in_array($documentType, ['pr', 'po', 'iar'], true)
-                    || ! in_array($format, ['xlsx', 'pdf'], true)
-                    || blank($dateFrom)
-                    || blank($dateTo)) {
+                if (! in_array($format, ['xlsx', 'pdf'], true) || blank($dateFrom) || blank($dateTo)) {
                     Notification::make()
                         ->title('Export could not be started.')
                         ->danger()
@@ -79,8 +66,7 @@ final class AcquisitionProcurementExportAction
                 $livewire = $action->getLivewire();
                 $categoryId = self::resolveCategoryId($livewire);
 
-                $url = route('owwa.export.bulk.procurement', array_filter([
-                    'document_type' => $documentType,
+                $url = route('owwa.export.bulk.disposals.report', array_filter([
                     'date_from' => $dateFrom,
                     'date_to' => $dateTo,
                     'format' => $format === 'pdf' ? 'pdf' : null,
@@ -88,18 +74,13 @@ final class AcquisitionProcurementExportAction
                     'back_url' => url()->previous(),
                 ]));
 
-                $label = match ($documentType) {
-                    'po' => 'purchase orders',
-                    'iar' => 'inspection reports',
-                    default => 'purchase requests',
-                };
                 $formatLabel = $format === 'pdf' ? 'PDF' : 'Excel';
 
                 OwwaExportBusyDispatcher::start(
                     $livewire instanceof LivewireComponent ? $livewire : null,
                     $url,
                     'Preparing '.$formatLabel.' export…',
-                    'Building '.$label.' for the selected date range…',
+                    'Building disposals for the selected date range…',
                 );
             });
     }

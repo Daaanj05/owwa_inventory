@@ -87,6 +87,47 @@ class RisRsmiExportTest extends TestCase
             ->assertNotFound();
     }
 
+    public function test_rsmi_date_range_route_exports_for_selected_dates(): void
+    {
+        $office = Office::factory()->create();
+        $category = ItemCategory::factory()->create(['name' => 'Consumables']);
+        $item = Item::factory()->create(['item_category_id' => $category->id]);
+
+        /** @var User $custodian */
+        $custodian = User::factory()->create(['role' => User::ROLE_SUPPLY_CUSTODIAN]);
+
+        $requisition = Requisition::query()->create([
+            'reference_code' => '2026-01-0499',
+            'office_id' => $office->id,
+            'requested_by' => $custodian->id,
+            'status' => Requisition::STATUS_ACCEPTED,
+        ]);
+
+        Issuance::query()->create([
+            'requisition_id' => $requisition->id,
+            'office_id' => $office->id,
+            'item_id' => $item->id,
+            'quantity' => 3,
+            'issuance_date' => now()->subDays(2)->toDateString(),
+            'reference_code' => '2026-01-0599',
+            'issued_by' => $custodian->id,
+        ]);
+
+        session(['active_item_category_id' => $category->id]);
+
+        $response = $this->actingAs($custodian)->get(route('owwa.export.bulk.issuances.rsmi', [
+            'date_from' => now()->subDays(3)->toDateString(),
+            'date_to' => now()->toDateString(),
+            'category' => $category->id,
+        ]));
+
+        $response->assertOk();
+        $response->assertHeader(
+            'content-type',
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        );
+    }
+
     public function test_requisition_export_route_returns_ris_spreadsheet(): void
     {
         $office = Office::factory()->create();

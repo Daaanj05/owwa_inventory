@@ -154,7 +154,6 @@ class DisposalResource extends Resource
                             'transferred_without_cost' => 'Transferred without cost',
                             default => '—',
                         }),
-                    TextEntry::make('wmr_inspection_item_no')->label('Inspection item number')->placeholder('—'),
                 ])
                 ->columns(2)
                 ->columnSpanFull(),

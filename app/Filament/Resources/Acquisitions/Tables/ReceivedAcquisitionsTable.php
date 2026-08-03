@@ -49,7 +49,7 @@ class ReceivedAcquisitionsTable
                     ->label('Lines'),
             ])
             ->filters([
-                AcquisitionDateRangeFilter::make('received_at', 'Received date'),
+                AcquisitionDateRangeFilter::make('received_at', 'Date'),
             ])
             ->defaultSort('received_at', 'desc')
             ->emptyStateHeading('No received acquisitions yet')
@@ -70,6 +70,8 @@ class ReceivedAcquisitionsTable
             ->recordUrl(null)
             ->recordAction('view');
 
-        return OwwaTableDefaults::hideRedundantToolbarIcons($table);
+        return AcquisitionDateRangeFilter::applyBesideSearch(
+            OwwaTableDefaults::hideRedundantToolbarIcons($table),
+        );
     }
 }

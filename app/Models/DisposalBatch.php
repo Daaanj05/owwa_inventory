@@ -28,13 +28,20 @@ class DisposalBatch extends Model
         'immediate_supervisor_printed_name',
         'inspection_officer_printed_name',
         'witness_printed_name',
+        'confirmed_at',
     ];
 
     protected function casts(): array
     {
         return [
             'disposal_date' => 'date',
+            'confirmed_at' => 'datetime',
         ];
+    }
+
+    public function isConfirmed(): bool
+    {
+        return $this->confirmed_at !== null;
     }
 
     /**

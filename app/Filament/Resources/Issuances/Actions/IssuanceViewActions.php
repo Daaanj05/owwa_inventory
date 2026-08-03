@@ -23,10 +23,6 @@ class IssuanceViewActions
         return Action::make('exportOwwa')
             ->label('Export Excel')
             ->icon('heroicon-o-document-arrow-down')
-            ->requiresConfirmation(fn (Issuance $record): bool => self::signatoriesIncomplete($record))
-            ->modalHeading('Export without signatories?')
-            ->modalDescription('Custodian / issued-by name is blank. Edit this issuance to add signatory names for the OWWA export, or continue with empty signature blocks on the form.')
-            ->modalSubmitActionLabel('Export anyway')
             ->action(function (Issuance $record, Action $action): void {
                 self::startExport($record, $action, false);
             });
@@ -37,10 +33,6 @@ class IssuanceViewActions
         return Action::make('exportOwwaPdf')
             ->label('Export PDF')
             ->icon('heroicon-o-document-text')
-            ->requiresConfirmation(fn (Issuance $record): bool => self::signatoriesIncomplete($record))
-            ->modalHeading('Export without signatories?')
-            ->modalDescription('Custodian / issued-by name is blank. Edit this issuance to add signatory names for the OWWA export, or continue with empty signature blocks on the form.')
-            ->modalSubmitActionLabel('Export anyway')
             ->action(function (Issuance $record, Action $action): void {
                 self::startExport($record, $action, true);
             });
@@ -79,15 +71,6 @@ class IssuanceViewActions
             ->openUrlInNewTab();
     }
 
-    public static function printViewAction(): Action
-    {
-        return Action::make('printView')
-            ->label('Print Preview')
-            ->icon('heroicon-o-printer')
-            ->url(fn (Issuance $record): string => route('owwa.export.issuance', $record).'?format=pdf')
-            ->openUrlInNewTab();
-    }
-
     protected static function startExport(Issuance $record, Action $action, bool $asPdf): void
     {
         $url = route('owwa.export.issuance', $record).($asPdf ? '?format=pdf' : '');
@@ -98,14 +81,5 @@ class IssuanceViewActions
             $asPdf ? 'Preparing PDF export…' : 'Preparing Excel export…',
             $asPdf ? 'Building your OWWA PDF…' : 'Building your OWWA form…',
         );
-    }
-
-    protected static function signatoriesIncomplete(Issuance $record): bool
-    {
-        $record->loadMissing(['batch', 'issuedBy']);
-
-        return blank($record->batch?->custodian_printed_name)
-            && blank($record->custodian_printed_name)
-            && blank($record->issuedBy?->name);
     }
 }

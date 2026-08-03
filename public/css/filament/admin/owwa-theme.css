@@ -966,6 +966,177 @@ button[type="submit"].fi-btn:hover {
     display: none !important;
 }
 
+/* From/To date filters on the same row as Search (Acquisition / Issuance / Disposal). */
+.owwa-toolbar-date-range .fi-ta-header-ctn {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    align-items: center !important;
+    gap: 0.35rem 0.75rem !important;
+    margin-bottom: 0.35rem !important;
+}
+
+.owwa-toolbar-date-range .fi-ta-header {
+    flex: 1 0 100% !important;
+}
+
+.owwa-toolbar-date-range .fi-ta-header-toolbar {
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: wrap !important;
+    align-items: center !important;
+    order: 1 !important;
+    flex: 1 1 auto !important;
+    width: auto !important;
+    min-width: 0 !important;
+    gap: 0.75rem !important;
+    padding: 0 !important;
+    border: none !important;
+    border-bottom: none !important;
+}
+
+/* Match reference search: compact white pill with thin border + soft shadow. */
+.owwa-toolbar-date-range .fi-ta-header-toolbar > div:has(.fi-ta-search-field) {
+    display: flex !important;
+    align-items: center !important;
+    width: auto !important;
+    flex: 1 1 auto !important;
+    min-width: 0 !important;
+}
+
+.owwa-toolbar-date-range .fi-ta-header-toolbar > :nth-child(2) .fi-ta-search-field,
+.owwa-toolbar-date-range .fi-ta-header-toolbar > div:has(.fi-ta-search-field) .fi-ta-search-field {
+    flex: 0 0 auto !important;
+    width: 260px !important;
+    max-width: 320px !important;
+    margin-right: auto !important;
+}
+
+.owwa-toolbar-date-range .fi-ta-search-field .fi-input-wrp {
+    background: #ffffff !important;
+    border: 1px solid #e5e7eb !important;
+    border-radius: 0.5rem !important;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04) !important;
+    --tw-ring-shadow: 0 0 #0000 !important;
+    --tw-ring-offset-shadow: 0 0 #0000 !important;
+}
+
+.owwa-toolbar-date-range .fi-ta-search-field .fi-input-wrp:focus-within {
+    border-color: #cbd5e1 !important;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04) !important;
+}
+
+.owwa-toolbar-date-range .fi-ta-filters-above-content-ctn {
+    order: 2 !important;
+    flex: 0 0 auto !important;
+    display: block !important;
+    margin: 0 0 0 auto !important;
+    padding: 0 !important;
+    max-width: max-content;
+    border: none !important;
+    border-bottom: none !important;
+    background: transparent !important;
+    box-shadow: none !important;
+}
+
+.owwa-toolbar-date-range .owwa-acquisition-doc-tabs-wrap,
+.owwa-toolbar-date-range .owwa-acquisition-doc-tabs,
+.owwa-toolbar-date-range .owwa-pa-view-tabs.owwa-acquisition-doc-tabs {
+    order: 3 !important;
+    flex: 1 0 100% !important;
+    width: 100% !important;
+    margin-top: 0.15rem !important;
+    margin-bottom: 0.35rem !important;
+    padding: 0 !important;
+    border: none !important;
+    border-bottom: none !important;
+}
+
+/* White fill on date inputs only — From/To labels and gaps stay on page background. */
+.owwa-toolbar-date-range .fi-ta-filters {
+    border: none !important;
+    background: transparent !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    box-shadow: none !important;
+    max-width: max-content;
+}
+
+.owwa-toolbar-date-range .fi-ta-filters-header,
+.owwa-toolbar-date-range .fi-ta-filters-actions-ctn,
+.owwa-toolbar-date-range .fi-ta-filter-indicators {
+    display: none !important;
+}
+
+.owwa-toolbar-date-range .fi-ta-filters .fi-sc-grid,
+.owwa-toolbar-date-range .fi-ta-filters .fi-sc-component {
+    display: flex !important;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 0.85rem !important;
+    background: transparent !important;
+}
+
+.owwa-toolbar-date-range .fi-fo-field-has-inline-label,
+.owwa-toolbar-date-range .fi-fo-field {
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    gap: 0.4rem !important;
+    margin: 0 !important;
+    background: transparent !important;
+}
+
+.owwa-toolbar-date-range .fi-fo-field-label-col {
+    flex: 0 0 auto !important;
+    width: auto !important;
+    max-width: none !important;
+    background: transparent !important;
+}
+
+.owwa-toolbar-date-range .fi-fo-field-label,
+.owwa-toolbar-date-range .fi-fo-field-label-content {
+    margin: 0 !important;
+    white-space: nowrap;
+    font-size: 0.75rem !important;
+    font-weight: 600 !important;
+    color: #374151 !important;
+    background: transparent !important;
+}
+
+.owwa-toolbar-date-range .fi-fo-field-content-col {
+    flex: 0 0 auto !important;
+    width: auto !important;
+    max-width: none !important;
+    background: transparent !important;
+}
+
+.owwa-toolbar-date-range .fi-ta-filters .fi-input-wrp {
+    min-width: 8.75rem;
+    border: 1px solid #e5e7eb !important;
+    border-radius: 0.5rem !important;
+    background: #fff !important;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04) !important;
+    overflow: hidden;
+    --tw-ring-shadow: 0 0 #0000 !important;
+    --tw-ring-offset-shadow: 0 0 #0000 !important;
+}
+
+.owwa-toolbar-date-range .fi-ta-filters input[type='date'] {
+    min-width: 8.5rem;
+    border: none !important;
+    border-radius: 0.5rem !important;
+    padding: 0.35rem 0.5rem !important;
+    font-size: 0.8125rem !important;
+    color: #111827 !important;
+    background: #fff !important;
+    box-shadow: none !important;
+}
+
+.fi-resource-list-records-page .fi-ta-col-manager-dropdown,
+.fi-resource-list-records-page .fi-ta-col-manager-modal {
+    display: none !important;
+}
+
 .fi-ta-header-cell {
     font-size: 0.6875rem !important;
     font-weight: 600 !important;

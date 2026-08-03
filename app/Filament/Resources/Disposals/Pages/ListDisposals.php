@@ -2,10 +2,11 @@
 
 namespace App\Filament\Resources\Disposals\Pages;
 
-use App\Filament\Concerns\CoaListPageExports;
 use App\Filament\Concerns\HasSystemAdminWizardHeading;
+use App\Filament\Concerns\StartsOwwaExportBusy;
 use App\Filament\Concerns\SyncsActiveItemCategory;
 use App\Filament\Pages\InventoryCategoryDashboard;
+use App\Filament\Resources\Disposals\Concerns\DisposalExportReportAction;
 use App\Filament\Resources\Disposals\DisposalResource;
 use App\Filament\Resources\Disposals\Schemas\DisposalForm;
 use App\Filament\Support\OwwaFormModalDefaults;
@@ -25,8 +26,8 @@ use Livewire\Attributes\Url;
 
 class ListDisposals extends ListRecords
 {
-    use CoaListPageExports;
     use HasSystemAdminWizardHeading;
+    use StartsOwwaExportBusy;
     use SyncsActiveItemCategory;
 
     #[Url]
@@ -99,7 +100,7 @@ class ListDisposals extends ListRecords
     public function content(Schema $schema): Schema
     {
         $actionsComponent = Actions::make([
-            $this->coaExportReportAction('coaDisposal', 'owwa.export.bulk.disposals'),
+            DisposalExportReportAction::make(),
             OwwaFormModalDefaults::createActionForResource(DisposalResource::class, OwwaFormModalDefaults::WIDTH_MEDIUM)
                 ->fillForm(fn (): array => [
                     'disposal_type' => DisposalForm::defaultDisposalType(),

@@ -1248,7 +1248,10 @@ class OwwaTemplateExportService
         $styleRow = (int) ($detail['style_row'] ?? $startRow);
         $highestColumn = (string) ($detail['highest_column'] ?? 'H');
         $columnTypes = (array) ($detail['column_types'] ?? []);
-        $alignments = OwwaExportStandards::resolveColumnAlignments($columnTypes);
+        $alignmentsConfig = (array) ($detail['alignments'] ?? []);
+        $alignments = $alignmentsConfig !== []
+            ? OwwaSpreadsheetLayoutHelper::alignmentMapFromConfig($alignmentsConfig)
+            : OwwaExportStandards::resolveColumnAlignments($columnTypes);
 
         OwwaSpreadsheetLayoutHelper::normalizeDetailRows(
             $sheet,
@@ -2344,6 +2347,40 @@ class OwwaTemplateExportService
     }
 
     /**
+     * One RSMI sheet with every issuance line in the collection (rows expand as needed).
+     *
+     * @param  Collection<int, Issuance>  $issuances
+     */
+    public function issuancesRsmiFilledSpreadsheet(Collection $issuances): Spreadsheet
+    {
+        $issuances = $issuances->sortBy('issuance_date')->values();
+        $first = $issuances->first();
+        abort_if($first === null, 404);
+
+        $first->loadMissing('item.category');
+        $templateFilename = $this->getTemplatePathForCategory('issuance', $first->item?->category);
+        $cellValues = $this->cellValuesForIssuanceRsmiBulk($issuances);
+
+        return $this->renderFilledSpreadsheet($templateFilename, $cellValues);
+    }
+
+    /**
+     * @param  Collection<int, Issuance>  $issuances
+     */
+    public function downloadIssuancesRsmiCombined(Collection $issuances): StreamedResponse
+    {
+        $spreadsheet = $this->issuancesRsmiFilledSpreadsheet($issuances);
+        $writer = new Xlsx($spreadsheet);
+
+        return response()->streamDownload(function () use ($writer, $spreadsheet): void {
+            $writer->save('php://output');
+            $spreadsheet->disconnectWorksheets();
+        }, OwwaExportFilename::batch('RSMI'), [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ]);
+    }
+
+    /**
      * @param  Collection<int, Issuance>  $issuances
      */
     public function downloadIssuancesRsmiWorkbook(Collection $issuances): StreamedResponse
@@ -2358,39 +2395,8 @@ class OwwaTemplateExportService
             }
         }
 
-        $merged = new Spreadsheet;
-        $removedDefaultSheet = false;
-        $usedSheetTitles = [];
-
-        foreach ($batches as $batchLines) {
-            $representative = $batchLines->sortBy('id')->first();
-            if ($representative === null) {
-                continue;
-            }
-
-            $source = $this->issuanceFilledSpreadsheet($representative);
-            $sheet = $source->getSheet(0);
-            $serial = $representative->controlNumber() ?? ('batch_'.$representative->issuance_batch_id);
-            $sheet->setTitle($this->uniqueExcelSheetTitleForRsmiBatch((string) $serial, $usedSheetTitles));
-            $merged->addExternalSheet($sheet);
-
-            if (! $removedDefaultSheet) {
-                $merged->removeSheetByIndex(0);
-                $removedDefaultSheet = true;
-            }
-
-            $source->disconnectWorksheets();
-            unset($source);
-        }
-
-        $merged->setActiveSheetIndex(0);
-        $writer = new Xlsx($merged);
-
-        return response()->streamDownload(function () use ($writer): void {
-            $writer->save('php://output');
-        }, OwwaExportFilename::batch('RSMI'), [
-            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        ]);
+        // Date-range / multi-batch reports: one growing RSMI sheet.
+        return $this->downloadIssuancesRsmiCombined($issuances);
     }
 
     /**
@@ -2561,6 +2567,9 @@ class OwwaTemplateExportService
     protected function cellValuesForIssuanceRsmiBulk(Collection $issuances): array
     {
         $issuances = $issuances->sortBy('issuance_date')->values();
+        $issuances->each(function (Issuance $issuance): void {
+            $issuance->loadMissing(['requisition', 'department', 'item', 'office']);
+        });
         $first = $issuances->first();
         $first->loadMissing(['requisition', 'department', 'item', 'office']);
 
@@ -2605,7 +2614,13 @@ class OwwaTemplateExportService
             $quantity = (int) $issuance->quantity;
             $lineAmount = $this->resolveIssuanceLineAmount($issuance, $unitCost);
             $responsibilityCenter = $issuance->department?->code ?? $lineOffice?->code ?? $lineOffice?->name ?? '';
-            $risNumber = $issuance->requisition?->reference_code ?? '';
+            $risNumber = $issuance->requisition?->reference_code
+                ?? $issuance->requisition?->getAttribute('ris_number')
+                ?? '';
+            if ($risNumber === '' && filled($issuance->requisition_id)) {
+                $issuance->loadMissing('requisition');
+                $risNumber = (string) ($issuance->requisition?->reference_code ?? '');
+            }
             $stockNo = $item?->item_code ?? '';
 
             $values[OwwaCellMapping::columnCell($detailColumns['ris_no'] ?? 'A', $row)] = $risNumber;

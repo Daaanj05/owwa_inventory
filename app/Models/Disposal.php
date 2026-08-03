@@ -125,4 +125,44 @@ class Disposal extends Model
     {
         return $this->belongsTo(User::class, 'recorded_by');
     }
+
+    public function isConfirmed(): bool
+    {
+        $this->loadMissing('batch');
+
+        return $this->batch?->isConfirmed() ?? false;
+    }
+
+    public function isEditable(): bool
+    {
+        return ! $this->isConfirmed();
+    }
+
+    protected static function booted(): void
+    {
+        static::updating(function (Disposal $disposal): void {
+            if ($disposal->getOriginal('disposal_batch_id') && ! $disposal->isEditable()) {
+                throw new \RuntimeException('Confirmed disposals cannot be edited.');
+            }
+        });
+
+        static::saved(function (Disposal $disposal): void {
+            ProcurementSignatoryName::remember(ProcurementSignatoryName::ROLE_CUSTODIAN, $disposal->custodian_printed_name);
+            ProcurementSignatoryName::remember(ProcurementSignatoryName::ROLE_APPROVED, $disposal->approved_by_printed_name);
+            ProcurementSignatoryName::remember(ProcurementSignatoryName::ROLE_INSPECTION_OFFICER, $disposal->inspection_officer_printed_name);
+            ProcurementSignatoryName::remember(ProcurementSignatoryName::ROLE_DISPOSAL_WITNESS, $disposal->witness_printed_name);
+            ProcurementSignatoryName::remember(
+                ProcurementSignatoryName::ROLE_DISPOSAL_AUTHORIZED_DESIGNATION,
+                $disposal->authorized_official_designation,
+            );
+            ProcurementSignatoryName::remember(
+                ProcurementSignatoryName::ROLE_DISPOSAL_ACCOUNTABLE_DESIGNATION,
+                $disposal->accountable_officer_designation,
+            );
+            ProcurementSignatoryName::remember(
+                ProcurementSignatoryName::ROLE_DISPOSAL_ACCOUNTABLE_STATION,
+                $disposal->accountable_officer_station,
+            );
+        });
+    }
 }

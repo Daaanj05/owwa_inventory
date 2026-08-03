@@ -29,7 +29,7 @@ class DisposalExportLayout
             'date' => $disposal->disposal_date?->format('Y-m-d') ?? '',
         ]);
 
-        $values[OwwaCellMapping::columnCell($cols['item_no'] ?? 'A', $detailStart)] = $disposal->wmr_inspection_item_no ?? 1;
+        $values[OwwaCellMapping::columnCell($cols['item_no'] ?? 'A', $detailStart)] = 1;
         $values[OwwaCellMapping::columnCell($cols['quantity'] ?? 'B', $detailStart)] = (string) $disposal->quantity;
         $values[OwwaCellMapping::columnCell($cols['unit'] ?? 'C', $detailStart)] = $item?->unit ?? '';
         $values[OwwaCellMapping::columnCell($cols['description'] ?? 'D', $detailStart)] = self::itemDescription($item)
@@ -180,7 +180,7 @@ class DisposalExportLayout
     protected static function applyWmrDisposalMode(array &$values, Disposal $disposal): void
     {
         $marks = (array) (OwwaCellMapping::form('WMR')['disposal_mode_marks'] ?? []);
-        $itemNo = (string) ($disposal->wmr_inspection_item_no ?? 1);
+        $itemNo = '1';
         $mode = $disposal->disposal_mode;
 
         $cell = match ($mode) {

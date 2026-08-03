@@ -24,11 +24,11 @@ class SemiExpendableRlsddpDisposalTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_disposal_marks_inventory_unit_disposed_on_create(): void
+    public function test_disposal_marks_inventory_unit_disposed_on_confirm(): void
     {
         ['unit' => $unit, 'office' => $office, 'item' => $item, 'custodian' => $custodian] = $this->seedSemiUnit();
 
-        Disposal::query()->create([
+        $disposal = Disposal::query()->create([
             'reference_code' => '2026-01-0701',
             'item_id' => $item->id,
             'inventory_unit_id' => $unit->id,
@@ -43,6 +43,10 @@ class SemiExpendableRlsddpDisposalTest extends TestCase
             'custodian_printed_name' => 'Accountable Officer',
             'recorded_by' => $custodian->id,
         ]);
+
+        $this->assertSame(InventoryUnit::STATUS_ISSUED, $unit->fresh()->status);
+
+        app(\App\Services\DisposalWorkflowService::class)->confirm($disposal->fresh(['batch']));
 
         $this->assertSame(InventoryUnit::STATUS_DISPOSED, $unit->fresh()->status);
     }
