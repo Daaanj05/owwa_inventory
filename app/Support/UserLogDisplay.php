@@ -33,6 +33,11 @@ class UserLogDisplay
         return $os !== null ? "{$browser} on {$os}" : $browser;
     }
 
+    public static function whereLabel(?string $path, ?string $panel = null): string
+    {
+        return self::pathLabel($path, $panel);
+    }
+
     public static function pathLabel(?string $path, ?string $panel = null): string
     {
         $path = trim((string) $path, '/');

@@ -48,4 +48,12 @@ class UserLogDisplayTest extends TestCase
             ],
         ];
     }
+
+    public function test_where_label_merges_panel_and_page(): void
+    {
+        $this->assertSame(
+            'System Admin — Login',
+            UserLogDisplay::whereLabel('system-admin/login', 'system-admin'),
+        );
+    }
 }
