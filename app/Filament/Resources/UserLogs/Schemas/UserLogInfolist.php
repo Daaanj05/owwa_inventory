@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\UserLogs\Schemas;
 
 use App\Models\UserLog;
+use App\Support\UserLogDisplay;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Infolists\Components\ViewEntry;
 use Filament\Schemas\Components\Section;
@@ -28,12 +29,19 @@ class UserLogInfolist
                 ->visible(fn (UserLog $record): bool => ! $record->isOpen()),
             TextEntry::make('panel')
                 ->label('Panel')
+                ->formatStateUsing(fn (?string $state): string => match ($state) {
+                    'system-admin' => 'System Admin',
+                    'admin' => 'Admin',
+                    default => filled($state) ? str($state)->replace(['-', '_'], ' ')->title()->toString() : '—',
+                })
                 ->badge(),
             TextEntry::make('path')
-                ->label('Path')
+                ->label('Page')
+                ->state(fn (UserLog $record): string => UserLogDisplay::pathLabel($record->path, $record->panel))
                 ->placeholder('—'),
             TextEntry::make('user_agent')
-                ->label('User agent')
+                ->label('Browser')
+                ->state(fn (UserLog $record): string => UserLogDisplay::browserLabel($record->user_agent))
                 ->placeholder('—')
                 ->columnSpanFull(),
             Section::make('Session activity')

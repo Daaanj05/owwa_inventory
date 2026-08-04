@@ -5,6 +5,7 @@ namespace App\Listeners;
 use App\Models\User;
 use App\Models\UserLog;
 use App\Services\UserSessionAuditService;
+use App\Support\UserLogDisplay;
 use Filament\Facades\Filament;
 use Illuminate\Auth\Events\Login;
 use Illuminate\Support\Facades\Session;
@@ -38,13 +39,18 @@ class LogUserLogin
         $this->sessionAudit->closeOpenSessionsForUser($user->id, UserLog::LOGOUT_NEW_LOGIN);
 
         $now = now();
+        $panelId = Filament::getCurrentPanel()?->getId();
 
         $log = UserLog::query()->create([
             'user_id' => $user->id,
             'ip_address' => request()->ip(),
             'user_agent' => (string) request()->userAgent(),
-            'path' => request()->path(),
-            'panel' => Filament::getCurrentPanel()?->getId(),
+            'path' => UserLogDisplay::resolveLoginPath(
+                request()->path(),
+                request()->headers->get('referer'),
+                $panelId,
+            ),
+            'panel' => $panelId,
             'logged_in_at' => $now,
             'last_activity_at' => $now,
             'session_id' => Session::getId(),

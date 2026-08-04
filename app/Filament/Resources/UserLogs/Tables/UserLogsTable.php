@@ -47,6 +47,11 @@ class UserLogsTable
                     ->toggleable(),
                 TextColumn::make('panel')
                     ->label('Panel')
+                    ->formatStateUsing(fn (?string $state): string => match ($state) {
+                        'system-admin' => 'System Admin',
+                        'admin' => 'Admin',
+                        default => filled($state) ? str($state)->replace(['-', '_'], ' ')->title()->toString() : '—',
+                    })
                     ->sortable()
                     ->badge(),
                 TextColumn::make('archived_at')
