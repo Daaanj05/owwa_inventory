@@ -85,7 +85,7 @@
                         data-chart-type="{{ $type }}"
                         x-data="chart({
                                     cachedData: @js($this->getCachedData()),
-                                    maxHeight: @js($maxHeight = $this->getMaxHeight()),
+                                    maxHeight: @js($maxHeight = '140px'),
                                     options: @js($this->getOptions()),
                                     type: @js($type),
                                 })"

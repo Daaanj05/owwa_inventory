@@ -35,7 +35,7 @@ class ConsumptionSharePieWidget extends ChartWidget
 
     protected ?string $pollingInterval = null;
 
-    protected ?string $maxHeight = '168px';
+    protected ?string $maxHeight = '210px';
 
     public static function canView(): bool
     {
