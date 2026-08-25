@@ -8,6 +8,7 @@
     $filters = $this->getFilters();
     $isCollapsible = $this->isCollapsible();
     $type = $this->getType();
+    $hasData = $this->hasConsumptionShareData();
 @endphp
 
 <x-filament-widgets::widget class="fi-wi-chart owwa-chart-pie owwa-chart-compact owwa-dashboard-chart">
@@ -71,58 +72,83 @@
             </x-slot>
         @endif
 
-        <div
-            @if ($pollingInterval = $this->getPollingInterval())
-                wire:poll.{{ $pollingInterval }}="updateChartData"
-            @endif
-        >
-            <div
-                x-load
-                x-load-src="{{ \Filament\Support\Facades\FilamentAsset::getAlpineComponentSrc('chart', 'filament/widgets') }}"
-                wire:ignore
-                data-chart-type="{{ $type }}"
-                x-data="chart({
-                            cachedData: @js($this->getCachedData()),
-                            maxHeight: @js($maxHeight = $this->getMaxHeight()),
-                            options: @js($this->getOptions()),
-                            type: @js($type),
-                        })"
-                {{
-                    (new ComponentAttributeBag)
-                        ->color(ChartWidgetComponent::class, $color)
-                        ->class([
-                            'fi-wi-chart-canvas-ctn',
-                            'fi-wi-chart-canvas-ctn-no-aspect-ratio' => filled($maxHeight),
-                        ])
-                }}
-            >
-                <canvas
-                    x-ref="canvas"
-                    @if ($maxHeight)
-                        style="max-height: {{ $maxHeight }}"
-                    @endif
-                ></canvas>
-
-                <span
-                    x-ref="backgroundColorElement"
-                    class="fi-wi-chart-bg-color"
-                ></span>
-
-                <span
-                    x-ref="borderColorElement"
-                    class="fi-wi-chart-border-color"
-                ></span>
-
-                <span
-                    x-ref="gridColorElement"
-                    class="fi-wi-chart-grid-color"
-                ></span>
-
-                <span
-                    x-ref="textColorElement"
-                    class="fi-wi-chart-text-color"
-                ></span>
+        @if (! $hasData)
+            <div class="owwa-share-empty">
+                <p class="owwa-share-empty-text">
+                    No issuances in this period yet. This doughnut will show each office’s share once items are issued.
+                </p>
+                <div class="owwa-share-chart-placeholder" aria-hidden="true">
+                    <div
+                        x-load
+                        x-load-src="{{ \Filament\Support\Facades\FilamentAsset::getAlpineComponentSrc('chart', 'filament/widgets') }}"
+                        wire:ignore
+                        data-chart-type="{{ $type }}"
+                        x-data="chart({
+                                    cachedData: @js($this->getCachedData()),
+                                    maxHeight: @js($maxHeight = $this->getMaxHeight()),
+                                    options: @js($this->getOptions()),
+                                    type: @js($type),
+                                })"
+                        {{
+                            (new ComponentAttributeBag)
+                                ->color(ChartWidgetComponent::class, $color)
+                                ->class([
+                                    'fi-wi-chart-canvas-ctn',
+                                    'fi-wi-chart-canvas-ctn-no-aspect-ratio' => filled($maxHeight),
+                                ])
+                        }}
+                    >
+                        <canvas
+                            x-ref="canvas"
+                            @if ($maxHeight)
+                                style="max-height: {{ $maxHeight }}"
+                            @endif
+                        ></canvas>
+                        <span x-ref="backgroundColorElement" class="fi-wi-chart-bg-color"></span>
+                        <span x-ref="borderColorElement" class="fi-wi-chart-border-color"></span>
+                        <span x-ref="gridColorElement" class="fi-wi-chart-grid-color"></span>
+                        <span x-ref="textColorElement" class="fi-wi-chart-text-color"></span>
+                    </div>
+                </div>
             </div>
-        </div>
+        @else
+            <div
+                @if ($pollingInterval = $this->getPollingInterval())
+                    wire:poll.{{ $pollingInterval }}="updateChartData"
+                @endif
+            >
+                <div
+                    x-load
+                    x-load-src="{{ \Filament\Support\Facades\FilamentAsset::getAlpineComponentSrc('chart', 'filament/widgets') }}"
+                    wire:ignore
+                    data-chart-type="{{ $type }}"
+                    x-data="chart({
+                                cachedData: @js($this->getCachedData()),
+                                maxHeight: @js($maxHeight = $this->getMaxHeight()),
+                                options: @js($this->getOptions()),
+                                type: @js($type),
+                            })"
+                    {{
+                        (new ComponentAttributeBag)
+                            ->color(ChartWidgetComponent::class, $color)
+                            ->class([
+                                'fi-wi-chart-canvas-ctn',
+                                'fi-wi-chart-canvas-ctn-no-aspect-ratio' => filled($maxHeight),
+                            ])
+                    }}
+                >
+                    <canvas
+                        x-ref="canvas"
+                        @if ($maxHeight)
+                            style="max-height: {{ $maxHeight }}"
+                        @endif
+                    ></canvas>
+                    <span x-ref="backgroundColorElement" class="fi-wi-chart-bg-color"></span>
+                    <span x-ref="borderColorElement" class="fi-wi-chart-border-color"></span>
+                    <span x-ref="gridColorElement" class="fi-wi-chart-grid-color"></span>
+                    <span x-ref="textColorElement" class="fi-wi-chart-text-color"></span>
+                </div>
+            </div>
+        @endif
     </x-filament::section>
 </x-filament-widgets::widget>

@@ -35,7 +35,7 @@ class ConsumptionSharePieWidget extends ChartWidget
 
     protected ?string $pollingInterval = null;
 
-    protected ?string $maxHeight = null;
+    protected ?string $maxHeight = '210px';
 
     public static function canView(): bool
     {
@@ -51,6 +51,32 @@ class ConsumptionSharePieWidget extends ChartWidget
         }
 
         return 'Share of total issued units per office. Includes all offices (regional and satellite) when All offices is selected.';
+    }
+
+    public function hasConsumptionShareData(): bool
+    {
+        $resolved = $this->resolveConsumptionFilters();
+        $service = app(ConsumptionAnalyticsService::class);
+
+        $result = $resolved['item_ids'] !== []
+            ? $service->getConsumptionTotalsByOfficeAndItem(
+                $resolved['from'],
+                $resolved['to'],
+                $resolved['department_ids'],
+                $resolved['office_ids'],
+                $resolved['includeYearInLabels'],
+                $resolved['item_ids'],
+            )
+            : $service->getConsumptionTotalsByOffice(
+                $resolved['from'],
+                $resolved['to'],
+                $resolved['department_ids'],
+                $resolved['office_ids'],
+                $resolved['includeYearInLabels'],
+                $resolved['item_ids'],
+            );
+
+        return ! empty($result['labels']) && ($result['total'] ?? 0) > 0;
     }
 
     /**
@@ -127,10 +153,7 @@ class ConsumptionSharePieWidget extends ChartWidget
             );
 
         if (empty($result['labels']) || $result['total'] === 0) {
-            return [
-                'datasets' => [['data' => [], 'backgroundColor' => [], 'borderColor' => '#e5e7eb']],
-                'labels' => [],
-            ];
+            return $this->placeholderShareChartData();
         }
 
         $colors = self::$chartColors;
@@ -153,6 +176,27 @@ class ConsumptionSharePieWidget extends ChartWidget
                 ],
             ],
             'labels' => $result['labels'],
+        ];
+    }
+
+    /**
+     * Soft doughnut shown when there are no issuances yet so the card is not blank.
+     *
+     * @return array{datasets: list<array<string, mixed>>, labels: list<string>}
+     */
+    protected function placeholderShareChartData(): array
+    {
+        return [
+            'datasets' => [
+                [
+                    'data' => [1],
+                    'backgroundColor' => ['#cbd5e1'],
+                    'borderColor' => ['#ffffff'],
+                    'borderWidth' => 3,
+                    'hoverOffset' => 0,
+                ],
+            ],
+            'labels' => ['No issuances yet'],
         ];
     }
 

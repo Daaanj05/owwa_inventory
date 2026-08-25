@@ -2742,6 +2742,28 @@ button[type="submit"].fi-btn:hover {
     line-height: 1.4;
 }
 
+.owwa-share-empty {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.owwa-share-empty-text {
+    margin: 0;
+    font-size: 0.75rem;
+    line-height: 1.4;
+    color: #6b7280;
+    text-align: center;
+}
+
+.owwa-share-chart-placeholder {
+    opacity: 0.85;
+}
+
+.owwa-share-chart-placeholder .fi-wi-chart-canvas-ctn {
+    min-height: 180px;
+}
+
 /* Filament table empty state */
 .fi-ta-empty-state {
     padding: 2.5rem 1.5rem !important;
@@ -7883,6 +7905,27 @@ body.owwa-busy-active .fi-topbar a {
 .fi-modal-window.owwa-record-modal .fi-fo-table-repeater > table > thead > tr > th,
 .fi-modal-window.owwa-record-modal .fi-fo-table-repeater > table > tbody > tr > td {
     overflow: visible !important;
+}
+
+/* Add Many Items: keep Unit / Reorder / Qty / Cost readable */
+.fi-modal-window.owwa-record-modal .owwa-bulk-items-repeater.fi-fo-table-repeater {
+    overflow-x: auto !important;
+}
+
+.fi-modal-window.owwa-record-modal .owwa-bulk-items-repeater.fi-fo-table-repeater > table {
+    table-layout: auto;
+    min-width: 72rem;
+}
+
+.fi-modal-window.owwa-record-modal .owwa-bulk-items-repeater.fi-fo-table-repeater > table > thead > tr > th,
+.fi-modal-window.owwa-record-modal .owwa-bulk-items-repeater.fi-fo-table-repeater > table > tbody > tr > td {
+    white-space: nowrap;
+}
+
+.fi-modal-window.owwa-record-modal .owwa-bulk-items-repeater.fi-fo-table-repeater > table > tbody > tr > td .fi-input,
+.fi-modal-window.owwa-record-modal .owwa-bulk-items-repeater.fi-fo-table-repeater > table > tbody > tr > td .fi-select-input,
+.fi-modal-window.owwa-record-modal .owwa-bulk-items-repeater.fi-fo-table-repeater > table > tbody > tr > td .fi-input-wrp {
+    min-width: 4.5rem;
 }
 
 /*

@@ -125,6 +125,28 @@ class ItemCreateOpeningStockTest extends TestCase
         ]);
     }
 
+    public function test_create_form_shows_starting_unit_cost_for_consumables_when_qty_set(): void
+    {
+        $office = Office::factory()->create(['is_regional_supply' => true]);
+        $category = ItemCategory::factory()->create(['name' => 'Consumables']);
+        $user = User::factory()->create([
+            'role' => User::ROLE_SUPPLY_CUSTODIAN,
+            'office_id' => $office->id,
+            'email_verified_at' => now(),
+        ]);
+
+        $this->actingAs($user);
+        session(['active_item_category_id' => $category->id]);
+
+        Livewire::test(\App\Filament\Resources\Items\Pages\CreateItem::class)
+            ->fillForm([
+                'item_category_id' => $category->id,
+                ItemOpeningStockFields::QUANTITY_KEY => 10,
+            ])
+            ->assertFormFieldIsVisible(ItemOpeningStockFields::UNIT_COST_KEY)
+            ->assertSee('Optional. If blank, starting stock is stored at');
+    }
+
     public function test_create_form_renders_alpine_whitelist_guards(): void
     {
         $office = Office::factory()->create(['is_regional_supply' => true]);

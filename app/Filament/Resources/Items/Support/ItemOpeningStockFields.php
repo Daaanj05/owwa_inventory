@@ -85,17 +85,31 @@ class ItemOpeningStockFields
                     ->label('Starting quantity')
                     ->visible(fn (string $operation): bool => $operation === 'create')
                     ->helperText('Optional starting stock. Assigned to the regional supply office. Cannot be changed later from the Items list.'),
-            ),
+            )->live(),
             self::configureDigitsOnlyUnitCost(
                 TextInput::make(self::UNIT_COST_KEY)
                     ->label('Starting unit cost')
                     ->required(fn (Get $get): bool => self::requiresUnitCost($get('item_category_id'))
                         && filled($get(self::QUANTITY_KEY)))
-                    ->visible(fn (string $operation, Get $get): bool => $operation === 'create'
-                        && self::requiresUnitCost($get('item_category_id')))
+                    ->visible(function (string $operation, Get $get): bool {
+                        if ($operation !== 'create') {
+                            return false;
+                        }
+
+                        // PPE / semi: always show (required when qty is set).
+                        if (self::requiresUnitCost($get('item_category_id'))) {
+                            return true;
+                        }
+
+                        // Consumables: show when starting quantity is entered (optional;
+                        // otherwise unit cost usually comes from acquisitions).
+                        return self::categorySlug($get('item_category_id')) === 'consumables'
+                            && filled($get(self::QUANTITY_KEY));
+                    })
                     ->helperText(fn (Get $get): ?string => match (self::categorySlug($get('item_category_id'))) {
                         'ppe' => PpeValueCategory::minimumRuleSummary(),
                         'semi_expendable' => SemiExpendableValueCategory::tierRuleSummary(),
+                        'consumables' => 'Optional. If blank, starting stock is stored at ₱0 cost. Later receipts use the acquisition unit cost.',
                         default => null,
                     }),
             ),

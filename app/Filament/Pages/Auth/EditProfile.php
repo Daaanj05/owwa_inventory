@@ -4,6 +4,7 @@ namespace App\Filament\Pages\Auth;
 
 use App\Filament\Concerns\InteractsWithAccountNavigation;
 use App\Filament\Concerns\InteractsWithProfileUser;
+use Filament\Actions\Action;
 use Filament\Auth\Pages\EditProfile as BaseEditProfile;
 use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\TextInput;
@@ -12,6 +13,7 @@ use Filament\Schemas\Components\View;
 use Filament\Schemas\Schema;
 use Filament\Support\Enums\Alignment;
 use Filament\Support\Enums\Width;
+use Filament\Support\Icons\Heroicon;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Arr;
@@ -23,11 +25,24 @@ class EditProfile extends BaseEditProfile
 
     protected Width|string|null $maxWidth = Width::TwoExtraLarge;
 
+    public bool $isEditingProfile = false;
+
     public function mount(): void
     {
         $this->loadProfileUserRelations();
 
         parent::mount();
+    }
+
+    public function startEditingProfile(): void
+    {
+        $this->isEditingProfile = true;
+    }
+
+    public function cancelEditingProfile(): void
+    {
+        $this->isEditingProfile = false;
+        $this->fillForm();
     }
 
     /**
@@ -64,7 +79,7 @@ class EditProfile extends BaseEditProfile
 
     public function getSubheading(): string|Htmlable|null
     {
-        return 'Update your name and email. Organization details are managed by your System Admin.';
+        return 'View your profile details. Use Edit to update your name. Organization details are managed by your System Admin.';
     }
 
     public function content(Schema $schema): Schema
@@ -95,26 +110,36 @@ class EditProfile extends BaseEditProfile
                     ->description('Your display name and login email.')
                     ->columns(2)
                     ->extraAttributes(['class' => 'owwa-account-section'])
+                    ->afterHeader([
+                        Action::make('editProfile')
+                            ->label('Edit')
+                            ->icon(Heroicon::PencilSquare)
+                            ->visible(fn (): bool => ! $this->isEditingProfile)
+                            ->action('startEditingProfile'),
+                    ])
                     ->schema([
                         TextInput::make('first_name')
                             ->label('First name')
                             ->required()
                             ->maxLength(255)
                             ->autofocus()
+                            ->disabled(fn (): bool => ! $this->isEditingProfile)
                             ->columnSpan(1),
                         TextInput::make('middle_name')
                             ->label('Middle name')
                             ->maxLength(255)
+                            ->disabled(fn (): bool => ! $this->isEditingProfile)
                             ->columnSpan(1),
                         TextInput::make('last_name')
                             ->label('Last name')
                             ->required()
                             ->maxLength(255)
+                            ->disabled(fn (): bool => ! $this->isEditingProfile)
                             ->columnSpan(1),
                         $this->getEmailFormComponent()
+                            ->disabled()
+                            ->dehydrated(false)
                             ->columnSpan(1),
-                        $this->getCurrentPasswordFormComponent()
-                            ->columnSpanFull(),
                     ]),
                 Section::make('Organization')
                     ->description('Contact your System Admin to change role or office assignment.')
@@ -160,10 +185,33 @@ class EditProfile extends BaseEditProfile
      */
     protected function getFormActions(): array
     {
+        if (! $this->isEditingProfile) {
+            return [];
+        }
+
         return [
+            Action::make('cancelEditingProfile')
+                ->label('Cancel')
+                ->color('gray')
+                ->action('cancelEditingProfile'),
             $this->getSaveFormAction()
                 ->label('Save changes'),
         ];
+    }
+
+    public function save(): void
+    {
+        if (! $this->isEditingProfile) {
+            return;
+        }
+
+        parent::save();
+    }
+
+    protected function afterSave(): void
+    {
+        $this->isEditingProfile = false;
+        $this->fillForm();
     }
 
     /**
@@ -176,7 +224,6 @@ class EditProfile extends BaseEditProfile
             'first_name',
             'middle_name',
             'last_name',
-            'email',
         ]);
     }
 

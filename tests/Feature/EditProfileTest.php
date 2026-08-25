@@ -100,6 +100,35 @@ class EditProfileTest extends TestCase
             ->assertDontSee('Sub-Office/Department');
     }
 
+    public function test_profile_fields_are_read_only_until_edit_is_pressed(): void
+    {
+        $user = User::factory()->create([
+            'role' => User::ROLE_EMPLOYEE,
+            'first_name' => 'Jane',
+            'middle_name' => 'Q',
+            'last_name' => 'Public',
+            'email' => 'jane.public@example.com',
+            'email_verified_at' => now(),
+        ]);
+
+        $this->actingAs($user);
+
+        Livewire::test(EditProfile::class)
+            ->assertSee('Edit')
+            ->assertFormFieldDisabled('first_name')
+            ->assertFormFieldDisabled('middle_name')
+            ->assertFormFieldDisabled('last_name')
+            ->assertFormFieldDisabled('email')
+            ->assertDontSee('Save changes')
+            ->call('startEditingProfile')
+            ->assertFormFieldEnabled('first_name')
+            ->assertFormFieldEnabled('middle_name')
+            ->assertFormFieldEnabled('last_name')
+            ->assertFormFieldDisabled('email')
+            ->assertSee('Save changes')
+            ->assertSee('Cancel');
+    }
+
     public function test_name_parts_save_and_sync_combined_name(): void
     {
         $user = User::factory()->create([
@@ -108,6 +137,7 @@ class EditProfileTest extends TestCase
             'middle_name' => 'Q',
             'last_name' => 'Public',
             'name' => 'Jane Q Public',
+            'email' => 'jane.public@example.com',
             'email_verified_at' => now(),
             'password' => 'CurrentPass1',
         ]);
@@ -115,14 +145,18 @@ class EditProfileTest extends TestCase
         $this->actingAs($user);
 
         Livewire::test(EditProfile::class)
+            ->call('startEditingProfile')
             ->fillForm([
                 'first_name' => 'Janet',
                 'middle_name' => 'Marie',
                 'last_name' => 'Citizen',
             ])
+            ->set('data.email', 'changed@example.com')
             ->call('save')
             ->assertHasNoFormErrors()
-            ->assertNotified();
+            ->assertNotified()
+            ->assertSet('isEditingProfile', false)
+            ->assertFormFieldDisabled('first_name');
 
         $user->refresh();
 
@@ -130,6 +164,43 @@ class EditProfileTest extends TestCase
         $this->assertSame('Marie', $user->middle_name);
         $this->assertSame('Citizen', $user->last_name);
         $this->assertSame('Janet Marie Citizen', $user->name);
+        $this->assertSame('jane.public@example.com', $user->email);
+    }
+
+    public function test_cancel_discards_profile_edits(): void
+    {
+        $user = User::factory()->create([
+            'role' => User::ROLE_EMPLOYEE,
+            'first_name' => 'Jane',
+            'middle_name' => 'Q',
+            'last_name' => 'Public',
+            'name' => 'Jane Q Public',
+            'email_verified_at' => now(),
+        ]);
+
+        $this->actingAs($user);
+
+        Livewire::test(EditProfile::class)
+            ->call('startEditingProfile')
+            ->fillForm([
+                'first_name' => 'Janet',
+                'middle_name' => 'Marie',
+                'last_name' => 'Citizen',
+            ])
+            ->call('cancelEditingProfile')
+            ->assertSet('isEditingProfile', false)
+            ->assertFormFieldDisabled('first_name')
+            ->assertFormSet([
+                'first_name' => 'Jane',
+                'middle_name' => 'Q',
+                'last_name' => 'Public',
+            ]);
+
+        $user->refresh();
+
+        $this->assertSame('Jane', $user->first_name);
+        $this->assertSame('Q', $user->middle_name);
+        $this->assertSame('Public', $user->last_name);
     }
 
     public function test_supply_custodian_sees_office_on_profile(): void

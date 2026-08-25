@@ -6,7 +6,9 @@ use App\Models\Department;
 use App\Models\Issuance;
 use App\Models\Item;
 use App\Models\Office;
+use App\Models\User;
 use App\Services\ConsumptionAnalyticsService;
+use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Tests\TestCase;
@@ -574,5 +576,38 @@ class ConsumptionAnalyticsTest extends TestCase
         $this->assertSame(['2'], $widget->filters['office_ids']);
         $this->assertSame('7', $widget->filters['item_category_ids']);
         $this->assertArrayNotHasKey('show_moving_average', $widget->filters);
+    }
+
+    public function test_consumption_share_shows_placeholder_chart_when_empty(): void
+    {
+        $office = Office::factory()->create(['is_regional_supply' => true]);
+        $user = User::factory()->create([
+            'role' => User::ROLE_SUPPLY_CUSTODIAN,
+            'office_id' => $office->id,
+            'email_verified_at' => now(),
+        ]);
+
+        $this->actingAs($user);
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+
+        $widget = new class extends \App\Filament\Widgets\ConsumptionSharePieWidget
+        {
+            public function mountForTest(): void
+            {
+                $this->bootConsumptionFilterDefaults();
+            }
+
+            public function exposeData(): array
+            {
+                return $this->getData();
+            }
+        };
+        $widget->mountForTest();
+
+        $this->assertFalse($widget->hasConsumptionShareData());
+
+        $data = $widget->exposeData();
+        $this->assertSame(['No issuances yet'], $data['labels']);
+        $this->assertSame([1], $data['datasets'][0]['data']);
     }
 }

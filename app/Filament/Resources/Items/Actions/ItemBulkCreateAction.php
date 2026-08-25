@@ -164,6 +164,7 @@ class ItemBulkCreateAction
                 ->table($tableColumns)
                 ->compact()
                 ->schema($rowFields)
+                ->extraAttributes(['class' => 'owwa-bulk-items-repeater'])
                 ->columnSpanFull(),
         ];
     }
@@ -175,15 +176,15 @@ class ItemBulkCreateAction
     {
         return [
             [
-                TableColumn::make('Base Item')->markAsRequired()->width('16%'),
+                TableColumn::make('Base Item')->markAsRequired()->width('14%'),
                 TableColumn::make('Sub-Item')->width('10%'),
-                TableColumn::make('Unit')->markAsRequired()->width('7%'),
-                TableColumn::make('Reorder Point')->markAsRequired()->width('7%'),
-                TableColumn::make('Inventory Type')->markAsRequired()->width('14%'),
-                TableColumn::make('Days To Consume')->width('8%'),
-                TableColumn::make('Starting Qty')->width('8%'),
-                TableColumn::make('Unit Cost')->width('8%'),
-                TableColumn::make('Description')->width('22%'),
+                TableColumn::make('Unit')->markAsRequired()->width('7rem'),
+                TableColumn::make('Reorder Point')->markAsRequired()->width('7rem'),
+                TableColumn::make('Inventory Type')->markAsRequired()->width('12%'),
+                TableColumn::make('Days To Consume')->width('7rem'),
+                TableColumn::make('Starting Qty')->width('6.5rem'),
+                TableColumn::make('Unit Cost')->width('7rem'),
+                TableColumn::make('Description')->width('16%'),
             ],
             [
                 ...self::commonLeadingFields($categoryId),
@@ -211,16 +212,16 @@ class ItemBulkCreateAction
     {
         return [
             [
-                TableColumn::make('Base Item')->markAsRequired()->width('14%'),
+                TableColumn::make('Base Item')->markAsRequired()->width('12%'),
                 TableColumn::make('Sub-Item')->width('8%'),
-                TableColumn::make('Unit')->markAsRequired()->width('6%'),
-                TableColumn::make('Reorder Point')->markAsRequired()->width('6%'),
-                TableColumn::make('Property Class')->markAsRequired()->width('12%'),
+                TableColumn::make('Unit')->markAsRequired()->width('6.5rem'),
+                TableColumn::make('Reorder Point')->markAsRequired()->width('6.5rem'),
+                TableColumn::make('Property Class')->markAsRequired()->width('11%'),
                 TableColumn::make('UACS Object Code')->markAsRequired()->width('12%'),
-                TableColumn::make('Estimated Useful Life')->markAsRequired()->width('10%'),
-                TableColumn::make('Starting Qty')->width('7%'),
-                TableColumn::make('Unit Cost')->markAsRequired()->width('8%'),
-                TableColumn::make('Description')->width('17%'),
+                TableColumn::make('Estimated Useful Life')->markAsRequired()->width('9%'),
+                TableColumn::make('Starting Qty')->width('6.5rem'),
+                TableColumn::make('Unit Cost')->markAsRequired()->width('7rem'),
+                TableColumn::make('Description')->width('14%'),
             ],
             [
                 ...self::commonLeadingFields($categoryId),
@@ -262,15 +263,15 @@ class ItemBulkCreateAction
     {
         return [
             [
-                TableColumn::make('Base Item')->markAsRequired()->width('14%'),
+                TableColumn::make('Base Item')->markAsRequired()->width('13%'),
                 TableColumn::make('Sub-Item')->width('8%'),
-                TableColumn::make('Unit')->markAsRequired()->width('6%'),
-                TableColumn::make('Reorder Point')->markAsRequired()->width('6%'),
-                TableColumn::make('Type of PPE')->markAsRequired()->width('14%'),
-                TableColumn::make('UACS Object Code')->markAsRequired()->width('14%'),
-                TableColumn::make('Starting Qty')->width('8%'),
-                TableColumn::make('Unit Cost')->markAsRequired()->width('8%'),
-                TableColumn::make('Description')->width('22%'),
+                TableColumn::make('Unit')->markAsRequired()->width('6.5rem'),
+                TableColumn::make('Reorder Point')->markAsRequired()->width('6.5rem'),
+                TableColumn::make('Type of PPE')->markAsRequired()->width('13%'),
+                TableColumn::make('UACS Object Code')->markAsRequired()->width('13%'),
+                TableColumn::make('Starting Qty')->width('6.5rem'),
+                TableColumn::make('Unit Cost')->markAsRequired()->width('7rem'),
+                TableColumn::make('Description')->width('16%'),
             ],
             [
                 ...self::commonLeadingFields($categoryId),
