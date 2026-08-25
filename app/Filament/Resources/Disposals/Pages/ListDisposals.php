@@ -9,10 +9,10 @@ use App\Filament\Pages\InventoryCategoryDashboard;
 use App\Filament\Resources\Disposals\Concerns\DisposalExportReportAction;
 use App\Filament\Resources\Disposals\DisposalResource;
 use App\Filament\Resources\Disposals\Schemas\DisposalForm;
+use App\Filament\Resources\Pages\ListRecordsWithoutFilterUrl;
 use App\Filament\Support\OwwaFormModalDefaults;
 use App\Models\ItemCategory;
 use App\Support\CustodianOfficeScope;
-use Filament\Resources\Pages\ListRecords;
 use Filament\Schemas\Components\Actions;
 use Filament\Schemas\Components\EmbeddedTable;
 use Filament\Schemas\Components\Flex;
@@ -24,7 +24,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\HtmlString;
 use Livewire\Attributes\Url;
 
-class ListDisposals extends ListRecords
+class ListDisposals extends ListRecordsWithoutFilterUrl
 {
     use HasSystemAdminWizardHeading;
     use StartsOwwaExportBusy;

@@ -8826,7 +8826,8 @@ body.owwa-busy-active .fi-topbar a {
 
 /* UC user create — hide assignment select clear (X) button */
 .fi-modal-window.owwa-record-modal .owwa-uc-office-groups-repeater .fi-select-input-value-remove-btn,
-.fi-modal-window.owwa-record-modal .owwa-uc-departments-repeater .fi-select-input-value-remove-btn {
+.fi-modal-window.owwa-record-modal .owwa-uc-departments-repeater .fi-select-input-value-remove-btn,
+.fi-modal-window.owwa-record-modal .owwa-uc-departments-select .fi-select-input-value-remove-btn {
     display: none !important;
 }
 

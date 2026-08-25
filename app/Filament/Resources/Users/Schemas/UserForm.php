@@ -183,25 +183,20 @@ class UserForm
                     ->searchable()
                     ->selectablePlaceholder(false)
                     ->live()
-                    ->afterStateUpdated(fn (Set $set): mixed => $set('departments', [null])),
-                Repeater::make('departments')
+                    ->afterStateUpdated(function (Set $set): void {
+                        $set('departments', []);
+                    }),
+                Select::make('departments')
+                    ->label('Sub-Office/Department')
                     ->hiddenLabel()
-                    ->simple(
-                        Select::make('department_id')
-                            ->options(fn (Get $get): array => self::groupedDepartmentOptions($get))
-                            ->required()
-                            ->searchable()
-                            ->selectablePlaceholder(false)
-                            ->disableOptionsWhenSelectedInSiblingRepeaterItems()
-                            ->disabled(fn (Get $get): bool => blank(self::resolvedOfficeIdFromGroup($get)))
-                            ->rules(fn (Get $get): array => self::groupedAssignmentDepartmentRules($get)),
-                    )
+                    ->multiple()
+                    ->options(fn (Get $get): array => self::groupedDepartmentOptions($get))
+                    ->required()
                     ->minItems(1)
-                    ->defaultItems(1)
-                    ->addActionLabel('Add sub-office/department')
-                    ->deleteAction(self::repeaterDeleteVisibleExceptFirst())
-                    ->reorderable(false)
-                    ->extraAttributes(['class' => 'owwa-uc-departments-repeater']),
+                    ->searchable()
+                    ->disabled(fn (Get $get): bool => blank($get('office_id')))
+                    ->rules(fn (Get $get): array => self::groupedAssignmentDepartmentRules($get))
+                    ->extraAttributes(['class' => 'owwa-uc-departments-select']),
             ])
             ->minItems(1)
             ->defaultItems(1)
@@ -266,33 +261,18 @@ class UserForm
         });
     }
 
-    protected static function resolvedOfficeIdFromGroup(Get $get): ?int
-    {
-        if (filled($get('office_id'))) {
-            return (int) $get('office_id');
-        }
-
-        if (filled($get('../../office_id'))) {
-            return (int) $get('../../office_id');
-        }
-
-        return null;
-    }
-
     /**
      * @return array<int, string>
      */
     protected static function groupedDepartmentOptions(Get $get): array
     {
-        $officeId = self::resolvedOfficeIdFromGroup($get);
-
-        if ($officeId === null) {
+        if (blank($get('office_id'))) {
             return [];
         }
 
         return Department::query()
             ->active()
-            ->where('office_id', $officeId)
+            ->where('office_id', (int) $get('office_id'))
             ->orderBy('name')
             ->pluck('name', 'id')
             ->all();
@@ -303,20 +283,37 @@ class UserForm
      */
     protected static function groupedAssignmentDepartmentRules(Get $get): array
     {
-        if (blank($get('department_id'))) {
-            return ['required'];
+        if (blank($get('office_id'))) {
+            return ['array', 'prohibited'];
         }
 
-        $officeId = self::resolvedOfficeIdFromGroup($get);
-
-        if ($officeId === null) {
-            return ['prohibited'];
-        }
+        $officeId = (int) $get('office_id');
 
         return [
-            Rule::exists('departments', 'id')->where(
-                fn ($query) => $query->where('office_id', $officeId)
-            ),
+            'array',
+            'min:1',
+            function (string $attribute, mixed $value, Closure $fail) use ($officeId): void {
+                $ids = collect(is_array($value) ? $value : [])
+                    ->map(fn (mixed $id): int => (int) $id)
+                    ->filter(fn (int $id): bool => $id > 0)
+                    ->unique()
+                    ->values();
+
+                if ($ids->isEmpty()) {
+                    $fail('Select at least one sub-office/department.');
+
+                    return;
+                }
+
+                $validCount = Department::query()
+                    ->where('office_id', $officeId)
+                    ->whereIn('id', $ids->all())
+                    ->count();
+
+                if ($validCount !== $ids->count()) {
+                    $fail('Each selected sub-office/department must belong to the chosen office.');
+                }
+            },
         ];
     }
 

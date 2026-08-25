@@ -8,6 +8,7 @@ use App\Filament\Concerns\SyncsActiveItemCategory;
 use App\Filament\Resources\Acquisitions\AcquisitionResource;
 use App\Filament\Resources\Acquisitions\Concerns\AcquisitionProcurementExportAction;
 use App\Filament\Resources\Acquisitions\Concerns\HasAcquisitionDocumentTabs;
+use App\Filament\Resources\Pages\ListRecordsWithoutFilterUrl;
 use App\Filament\Support\OwwaFormModalDefaults;
 use App\Models\AcquisitionPaperwork;
 use App\Models\Requisition;
@@ -16,7 +17,6 @@ use App\Services\RequisitionPurchaseRequestService;
 use App\Support\CustodianOfficeScope;
 use Filament\Actions\Action;
 use Filament\Actions\CreateAction;
-use Filament\Resources\Pages\ListRecords;
 use Filament\Schemas\Components\Actions;
 use Filament\Schemas\Components\EmbeddedTable;
 use Filament\Schemas\Components\Flex;
@@ -29,7 +29,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Validation\ValidationException;
 use Livewire\Attributes\Url;
 
-class ListAcquisitions extends ListRecords
+class ListAcquisitions extends ListRecordsWithoutFilterUrl
 {
     use HasAcquisitionDocumentTabs;
     use HasSystemAdminWizardHeading;

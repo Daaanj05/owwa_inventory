@@ -144,11 +144,11 @@ class AcquisitionDocumentTabsTest extends TestCase
         $iarUrl = \App\Filament\Resources\Acquisitions\InspectionAcceptanceReports\InspectionAcceptanceReportResource::getUrl('index', ['category' => $category->id]);
         $receivedUrl = \App\Filament\Resources\Acquisitions\AcquisitionResource::getUrl('received', ['category' => $category->id]);
 
-        $this->assertStringContainsString('/admin/purchase-orders', $poUrl);
-        $this->assertStringContainsString('/admin/inspection-acceptance-reports', $iarUrl);
-        $this->assertStringContainsString('/admin/acquisitions/received', $receivedUrl);
-        $this->assertStringNotContainsString('/admin/acquisitions/', $poUrl);
-        $this->assertStringNotContainsString('/admin/acquisitions/', $iarUrl);
+        $this->assertStringContainsString('/purchase-orders', $poUrl);
+        $this->assertStringContainsString('/inspection-acceptance-reports', $iarUrl);
+        $this->assertStringContainsString('/acquisitions/received', $receivedUrl);
+        $this->assertStringNotContainsString('/acquisitions/', $poUrl);
+        $this->assertStringNotContainsString('/acquisitions/', $iarUrl);
 
         Livewire::actingAs($custodian)
             ->test(ListAcquisitions::class, ['category' => $category->id])

@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\User;
 use App\Support\FriendlyMessages;
+use Filament\Facades\Filament;
 use Illuminate\Auth\Events\Verified;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -36,7 +37,7 @@ class GuestEmailVerificationController extends Controller
     protected function redirectWithVerificationError(string $message): RedirectResponse
     {
         return redirect()
-            ->to('/admin/login')
+            ->to(Filament::getPanel('admin')->getLoginUrl())
             ->with('verification_error', $message);
     }
 }

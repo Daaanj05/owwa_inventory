@@ -57,7 +57,7 @@ class StockLevelsPaginationTest extends TestCase
 
         $paginator = $component->instance()->getStockLevels();
 
-        $this->assertStringContainsString('/admin/stock-levels', $paginator->url(2));
+        $this->assertStringContainsString('/stock-levels', $paginator->url(2));
         $this->assertStringNotContainsString('/livewire-', $paginator->url(2));
     }
 }

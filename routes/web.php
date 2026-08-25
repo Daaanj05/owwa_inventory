@@ -10,12 +10,9 @@ use App\Http\Controllers\OwwaBulkExportController;
 use App\Http\Controllers\OwwaExportController;
 use App\Http\Controllers\OwwaPrintController;
 use App\Http\Controllers\PublicAssetController;
+use Filament\Facades\Filament;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
-
-Route::get('/', function () {
-    return redirect('/admin/login');
-});
 
 Route::get('/email/verify/{id}/{hash}', GuestEmailVerificationController::class)
     ->middleware(['signed', 'throttle:6,1'])
@@ -33,7 +30,7 @@ Route::middleware(['auth', 'web'])->group(function () {
 
     Route::post('/email/verification-notification', function (Request $request) {
         if ($request->user()->hasVerifiedEmail()) {
-            return redirect()->intended('/admin');
+            return redirect()->intended(Filament::getPanel('admin')->getUrl());
         }
 
         $request->user()->sendEmailVerificationNotification();
@@ -98,6 +95,13 @@ Route::middleware(['auth', 'web'])->group(function () {
     Route::get('reports/owwa/issuance/{issuance}/print', [OwwaPrintController::class, 'issuance'])->name('owwa.print.issuance');
     Route::get('reports/owwa/transfer/{transfer}/print', [OwwaPrintController::class, 'transfer'])->name('owwa.print.transfer');
     Route::get('reports/owwa/disposal/{disposal}/print', [OwwaPrintController::class, 'disposal'])->name('owwa.print.disposal');
-    Route::get('admin/ai-procurement-runs/{run}/print', AiProcurementRunPrintController::class)
+    Route::get('ai-procurement-runs/{run}/print', AiProcurementRunPrintController::class)
         ->name('ai-procurement-runs.print');
 });
+
+Route::get('/admin/{path?}', function (Request $request, ?string $path = null) {
+    $target = '/'.ltrim((string) $path, '/');
+    $query = $request->getQueryString();
+
+    return redirect($query ? $target.'?'.$query : $target);
+})->where('path', '.*');

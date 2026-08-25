@@ -21,8 +21,8 @@ class OwwaMailThemeTest extends TestCase
             'email' => 'jane@example.com',
         ]);
 
-        $verificationUrl = 'https://capstoneproject.test/admin/email-verification/verify/1/abc123';
-        $loginUrl = 'https://capstoneproject.test/admin/login';
+        $verificationUrl = 'https://capstoneproject.test/email/verify/1/abc123';
+        $loginUrl = 'https://capstoneproject.test/login';
 
         $notification = new UserWelcomeNotification(
             temporaryPassword: 'TempPass1!',

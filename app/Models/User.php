@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Models\Concerns\LogsUserActivity;
 use App\Services\UserActivityLogger;
 use App\Support\CustodianOfficeScope;
+use Filament\Facades\Filament;
 use Filament\Models\Contracts\FilamentUser;
 use Filament\Panel;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
@@ -196,7 +197,7 @@ class User extends Authenticatable implements FilamentUser, MustVerifyEmail
                 ];
             }
 
-            // Filament simple() department repeater stores scalar IDs.
+            // Multi-select stores a flat list of department IDs per office group.
             $groups[$officeId]['departments'][] = $departmentId;
         }
 
@@ -484,11 +485,9 @@ class User extends Authenticatable implements FilamentUser, MustVerifyEmail
 
     public static function panelLoginUrlFor(self $user): string
     {
-        if ($user->isSystemAdmin()) {
-            return url('/system-admin/login');
-        }
+        $panelId = $user->isSystemAdmin() ? 'system-admin' : 'admin';
 
-        return url('/admin/login');
+        return Filament::getPanel($panelId)->getLoginUrl();
     }
 
     public static function guestEmailVerificationUrlFor(self $user): string

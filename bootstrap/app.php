@@ -32,7 +32,7 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->render(function (\Illuminate\Routing\Exceptions\InvalidSignatureException $exception, \Illuminate\Http\Request $request) {
             return redirect()
-                ->to('/admin/login')
+                ->to('/login')
                 ->with('verification_error', \App\Support\FriendlyMessages::emailVerificationExpiredLink());
         });
     })->create();

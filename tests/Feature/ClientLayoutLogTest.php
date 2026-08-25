@@ -18,7 +18,7 @@ class ClientLayoutLogTest extends TestCase
         $user = User::factory()->create();
 
         $response = $this->actingAs($user)->postJson(route('owwa.client-layout-log'), [
-            'url' => 'http://localhost/admin/purchase-orders',
+            'url' => 'http://localhost/purchase-orders',
             'hasValidationError' => true,
             'deadSpacePx' => 420,
             'contentChildrenSum' => 300,

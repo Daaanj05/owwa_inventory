@@ -88,7 +88,7 @@ class UserEmailVerificationTest extends TestCase
         ]);
 
         $this->get('/email/verify/'.$user->id.'/'.sha1($user->getEmailForVerification()))
-            ->assertRedirect('/admin/login')
+            ->assertRedirect('/login')
             ->assertSessionHas('verification_error');
 
         $this->assertNull($user->fresh()->email_verified_at);

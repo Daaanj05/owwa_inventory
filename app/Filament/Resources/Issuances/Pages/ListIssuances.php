@@ -8,8 +8,8 @@ use App\Filament\Concerns\SyncsActiveItemCategory;
 use App\Filament\Pages\InventoryCategoryDashboard;
 use App\Filament\Resources\Issuances\Concerns\IssuanceRsmiExportAction;
 use App\Filament\Resources\Issuances\IssuanceResource;
+use App\Filament\Resources\Pages\ListRecordsWithoutFilterUrl;
 use App\Models\ItemCategory;
-use Filament\Resources\Pages\ListRecords;
 use Filament\Schemas\Components\Actions;
 use Filament\Schemas\Components\EmbeddedTable;
 use Filament\Schemas\Components\Flex;
@@ -21,7 +21,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\HtmlString;
 use Livewire\Attributes\Url;
 
-class ListIssuances extends ListRecords
+class ListIssuances extends ListRecordsWithoutFilterUrl
 {
     use HasSystemAdminWizardHeading;
     use StartsOwwaExportBusy;

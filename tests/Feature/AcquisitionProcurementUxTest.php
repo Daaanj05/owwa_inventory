@@ -143,6 +143,39 @@ class AcquisitionProcurementUxTest extends TestCase
             ->assertCanNotSeeTableRecords([$outOfRange]);
     }
 
+    public function test_pr_list_date_range_filter_ignores_inverted_from_to(): void
+    {
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+
+        $office = Office::factory()->create(['is_regional_supply' => true]);
+        $category = ItemCategory::factory()->create(['name' => 'Consumables']);
+        session()->put('active_item_category_id', $category->id);
+
+        $custodian = User::factory()->create([
+            'role' => User::ROLE_SUPPLY_CUSTODIAN,
+            'office_id' => $office->id,
+        ]);
+
+        $early = $this->createPrDraft($office, $category, $custodian, now()->subDays(20)->toDateString());
+        $late = $this->createPrDraft($office, $category, $custodian, now()->subDays(2)->toDateString());
+
+        Livewire::actingAs($custodian)
+            ->test(ListAcquisitions::class, ['category' => $category->id])
+            ->filterTable('date_range', [
+                'from' => now()->toDateString(),
+                'until' => now()->subDays(5)->toDateString(),
+            ])
+            ->assertCanSeeTableRecords([$early, $late]);
+    }
+
+    public function test_pr_list_does_not_bind_table_filters_to_url(): void
+    {
+        $attributes = (new \ReflectionProperty(ListAcquisitions::class, 'tableFilters'))
+            ->getAttributes(\Livewire\Attributes\Url::class);
+
+        $this->assertSame([], $attributes);
+    }
+
     public function test_bulk_procurement_export_returns_excel_for_date_range(): void
     {
         if (! $this->acquisitionPaperworkTemplatesExist()) {

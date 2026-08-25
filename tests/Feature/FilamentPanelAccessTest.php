@@ -37,8 +37,8 @@ class FilamentPanelAccessTest extends TestCase
         ]);
 
         $this->actingAs($admin)
-            ->get('/admin')
-            ->assertRedirect('/admin/login')
+            ->get('/')
+            ->assertRedirect('/login')
             ->assertSessionHas(
                 'panel_access_error',
                 'This portal is for supply custodian, unit consolidator, and employee accounts. System administrators must use the system administrator portal.'
@@ -49,7 +49,7 @@ class FilamentPanelAccessTest extends TestCase
 
     public function test_login_pages_do_not_show_cross_panel_links(): void
     {
-        $this->get('/admin/login')
+        $this->get('/login')
             ->assertOk()
             ->assertSee('OWWA-4A personnel only. Unauthorized access is strictly prohibited.', false)
             ->assertDontSee('System administrator portal', false)
@@ -62,5 +62,12 @@ class FilamentPanelAccessTest extends TestCase
             ->assertDontSee('System administrator portal', false)
             ->assertDontSee('Operations portal', false)
             ->assertDontSee('Use this only if you were sent to the wrong portal.', false);
+    }
+
+    public function test_legacy_admin_urls_redirect_to_root_panel_paths(): void
+    {
+        $this->get('/admin')->assertRedirect('/');
+        $this->get('/admin/login')->assertRedirect('/login');
+        $this->get('/admin/acquisitions?category=1')->assertRedirect('/acquisitions?category=1');
     }
 }

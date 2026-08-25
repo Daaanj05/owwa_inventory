@@ -26,7 +26,7 @@ class Login extends BaseLogin
     public function authenticate(): ?LoginResponse
     {
         // Always send users back to the current panel's dashboard,
-        // not to any previously stored "intended" URL (like /admin).
+        // not to any previously stored "intended" URL.
         Session::forget('url.intended');
 
         $this->form->fill(array_merge(

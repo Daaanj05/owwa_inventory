@@ -8,6 +8,7 @@ use App\Filament\Concerns\SyncsActiveItemCategory;
 use App\Filament\Resources\Acquisitions\Concerns\AcquisitionProcurementExportAction;
 use App\Filament\Resources\Acquisitions\Concerns\HasAcquisitionDocumentTabs;
 use App\Filament\Resources\Acquisitions\PurchaseOrders\PurchaseOrderResource;
+use App\Filament\Resources\Pages\ListRecordsWithoutFilterUrl;
 use App\Filament\Support\OwwaFormModalDefaults;
 use App\Models\AcquisitionPaperwork;
 use App\Models\PurchaseOrder;
@@ -15,7 +16,6 @@ use App\Services\PurchaseOrderWorkflowService;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Select;
 use Filament\Notifications\Notification;
-use Filament\Resources\Pages\ListRecords;
 use Filament\Schemas\Components\Actions;
 use Filament\Schemas\Components\EmbeddedTable;
 use Filament\Schemas\Components\Flex;
@@ -27,7 +27,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Validation\ValidationException;
 use Livewire\Attributes\Url;
 
-class ListPurchaseOrders extends ListRecords
+class ListPurchaseOrders extends ListRecordsWithoutFilterUrl
 {
     use HasAcquisitionDocumentTabs;
     use HasSystemAdminWizardHeading;

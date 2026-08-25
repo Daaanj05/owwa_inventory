@@ -25,10 +25,11 @@ class SystemAdminOfficeSetupTest extends TestCase
         $this->assertStringContainsString("Repeater::make('office_groups')", $source);
         $this->assertStringContainsString('Sub-Office/Department', $source);
         $this->assertStringContainsString('owwa-uc-office-groups-repeater', $source);
-        $this->assertStringContainsString('Add sub-office/department', $source);
+        $this->assertStringContainsString("Select::make('departments')", $source);
+        $this->assertStringContainsString('->multiple()', $source);
         $this->assertStringContainsString('->table([', $source);
-        $this->assertStringContainsString('->simple(', $source);
         $this->assertStringContainsString('deleteAction(', $source);
+        $this->assertStringNotContainsString('->simple(', $source);
         $this->assertStringNotContainsString('owwa-uc-assignments-table-repeater', $source);
     }
 

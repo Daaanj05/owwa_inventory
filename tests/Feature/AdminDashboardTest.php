@@ -29,7 +29,7 @@ class AdminDashboardTest extends TestCase
 
         $this->actingAs($user);
 
-        $this->get('/admin')->assertOk();
+        $this->get('/')->assertOk();
 
         Livewire::test(Dashboard::class)->assertOk();
     }
@@ -43,6 +43,6 @@ class AdminDashboardTest extends TestCase
 
         $this->actingAs($user);
 
-        $this->get('/admin')->assertForbidden();
+        $this->get('/')->assertRedirect('/login');
     }
 }

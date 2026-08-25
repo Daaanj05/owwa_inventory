@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Acquisitions\Concerns;
 
+use DateTimeInterface;
 use Filament\Forms\Components\DatePicker;
 use Filament\Tables\Enums\FiltersLayout;
 use Filament\Tables\Filters\Filter;
@@ -21,33 +22,44 @@ final class AcquisitionDateRangeFilter
                 DatePicker::make('from')
                     ->label('From')
                     ->native(true)
-                    ->inlineLabel(),
+                    ->inlineLabel()
+                    ->live(onBlur: true),
                 DatePicker::make('until')
                     ->label('To')
                     ->native(true)
-                    ->inlineLabel(),
+                    ->inlineLabel()
+                    ->live(onBlur: true),
             ])
             ->columns(2)
             ->query(function (Builder $query, array $data) use ($column): Builder {
+                $from = self::normalizeDate($data['from'] ?? null);
+                $until = self::normalizeDate($data['until'] ?? null);
+
+                if ($from !== null && $until !== null && $from > $until) {
+                    return $query;
+                }
+
                 return $query
                     ->when(
-                        filled($data['from'] ?? null),
-                        fn (Builder $query): Builder => $query->whereDate($column, '>=', $data['from']),
+                        $from !== null,
+                        fn (Builder $query): Builder => $query->whereDate($column, '>=', $from),
                     )
                     ->when(
-                        filled($data['until'] ?? null),
-                        fn (Builder $query): Builder => $query->whereDate($column, '<=', $data['until']),
+                        $until !== null,
+                        fn (Builder $query): Builder => $query->whereDate($column, '<=', $until),
                     );
             })
             ->indicateUsing(function (array $data) use ($label): array {
                 $indicators = [];
+                $from = self::normalizeDate($data['from'] ?? null);
+                $until = self::normalizeDate($data['until'] ?? null);
 
-                if (filled($data['from'] ?? null)) {
-                    $indicators[] = $label.' from '.$data['from'];
+                if ($from !== null) {
+                    $indicators[] = $label.' from '.$from;
                 }
 
-                if (filled($data['until'] ?? null)) {
-                    $indicators[] = $label.' to '.$data['until'];
+                if ($until !== null) {
+                    $indicators[] = $label.' to '.$until;
                 }
 
                 return $indicators;
@@ -65,5 +77,20 @@ final class AcquisitionDateRangeFilter
             ->filtersFormColumns(1)
             ->hiddenFilterIndicators()
             ->extraAttributes(['class' => 'owwa-toolbar-date-range'], merge: true);
+    }
+
+    public static function normalizeDate(mixed $value): ?string
+    {
+        if ($value instanceof DateTimeInterface) {
+            return $value->format('Y-m-d');
+        }
+
+        if (! is_string($value)) {
+            return null;
+        }
+
+        $value = trim($value);
+
+        return $value === '' ? null : substr($value, 0, 10);
     }
 }

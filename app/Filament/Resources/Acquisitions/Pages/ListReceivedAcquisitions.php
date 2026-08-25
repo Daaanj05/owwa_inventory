@@ -9,7 +9,7 @@ use App\Filament\Resources\Acquisitions\AcquisitionResource;
 use App\Filament\Resources\Acquisitions\Concerns\AcquisitionProcurementExportAction;
 use App\Filament\Resources\Acquisitions\Concerns\HasAcquisitionDocumentTabs;
 use App\Filament\Resources\Acquisitions\Tables\ReceivedAcquisitionsTable;
-use Filament\Resources\Pages\ListRecords;
+use App\Filament\Resources\Pages\ListRecordsWithoutFilterUrl;
 use Filament\Schemas\Components\Actions;
 use Filament\Schemas\Components\EmbeddedTable;
 use Filament\Schemas\Components\Flex;
@@ -21,7 +21,7 @@ use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Database\Eloquent\Builder;
 use Livewire\Attributes\Url;
 
-class ListReceivedAcquisitions extends ListRecords
+class ListReceivedAcquisitions extends ListRecordsWithoutFilterUrl
 {
     use HasAcquisitionDocumentTabs;
     use HasSystemAdminWizardHeading;

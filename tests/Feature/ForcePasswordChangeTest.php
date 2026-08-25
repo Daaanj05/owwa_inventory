@@ -60,7 +60,7 @@ class ForcePasswordChangeTest extends TestCase
         ]);
 
         $this->actingAs($user)
-            ->get('/admin')
+            ->get('/')
             ->assertRedirect(ChangePassword::getUrl(panel: 'admin'));
     }
 
@@ -74,7 +74,7 @@ class ForcePasswordChangeTest extends TestCase
         ]);
 
         $this->actingAs($user)
-            ->get('/admin/profile')
+            ->get('/profile')
             ->assertRedirect(ChangePassword::getUrl(panel: 'admin'));
     }
 
@@ -88,7 +88,7 @@ class ForcePasswordChangeTest extends TestCase
         ]);
 
         $this->actingAs($user)
-            ->get('/admin/account/settings')
+            ->get('/account/settings')
             ->assertRedirect(ChangePassword::getUrl(panel: 'admin'));
     }
 
@@ -139,7 +139,7 @@ class ForcePasswordChangeTest extends TestCase
         $this->assertFalse($user->mustChangePassword());
         $this->assertTrue(Hash::check('NewPass1', $user->password));
 
-        $this->get('/admin')->assertOk();
+        $this->get('/')->assertOk();
     }
 
     public function test_verified_user_can_access_profile_when_flag_is_false(): void

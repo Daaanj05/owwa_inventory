@@ -58,7 +58,7 @@ class AdminPanelProvider extends PanelProvider
         $panel = $panel
             ->default()
             ->id('admin')
-            ->path('admin')
+            ->path('')
             ->brandName('OWWA Region IV-A Inventory System')
             ->favicon('/images/owwa-4a_logo_transparent.png')
             ->login(Login::class)

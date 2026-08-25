@@ -15,7 +15,7 @@ Your requisition was rejected.
 @endif
 </x-mail::panel>
 
-<x-mail::button :url="url('/admin/login')">
+<x-mail::button :url="url('/login')">
 Sign in to review
 </x-mail::button>
 
