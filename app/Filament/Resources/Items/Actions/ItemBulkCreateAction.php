@@ -4,12 +4,14 @@ namespace App\Filament\Resources\Items\Actions;
 
 use App\Filament\Concerns\SyncsActiveItemCategory;
 use App\Filament\Forms\Components\StyledDatalistInput;
+use App\Filament\Resources\Items\Support\ItemOpeningStockFields;
 use App\Filament\Support\OwwaFormModalDefaults;
 use App\Models\Item;
 use App\Models\ItemCategory;
 use App\Models\UacsObjectCode;
 use App\Services\BulkCreateItemsService;
 use App\Support\ConsumableInventoryType;
+use App\Support\ItemMeasurementUnitInput;
 use App\Support\ItemPropertyClass;
 use App\Support\PpePropertyType;
 use App\Support\SemiExpendableUsefulLife;
@@ -38,10 +40,17 @@ class ItemBulkCreateAction
                     $category = self::currentCategory();
 
                     return $category
-                        ? 'Create multiple catalog items for '.$category->name.'. Stock / property numbers are assigned automatically on save.'
-                        : 'Create multiple catalog items. Stock / property numbers are assigned automatically on save.';
+                        ? 'Create multiple catalog items for '.$category->name.'. Starting stock is optional per row and is assigned to the regional supply office.'
+                        : 'Create multiple catalog items. Starting stock is optional per row and is assigned to the regional supply office.';
                 })
-                ->modalSubmitActionLabel('Create Items')
+                ->modalSubmitAction(false)
+                ->extraModalFooterActions(fn (Action $action): array => [
+                    ItemOpeningStockFields::confirmingSubmitAction(
+                        $action,
+                        'Create items',
+                        'Create these items?',
+                    ),
+                ])
                 ->visible(fn (): bool => self::currentCategoryId() > 0)
                 ->fillForm(function (): array {
                     $categoryId = self::currentCategoryId();
@@ -58,11 +67,14 @@ class ItemBulkCreateAction
                 ->schema(fn (): array => self::schema())
                 ->action(function (array $data): void {
                     $categoryId = self::currentCategoryId();
+                    $officeId = ItemOpeningStockFields::resolveRegionalOfficeId();
 
                     try {
                         $created = app(BulkCreateItemsService::class)->createMany(
                             $categoryId,
                             array_values($data['items'] ?? []),
+                            $officeId,
+                            auth()->user(),
                         );
                     } catch (ValidationException $exception) {
                         Notification::make()
@@ -117,6 +129,8 @@ class ItemBulkCreateAction
             'uacs_object_code_id' => null,
             'estimated_useful_life' => null,
             'description' => null,
+            ItemOpeningStockFields::QUANTITY_KEY => null,
+            ItemOpeningStockFields::UNIT_COST_KEY => null,
         ];
     }
 
@@ -161,13 +175,15 @@ class ItemBulkCreateAction
     {
         return [
             [
-                TableColumn::make('Base Item')->markAsRequired()->width('18%'),
-                TableColumn::make('Sub-Item')->width('12%'),
-                TableColumn::make('Unit')->markAsRequired()->width('8%'),
-                TableColumn::make('Reorder Point')->markAsRequired()->width('8%'),
-                TableColumn::make('Inventory Type')->markAsRequired()->width('18%'),
-                TableColumn::make('Days To Consume')->width('10%'),
-                TableColumn::make('Description')->width('26%'),
+                TableColumn::make('Base Item')->markAsRequired()->width('16%'),
+                TableColumn::make('Sub-Item')->width('10%'),
+                TableColumn::make('Unit')->markAsRequired()->width('7%'),
+                TableColumn::make('Reorder Point')->markAsRequired()->width('7%'),
+                TableColumn::make('Inventory Type')->markAsRequired()->width('14%'),
+                TableColumn::make('Days To Consume')->width('8%'),
+                TableColumn::make('Starting Qty')->width('8%'),
+                TableColumn::make('Unit Cost')->width('8%'),
+                TableColumn::make('Description')->width('22%'),
             ],
             [
                 ...self::commonLeadingFields($categoryId),
@@ -179,6 +195,8 @@ class ItemBulkCreateAction
                     ->hiddenLabel()
                     ->numeric()
                     ->minValue(0),
+                ItemOpeningStockFields::bulkQuantityField(),
+                ItemOpeningStockFields::bulkUnitCostField(requiredWhenQuantity: false),
                 TextInput::make('description')
                     ->hiddenLabel()
                     ->maxLength(500),
@@ -193,14 +211,16 @@ class ItemBulkCreateAction
     {
         return [
             [
-                TableColumn::make('Base Item')->markAsRequired()->width('16%'),
-                TableColumn::make('Sub-Item')->width('10%'),
-                TableColumn::make('Unit')->markAsRequired()->width('8%'),
-                TableColumn::make('Reorder Point')->markAsRequired()->width('8%'),
-                TableColumn::make('Property Class')->markAsRequired()->width('14%'),
-                TableColumn::make('UACS Object Code')->markAsRequired()->width('16%'),
-                TableColumn::make('Estimated Useful Life')->markAsRequired()->width('12%'),
-                TableColumn::make('Description')->width('16%'),
+                TableColumn::make('Base Item')->markAsRequired()->width('14%'),
+                TableColumn::make('Sub-Item')->width('8%'),
+                TableColumn::make('Unit')->markAsRequired()->width('6%'),
+                TableColumn::make('Reorder Point')->markAsRequired()->width('6%'),
+                TableColumn::make('Property Class')->markAsRequired()->width('12%'),
+                TableColumn::make('UACS Object Code')->markAsRequired()->width('12%'),
+                TableColumn::make('Estimated Useful Life')->markAsRequired()->width('10%'),
+                TableColumn::make('Starting Qty')->width('7%'),
+                TableColumn::make('Unit Cost')->markAsRequired()->width('8%'),
+                TableColumn::make('Description')->width('17%'),
             ],
             [
                 ...self::commonLeadingFields($categoryId),
@@ -226,6 +246,8 @@ class ItemBulkCreateAction
                 TextInput::make('estimated_useful_life')
                     ->hiddenLabel()
                     ->placeholder('Months, e.g. 36'),
+                ItemOpeningStockFields::bulkQuantityField(),
+                ItemOpeningStockFields::bulkUnitCostField(),
                 TextInput::make('description')
                     ->hiddenLabel()
                     ->maxLength(500),
@@ -240,13 +262,15 @@ class ItemBulkCreateAction
     {
         return [
             [
-                TableColumn::make('Base Item')->markAsRequired()->width('16%'),
-                TableColumn::make('Sub-Item')->width('10%'),
-                TableColumn::make('Unit')->markAsRequired()->width('8%'),
-                TableColumn::make('Reorder Point')->markAsRequired()->width('8%'),
-                TableColumn::make('Type of PPE')->markAsRequired()->width('16%'),
-                TableColumn::make('UACS Object Code')->markAsRequired()->width('18%'),
-                TableColumn::make('Description')->width('24%'),
+                TableColumn::make('Base Item')->markAsRequired()->width('14%'),
+                TableColumn::make('Sub-Item')->width('8%'),
+                TableColumn::make('Unit')->markAsRequired()->width('6%'),
+                TableColumn::make('Reorder Point')->markAsRequired()->width('6%'),
+                TableColumn::make('Type of PPE')->markAsRequired()->width('14%'),
+                TableColumn::make('UACS Object Code')->markAsRequired()->width('14%'),
+                TableColumn::make('Starting Qty')->width('8%'),
+                TableColumn::make('Unit Cost')->markAsRequired()->width('8%'),
+                TableColumn::make('Description')->width('22%'),
             ],
             [
                 ...self::commonLeadingFields($categoryId),
@@ -258,6 +282,8 @@ class ItemBulkCreateAction
                     ->hiddenLabel()
                     ->options(fn (): array => self::uacsOptions())
                     ->searchable(),
+                ItemOpeningStockFields::bulkQuantityField(),
+                ItemOpeningStockFields::bulkUnitCostField(),
                 TextInput::make('description')
                     ->hiddenLabel()
                     ->maxLength(500),
@@ -278,10 +304,12 @@ class ItemBulkCreateAction
             TextInput::make('sub_item')
                 ->hiddenLabel()
                 ->maxLength(255),
-            TextInput::make('unit')
-                ->hiddenLabel()
-                ->default('piece')
-                ->maxLength(50),
+            ItemMeasurementUnitInput::configure(
+                TextInput::make('unit')
+                    ->hiddenLabel()
+                    ->default('piece')
+                    ->maxLength(50),
+            ),
             TextInput::make('reorder_level')
                 ->hiddenLabel()
                 ->numeric()

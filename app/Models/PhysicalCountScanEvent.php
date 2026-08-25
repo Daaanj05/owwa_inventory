@@ -12,6 +12,7 @@ class PhysicalCountScanEvent extends Model
         'property_number',
         'result',
         'physical_count_line_id',
+        'inventory_unit_id',
         'scanned_by',
         'scanned_at',
     ];

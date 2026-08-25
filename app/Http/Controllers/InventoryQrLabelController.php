@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Acquisition;
 use App\Models\AcquisitionPaperwork;
 use App\Models\Issuance;
+use App\Models\Item;
 use App\Models\PhysicalCountSession;
 use App\Models\User;
 use App\Services\AcquisitionUnitService;
@@ -119,6 +120,32 @@ class InventoryQrLabelController extends Controller
         ])->setPaper('a4', 'portrait');
 
         return $pdf->download(OwwaExportFilename::qrLabel('PhysicalCount', (string) $physicalCountSession->reference_code));
+    }
+
+    public function item(Item $item, InventoryQrLabelService $labels): SymfonyResponse
+    {
+        $this->authorizeSupplyCustodian();
+
+        $item->loadMissing(['category']);
+
+        $slug = $item->category?->getTemplateSlug();
+        if (! in_array($slug, ['ppe', 'semi_expendable'], true)) {
+            abort(404, 'QR labels are only available for PPE and semi-expendable items.');
+        }
+
+        $officeId = \App\Support\CustodianOfficeScope::inventoryOfficeId();
+        $labelRows = $labels->labelsForItem($item, $officeId);
+
+        if ($labelRows->isEmpty()) {
+            abort(404, 'No inventory units for this item. Set starting stock or receive an acquisition first.');
+        }
+
+        $pdf = Pdf::loadView('reports.qr-labels', [
+            'title' => 'Unit QR labels — '.$item->name,
+            'labels' => $labelRows,
+        ])->setPaper('a4', 'portrait');
+
+        return $pdf->download(OwwaExportFilename::qrLabel('Item', (string) ($item->item_code ?? $item->id)));
     }
 
     protected function authorizeSupplyCustodian(): void

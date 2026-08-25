@@ -10,6 +10,7 @@ use App\Models\Item;
 use App\Models\Office;
 use App\Models\PhysicalCountLine;
 use App\Models\PhysicalCountSession;
+use App\Models\StockOpeningBalance;
 use App\Models\Transfer;
 use App\Support\AnnexA1BlockLayout;
 use App\Support\AnnexA4Layout;
@@ -247,7 +248,12 @@ class OwwaItemReportService
             });
 
         foreach ($itemIds as $itemId) {
-            $rowsByItem[$itemId] = $this->finalizeTransactionHistoryRows($rowsByItem[$itemId], $newestFirst);
+            $rowsByItem[$itemId] = $this->finalizeTransactionHistoryRows(
+                $rowsByItem[$itemId],
+                $newestFirst,
+                (int) $itemId,
+                $unitCost,
+            );
         }
 
         return $rowsByItem;
@@ -257,26 +263,62 @@ class OwwaItemReportService
      * @param  array<int, array<string, mixed>>  $rows
      * @return array<int, array<string, mixed>>
      */
-    protected function finalizeTransactionHistoryRows(array $rows, bool $newestFirst): array
-    {
-        usort($rows, fn (array $a, array $b): int => ($a['sort_date'] ?? '') <=> ($b['sort_date'] ?? ''));
-
-        $balance = 0;
-        foreach ($rows as $index => $txn) {
-            if ($txn['receipt_qty']) {
-                $balance += (int) $txn['receipt_qty'];
-            }
-            if ($txn['issue_qty']) {
-                $balance -= (int) $txn['issue_qty'];
-            }
-            $rows[$index]['balance'] = max(0, $balance);
+    protected function finalizeTransactionHistoryRows(
+        array $rows,
+        bool $newestFirst,
+        int $itemId,
+        ?float $unitCost = null,
+    ): array {
+        $grouped = [];
+        foreach ($rows as $row) {
+            $officeId = (int) ($row['office_id'] ?? 0);
+            $grouped[$officeId][] = $row;
         }
+
+        $finalized = [];
+        foreach ($grouped as $officeId => $officeRows) {
+            usort($officeRows, fn (array $a, array $b): int => ($a['sort_date'] ?? '') <=> ($b['sort_date'] ?? ''));
+
+            $balance = $this->openingQuantityForLedger($itemId, $officeId, $unitCost);
+
+            foreach ($officeRows as $index => $txn) {
+                if ($txn['receipt_qty']) {
+                    $balance += (int) $txn['receipt_qty'];
+                }
+                if ($txn['issue_qty']) {
+                    $balance -= (int) $txn['issue_qty'];
+                }
+                $officeRows[$index]['balance'] = max(0, $balance);
+            }
+
+            foreach ($officeRows as $row) {
+                $finalized[] = $row;
+            }
+        }
+
+        usort($finalized, fn (array $a, array $b): int => ($a['sort_date'] ?? '') <=> ($b['sort_date'] ?? ''));
 
         if ($newestFirst) {
-            return array_reverse($rows);
+            return array_reverse($finalized);
         }
 
-        return $rows;
+        return $finalized;
+    }
+
+    protected function openingQuantityForLedger(int $itemId, int $officeId, ?float $unitCost): int
+    {
+        if ($officeId <= 0) {
+            return 0;
+        }
+
+        if ($unitCost !== null) {
+            return StockOpeningBalance::quantityForPosition($itemId, $officeId, $unitCost);
+        }
+
+        return (int) StockOpeningBalance::query()
+            ->where('item_id', $itemId)
+            ->where('office_id', $officeId)
+            ->sum('quantity');
     }
 
     /**

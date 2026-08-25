@@ -7,8 +7,12 @@ use App\Filament\Concerns\SyncsActiveItemCategory;
 use App\Filament\Pages\InventoryCategoryDashboard;
 use App\Filament\Resources\Items\Actions\ItemBulkCreateAction;
 use App\Filament\Resources\Items\ItemResource;
+use App\Filament\Resources\Items\Support\ItemOpeningStockFields;
 use App\Filament\Support\OwwaFormModalDefaults;
+use App\Models\Item;
 use App\Models\ItemCategory;
+use App\Models\User;
+use Filament\Actions\Action;
 use Filament\Resources\Pages\ListRecords;
 use Filament\Schemas\Components\Actions;
 use Filament\Schemas\Components\EmbeddedTable;
@@ -94,24 +98,58 @@ class ListItems extends ListRecords
 
     public function content(Schema $schema): Schema
     {
+        $openingStock = [
+            'office_id' => null,
+            'quantity' => null,
+            'unit_cost' => null,
+        ];
+
+        $createAction = OwwaFormModalDefaults::createActionForResource(ItemResource::class, OwwaFormModalDefaults::WIDTH_COMPACT)
+            ->fillForm(fn (): array => [
+                'item_category_id' => $this->activeItemCategoryId() ?: null,
+            ])
+            ->modalHeading('Item')
+            ->modalSubmitAction(false)
+            ->extraModalFooterActions(function (Action $action): array {
+                $footer = [
+                    ItemOpeningStockFields::confirmingSubmitAction($action, 'Create'),
+                ];
+
+                if ($action instanceof \Filament\Actions\CreateAction && $action->canCreateAnother()) {
+                    $footer[] = ItemOpeningStockFields::applyCreateConfirmation(
+                        $action->getCreateAnotherAction(),
+                        'Create this item and add another?',
+                    );
+                }
+
+                return $footer;
+            })
+            ->mutateDataUsing(function (array $data) use (&$openingStock): array {
+                $categoryId = $this->activeItemCategoryId();
+                if ($categoryId > 0) {
+                    $data['item_category_id'] = $categoryId;
+                }
+
+                $openingStock = ItemOpeningStockFields::extract($data);
+
+                return $data;
+            })
+            ->after(function (Item $record) use (&$openingStock): void {
+                $user = auth()->user();
+                ItemOpeningStockFields::applyIfPresent(
+                    $record,
+                    $openingStock,
+                    $user instanceof User ? $user : null,
+                );
+            });
+
         return $schema
             ->components([
                 Flex::make([
                     $this->getTabsContentComponent(),
                     Actions::make([
                         ItemBulkCreateAction::make(),
-                        OwwaFormModalDefaults::createActionForResource(ItemResource::class, OwwaFormModalDefaults::WIDTH_COMPACT)
-                            ->fillForm(fn (): array => [
-                                'item_category_id' => $this->activeItemCategoryId() ?: null,
-                            ])
-                            ->mutateDataUsing(function (array $data): array {
-                                $categoryId = $this->activeItemCategoryId();
-                                if ($categoryId > 0) {
-                                    $data['item_category_id'] = $categoryId;
-                                }
-
-                                return $data;
-                            }),
+                        $createAction,
                     ])->alignEnd(),
                 ])->alignBetween()->verticallyAlignCenter(),
                 RenderHook::make(PanelsRenderHook::RESOURCE_PAGES_LIST_RECORDS_TABLE_BEFORE),

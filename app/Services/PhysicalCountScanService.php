@@ -58,6 +58,7 @@ class PhysicalCountScanService
 
         $payload = InventoryUnitQrPayload::resolve($rawCode);
         $propertyNumber = $payload?->propertyNumber ?? $this->normalizePropertyNumber($rawCode);
+        $inventoryUnitId = $payload?->inventoryUnitId;
 
         if ($propertyNumber === '') {
             return $this->recordEvent(
@@ -78,7 +79,32 @@ class PhysicalCountScanService
                 null,
                 $userId,
                 "Property {$propertyNumber} belongs to a different office.",
+                $inventoryUnitId,
             );
+        }
+
+        $resolvedUnit = null;
+        if ($inventoryUnitId !== null) {
+            $resolvedUnit = InventoryUnit::query()
+                ->with(['item.category'])
+                ->whereKey($inventoryUnitId)
+                ->first();
+
+            if ($resolvedUnit !== null && $this->wasUnitAlreadyScanned($session, $resolvedUnit->id)) {
+                $line = $session->lines()
+                    ->where('property_number', $resolvedUnit->property_number)
+                    ->first();
+
+                return $this->recordEvent(
+                    $session,
+                    (string) $resolvedUnit->property_number,
+                    PhysicalCountScanOutcome::Duplicate,
+                    $line,
+                    $userId,
+                    'Already scanned.',
+                    $resolvedUnit->id,
+                );
+            }
         }
 
         $line = $session->lines()
@@ -94,6 +120,7 @@ class PhysicalCountScanService
                     $line,
                     $userId,
                     'Already scanned.',
+                    $inventoryUnitId,
                 );
             }
 
@@ -106,10 +133,11 @@ class PhysicalCountScanService
                 $line->fresh(),
                 $userId,
                 "Found: {$line->article} ({$propertyNumber}).",
+                $inventoryUnitId ?? $resolvedUnit?->id,
             );
         }
 
-        $unit = InventoryUnit::query()
+        $unit = $resolvedUnit ?? InventoryUnit::query()
             ->with(['item.category'])
             ->where('property_number', $propertyNumber)
             ->first();
@@ -125,6 +153,7 @@ class PhysicalCountScanService
                     $foundLine,
                     $userId,
                     "Found: {$foundLine->article} ({$propertyNumber}).",
+                    $unit->id,
                 );
             }
 
@@ -137,6 +166,7 @@ class PhysicalCountScanService
                 $overageLine,
                 $userId,
                 "Overage: {$overageLine->article} ({$propertyNumber}) — not on expected list.",
+                $unit->id,
             );
         }
 
@@ -382,6 +412,18 @@ class PhysicalCountScanService
         });
     }
 
+    protected function wasUnitAlreadyScanned(PhysicalCountSession $session, int $inventoryUnitId): bool
+    {
+        return PhysicalCountScanEvent::query()
+            ->where('physical_count_session_id', $session->id)
+            ->where('inventory_unit_id', $inventoryUnitId)
+            ->whereIn('result', [
+                PhysicalCountScanOutcome::Found->value,
+                PhysicalCountScanOutcome::Overage->value,
+            ])
+            ->exists();
+    }
+
     protected function recordEvent(
         PhysicalCountSession $session,
         string $propertyNumber,
@@ -389,12 +431,14 @@ class PhysicalCountScanService
         ?PhysicalCountLine $line,
         ?int $userId,
         ?string $message,
+        ?int $inventoryUnitId = null,
     ): PhysicalCountScanResult {
         PhysicalCountScanEvent::query()->create([
             'physical_count_session_id' => $session->id,
             'property_number' => $propertyNumber,
             'result' => $outcome->value,
             'physical_count_line_id' => $line?->id,
+            'inventory_unit_id' => $inventoryUnitId,
             'scanned_by' => $userId ?? auth()->id(),
             'scanned_at' => now(),
         ]);

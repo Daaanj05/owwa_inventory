@@ -38,23 +38,53 @@ class AcquisitionUnitService
             return $acquisition->inventoryUnits()->orderBy('id')->get()->all();
         }
 
+        $item = $acquisition->item;
+        if ($item === null) {
+            return [];
+        }
+
+        $created = $this->mintUnitsForItem(
+            item: $item,
+            officeId: (int) $acquisition->office_id,
+            quantity: $quantity - $existing,
+            unitCost: $acquisition->unit_cost !== null ? (float) $acquisition->unit_cost : null,
+            acquisitionId: $acquisition->id,
+        );
+
+        return $acquisition->inventoryUnits()->orderBy('id')->get()->all() ?: $created;
+    }
+
+    /**
+     * Mint inventory units with a shared catalog property number.
+     *
+     * @return array<int, InventoryUnit>
+     */
+    public function mintUnitsForItem(
+        Item $item,
+        int $officeId,
+        int $quantity,
+        ?float $unitCost,
+        ?int $acquisitionId = null,
+    ): array {
+        $item->loadMissing(['category', 'uacsObjectCode']);
+
+        $slug = $item->category?->getTemplateSlug();
+        if (! in_array($slug, ['ppe', 'semi_expendable'], true) || $quantity < 1) {
+            return [];
+        }
+
         $units = [];
 
-        DB::transaction(function () use ($acquisition, $slug, $quantity, $existing, &$units): void {
-            $item = $acquisition->item;
-            if ($item === null) {
-                return;
-            }
+        DB::transaction(function () use ($item, $officeId, $quantity, $unitCost, $acquisitionId, $slug, &$units): void {
+            $propertyNumber = $this->resolveCatalogPropertyNumberForItem($item, $slug, $unitCost);
 
-            $propertyNumber = $this->resolveCatalogPropertyNumber($acquisition, $item, $slug);
-
-            for ($i = $existing; $i < $quantity; $i++) {
+            for ($i = 0; $i < $quantity; $i++) {
                 $units[] = InventoryUnit::query()->create([
                     'property_number' => $propertyNumber,
-                    'acquisition_id' => $acquisition->id,
+                    'acquisition_id' => $acquisitionId,
                     'item_id' => $item->id,
-                    'office_id' => $acquisition->office_id,
-                    'unit_cost' => $acquisition->unit_cost,
+                    'office_id' => $officeId,
+                    'unit_cost' => $unitCost,
                     'status' => InventoryUnit::STATUS_IN_STOCK,
                     'article' => $item->name,
                     'description' => $item->description,
@@ -67,10 +97,9 @@ class AcquisitionUnitService
         return $units;
     }
 
-    protected function resolveCatalogPropertyNumber(Acquisition $acquisition, Item $item, string $slug): string
+    protected function resolveCatalogPropertyNumberForItem(Item $item, string $slug, ?float $unitCost): string
     {
         if ($slug === 'semi_expendable') {
-            $unitCost = $acquisition->unit_cost !== null ? (float) $acquisition->unit_cost : null;
             $number = $this->catalogNumbers->finalizeSemiWithUnitCost($item, $unitCost);
             $this->semiBuilder->persistBucketPropertyNumber($item, $unitCost, $number);
 

@@ -37,6 +37,7 @@ class ItemSubItemNameTest extends TestCase
                 'sub_item' => 'A4',
                 'unit' => 'ream',
                 'reorder_level' => 10,
+                'inventory_type' => 'office_supplies',
             ])
             ->call('create')
             ->assertHasNoFormErrors()
@@ -70,6 +71,7 @@ class ItemSubItemNameTest extends TestCase
                 'sub_item' => null,
                 'unit' => 'piece',
                 'reorder_level' => 5,
+                'inventory_type' => 'office_supplies',
             ])
             ->call('create')
             ->assertHasNoFormErrors()
@@ -111,6 +113,7 @@ class ItemSubItemNameTest extends TestCase
                 'sub_item' => 'Long',
                 'unit' => 'ream',
                 'reorder_level' => 10,
+                'inventory_type' => 'office_supplies',
             ])
             ->call('create')
             ->assertHasNoFormErrors()

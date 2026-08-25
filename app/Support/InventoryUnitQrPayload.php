@@ -13,6 +13,7 @@ class InventoryUnitQrPayload
         public ?int $itemId = null,
         public ?int $officeId = null,
         public ?string $stockNumber = null,
+        public ?int $inventoryUnitId = null,
     ) {}
 
     public static function encode(InventoryUnit $unit): string
@@ -34,6 +35,10 @@ class InventoryUnitQrPayload
             'office' => (string) $unit->office_id,
         ];
 
+        if (filled($unit->id)) {
+            $parts['uid'] = (string) $unit->id;
+        }
+
         $stockNumber = $unit->stock_number ?? $unit->item?->item_code;
         if (filled($stockNumber)) {
             $parts['sn'] = (string) $stockNumber;
@@ -49,9 +54,17 @@ class InventoryUnitQrPayload
 
     public static function publicUrl(InventoryUnit|string $unitOrPropertyNumber): string
     {
-        $propertyNumber = $unitOrPropertyNumber instanceof InventoryUnit
-            ? (string) $unitOrPropertyNumber->property_number
-            : trim($unitOrPropertyNumber);
+        if ($unitOrPropertyNumber instanceof InventoryUnit) {
+            if (filled($unitOrPropertyNumber->id)) {
+                return route('inventory.assets.unit.show', ['inventoryUnit' => $unitOrPropertyNumber->id]);
+            }
+
+            return route('inventory.assets.show', [
+                'propertyNumber' => (string) $unitOrPropertyNumber->property_number,
+            ]);
+        }
+
+        $propertyNumber = trim($unitOrPropertyNumber);
 
         return route('inventory.assets.show', ['propertyNumber' => $propertyNumber]);
     }
@@ -92,6 +105,7 @@ class InventoryUnitQrPayload
             itemId: isset($data['item']) ? (int) $data['item'] : null,
             officeId: isset($data['office']) ? (int) $data['office'] : null,
             stockNumber: isset($data['sn']) ? (string) $data['sn'] : null,
+            inventoryUnitId: isset($data['uid']) ? (int) $data['uid'] : null,
         );
     }
 
@@ -103,6 +117,22 @@ class InventoryUnitQrPayload
             return null;
         }
 
+        if (preg_match('~/assets/u/(\d+)~', $raw, $unitMatches) === 1) {
+            $unitId = (int) $unitMatches[1];
+            $unit = InventoryUnit::query()->find($unitId);
+            if ($unit === null || blank($unit->property_number)) {
+                return null;
+            }
+
+            return new self(
+                propertyNumber: (string) $unit->property_number,
+                itemId: (int) $unit->item_id,
+                officeId: (int) $unit->office_id,
+                stockNumber: $unit->stock_number,
+                inventoryUnitId: $unit->id,
+            );
+        }
+
         if (! str_contains($raw, '/assets/')) {
             return null;
         }
@@ -112,7 +142,7 @@ class InventoryUnitQrPayload
         }
 
         $propertyNumber = rawurldecode($matches[1]);
-        if ($propertyNumber === '') {
+        if ($propertyNumber === '' || str_starts_with($propertyNumber, 'u/')) {
             return null;
         }
 

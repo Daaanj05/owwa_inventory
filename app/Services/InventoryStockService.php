@@ -16,6 +16,7 @@ class InventoryStockService
      * Request-scoped movement totals so repeated getStock() calls reuse one aggregation pass.
      *
      * @var array{
+     *   opening: array<string, int>,
      *   acq: array<string, int>,
      *   inTransfers: array<string, int>,
      *   issuances: array<string, int>,
@@ -177,6 +178,7 @@ class InventoryStockService
             }
         };
 
+        $addKeys(DB::table('stock_opening_balances')->select('item_id', 'office_id', 'unit_cost')->distinct()->get(), 'office_id');
         $addKeys(DB::table('acquisitions')->whereNull('deleted_at')->select('item_id', 'office_id', 'unit_cost')->distinct()->get(), 'office_id');
         $addKeys(DB::table('issuances')->whereNull('deleted_at')->select('item_id', 'office_id', 'unit_cost')->distinct()->get(), 'office_id');
         $addKeys(
@@ -543,6 +545,7 @@ class InventoryStockService
 
     /**
      * @return array{
+     *   opening: array<string, int>,
      *   acq: array<string, int>,
      *   inTransfers: array<string, int>,
      *   issuances: array<string, int>,
@@ -553,12 +556,39 @@ class InventoryStockService
     protected function getMovementTotalsMaps(): array
     {
         return self::$movementTotalsMaps ??= [
+            'opening' => $this->buildOpeningBalanceMap(),
             'acq' => $this->buildMovementMap('acquisitions', 'office_id', 'unit_cost'),
             'inTransfers' => $this->buildMovementMap('transfers', 'to_office_id', 'unit_cost'),
             'issuances' => $this->buildMovementMap('issuances', 'office_id', 'unit_cost'),
             'outTransfers' => $this->buildMovementMap('transfers', 'from_office_id', 'unit_cost'),
             'disposals' => $this->buildConfirmedDisposalMovementMap(),
         ];
+    }
+
+    /**
+     * @return array<string, int>
+     */
+    protected function buildOpeningBalanceMap(): array
+    {
+        return DB::table('stock_opening_balances')
+            ->select(
+                'item_id',
+                'office_id',
+                DB::raw('COALESCE(unit_cost, 0) as unit_cost'),
+                DB::raw('SUM(quantity) as total'),
+            )
+            ->groupBy('item_id', 'office_id', DB::raw('COALESCE(unit_cost, 0)'))
+            ->get()
+            ->mapWithKeys(function ($row): array {
+                $key = UnitCostKey::positionKey(
+                    (int) $row->item_id,
+                    (int) $row->office_id,
+                    (float) $row->unit_cost,
+                );
+
+                return [$key => (int) $row->total];
+            })
+            ->all();
     }
 
     protected function buildMovementMap(string $table, string $officeColumn, string $costColumn): array
@@ -617,18 +647,19 @@ class InventoryStockService
     }
 
     /**
-     * @param  array{acq: array<string, int>, inTransfers: array<string, int>, issuances: array<string, int>, outTransfers: array<string, int>, disposals: array<string, int>}  $maps
+     * @param  array{opening: array<string, int>, acq: array<string, int>, inTransfers: array<string, int>, issuances: array<string, int>, outTransfers: array<string, int>, disposals: array<string, int>}  $maps
      */
     protected function calculateStockFromMaps(string $key, array $maps): int
     {
-        $stock = ($maps['acq'][$key] ?? 0) + ($maps['inTransfers'][$key] ?? 0)
+        $stock = ($maps['opening'][$key] ?? 0)
+            + ($maps['acq'][$key] ?? 0) + ($maps['inTransfers'][$key] ?? 0)
             - ($maps['issuances'][$key] ?? 0) - ($maps['outTransfers'][$key] ?? 0) - ($maps['disposals'][$key] ?? 0);
 
         return max(0, $stock);
     }
 
     /**
-     * @param  array{acq: array<string, int>, inTransfers: array<string, int>, issuances: array<string, int>, outTransfers: array<string, int>, disposals: array<string, int>}  $maps
+     * @param  array{opening: array<string, int>, acq: array<string, int>, inTransfers: array<string, int>, issuances: array<string, int>, outTransfers: array<string, int>, disposals: array<string, int>}  $maps
      * @return array<int, string>
      */
     protected function positionKeysFromMaps(array $maps): array

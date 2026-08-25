@@ -24,6 +24,7 @@ class InventoryUnitPublicLookupService
         $unit = InventoryUnit::query()
             ->with(['item.category', 'office', 'acquisition', 'issuance.department', 'issuance.issuedTo'])
             ->where('property_number', $propertyNumber)
+            ->orderBy('id')
             ->first();
 
         if ($unit !== null) {
@@ -40,6 +41,17 @@ class InventoryUnitPublicLookupService
         }
 
         return null;
+    }
+
+    public function findByUnit(InventoryUnit $unit): ?PublicAssetCardData
+    {
+        if (! config('inventory.qr_public_lookup', true)) {
+            return null;
+        }
+
+        $unit->loadMissing(['item.category', 'office', 'acquisition', 'issuance.department', 'issuance.issuedTo']);
+
+        return $this->fromInventoryUnit($unit);
     }
 
     protected function fromInventoryUnit(InventoryUnit $unit): PublicAssetCardData

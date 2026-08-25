@@ -6,7 +6,7 @@ use App\Models\Acquisition;
 use App\Models\AcquisitionPaperwork;
 use App\Models\InventoryUnit;
 use App\Models\Issuance;
-use App\Models\PhysicalCountLine;
+use App\Models\Item;
 use App\Models\PhysicalCountSession;
 use App\Support\InventoryUnitQrPayload;
 use App\Support\OwwaReferenceLabels;
@@ -161,31 +161,69 @@ class InventoryQrLabelService
     /**
      * @return Collection<int, array<string, string|null>>
      */
+    public function labelsForItem(Item $item, ?int $officeId = null): Collection
+    {
+        $item->loadMissing(['category']);
+
+        $slug = $item->category?->getTemplateSlug();
+        if (! in_array($slug, ['ppe', 'semi_expendable'], true)) {
+            return collect();
+        }
+
+        $units = InventoryUnit::query()
+            ->with(['item.category', 'office', 'acquisition', 'issuance.issuedTo', 'issuance.department'])
+            ->where('item_id', $item->id)
+            ->when($officeId !== null, fn ($q) => $q->where('office_id', $officeId))
+            ->orderBy('id')
+            ->get();
+
+        return $units
+            ->map(fn (InventoryUnit $unit) => $this->labelRowFromUnit(
+                $unit,
+                $unit->office?->name ?? '',
+            ))
+            ->values();
+    }
+
+    /**
+     * @return Collection<int, array<string, string|null>>
+     */
     public function labelsForSession(PhysicalCountSession $session): Collection
     {
         $session->loadMissing(['office', 'lines.item.category']);
 
-        return $session->lines
-            ->filter(fn (PhysicalCountLine $line): bool => filled($line->property_number))
-            ->map(function (PhysicalCountLine $line) use ($session): array {
-                $unit = InventoryUnit::query()
-                    ->with(['item.category', 'acquisition', 'issuance.issuedTo', 'issuance.department'])
-                    ->where('property_number', $line->property_number)
-                    ->first();
+        $labels = collect();
 
-                if ($unit !== null) {
-                    return $this->labelRowFromUnit($unit, $session->office?->name ?? '');
+        foreach ($session->lines as $line) {
+            if (blank($line->property_number)) {
+                continue;
+            }
+
+            $units = InventoryUnit::query()
+                ->with(['item.category', 'acquisition', 'issuance.issuedTo', 'issuance.department'])
+                ->where('property_number', $line->property_number)
+                ->when($session->office_id, fn ($q) => $q->where('office_id', $session->office_id))
+                ->orderBy('id')
+                ->get();
+
+            if ($units->isNotEmpty()) {
+                foreach ($units as $unit) {
+                    $labels->push($this->labelRowFromUnit($unit, $session->office?->name ?? ''));
                 }
 
-                return $this->labelRow(
-                    propertyNumber: (string) $line->property_number,
-                    itemName: $line->article ?? $line->item?->name ?? 'Item',
-                    officeName: $session->office?->name ?? '',
-                    categorySlug: $line->item?->category?->getTemplateSlug(),
-                    description: $line->item?->description,
-                );
-            })
-            ->values();
+                continue;
+            }
+
+            $labels->push($this->labelRow(
+                propertyNumber: (string) $line->property_number,
+                itemName: $line->article ?? $line->item?->name ?? 'Item',
+                officeName: $session->office?->name ?? '',
+                categorySlug: $line->item?->category?->getTemplateSlug(),
+                description: $line->item?->description,
+            ));
+        }
+
+        return $labels->values();
     }
 
     /**

@@ -4,10 +4,12 @@ namespace App\Filament\Resources\Items\Schemas;
 
 use App\Filament\Concerns\SyncsActiveItemCategory;
 use App\Filament\Forms\Components\StyledDatalistInput;
+use App\Filament\Resources\Items\Support\ItemOpeningStockFields;
 use App\Models\Item;
 use App\Models\ItemCategory;
 use App\Services\ReferenceCodeService;
 use App\Support\ConsumableInventoryType;
+use App\Support\ItemMeasurementUnitInput;
 use App\Support\ItemPropertyClass;
 use App\Support\PpePropertyType;
 use App\Support\SemiExpendableUsefulLife;
@@ -51,32 +53,36 @@ class ItemForm
                             ->default(fn (): ?int => self::activeCategoryId())
                             ->disabled(fn (): bool => self::isCategoryScoped())
                             ->dehydrated(true)
-                            ->visible(fn (string $operation): bool => $operation !== 'create' || ! self::isCategoryScoped()),
+                            ->visible(fn (string $operation): bool => $operation !== 'create' || ! self::isCategoryScoped())
+                            ->columnSpanFull(),
+
                         StyledDatalistInput::make('base_name')
                             ->label('Base item')
                             ->required()
                             ->maxLength(255)
                             ->suggestions(fn (Get $get): array => array_values(self::baseItemOptions($get('item_category_id'))))
                             ->live(onBlur: true)
-                            ->helperText('Type to filter existing base items, or enter a new one. Saved with the item on create.'),
+                            ->helperText('Type to filter existing base items, or enter a new one.'),
                         TextInput::make('sub_item')
                             ->label('Sub-item')
                             ->maxLength(255)
                             ->live(onBlur: true)
-                            ->helperText('Optional variant (e.g. A4, Long, Blue). Each sub-item is a separate catalog row with its own stock/property number.'),
+                            ->helperText('Optional variant (e.g. A4, Long, Blue).'),
                         Placeholder::make('name_preview')
                             ->label('Item name')
                             ->content(fn (Get $get): string => Item::mergeDisplayName(
                                 $get('base_name'),
                                 $get('sub_item'),
                             ) ?: '—')
-                            ->helperText('Saved as the catalog name used on forms and reports.'),
+                            ->helperText('Saved as the catalog name used on forms and reports.')
+                            ->columnSpanFull(),
                         Hidden::make('name')
                             ->dehydrated(true)
                             ->dehydrateStateUsing(fn (Get $get): string => Item::mergeDisplayName(
                                 $get('base_name'),
                                 $get('sub_item'),
                             )),
+
                         Toggle::make('override_item_code')
                             ->label('Edit stock number manually')
                             ->default(false)
@@ -84,7 +90,8 @@ class ItemForm
                             ->dehydrated(false)
                             ->visible(fn (string $operation, Get $get): bool => $operation !== 'create'
                                 && self::isConsumablesCategory($get('item_category_id'))
-                                && (Filament::auth()->user()?->canOverrideGeneratedCodes() ?? false)),
+                                && (Filament::auth()->user()?->canOverrideGeneratedCodes() ?? false))
+                            ->columnSpanFull(),
                         TextInput::make('item_code')
                             ->label('Stock number / item code')
                             ->maxLength(100)
@@ -95,24 +102,22 @@ class ItemForm
                             ->visible(fn (string $operation, Get $get): bool => self::isConsumablesCategory($get('item_category_id'))
                                 && ($operation !== 'create' || ! config('inventory.auto_generate_item_codes', true)))
                             ->helperText(fn (string $operation, Get $get): string => self::itemCodeHelperText($operation, $get)),
-                        TextInput::make('unit')
-                            ->label('Measurement unit')
-                            ->required()
-                            ->default('piece')
-                            ->maxLength(50)
-                            ->datalist(fn (): array => Item::query()
-                                ->whereNotNull('unit')
-                                ->where('unit', '!=', '')
-                                ->distinct()
-                                ->orderBy('unit')
-                                ->limit(50)
-                                ->pluck('unit')
-                                ->merge(['piece', 'ream', 'box'])
-                                ->unique()
-                                ->filter()
-                                ->values()
-                                ->all())
-                            ->helperText('How quantity is counted (e.g. piece, ream, box).'),
+                        TextInput::make('semi_expendable_property_number')
+                            ->label('Inventory item no.')
+                            ->disabled()
+                            ->dehydrated(false)
+                            ->placeholder('Assigned automatically on save')
+                            ->helperText('Catalog Inventory item no. (TEMP-… until first acquisition cost finalizes SPLV/SPHV).')
+                            ->visible(fn (string $operation, Get $get): bool => $operation !== 'create'
+                                && self::isSemiExpendableCategory($get('item_category_id'))),
+                        TextInput::make('ppe_property_number')
+                            ->label('Property No.')
+                            ->disabled()
+                            ->dehydrated(false)
+                            ->placeholder('Assigned automatically on save')
+                            ->helperText('One Property No. per catalog PPE item.')
+                            ->visible(fn (string $operation, Get $get): bool => $operation !== 'create'
+                                && self::isPpeCategory($get('item_category_id'))),
                         TextInput::make('value_type_display')
                             ->label('Value category (COA)')
                             ->disabled()
@@ -120,20 +125,37 @@ class ItemForm
                             ->visible(fn (string $operation, Get $get): bool => $operation !== 'create'
                                 && self::isSemiExpendableCategory($get('item_category_id')))
                             ->formatStateUsing(fn ($state, $record): string => $record
-                                ? \App\Support\SemiExpendableValueCategory::labelForValueType($record->value_type)
+                                ? SemiExpendableValueCategory::labelForValueType($record->value_type)
                                 : 'Set automatically from acquisition unit cost ('.SemiExpendableValueCategory::tierRuleSummary().')')
-                            ->helperText('Low-valued (SPLV) or high-valued (SPHV) per COA Circular 2022-004 — '.SemiExpendableValueCategory::tierRuleSummary().'. Not entered manually.'),
+                            ->helperText('Low-valued (SPLV) or high-valued (SPHV) per COA Circular 2022-004. Not entered manually.'),
+
+                        ItemMeasurementUnitInput::configure(
+                            TextInput::make('unit')
+                                ->label('Measurement unit')
+                                ->required()
+                                ->default('piece')
+                                ->maxLength(50)
+                                ->datalist(fn (): array => Item::query()
+                                    ->whereNotNull('unit')
+                                    ->where('unit', '!=', '')
+                                    ->distinct()
+                                    ->orderBy('unit')
+                                    ->limit(50)
+                                    ->pluck('unit')
+                                    ->merge(['piece', 'ream', 'box'])
+                                    ->unique()
+                                    ->filter(fn (string $unit): bool => ItemMeasurementUnitInput::isValid($unit))
+                                    ->values()
+                                    ->all())
+                                ->helperText('Letters only — how quantity is counted (e.g. piece, ream, box).'),
+                        ),
                         TextInput::make('reorder_level')
                             ->label('Reorder point')
                             ->required()
                             ->numeric()
                             ->default(0)
                             ->minValue(0),
-                        TextInput::make('days_to_consume')
-                            ->label('Days to consume')
-                            ->numeric()
-                            ->minValue(0)
-                            ->visible(fn (Get $get): bool => self::isConsumablesCategory($get('item_category_id'))),
+
                         Select::make('inventory_type')
                             ->label('Inventory type')
                             ->options(ConsumableInventoryType::options())
@@ -141,6 +163,12 @@ class ItemForm
                             ->searchable()
                             ->visible(fn (Get $get): bool => self::isConsumablesCategory($get('item_category_id')))
                             ->dehydrated(fn (Get $get): bool => self::isConsumablesCategory($get('item_category_id'))),
+                        TextInput::make('days_to_consume')
+                            ->label('Days to consume')
+                            ->numeric()
+                            ->minValue(0)
+                            ->visible(fn (Get $get): bool => self::isConsumablesCategory($get('item_category_id'))),
+
                         Select::make('property_class')
                             ->label('Property class')
                             ->options(ItemPropertyClass::options())
@@ -187,30 +215,15 @@ class ItemForm
                                 : 'CODE NUMBER segment (GL / UACS). Maintained under System Admin → UACS object codes.')
                             ->visible(fn (Get $get): bool => self::isSemiExpendableCategory($get('item_category_id'))
                                 || self::isPpeCategory($get('item_category_id'))),
-                        TextInput::make('semi_expendable_property_number')
-                            ->label('Inventory item no.')
-                            ->disabled()
-                            ->dehydrated(false)
-                            ->placeholder('Assigned automatically on save')
-                            ->helperText('Catalog Inventory item no. (TEMP-… until first acquisition cost finalizes SPLV/SPHV).')
-                            ->visible(fn (string $operation, Get $get): bool => $operation !== 'create'
-                                && self::isSemiExpendableCategory($get('item_category_id'))),
-                        TextInput::make('ppe_property_number')
-                            ->label('Property No.')
-                            ->disabled()
-                            ->dehydrated(false)
-                            ->placeholder('Assigned automatically on save')
-                            ->helperText('One Property No. per catalog PPE item.')
-                            ->visible(fn (string $operation, Get $get): bool => $operation !== 'create'
-                                && self::isPpeCategory($get('item_category_id'))),
                         TextInput::make('estimated_useful_life')
                             ->label('Estimated useful life (months)')
                             ->placeholder('e.g. 36')
                             ->numeric()
                             ->minValue(1)
-                            ->helperText(SemiExpendableUsefulLife::labelSummary())
+                            ->helperText('Months (e.g. 36 = 3 years). Must exceed 12 months for semi-expendable eligibility.')
                             ->required(fn (Get $get): bool => self::isSemiExpendableCategory($get('item_category_id')))
                             ->visible(fn (Get $get): bool => self::isSemiExpendableCategory($get('item_category_id')))
+                            ->columnSpanFull()
                             ->dehydrateStateUsing(fn ($state): ?string => SemiExpendableUsefulLife::storeFromMonths($state))
                             ->formatStateUsing(fn ($state): ?string => SemiExpendableUsefulLife::parseToMonths($state) !== null
                                 ? (string) SemiExpendableUsefulLife::parseToMonths($state)
@@ -230,6 +243,9 @@ class ItemForm
                                     }
                                 };
                             }),
+
+                        ...ItemOpeningStockFields::createFields(),
+
                         Textarea::make('description')
                             ->columnSpanFull()
                             ->rows(2)

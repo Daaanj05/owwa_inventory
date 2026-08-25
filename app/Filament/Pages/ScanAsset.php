@@ -70,6 +70,21 @@ class ScanAsset extends Page
 
     public function resolveScan(string $code): void
     {
+        $payload = \App\Support\InventoryUnitQrPayload::resolve($code);
+        $lookup = app(InventoryUnitPublicLookupService::class);
+
+        if ($payload?->inventoryUnitId !== null) {
+            $unit = \App\Models\InventoryUnit::query()->find($payload->inventoryUnitId);
+            if ($unit !== null && $lookup->findByUnit($unit) !== null) {
+                $this->redirect(
+                    route('inventory.assets.unit.show', ['inventoryUnit' => $unit->id]),
+                    navigate: false,
+                );
+
+                return;
+            }
+        }
+
         $propertyNumber = app(PhysicalCountScanService::class)->normalizePropertyNumber($code);
 
         if (blank($propertyNumber)) {
@@ -82,7 +97,7 @@ class ScanAsset extends Page
             return;
         }
 
-        $asset = app(InventoryUnitPublicLookupService::class)->findByPropertyNumber($propertyNumber);
+        $asset = $lookup->findByPropertyNumber($propertyNumber);
 
         if ($asset === null) {
             Notification::make()

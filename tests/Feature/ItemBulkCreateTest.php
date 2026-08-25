@@ -28,7 +28,7 @@ class ItemBulkCreateTest extends TestCase
 
     public function test_supply_custodian_can_bulk_create_consumable_items(): void
     {
-        $office = Office::factory()->create();
+        $office = Office::factory()->create(['is_regional_supply' => true]);
         $category = ItemCategory::factory()->create(['name' => 'Consumables']);
         $user = User::factory()->create([
             'role' => User::ROLE_SUPPLY_CUSTODIAN,
@@ -50,12 +50,16 @@ class ItemBulkCreateTest extends TestCase
                         'unit' => 'ream',
                         'reorder_level' => 10,
                         'days_to_consume' => 30,
+                        'inventory_type' => 'office_supplies',
+                        'opening_quantity' => 100,
+                        'opening_unit_cost' => 10.5,
                     ],
                     [
                         'base_name' => 'Ballpen',
                         'sub_item' => 'Blue',
                         'unit' => 'piece',
                         'reorder_level' => 50,
+                        'inventory_type' => 'office_supplies',
                     ],
                 ],
             ])
@@ -81,6 +85,21 @@ class ItemBulkCreateTest extends TestCase
         ]);
 
         $this->assertSame(2, Item::query()->where('item_category_id', $category->id)->count());
+
+        $bondPaper = Item::query()->where('name', 'Bond Paper A4')->first();
+        $this->assertNotNull($bondPaper);
+        $this->assertDatabaseHas(\App\Models\StockOpeningBalance::class, [
+            'item_id' => $bondPaper->id,
+            'office_id' => $office->id,
+            'quantity' => 100,
+        ]);
+        $this->assertSame(100, app(\App\Services\InventoryStockService::class)->getStockForUnitCost($bondPaper->id, $office->id, 10.5));
+
+        $ballpen = Item::query()->where('name', 'Ballpen Blue')->first();
+        $this->assertNotNull($ballpen);
+        $this->assertDatabaseMissing(\App\Models\StockOpeningBalance::class, [
+            'item_id' => $ballpen->id,
+        ]);
     }
 
     public function test_bulk_create_rejects_duplicate_catalog_names(): void
@@ -114,6 +133,7 @@ class ItemBulkCreateTest extends TestCase
                         'sub_item' => 'A4',
                         'unit' => 'ream',
                         'reorder_level' => 10,
+                        'inventory_type' => 'office_supplies',
                     ],
                 ],
             ])
@@ -202,6 +222,7 @@ class ItemBulkCreateTest extends TestCase
                         'sub_item' => null,
                         'unit' => 'unit',
                         'reorder_level' => 0,
+                        'ppe_type' => \App\Support\PpePropertyType::OfficeEquipment,
                         'uacs_object_code_id' => $uacs->id,
                         'description' => 'Brand X desktop',
                     ],
@@ -212,7 +233,7 @@ class ItemBulkCreateTest extends TestCase
 
         $item = Item::query()->where('name', 'Desktop Computer')->first();
         $this->assertNotNull($item);
-        $this->assertSame(ItemPropertyClass::OfficeEquipment, $item->property_class);
+        $this->assertSame(\App\Support\PpePropertyType::OfficeEquipment, $item->ppe_type);
         $this->assertSame($uacs->id, $item->uacs_object_code_id);
         $this->assertSame('Brand X desktop', $item->description);
         $this->assertNotEmpty($item->ppe_property_number);

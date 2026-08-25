@@ -18,6 +18,11 @@ Route::get('/email/verify/{id}/{hash}', GuestEmailVerificationController::class)
     ->middleware(['signed', 'throttle:6,1'])
     ->name('verification.verify.guest');
 
+Route::get('/assets/u/{inventoryUnit}', [PublicAssetController::class, 'showUnit'])
+    ->whereNumber('inventoryUnit')
+    ->middleware('throttle:60,1')
+    ->name('inventory.assets.unit.show');
+
 Route::get('/assets/{propertyNumber}', [PublicAssetController::class, 'show'])
     ->where('propertyNumber', '.+')
     ->middleware('throttle:60,1')
@@ -89,6 +94,7 @@ Route::middleware(['auth', 'web'])->group(function () {
     });
 
     Route::get('reports/owwa/acquisition/{acquisition}/qr-labels', [InventoryQrLabelController::class, 'acquisition'])->name('owwa.qr-labels.acquisition');
+    Route::get('reports/owwa/items/{item}/qr-labels', [InventoryQrLabelController::class, 'item'])->name('owwa.qr-labels.item');
     Route::get('reports/owwa/physical-count/{physicalCountSession}/qr-labels', [InventoryQrLabelController::class, 'physicalCountSession'])->name('owwa.qr-labels.physical-count');
     Route::get('reports/owwa/issuance/{issuance}/qr-label', [InventoryQrLabelController::class, 'issuance'])->name('owwa.qr-labels.issuance');
     Route::get('reports/owwa/acquisition-paperwork/{acquisitionPaperwork}/qr-labels', [InventoryQrLabelController::class, 'acquisitionPaperwork'])->name('owwa.qr-labels.acquisition-paperwork');

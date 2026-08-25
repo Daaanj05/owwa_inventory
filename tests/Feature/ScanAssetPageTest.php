@@ -86,7 +86,7 @@ class ScanAssetPageTest extends TestCase
         Livewire::actingAs($custodian)
             ->test(ScanAsset::class)
             ->call('resolveScan', $legacyPayload)
-            ->assertRedirect(route('inventory.assets.show', ['propertyNumber' => $unit->property_number]));
+            ->assertRedirect(route('inventory.assets.unit.show', ['inventoryUnit' => $unit->id]));
     }
 
     public function test_resolve_scan_redirects_to_public_asset_page_for_url_payload(): void
@@ -104,6 +104,24 @@ class ScanAssetPageTest extends TestCase
         Livewire::actingAs($custodian)
             ->test(ScanAsset::class)
             ->call('resolveScan', $url)
+            ->assertRedirect(route('inventory.assets.unit.show', ['inventoryUnit' => $unit->id]));
+    }
+
+    public function test_resolve_scan_redirects_to_property_page_for_legacy_pn_only_payload(): void
+    {
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+
+        [$office, , , $unit] = $this->createInventoryUnit();
+        $custodian = User::factory()->create([
+            'role' => User::ROLE_SUPPLY_CUSTODIAN,
+            'office_id' => $office->id,
+        ]);
+
+        $pnOnly = 'OWWA|1|pn='.$unit->property_number;
+
+        Livewire::actingAs($custodian)
+            ->test(ScanAsset::class)
+            ->call('resolveScan', $pnOnly)
             ->assertRedirect(route('inventory.assets.show', ['propertyNumber' => $unit->property_number]));
     }
 

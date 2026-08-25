@@ -98,6 +98,30 @@ class PublicAssetLookupTest extends TestCase
         $this->assertSame('PPE-2026-0099', InventoryUnitQrPayload::parseFromUrl($encoded)?->propertyNumber);
     }
 
+    public function test_qr_encode_uses_unit_url_when_unit_has_id(): void
+    {
+        config(['inventory.qr_public_lookup' => true]);
+
+        [, , , $unit] = $this->createInventoryUnitFixtures();
+
+        $encoded = InventoryUnitQrPayload::encode($unit);
+
+        $this->assertStringContainsString('/assets/u/'.$unit->id, $encoded);
+        $parsed = InventoryUnitQrPayload::parseFromUrl($encoded);
+        $this->assertNotNull($parsed);
+        $this->assertSame($unit->property_number, $parsed->propertyNumber);
+        $this->assertSame($unit->id, $parsed->inventoryUnitId);
+    }
+
+    public function test_public_unit_asset_page_is_ok(): void
+    {
+        [, , , $unit] = $this->createInventoryUnitFixtures();
+
+        $this->get(route('inventory.assets.unit.show', ['inventoryUnit' => $unit->id]))
+            ->assertOk()
+            ->assertSee($unit->property_number);
+    }
+
     public function test_legacy_qr_payload_still_parses(): void
     {
         $unit = new InventoryUnit([
