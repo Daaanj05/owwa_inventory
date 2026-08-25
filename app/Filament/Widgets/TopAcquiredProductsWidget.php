@@ -2,7 +2,7 @@
 
 namespace App\Filament\Widgets;
 
-use App\Models\AcquisitionPaperworkLine;
+use App\Models\Acquisition;
 use Filament\Facades\Filament;
 use Filament\Widgets\Widget;
 use Illuminate\Support\Collection;
@@ -26,6 +26,9 @@ class TopAcquiredProductsWidget extends Widget
     }
 
     /**
+     * Rank by received stock (custodian receipt / IAR), using acquisition unit costs —
+     * not PR paperwork lines, which stay at ₱0 until costs are entered on the PO.
+     *
      * @return Collection<int, object{
      *     item_id: int,
      *     item_code: ?string,
@@ -38,26 +41,24 @@ class TopAcquiredProductsWidget extends Widget
      */
     public function getTopProductRows(): Collection
     {
-        return AcquisitionPaperworkLine::query()
-            ->join('acquisition_paperwork', 'acquisition_paperwork_lines.acquisition_paperwork_id', '=', 'acquisition_paperwork.id')
-            ->join('items', 'acquisition_paperwork_lines.item_id', '=', 'items.id')
+        return Acquisition::query()
+            ->join('items', 'acquisitions.item_id', '=', 'items.id')
             ->join('item_categories', 'items.item_category_id', '=', 'item_categories.id')
-            ->whereNotNull('acquisition_paperwork.received_at')
             ->whereNull('items.archived_at')
             ->groupBy(
-                'acquisition_paperwork_lines.item_id',
+                'acquisitions.item_id',
                 'items.item_code',
                 'items.name',
                 'item_categories.name',
             )
             ->select([
-                'acquisition_paperwork_lines.item_id',
+                'acquisitions.item_id',
                 'items.item_code',
                 'items.name as item_name',
                 'item_categories.name as category_name',
-                DB::raw('SUM(acquisition_paperwork_lines.quantity) as total_quantity'),
-                DB::raw('AVG(acquisition_paperwork_lines.unit_cost) as avg_unit_cost'),
-                DB::raw('SUM(acquisition_paperwork_lines.amount) as total_amount'),
+                DB::raw('SUM(acquisitions.quantity) as total_quantity'),
+                DB::raw('CASE WHEN SUM(acquisitions.quantity) > 0 THEN SUM(acquisitions.quantity * acquisitions.unit_cost) / SUM(acquisitions.quantity) ELSE 0 END as avg_unit_cost'),
+                DB::raw('SUM(acquisitions.quantity * acquisitions.unit_cost) as total_amount'),
             ])
             ->orderByDesc('total_quantity')
             ->limit(5)

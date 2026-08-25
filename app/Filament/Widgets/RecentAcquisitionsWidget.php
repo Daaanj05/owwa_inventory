@@ -34,7 +34,7 @@ class RecentAcquisitionsWidget extends Widget
     {
         return AcquisitionPaperwork::query()
             ->whereNotNull('received_at')
-            ->with(['office', 'lines'])
+            ->with(['office', 'acquisitions'])
             ->orderByDesc('received_at')
             ->limit(5)
             ->get();
@@ -55,6 +55,8 @@ class RecentAcquisitionsWidget extends Widget
 
     public function getTotalAmount(AcquisitionPaperwork $paperwork): float
     {
-        return (float) $paperwork->lines->sum('amount');
+        return (float) $paperwork->acquisitions->sum(
+            fn ($acquisition): float => (float) $acquisition->quantity * (float) $acquisition->unit_cost,
+        );
     }
 }

@@ -56,7 +56,8 @@ class DashboardAcquisitionWidgetsTest extends TestCase
             ->assertOk()
             ->assertSee('Top 5 acquired product')
             ->assertSee($item->name)
-            ->assertSee('1');
+            ->assertSee('1')
+            ->assertSee('₱500.00');
     }
 
     public function test_acquisition_dashboard_widgets_are_hidden_from_unit_consolidator(): void
