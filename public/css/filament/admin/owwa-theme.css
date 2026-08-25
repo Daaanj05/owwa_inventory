@@ -1295,26 +1295,38 @@ button[type="submit"].fi-btn:hover {
     flex: 1 1 auto;
     display: flex !important;
     flex-direction: column !important;
-    justify-content: stretch;
-    align-items: stretch;
+    justify-content: center;
+    align-items: center;
     min-height: 0;
     width: 100%;
 }
 
 .fi-page.owwa-dashboard-page .owwa-chart-pie.owwa-dashboard-chart .fi-wi-chart-canvas-ctn {
-    flex: 1 1 auto !important;
+    flex: 0 0 auto !important;
     width: 100% !important;
-    max-width: 100% !important;
-    min-height: 16rem !important;
-    height: 100% !important;
-    max-height: none !important;
-    padding: 0.35rem 0.5rem 0.5rem !important;
+    max-width: 14rem !important;
+    min-height: 9.5rem !important;
+    height: 10.5rem !important;
+    max-height: 10.5rem !important;
+    margin-inline: auto;
+    padding: 0.25rem 0.35rem 0.35rem !important;
 }
 
 .fi-page.owwa-dashboard-page .owwa-chart-pie.owwa-dashboard-chart canvas {
-    max-height: none !important;
+    max-height: 10.5rem !important;
     width: 100% !important;
     height: 100% !important;
+}
+
+.fi-page.owwa-dashboard-page .owwa-share-chart-placeholder .fi-wi-chart-canvas-ctn {
+    max-width: 11.5rem !important;
+    min-height: 8rem !important;
+    height: 8.75rem !important;
+    max-height: 8.75rem !important;
+}
+
+.fi-page.owwa-dashboard-page .owwa-share-chart-placeholder canvas {
+    max-height: 8.75rem !important;
 }
 
 .fi-page.owwa-dashboard-page .owwa-dashboard-chart.owwa-chart-compact .fi-section-header {
@@ -2744,12 +2756,17 @@ button[type="submit"].fi-btn:hover {
 
 .owwa-share-empty {
     display: flex;
+    flex: 1 1 auto;
     flex-direction: column;
-    gap: 0.75rem;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    min-height: 0;
 }
 
 .owwa-share-empty-text {
     margin: 0;
+    max-width: 18rem;
     font-size: 0.75rem;
     line-height: 1.4;
     color: #6b7280;
@@ -2758,10 +2775,14 @@ button[type="submit"].fi-btn:hover {
 
 .owwa-share-chart-placeholder {
     opacity: 0.85;
+    width: 100%;
+    display: flex;
+    justify-content: center;
 }
 
 .owwa-share-chart-placeholder .fi-wi-chart-canvas-ctn {
-    min-height: 180px;
+    min-height: 8rem;
+    max-height: 8.75rem;
 }
 
 /* Filament table empty state */
