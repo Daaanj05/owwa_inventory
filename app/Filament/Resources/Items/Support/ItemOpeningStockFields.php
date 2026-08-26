@@ -2,8 +2,10 @@
 
 namespace App\Filament\Resources\Items\Support;
 
+use App\Models\Acquisition;
 use App\Models\Item;
 use App\Models\ItemCategory;
+use App\Models\StockOpeningBalance;
 use App\Models\User;
 use App\Services\OpeningBalanceService;
 use App\Support\PpeValueCategory;
@@ -11,9 +13,12 @@ use App\Support\SemiExpendableValueCategory;
 use App\Support\SupplyOfficeResolver;
 use App\Support\WhitelistedTextInput;
 use Filament\Actions\Action;
+use Filament\Facades\Filament;
 use Filament\Forms\Components\TextInput;
+use Filament\Notifications\Notification;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
+use Filament\Support\Icons\Heroicon;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -70,6 +75,130 @@ class ItemOpeningStockFields
     public static function resolveRegionalOfficeId(): ?int
     {
         return app(SupplyOfficeResolver::class)->resolve();
+    }
+
+    /**
+     * One-time legacy backfill: no opening balance and no acquisition at the regional office.
+     */
+    public static function canSetStartingStock(Item $item, ?int $officeId = null): bool
+    {
+        if ($item->archived_at !== null) {
+            return false;
+        }
+
+        $officeId ??= self::resolveRegionalOfficeId();
+        if ($officeId === null || $officeId < 1) {
+            return false;
+        }
+
+        if (StockOpeningBalance::query()
+            ->where('item_id', $item->id)
+            ->where('office_id', $officeId)
+            ->exists()) {
+            return false;
+        }
+
+        return ! Acquisition::query()
+            ->where('item_id', $item->id)
+            ->where('office_id', $officeId)
+            ->exists();
+    }
+
+    /**
+     * Modal fields for the one-time Set starting stock action (not create-form operation-gated).
+     *
+     * @return array<int, TextInput>
+     */
+    public static function actionFormFields(Item $item): array
+    {
+        $categoryId = $item->item_category_id;
+
+        return [
+            self::configureDigitsOnlyQuantity(
+                TextInput::make(self::QUANTITY_KEY)
+                    ->label('Starting quantity')
+                    ->required()
+                    ->helperText('Assigned to the regional supply office. Cannot be changed later.'),
+            )->live(),
+            self::configureDigitsOnlyUnitCost(
+                TextInput::make(self::UNIT_COST_KEY)
+                    ->label('Starting unit cost')
+                    ->required(fn (Get $get): bool => self::requiresUnitCost($categoryId)
+                        && filled($get(self::QUANTITY_KEY)))
+                    ->visible(function (Get $get) use ($categoryId): bool {
+                        if (self::requiresUnitCost($categoryId)) {
+                            return true;
+                        }
+
+                        return self::categorySlug($categoryId) === 'consumables'
+                            && filled($get(self::QUANTITY_KEY));
+                    })
+                    ->helperText(fn (): ?string => match (self::categorySlug($categoryId)) {
+                        'ppe' => PpeValueCategory::minimumRuleSummary(),
+                        'semi_expendable' => SemiExpendableValueCategory::tierRuleSummary(),
+                        'consumables' => 'Optional. If blank, starting stock is stored at ₱0 cost. Later receipts use the acquisition unit cost.',
+                        default => null,
+                    }),
+            ),
+        ];
+    }
+
+    /**
+     * Table / page action: set opening stock once for a legacy catalog item.
+     */
+    public static function makeSetStartingStockAction(): Action
+    {
+        return Action::make('setOpeningStock')
+            ->label('Set starting stock')
+            ->icon(Heroicon::ArchiveBoxArrowDown)
+            ->color('gray')
+            ->visible(function (?Item $record = null): bool {
+                $user = Filament::auth()->user();
+                if (! $user?->isSupplyCustodian()) {
+                    return false;
+                }
+
+                if ($record === null) {
+                    return true;
+                }
+
+                return self::canSetStartingStock($record);
+            })
+            ->modalHeading(fn (?Item $record): string => $record
+                ? 'Set starting stock — '.$record->name
+                : 'Set starting stock')
+            ->modalDescription('One-time starting stock for the regional supply office. Use acquisitions for later receipts.')
+            ->modalSubmitActionLabel('Save starting stock')
+            ->schema(fn (Item $record): array => self::actionFormFields($record))
+            ->action(function (Item $record, array $data): void {
+                self::persistFromActionData($record, $data);
+            });
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     */
+    public static function persistFromActionData(Item $item, array $data, ?User $recordedBy = null): void
+    {
+        if (! self::canSetStartingStock($item)) {
+            throw ValidationException::withMessages([
+                self::QUANTITY_KEY => 'Starting stock cannot be set for this item. It may already have an opening balance or acquisition history.',
+            ]);
+        }
+
+        $opening = self::extract($data);
+        $user = $recordedBy ?? Filament::auth()->user();
+        self::applyIfPresent(
+            $item,
+            $opening,
+            $user instanceof User ? $user : null,
+        );
+
+        Notification::make()
+            ->title('Starting stock saved')
+            ->body('Quantity was recorded for the regional supply office.')
+            ->success()
+            ->send();
     }
 
     /**

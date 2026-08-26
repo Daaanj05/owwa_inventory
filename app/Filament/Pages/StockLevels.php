@@ -4,12 +4,14 @@ namespace App\Filament\Pages;
 
 use App\Filament\Concerns\StartsOwwaExportBusy;
 use App\Filament\Concerns\SyncsActiveItemCategory;
+use App\Filament\Resources\Items\Support\ItemOpeningStockFields;
 use App\Filament\Resources\Transfers\TransferResource;
 use App\Models\InventoryUnit;
 use App\Models\Item;
 use App\Models\ItemCategory;
 use App\Models\Office;
 use App\Models\StockPositionRestockFlag;
+use App\Models\User;
 use App\Services\InventoryStockService;
 use App\Services\OwwaItemReportService;
 use App\Services\StockLedgerViewService;
@@ -25,12 +27,15 @@ use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Radio;
 use Filament\Pages\Page;
 use Filament\Support\Enums\Width;
+use Filament\Support\Icons\Heroicon;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\HtmlString;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Livewire\Attributes\Url;
 use Livewire\Component as LivewireComponent;
 use Livewire\WithPagination;
@@ -527,6 +532,8 @@ class StockLevels extends Page
 
         $rows = app(InventoryStockService::class)->summarizeStockLevelsByItemOffice($rows);
 
+        $rows = $this->appendEligibleStartingStockRows($rows);
+
         if (in_array($this->categoryRecord?->getTemplateSlug(), ['ppe', 'semi_expendable'], true)) {
             $taggedCounts = $this->taggedUnitCountsForRows($rows);
             $rows = $rows->map(function (object $row) use ($taggedCounts): object {
@@ -540,6 +547,153 @@ class StockLevels extends Page
         }
 
         return $rows;
+    }
+
+    /**
+     * Catalog items with no opening/acquisition yet so custodians can seed starting stock.
+     *
+     * @param  Collection<int, object>  $rows
+     * @return Collection<int, object>
+     */
+    protected function appendEligibleStartingStockRows(Collection $rows): Collection
+    {
+        if ($this->restockFilter === 'inactive' || ! $this->categoryRecord) {
+            return $rows;
+        }
+
+        $officeId = ItemOpeningStockFields::resolveRegionalOfficeId();
+        if ($officeId === null || $officeId < 1) {
+            return $rows;
+        }
+
+        $user = Filament::auth()->user();
+        if ($user?->office_id && (int) $user->office_id !== $officeId) {
+            return $rows;
+        }
+
+        $office = Office::query()->find($officeId);
+        if ($office === null || $office->archived_at !== null) {
+            return $rows;
+        }
+
+        $existingPairs = $rows
+            ->mapWithKeys(fn (object $row): array => [
+                ((int) $row->item_id).'_'.((int) $row->office_id) => true,
+            ]);
+
+        $searchTerm = filled($this->search) ? mb_strtolower($this->search) : null;
+
+        $eligibleItems = Item::query()
+            ->where('item_category_id', $this->categoryRecord->id)
+            ->whereNull('archived_at')
+            ->orderBy('name')
+            ->get()
+            ->filter(fn (Item $item): bool => ItemOpeningStockFields::canSetStartingStock($item, $officeId));
+
+        foreach ($eligibleItems as $item) {
+            $pairKey = $item->id.'_'.$officeId;
+            if ($existingPairs->has($pairKey)) {
+                continue;
+            }
+
+            if ($searchTerm !== null
+                && ! str_contains(mb_strtolower($item->name), $searchTerm)
+                && ! str_contains(mb_strtolower((string) $office->name), $searchTerm)) {
+                continue;
+            }
+
+            $reorder = (int) $item->reorder_level;
+
+            $rows->push((object) [
+                'item_id' => $item->id,
+                'item_name' => $item->name,
+                'category_name' => $this->categoryRecord->name,
+                'office_id' => $officeId,
+                'office_name' => $office->name,
+                'unit_cost' => 0.0,
+                'avg_unit_cost' => 0.0,
+                'latest_unit_cost' => 0.0,
+                'stock_value' => 0.0,
+                'property_number' => null,
+                'property_class' => $item->property_class,
+                'value_type' => 'low',
+                'stock' => 0,
+                'reorder_level' => $reorder,
+                'is_low' => $reorder > 0,
+                'is_inactive_for_restock' => false,
+                'inactive_source' => null,
+                'restock_status_label' => 'No stock',
+                'position_key' => UnitCostKey::positionKey($item->id, $officeId, 0.0),
+                'cost_bucket_count' => 0,
+                'can_set_starting_stock' => true,
+                'accountable_tags' => 0,
+                'tagged_units' => 0,
+                'tagged_drift' => false,
+            ]);
+        }
+
+        return $rows->sortBy(['item_name', 'office_name'])->values();
+    }
+
+    public function openSetStartingStock(int $itemId): void
+    {
+        $item = Item::query()->findOrFail($itemId);
+        $officeId = ItemOpeningStockFields::resolveRegionalOfficeId();
+
+        if ($officeId === null || ! ItemOpeningStockFields::canSetStartingStock($item, $officeId)) {
+            abort(403);
+        }
+
+        $user = Filament::auth()->user();
+        if ($user?->office_id && (int) $user->office_id !== $officeId) {
+            abort(403);
+        }
+
+        $this->mountAction('setOpeningStock', [
+            'item_id' => $itemId,
+        ]);
+    }
+
+    public function setOpeningStockAction(): Action
+    {
+        return Action::make('setOpeningStock')
+            ->label('Set starting stock')
+            ->icon(Heroicon::ArchiveBoxArrowDown)
+            ->modalHeading(function (array $arguments): string {
+                $item = Item::query()->find($arguments['item_id'] ?? null);
+
+                return $item
+                    ? 'Set starting stock — '.$item->name
+                    : 'Set starting stock';
+            })
+            ->modalDescription('One-time starting stock for the regional supply office. Use acquisitions for later receipts.')
+            ->modalSubmitActionLabel('Save starting stock')
+            ->schema(function (array $arguments): array {
+                $item = Item::query()->findOrFail($arguments['item_id'] ?? 0);
+
+                return ItemOpeningStockFields::actionFormFields($item);
+            })
+            ->action(function (array $data, array $arguments): void {
+                $item = Item::query()->findOrFail($arguments['item_id'] ?? 0);
+                $officeId = ItemOpeningStockFields::resolveRegionalOfficeId();
+
+                if ($officeId === null || ! ItemOpeningStockFields::canSetStartingStock($item, $officeId)) {
+                    throw ValidationException::withMessages([
+                        ItemOpeningStockFields::QUANTITY_KEY => 'Starting stock cannot be set for this item.',
+                    ]);
+                }
+
+                $user = Filament::auth()->user();
+                if ($user?->office_id && (int) $user->office_id !== $officeId) {
+                    abort(403);
+                }
+
+                ItemOpeningStockFields::persistFromActionData(
+                    $item,
+                    $data,
+                    $user instanceof User ? $user : null,
+                );
+            });
     }
 
     /**

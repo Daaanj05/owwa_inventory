@@ -232,7 +232,9 @@
                                     @endif
                                     <td class="owwa-num owwa-cell-muted">{{ number_format($row->reorder_level) }}</td>
                                     <td class="owwa-status">
-                                        @if($row->is_inactive_for_restock ?? false)
+                                        @if($row->can_set_starting_stock ?? false)
+                                            <span class="owwa-status-badge owwa-status-low">No stock</span>
+                                        @elseif($row->is_inactive_for_restock ?? false)
                                             <span class="owwa-status-badge owwa-status-low">
                                                 {{ $row->restock_status_label ?? 'Inactive' }}
                                             </span>
@@ -261,6 +263,15 @@
                                             </x-slot>
 
                                             <x-filament::dropdown.list>
+                                                @if($row->can_set_starting_stock ?? false)
+                                                    <x-filament::dropdown.list.item
+                                                        icon="heroicon-o-archive-box-arrow-down"
+                                                        wire:click="openSetStartingStock({{ (int) $row->item_id }})"
+                                                    >
+                                                        Set starting stock
+                                                    </x-filament::dropdown.list.item>
+                                                @endif
+
                                                 @if($this->canCreateTransfer())
                                                     @if($row->stock > 0)
                                                         <x-filament::dropdown.list.item
@@ -281,20 +292,22 @@
                                                     @endif
                                                 @endif
 
-                                                @if($row->is_inactive_for_restock ?? false)
-                                                    <x-filament::dropdown.list.item
-                                                        icon="heroicon-o-arrow-path"
-                                                        wire:click="toggleRestockActive({{ (int) $row->item_id }}, {{ (int) $row->office_id }}, {{ json_encode((float) ($row->unit_cost ?? 0)) }})"
-                                                    >
-                                                        Mark active
-                                                    </x-filament::dropdown.list.item>
-                                                @else
-                                                    <x-filament::dropdown.list.item
-                                                        icon="heroicon-o-archive-box"
-                                                        wire:click="toggleRestockInactive({{ (int) $row->item_id }}, {{ (int) $row->office_id }}, {{ json_encode((float) ($row->unit_cost ?? 0)) }})"
-                                                    >
-                                                        Mark inactive
-                                                    </x-filament::dropdown.list.item>
+                                                @if(! ($row->can_set_starting_stock ?? false))
+                                                    @if($row->is_inactive_for_restock ?? false)
+                                                        <x-filament::dropdown.list.item
+                                                            icon="heroicon-o-arrow-path"
+                                                            wire:click="toggleRestockActive({{ (int) $row->item_id }}, {{ (int) $row->office_id }}, {{ json_encode((float) ($row->unit_cost ?? 0)) }})"
+                                                        >
+                                                            Mark active
+                                                        </x-filament::dropdown.list.item>
+                                                    @else
+                                                        <x-filament::dropdown.list.item
+                                                            icon="heroicon-o-archive-box"
+                                                            wire:click="toggleRestockInactive({{ (int) $row->item_id }}, {{ (int) $row->office_id }}, {{ json_encode((float) ($row->unit_cost ?? 0)) }})"
+                                                        >
+                                                            Mark inactive
+                                                        </x-filament::dropdown.list.item>
+                                                    @endif
                                                 @endif
                                             </x-filament::dropdown.list>
                                         </x-filament::dropdown>

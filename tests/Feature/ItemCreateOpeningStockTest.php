@@ -67,7 +67,7 @@ class ItemCreateOpeningStockTest extends TestCase
 
         Livewire::withQueryParams(['category' => (string) $category->id])
             ->test(ListItems::class)
-            ->assertActionDoesNotExist(TestAction::make('setOpeningStock')->table($item));
+            ->assertActionHidden(TestAction::make('setOpeningStock')->table($item));
     }
 
     public function test_create_requires_confirmation_before_saving(): void

@@ -5,6 +5,7 @@ namespace App\Filament\Resources\Items\Tables;
 use App\Filament\Concerns\SyncsActiveItemCategory;
 use App\Filament\Resources\Items\ItemResource;
 use App\Filament\Resources\Items\Schemas\ItemInfolist;
+use App\Filament\Resources\Items\Support\ItemOpeningStockFields;
 use App\Filament\Support\ConfiguresOwwaViewAction;
 use App\Filament\Support\OwwaFormModalDefaults;
 use App\Filament\Support\OwwaModalSchema;
@@ -47,6 +48,7 @@ class ItemsTable
                 ),
                 ActionGroup::make([
                     OwwaFormModalDefaults::editActionForResource(ItemResource::class, OwwaFormModalDefaults::WIDTH_COMPACT),
+                    ItemOpeningStockFields::makeSetStartingStockAction(),
                     Action::make('downloadQrLabels')
                         ->label('Download QR labels')
                         ->icon('heroicon-o-qr-code')
