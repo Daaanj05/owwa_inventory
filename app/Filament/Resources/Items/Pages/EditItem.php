@@ -32,6 +32,13 @@ class EditItem extends EditRecord
 
     protected function mutateFormDataBeforeSave(array $data): array
     {
+        unset(
+            $data['item_code'],
+            $data['semi_expendable_property_number'],
+            $data['ppe_property_number'],
+            $data['item_category_id'],
+        );
+
         $data['base_name'] = trim((string) ($data['base_name'] ?? ''));
         $data['sub_item'] = filled($data['sub_item'] ?? null) ? trim((string) $data['sub_item']) : null;
         $data['name'] = Item::mergeDisplayName($data['base_name'], $data['sub_item']);

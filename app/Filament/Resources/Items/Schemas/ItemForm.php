@@ -7,7 +7,6 @@ use App\Filament\Forms\Components\StyledDatalistInput;
 use App\Filament\Resources\Items\Support\ItemOpeningStockFields;
 use App\Models\Item;
 use App\Models\ItemCategory;
-use App\Services\ReferenceCodeService;
 use App\Support\ConsumableInventoryType;
 use App\Support\ItemMeasurementUnitInput;
 use App\Support\ItemPropertyClass;
@@ -20,7 +19,6 @@ use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
-use Filament\Forms\Components\Toggle;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
@@ -42,7 +40,8 @@ class ItemForm
                         Hidden::make('item_category_id')
                             ->default(fn (): ?int => self::activeCategoryId())
                             ->dehydrated(true)
-                            ->visible(fn (string $operation): bool => $operation === 'create' && self::isCategoryScoped()),
+                            ->visible(fn (string $operation): bool => $operation === 'edit'
+                                || ($operation === 'create' && self::isCategoryScoped())),
                         Select::make('item_category_id')
                             ->label('Category')
                             ->relationship('category', 'name')
@@ -53,7 +52,7 @@ class ItemForm
                             ->default(fn (): ?int => self::activeCategoryId())
                             ->disabled(fn (): bool => self::isCategoryScoped())
                             ->dehydrated(true)
-                            ->visible(fn (string $operation): bool => $operation !== 'create' || ! self::isCategoryScoped())
+                            ->visible(fn (string $operation): bool => $operation === 'create' && ! self::isCategoryScoped())
                             ->columnSpanFull(),
 
                         StyledDatalistInput::make('base_name')
@@ -83,25 +82,14 @@ class ItemForm
                                 $get('sub_item'),
                             )),
 
-                        Toggle::make('override_item_code')
-                            ->label('Edit stock number manually')
-                            ->default(false)
-                            ->live()
-                            ->dehydrated(false)
-                            ->visible(fn (string $operation, Get $get): bool => $operation !== 'create'
-                                && self::isConsumablesCategory($get('item_category_id'))
-                                && (Filament::auth()->user()?->canOverrideGeneratedCodes() ?? false))
-                            ->columnSpanFull(),
                         TextInput::make('item_code')
                             ->label('Stock number / item code')
                             ->maxLength(100)
-                            ->disabled(fn (string $operation, Get $get): bool => $operation === 'create'
-                                && ! ($get('override_item_code') ?? false)
-                                && config('inventory.auto_generate_item_codes', true))
-                            ->dehydrated()
+                            ->disabled()
+                            ->dehydrated(false)
                             ->visible(fn (string $operation, Get $get): bool => self::isConsumablesCategory($get('item_category_id'))
-                                && ($operation !== 'create' || ! config('inventory.auto_generate_item_codes', true)))
-                            ->helperText(fn (string $operation, Get $get): string => self::itemCodeHelperText($operation, $get)),
+                                && $operation !== 'create')
+                            ->helperText('Assigned automatically on create. Not editable.'),
                         TextInput::make('semi_expendable_property_number')
                             ->label('Inventory item no.')
                             ->disabled()
@@ -282,27 +270,6 @@ class ItemForm
             ->unique()
             ->sortKeys()
             ->all();
-    }
-
-    protected static function itemCodeHelperText(string $operation, Get $get): string
-    {
-        if ($operation !== 'create' || ! config('inventory.auto_generate_item_codes', true)) {
-            return 'Permanent catalog identifier (Stock No. on OWWA forms).';
-        }
-
-        if ($get('override_item_code')) {
-            return 'Manual override enabled. Use only for exceptions approved by your supervisor.';
-        }
-
-        $preview = app(ReferenceCodeService::class)->previewItemCodeForCategoryId(
-            $get('item_category_id') ? (int) $get('item_category_id') : null,
-        );
-
-        if ($preview !== '') {
-            return "Next stock number on save: {$preview}";
-        }
-
-        return 'Select a category to preview the next stock number. The system assigns it automatically on save.';
     }
 
     protected static function isConsumablesCategory(mixed $categoryId): bool

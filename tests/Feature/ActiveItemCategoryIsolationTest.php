@@ -87,15 +87,19 @@ class ActiveItemCategoryIsolationTest extends TestCase
 
         session(['active_item_category_id' => $ppe->id]);
 
+        $create = TestAction::make('create')->schemaComponent(true, 'content');
+
         Livewire::actingAs($custodian)
             ->withQueryParams(['category' => $consumables->id])
             ->test(ListItems::class)
-            ->mountAction(TestAction::make('create')->schemaComponent(true, 'content'))
+            ->mountAction($create)
             ->fillForm([
                 'base_name' => 'Bond paper',
                 'unit' => 'ream',
                 'reorder_level' => 5,
+                'inventory_type' => 'office_supplies',
             ])
+            ->mountAction('submit')
             ->callMountedAction()
             ->assertNotified();
 
