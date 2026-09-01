@@ -109,7 +109,7 @@ class RequisitionViewPresenterTest extends TestCase
         $steps = EmployeeRequisitionViewPresenter::workflowSteps($requisition);
 
         $this->assertStringContainsString('Request filed', $steps[0]['description']);
-        $this->assertStringContainsString('Approved by consolidator', $steps[1]['description']);
+        $this->assertStringContainsString('Reviewed by consolidator', $steps[1]['description']);
         $this->assertStringContainsString('Sent to Supply Custodian', $steps[2]['description']);
     }
 }

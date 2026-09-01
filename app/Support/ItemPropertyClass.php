@@ -74,6 +74,31 @@ class ItemPropertyClass
         return self::LegacyMap[$propertyClass] ?? null;
     }
 
+    public static function resolve(?string $value): ?string
+    {
+        if (blank($value)) {
+            return null;
+        }
+
+        $normalized = self::normalize($value);
+        if ($normalized !== null) {
+            return $normalized;
+        }
+
+        return self::resolveFromInventoryTypeLabel($value);
+    }
+
+    public static function label(?string $propertyClass): ?string
+    {
+        if (blank($propertyClass)) {
+            return null;
+        }
+
+        $normalized = self::normalize($propertyClass);
+
+        return $normalized !== null ? (self::options()[$normalized] ?? null) : null;
+    }
+
     public static function resolveForExport(?string $propertyClass): string
     {
         $normalized = self::normalize($propertyClass);

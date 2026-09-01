@@ -42,9 +42,9 @@ class EmployeeRequisitionViewPresenter
                 ],
                 [
                     'step' => 4,
-                    'label' => 'Distributed / Closed',
+                    'label' => 'Issued / Closed',
                     'shortLabel' => 'Closed',
-                    'description' => 'Awaiting distribution from your office',
+                    'description' => 'Awaiting issuance from Supply Custodian',
                     'state' => 'pending',
                     'url' => null,
                 ],
@@ -58,15 +58,14 @@ class EmployeeRequisitionViewPresenter
             ? 'done'
             : ($record->compiled_into_requisition_id !== null ? 'active' : 'pending');
 
-        $distributed = EmployeeRequisitionStatus::distributedTotal($record);
-        $requested = EmployeeRequisitionStatus::fulfillmentTargetTotal($record);
-
         if ($record->status === Requisition::STATUS_REJECTED) {
             $endorsedState = 'pending';
             $distributedState = 'pending';
         }
 
-        $latestDistributionDate = EmployeeRequisitionStatus::latestDistributionDate($record);
+        $latestIssuanceDate = EmployeeRequisitionStatus::latestIssuanceDate($record);
+        $issued = EmployeeRequisitionStatus::issuedTotal($record);
+        $requested = EmployeeRequisitionStatus::fulfillmentTargetTotal($record);
 
         return [
             [
@@ -84,7 +83,7 @@ class EmployeeRequisitionViewPresenter
                 'description' => match ($record->status) {
                     Requisition::STATUS_PENDING => 'Awaiting consolidator review',
                     Requisition::STATUS_REJECTED => self::stepDescription('Rejected', $record->approved_at),
-                    default => self::stepDescription('Approved by consolidator', $record->approved_at),
+                    default => self::stepDescription('Reviewed by consolidator', $record->approved_at),
                 },
                 'state' => $reviewState,
                 'url' => null,
@@ -101,7 +100,7 @@ class EmployeeRequisitionViewPresenter
             ],
             [
                 'step' => 4,
-                'label' => 'Distributed / Closed',
+                'label' => 'Issued / Closed',
                 'shortLabel' => 'Closed',
                 'description' => match (true) {
                     $record->closed_at !== null => self::stepDescription(
@@ -109,14 +108,14 @@ class EmployeeRequisitionViewPresenter
                         $record->closed_at,
                     ),
                     $record->status === Requisition::STATUS_REJECTED => 'Not applicable',
-                    $distributed > 0 && $distributed < $requested => self::stepDescription(
-                        'Partially distributed — awaiting balance',
-                        $latestDistributionDate,
+                    $issued > 0 && $issued < $requested => self::stepDescription(
+                        'Partially issued — awaiting balance',
+                        $latestIssuanceDate,
                     ),
                     $record->hasBackorderedLines() && $record->compiled_into_requisition_id !== null => 'Awaiting regional stock',
-                    default => $latestDistributionDate
-                        ? self::stepDescription('Partial distribution recorded', $latestDistributionDate)
-                        : 'Awaiting distribution from your office',
+                    default => $latestIssuanceDate
+                        ? self::stepDescription('Partial issuance recorded', $latestIssuanceDate)
+                        : 'Awaiting issuance from Supply Custodian',
                 },
                 'state' => $distributedState,
                 'url' => null,

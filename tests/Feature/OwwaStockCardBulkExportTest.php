@@ -77,6 +77,8 @@ class OwwaStockCardBulkExportTest extends TestCase
 
     public function test_bulk_stock_card_pdf_export_returns_pdf(): void
     {
+        $this->skipUnlessLibreOfficeAvailable();
+
         $category = ItemCategory::factory()->create(['name' => 'Consumables']);
         $office = Office::factory()->create();
         $custodian = User::factory()->create([

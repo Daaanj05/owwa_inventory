@@ -93,7 +93,7 @@ class RequisitionViewPresenter
             ['step' => 1, 'label' => 'File', 'shortLabel' => 'File', 'description' => 'Requisition submitted', 'state' => 'done', 'url' => null],
             ['step' => 2, 'label' => 'Review', 'shortLabel' => 'Review', 'description' => $record->status === Requisition::STATUS_PENDING ? 'Awaiting action' : 'Review complete', 'state' => $reviewState, 'url' => null],
             ['step' => 3, 'label' => 'Decision', 'shortLabel' => 'Decision', 'description' => match ($record->status) {
-                Requisition::STATUS_ACCEPTED => 'Accepted',
+                Requisition::STATUS_ACCEPTED => 'Reviewed',
                 Requisition::STATUS_REJECTED => 'Rejected',
                 default => 'Pending decision',
             }, 'state' => $decisionState, 'url' => null],

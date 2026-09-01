@@ -6,6 +6,7 @@ use App\Filament\Concerns\HasSystemAdminWizardHeading;
 use App\Filament\Concerns\SyncsActiveItemCategory;
 use App\Filament\Pages\InventoryCategoryDashboard;
 use App\Filament\Resources\Items\Actions\ItemBulkCreateAction;
+use App\Filament\Resources\Items\Actions\ItemImportAction;
 use App\Filament\Resources\Items\ItemResource;
 use App\Filament\Resources\Items\Support\ItemOpeningStockFields;
 use App\Filament\Support\OwwaFormModalDefaults;
@@ -23,6 +24,7 @@ use Filament\Schemas\Schema;
 use Filament\View\PanelsRenderHook;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\HtmlString;
+use Livewire\Attributes\On;
 use Livewire\Attributes\Url;
 
 class ListItems extends ListRecords
@@ -32,6 +34,11 @@ class ListItems extends ListRecords
 
     #[Url]
     public int|string|null $category = null;
+
+    /**
+     * @var array<string, mixed>|null
+     */
+    public ?array $importConsumableResult = null;
 
     protected static string $resource = ItemResource::class;
 
@@ -148,6 +155,10 @@ class ListItems extends ListRecords
                 Flex::make([
                     $this->getTabsContentComponent(),
                     Actions::make([
+                        ItemImportAction::make()
+                            ->extraAttributes(fn (): array => $this->isActiveImportableCategory()
+                                ? []
+                                : ['class' => 'hidden']),
                         ItemBulkCreateAction::make(),
                         $createAction,
                     ])->alignEnd(),
@@ -161,6 +172,61 @@ class ListItems extends ListRecords
     protected function getHeaderActions(): array
     {
         return [];
+    }
+
+    public function importConsumableResultsAction(): Action
+    {
+        return ItemImportAction::resultsAction()
+            ->schema(function (): array {
+                $result = $this->importConsumableResult;
+                if (! is_array($result) || ($result['rows'] ?? []) === []) {
+                    return [];
+                }
+
+                return ItemImportAction::resultsSchema($result);
+            });
+    }
+
+    #[On('open-consumable-import-results')]
+    public function openConsumableImportResults(): void
+    {
+        if ($this->importConsumableResult === null) {
+            return;
+        }
+
+        $this->replaceMountedAction('importConsumableResults');
+    }
+
+    public function isActiveImportableCategory(): bool
+    {
+        $categoryId = $this->activeItemCategoryId();
+        if ($categoryId <= 0) {
+            $categoryId = (int) session('active_item_category_id', 0);
+        }
+
+        if ($categoryId <= 0) {
+            return false;
+        }
+
+        $category = ItemCategory::query()->find($categoryId);
+
+        return in_array($category?->getTemplateSlug(), ['consumables', 'semi_expendable', 'ppe'], true);
+    }
+
+    public function isActiveConsumablesCategory(): bool
+    {
+        $categoryId = $this->activeItemCategoryId();
+        if ($categoryId <= 0) {
+            $categoryId = (int) session('active_item_category_id', 0);
+        }
+
+        if ($categoryId <= 0) {
+            return false;
+        }
+
+        $category = ItemCategory::query()->find($categoryId);
+
+        return $category?->getTemplateSlug() === 'consumables';
     }
 
     /**

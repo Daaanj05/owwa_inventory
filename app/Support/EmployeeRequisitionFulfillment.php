@@ -36,11 +36,11 @@ class EmployeeRequisitionFulfillment
             return null;
         }
 
-        $distributed = EmployeeRequisitionStatus::distributedTotal($requisition);
+        $issued = EmployeeRequisitionStatus::issuedTotal($requisition);
         $target = EmployeeRequisitionStatus::fulfillmentTargetTotal($requisition);
 
-        if ($distributed > 0) {
-            if ($distributed < $target) {
+        if ($issued > 0) {
+            if ($issued < $target) {
                 return RequisitionLineFulfillmentState::PARTIALLY_ISSUED;
             }
 

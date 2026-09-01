@@ -49,8 +49,7 @@ return [
     ],
 
     'libreoffice' => [
-        // Prefer LibreOffice headless for PR/PO/IAR PDF (Excel-like layout).
-        // Falls back to Dompdf when disabled/unavailable.
+        // LibreOffice headless for OWWA PDF exports (Excel-like layout). Required for PDF export.
         'enabled' => filter_var(env('LIBREOFFICE_PDF', true), FILTER_VALIDATE_BOOLEAN),
         'binary' => env('LIBREOFFICE_BINARY', 'soffice'),
         'timeout' => (int) env('LIBREOFFICE_TIMEOUT', 90),

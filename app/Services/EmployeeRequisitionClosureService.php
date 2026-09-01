@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Distribution;
+use App\Models\Issuance;
 use App\Models\Requisition;
 use App\Models\User;
 use App\Notifications\RequisitionWorkflowDatabaseNotification;
@@ -10,11 +11,33 @@ use App\Support\EmployeeRequisitionStatus;
 
 class EmployeeRequisitionClosureService
 {
+    public function closeFromIssuance(Issuance $issuance): void
+    {
+        $issuance->loadMissing(['requisition.requestedBy', 'issuedTo']);
+
+        $requisition = $this->resolveEmployeeRequisitionFromIssuance($issuance);
+
+        if (! $requisition instanceof Requisition) {
+            return;
+        }
+
+        $this->closeIfFulfilled($requisition);
+    }
+
+    public function closeFromRequisition(Requisition $requisition): void
+    {
+        if (! $requisition->isEmployeeRequest()) {
+            return;
+        }
+
+        $this->closeIfFulfilled($requisition);
+    }
+
     public function closeFromDistribution(Distribution $distribution): void
     {
         $distribution->loadMissing(['requisition.requestedBy', 'distributedTo']);
 
-        $requisition = $this->resolveEmployeeRequisition($distribution);
+        $requisition = $this->resolveEmployeeRequisitionFromDistribution($distribution);
 
         if (! $requisition instanceof Requisition) {
             return;
@@ -35,9 +58,30 @@ class EmployeeRequisitionClosureService
             return;
         }
 
+        $this->finalizeClosure($requisition, $distributed, $target);
+    }
+
+    protected function closeIfFulfilled(Requisition $requisition): void
+    {
+        if ($requisition->closed_at !== null) {
+            return;
+        }
+
+        $target = EmployeeRequisitionStatus::fulfillmentTargetTotal($requisition);
+        $issued = EmployeeRequisitionStatus::issuedTotal($requisition);
+
+        if ($target <= 0 || $issued < $target) {
+            return;
+        }
+
+        $this->finalizeClosure($requisition, $issued, $target);
+    }
+
+    protected function finalizeClosure(Requisition $requisition, int $fulfilled, int $target): void
+    {
         $requisition->update([
             'closed_at' => now(),
-            'fulfillment_summary' => EmployeeRequisitionStatus::formatSummary($distributed, $target),
+            'fulfillment_summary' => EmployeeRequisitionStatus::formatSummary($fulfilled, $target),
         ]);
 
         $employee = $requisition->requestedBy;
@@ -60,7 +104,18 @@ class EmployeeRequisitionClosureService
         ));
     }
 
-    protected function resolveEmployeeRequisition(Distribution $distribution): ?Requisition
+    protected function resolveEmployeeRequisitionFromIssuance(Issuance $issuance): ?Requisition
+    {
+        $requisition = $issuance->requisition;
+
+        if ($requisition?->isEmployeeRequest()) {
+            return $requisition;
+        }
+
+        return null;
+    }
+
+    protected function resolveEmployeeRequisitionFromDistribution(Distribution $distribution): ?Requisition
     {
         if ($distribution->requisition_id) {
             $requisition = $distribution->requisition;

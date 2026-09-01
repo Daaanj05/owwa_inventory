@@ -4,9 +4,8 @@ namespace App\Filament\Widgets;
 
 use App\Filament\Concerns\ListensForRequisitionBroadcasts;
 use App\Filament\Pages\OfficePropertyRegister;
-use App\Filament\Resources\Distributions\DistributionResource;
 use App\Filament\Resources\Requisitions\RequisitionResource;
-use App\Models\Distribution;
+use App\Models\Issuance;
 use App\Models\Requisition;
 use App\Models\User;
 use App\Services\OfficePropertyRegisterService;
@@ -59,9 +58,9 @@ class UnitConsolidatorStatsWidget extends StatsOverviewWidget implements HasActi
 
         $nearingEul = app(OfficePropertyRegisterService::class)->countNearingExpiryForUser($user);
 
-        $distributed = (int) Distribution::query()
-            ->where('distributed_by', $user->id)
-            ->whereBetween('distribution_date', [$yearStart, $yearEnd])
+        $distributed = (int) Issuance::query()
+            ->whereHas('consolidatedRequisition', fn (Builder $query) => $query->where('requested_by', $user->id))
+            ->whereBetween('issuance_date', [$yearStart, $yearEnd])
             ->sum('quantity');
 
         return [
@@ -85,8 +84,8 @@ class UnitConsolidatorStatsWidget extends StatsOverviewWidget implements HasActi
                     'title' => 'Click to view details',
                 ], merge: true),
 
-            Stat::make('Items distributed', number_format($distributed))
-                ->description('Total items distributed this year')
+            Stat::make('Items issued', number_format($distributed))
+                ->description('Total items issued to employees this year')
                 ->descriptionIcon('heroicon-o-gift')
                 ->color('info')
                 ->extraAttributes([
@@ -127,10 +126,10 @@ class UnitConsolidatorStatsWidget extends StatsOverviewWidget implements HasActi
     {
         return $this->detailModalAction(
             'viewItemsDistributed',
-            'Items distributed (this year)',
-            fn (): array => $this->itemsDistributedDetail(),
-            DistributionResource::getUrl('index'),
-            'Open Distributions',
+            'Items issued to employees (this year)',
+            fn (): array => $this->itemsIssuedDetail(),
+            RequisitionResource::getUrl('index'),
+            'Open Requisitions',
         );
     }
 
@@ -262,19 +261,19 @@ class UnitConsolidatorStatsWidget extends StatsOverviewWidget implements HasActi
     /**
      * @return array{summary: string|null, empty_title: string, empty_desc: string, columns: array<string, string>, numeric_keys: array<int, string>, rows: array<int, array<string, mixed>>}
      */
-    protected function itemsDistributedDetail(): array
+    protected function itemsIssuedDetail(): array
     {
         $user = Filament::auth()->user();
         if (! $user instanceof User) {
             return [
                 'summary' => null,
-                'empty_title' => 'No items distributed',
+                'empty_title' => 'No items issued',
                 'empty_desc' => 'Nothing to show.',
                 'columns' => [
                     'item' => 'Item',
                     'category' => 'Category',
                     'quantity' => 'Qty',
-                    'employee' => 'Distributed to',
+                    'employee' => 'Issued to',
                     'date' => 'Date',
                 ],
                 'numeric_keys' => ['quantity'],
@@ -284,33 +283,33 @@ class UnitConsolidatorStatsWidget extends StatsOverviewWidget implements HasActi
 
         [$yearStart, $yearEnd] = $this->yearBounds();
 
-        $distributions = Distribution::query()
-            ->with(['item.category', 'distributedTo'])
-            ->where('distributed_by', $user->id)
-            ->whereBetween('distribution_date', [$yearStart, $yearEnd])
-            ->latest('distribution_date')
+        $issuances = Issuance::query()
+            ->with(['item.category', 'issuedTo', 'requisition'])
+            ->whereHas('consolidatedRequisition', fn (Builder $query) => $query->where('requested_by', $user->id))
+            ->whereBetween('issuance_date', [$yearStart, $yearEnd])
+            ->latest('issuance_date')
             ->limit(100)
             ->get();
 
-        $rows = $distributions->map(fn (Distribution $distribution): array => [
-            'item' => $distribution->item?->name,
-            'category' => $distribution->item?->category?->name,
-            'quantity' => $distribution->quantity,
-            'employee' => $distribution->distributedTo?->name,
-            'date' => optional($distribution->distribution_date)?->format('M j, Y'),
+        $rows = $issuances->map(fn (Issuance $issuance): array => [
+            'item' => $issuance->item?->name,
+            'category' => $issuance->item?->category?->name,
+            'quantity' => $issuance->quantity,
+            'employee' => $issuance->issuedTo?->name,
+            'date' => optional($issuance->issuance_date)?->format('M j, Y'),
         ])->all();
 
-        $totalQty = (int) $distributions->sum('quantity');
+        $totalQty = (int) $issuances->sum('quantity');
 
         return [
-            'summary' => number_format($totalQty).' unit'.($totalQty === 1 ? '' : 's').' distributed across '.count($rows).' record'.(count($rows) === 1 ? '' : 's').' (showing up to 100).',
-            'empty_title' => 'No items distributed',
-            'empty_desc' => 'You have not distributed items to employees this year.',
+            'summary' => number_format($totalQty).' unit'.($totalQty === 1 ? '' : 's').' issued across '.count($rows).' record'.(count($rows) === 1 ? '' : 's').' (showing up to 100).',
+            'empty_title' => 'No items issued',
+            'empty_desc' => 'No items have been issued to employees from your consolidated requisitions this year.',
             'columns' => [
                 'item' => 'Item',
                 'category' => 'Category',
                 'quantity' => 'Qty',
-                'employee' => 'Distributed to',
+                'employee' => 'Issued to',
                 'date' => 'Date',
             ],
             'numeric_keys' => ['quantity'],

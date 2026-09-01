@@ -131,7 +131,7 @@ class EmployeeRequisitionStatusTest extends TestCase
             'status' => Requisition::STATUS_ACCEPTED,
             'transaction_number' => '2026-01-1004',
             'closed_at' => now(),
-            'fulfillment_summary' => 'Distributed 2 of 5',
+            'fulfillment_summary' => 'Issued 2 of 5',
         ]);
         RequisitionItem::query()->create([
             'requisition_id' => $requisition->id,
@@ -139,7 +139,7 @@ class EmployeeRequisitionStatusTest extends TestCase
             'quantity' => 5,
         ]);
 
-        $this->assertSame('Partially distributed — Closed', EmployeeRequisitionStatus::label($requisition));
+        $this->assertSame('Partially issued — Closed', EmployeeRequisitionStatus::label($requisition));
     }
 
     public function test_rejected_employee_requisition_shows_rejected_label(): void

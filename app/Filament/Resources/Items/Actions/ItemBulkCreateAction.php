@@ -190,7 +190,7 @@ class ItemBulkCreateAction
                 ...self::commonLeadingFields($categoryId),
                 Select::make('inventory_type')
                     ->hiddenLabel()
-                    ->options(ConsumableInventoryType::options())
+                    ->options(ConsumableInventoryType::optionsWithUsed())
                     ->searchable(),
                 TextInput::make('days_to_consume')
                     ->hiddenLabel()

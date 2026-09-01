@@ -9,6 +9,14 @@ use Throwable;
 
 class LibreOfficePdfConverter
 {
+    public static function unavailableMessage(?string $binary = null): string
+    {
+        $binary ??= (string) config('services.libreoffice.binary', 'soffice');
+
+        return 'LibreOffice is required for PDF export. Install LibreOffice and set LIBREOFFICE_BINARY '
+            ."(current: {$binary}).";
+    }
+
     public function isEnabled(): bool
     {
         return (bool) config('services.libreoffice.enabled', true);

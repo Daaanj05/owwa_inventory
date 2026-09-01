@@ -198,10 +198,11 @@ class BulkCreateItemsService
                 }
 
                 $inventoryType = filled($row['inventory_type'] ?? null) ? (string) $row['inventory_type'] : null;
-                if ($inventoryType === null || ConsumableInventoryType::normalize($inventoryType) === null) {
+                $resolvedInventoryType = $inventoryType !== null ? ConsumableInventoryType::resolve($inventoryType) : null;
+                if ($resolvedInventoryType === null) {
                     $errors["items.{$index}.inventory_type"] = 'Inventory type is required.';
                 } else {
-                    $inventoryType = ConsumableInventoryType::normalize($inventoryType);
+                    $inventoryType = $resolvedInventoryType;
                 }
             }
 

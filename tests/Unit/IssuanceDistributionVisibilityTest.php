@@ -29,7 +29,60 @@ class IssuanceDistributionVisibilityTest extends TestCase
         $this->assertSame('Unit Consolidator', IssuanceDistributionVisibility::holderLabelForIssuance($issuance));
     }
 
-    public function test_distributed_status_and_employee_holder_label(): void
+    public function test_direct_employee_issuance_shows_employee_holder_with_uc(): void
+    {
+        $office = Office::factory()->create();
+        $item = Item::factory()->create();
+        $uc = User::factory()->create([
+            'name' => 'Unit Consolidator',
+            'role' => User::ROLE_UNIT_CONSOLIDATOR,
+            'office_id' => $office->id,
+        ]);
+        $employee = User::factory()->create([
+            'name' => 'Employee Holder',
+            'role' => User::ROLE_EMPLOYEE,
+            'office_id' => $office->id,
+        ]);
+
+        $consolidated = Requisition::query()->create([
+            'reference_code' => 'REQ-DIRECT-1',
+            'office_id' => $office->id,
+            'requested_by' => $uc->id,
+            'status' => Requisition::STATUS_ACCEPTED,
+        ]);
+
+        $employeeRequisition = Requisition::query()->create([
+            'office_id' => $office->id,
+            'requested_by' => $employee->id,
+            'status' => Requisition::STATUS_ACCEPTED,
+            'transaction_number' => 'EMP-1',
+        ]);
+
+        $issuance = Issuance::query()->create([
+            'requisition_id' => $employeeRequisition->id,
+            'consolidated_requisition_id' => $consolidated->id,
+            'reference_code' => 'ICS-DIRECT-1',
+            'item_id' => $item->id,
+            'office_id' => $office->id,
+            'quantity' => 2,
+            'issuance_date' => now()->toDateString(),
+            'issued_to' => $employee->id,
+        ]);
+
+        $summary = IssuanceDistributionVisibility::forIssuance($issuance->fresh());
+
+        $this->assertSame(IssuanceDistributionVisibility::STATUS_ISSUED, $summary['distribution_status']);
+        $this->assertSame('Issued to employee', $summary['distribution_status_label']);
+        $this->assertSame($uc->name, $summary['unit_consolidator']);
+        $this->assertCount(1, $summary['employees']);
+        $this->assertSame($employee->name, $summary['employees'][0]['name']);
+        $this->assertSame(
+            "{$employee->name} (via {$uc->name})",
+            IssuanceDistributionVisibility::holderLabelForIssuance($issuance->fresh()),
+        );
+    }
+
+    public function test_distributed_status_and_employee_holder_label_for_legacy_flow(): void
     {
         [$issuance, $uc, $employee] = $this->seedIssuanceContext();
 

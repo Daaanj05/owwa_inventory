@@ -2,6 +2,7 @@
 
 namespace Tests;
 
+use App\Services\LibreOfficePdfConverter;
 use Database\Seeders\ReferenceSeriesSeeder;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
@@ -61,6 +62,13 @@ abstract class TestCase extends BaseTestCase
 
         if (class_exists(\App\Support\InventoryCategoryOptions::class)) {
             \App\Support\InventoryCategoryOptions::forgetCache();
+        }
+    }
+
+    protected function skipUnlessLibreOfficeAvailable(): void
+    {
+        if (! app(LibreOfficePdfConverter::class)->isAvailable()) {
+            $this->markTestSkipped(LibreOfficePdfConverter::unavailableMessage());
         }
     }
 }

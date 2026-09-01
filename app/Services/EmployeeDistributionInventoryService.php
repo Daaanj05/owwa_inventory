@@ -97,22 +97,43 @@ class EmployeeDistributionInventoryService
             ];
         }
 
-        $base = Distribution::query()
-            ->where('distributed_to', $user->id)
-            ->whereIn('item_id', $this->itemIdsForCategorySlug($category));
-        $this->applyDatePeriodFilter($base, 'distribution_date', $fromDate, $toDate);
+        $base = Issuance::query()
+            ->where('issued_to', $user->id)
+            ->whereHas('item', fn (Builder $itemQuery): Builder => $itemQuery->whereIn(
+                'item_category_id',
+                $this->categoryIdsForSlug($category),
+            ));
+
+        $this->applyDatePeriodFilter($base, 'issuance_date', $fromDate, $toDate);
+
+        $issuedQty = (int) (clone $base)->sum('quantity');
+
+        if ($issuedQty === 0) {
+            $legacyBase = Distribution::query()
+                ->where('distributed_to', $user->id)
+                ->whereIn('item_id', $this->itemIdsForCategorySlug($category));
+            $this->applyDatePeriodFilter($legacyBase, 'distribution_date', $fromDate, $toDate);
+
+            return [
+                'totalItems' => (int) (clone $legacyBase)->distinct('item_id')->count('item_id'),
+                'totalQuantity' => (int) (clone $legacyBase)->sum('quantity'),
+                'totalQuantityThisYear' => (int) (clone $legacyBase)
+                    ->whereBetween('distribution_date', [now()->startOfYear(), now()->endOfYear()])
+                    ->sum('quantity'),
+            ];
+        }
 
         return [
             'totalItems' => (int) (clone $base)->distinct('item_id')->count('item_id'),
-            'totalQuantity' => (int) (clone $base)->sum('quantity'),
+            'totalQuantity' => $issuedQty,
             'totalQuantityThisYear' => (int) (clone $base)
-                ->whereBetween('distribution_date', [now()->startOfYear(), now()->endOfYear()])
+                ->whereBetween('issuance_date', [now()->startOfYear(), now()->endOfYear()])
                 ->sum('quantity'),
         ];
     }
 
     /**
-     * @return Builder<Distribution>
+     * @return Builder<Issuance>
      */
     public function groupedInventoryQuery(
         User $user,
@@ -125,23 +146,23 @@ class EmployeeDistributionInventoryService
             $category = self::CATEGORY_CONSUMABLES;
         }
 
-        $query = Distribution::query()
+        $query = Issuance::query()
             ->select([
-                'distributions.item_id',
-                DB::raw('SUM(distributions.quantity) as total_quantity'),
-                DB::raw('MAX(distributions.distribution_date) as last_distribution_date'),
+                'issuances.item_id',
+                DB::raw('SUM(issuances.quantity) as total_quantity'),
+                DB::raw('MAX(issuances.issuance_date) as last_distribution_date'),
                 DB::raw('COUNT(*) as distribution_count'),
             ])
-            ->join('items', 'items.id', '=', 'distributions.item_id')
+            ->join('items', 'items.id', '=', 'issuances.item_id')
             ->join('item_categories', 'item_categories.id', '=', 'items.item_category_id')
-            ->where('distributed_to', $user->id)
+            ->where('issued_to', $user->id)
             ->whereIn('items.item_category_id', $this->categoryIdsForSlug($category))
-            ->groupBy('distributions.item_id', 'items.name', 'item_categories.name')
+            ->groupBy('issuances.item_id', 'items.name', 'item_categories.name')
             ->addSelect([
                 'items.name as item_name',
                 'item_categories.name as category_name',
             ]);
-        $this->applyDatePeriodFilter($query, 'distributions.distribution_date', $fromDate, $toDate);
+        $this->applyDatePeriodFilter($query, 'issuances.issuance_date', $fromDate, $toDate);
 
         if (filled($search)) {
             $term = '%'.$search.'%';
@@ -741,10 +762,17 @@ class EmployeeDistributionInventoryService
      */
     public function assertEmployeeOwnsItem(User $user, int $itemId): void
     {
-        $owns = Distribution::query()
-            ->where('distributed_to', $user->id)
+        $owns = Issuance::query()
+            ->where('issued_to', $user->id)
             ->where('item_id', $itemId)
             ->exists();
+
+        if (! $owns) {
+            $owns = Distribution::query()
+                ->where('distributed_to', $user->id)
+                ->where('item_id', $itemId)
+                ->exists();
+        }
 
         if (! $owns) {
             throw new AuthorizationException('This item is not in your inventory.');
@@ -897,6 +925,99 @@ class EmployeeDistributionInventoryService
     {
         $this->assertEmployeeOwnsItem($user, $itemId);
 
+        $query = Issuance::query()
+            ->with([
+                'requisition.endorsedBy',
+                'requisition.requestedBy',
+                'consolidatedRequisition.requestedBy',
+                'issuedBy',
+                'item.category',
+            ])
+            ->where('issued_to', $user->id)
+            ->where('item_id', $itemId);
+        $this->applyDatePeriodFilter($query, 'issuance_date', $fromDate, $toDate);
+
+        $issuances = $query
+            ->orderBy('issuance_date')
+            ->orderBy('id')
+            ->get();
+
+        if ($issuances->isEmpty()) {
+            return $this->presentLegacyDistributionLedger($user, $itemId, $fromDate, $toDate);
+        }
+
+        $item = $issuances->first()?->item;
+        $balance = 0;
+        $rows = [];
+
+        foreach ($issuances as $issuance) {
+            $balance += (int) $issuance->quantity;
+
+            $rows[] = [
+                'date' => $issuance->issuance_date?->format('M j, Y') ?? '—',
+                'reference' => $issuance->consolidatedRequisition?->reference_code
+                    ?? $issuance->requisition?->displayRisNumber()
+                    ?? $issuance->requisition?->reference_code
+                    ?? $issuance->controlNumber()
+                    ?? ('Issuance #'.$issuance->id),
+                'quantity' => (int) $issuance->quantity,
+                'balance' => $balance,
+                'distributed_by' => $this->resolveIssuedByConsolidatorName($issuance),
+                'remarks' => $issuance->remarks ?? '—',
+            ];
+        }
+
+        $rows = array_reverse($rows);
+
+        return [
+            'header' => [
+                'item_name' => $item?->name ?? '—',
+                'category_name' => $item?->category?->name ?? '—',
+                'stock_no' => $item?->item_code,
+                'total_on_hand' => (string) $balance,
+                'total_quantity' => (string) $issuances->sum(fn (Issuance $issuance): int => (int) $issuance->quantity),
+                'last_received' => $issuances->max('issuance_date')?->format('M j, Y') ?? '—',
+                'distribution_count' => (string) $issuances->count(),
+            ],
+            'columns' => [
+                'date' => $this->ledgerColumn(
+                    'Date Issued',
+                    'Date the Supply Custodian issued this item to you.',
+                ),
+                'reference' => $this->ledgerColumn(
+                    'RIS No.',
+                    'Requisition and Issue Slip number linked to this issuance.',
+                ),
+                'quantity' => $this->ledgerColumn(
+                    'Qty received',
+                    'Quantity received in this event.',
+                ),
+                'balance' => $this->ledgerColumn(
+                    'Balance',
+                    'Running total on hand after this event.',
+                ),
+                'distributed_by' => $this->ledgerColumn(
+                    'Unit Consolidator',
+                    'Unit Consolidator who endorsed your request.',
+                ),
+                'remarks' => $this->ledgerColumn(
+                    'Remarks',
+                    'Optional notes recorded with this issuance.',
+                ),
+            ],
+            'rows' => $rows,
+        ];
+    }
+
+    /**
+     * @return array{
+     *     header: array<string, string|null>,
+     *     columns: array<string, string>,
+     *     rows: array<int, array<string, mixed>>
+     * }
+     */
+    protected function presentLegacyDistributionLedger(User $user, int $itemId, ?string $fromDate = null, ?string $toDate = null): array
+    {
         $query = Distribution::query()
             ->with([
                 'requisition.endorsedBy',
@@ -972,6 +1093,14 @@ class EmployeeDistributionInventoryService
             ],
             'rows' => $rows,
         ];
+    }
+
+    protected function resolveIssuedByConsolidatorName(Issuance $issuance): string
+    {
+        $uc = $issuance->consolidatedRequisition?->requestedBy?->name
+            ?? $issuance->requisition?->endorsedBy?->name;
+
+        return $uc ?? '—';
     }
 
     /**

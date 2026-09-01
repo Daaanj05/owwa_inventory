@@ -136,7 +136,7 @@ class IssuancesTable
                 AcquisitionDateRangeFilter::make('issuance_date', 'Date'),
             ])
             ->emptyStateHeading('No issuances recorded')
-            ->emptyStateDescription('Issuances are created from Requisitions → Accept & issue (or Issue remainder). Export RSMI here after issue; export RIS from Requisitions.')
+            ->emptyStateDescription('Issuances are created from Requisitions → Review & issue (or Issue remainder). Export RSMI here after issue; export RIS from Requisitions.')
             ->emptyStateIcon('heroicon-o-arrow-up-tray')
             ->recordActions([
                 ConfiguresOwwaViewAction::make(

@@ -148,22 +148,22 @@ class EmployeeCustodyTest extends TestCase
     {
         [$uc, $employee, $item] = $this->seedEmployeeDistributions();
 
-        /** @var Distribution $oldDistribution */
-        $oldDistribution = Distribution::query()
-            ->where('distributed_to', $employee->id)
+        /** @var Issuance $oldIssuance */
+        $oldIssuance = Issuance::query()
+            ->where('issued_to', $employee->id)
             ->where('item_id', $item->id)
             ->orderBy('id')
             ->firstOrFail();
 
-        /** @var Distribution $newDistribution */
-        $newDistribution = Distribution::query()
-            ->where('distributed_to', $employee->id)
+        /** @var Issuance $newIssuance */
+        $newIssuance = Issuance::query()
+            ->where('issued_to', $employee->id)
             ->where('item_id', $item->id)
             ->orderByDesc('id')
             ->firstOrFail();
 
-        $oldDistribution->update(['distribution_date' => now()->subMonth()]);
-        $newDistribution->update(['distribution_date' => now()]);
+        $oldIssuance->update(['issuance_date' => now()->subMonth()]);
+        $newIssuance->update(['issuance_date' => now()]);
 
         Livewire::actingAs($uc)
             ->test(EmployeeCustody::class, [
@@ -421,15 +421,24 @@ class EmployeeCustodyTest extends TestCase
             'name' => 'Test Item',
         ]);
 
+        $requisition = Requisition::query()->create([
+            'office_id' => $office->id,
+            'department_id' => $department->id,
+            'requested_by' => $employee->id,
+            'status' => Requisition::STATUS_ACCEPTED,
+            'transaction_number' => 'EMP-CUST-1',
+        ]);
+
         foreach ([5, 3] as $quantity) {
-            Distribution::factory()->create([
+            Issuance::query()->create([
                 'office_id' => $office->id,
                 'department_id' => $department->id,
+                'requisition_id' => $requisition->id,
                 'item_id' => $item->id,
-                'distributed_to' => $employee->id,
-                'distributed_by' => $uc->id,
                 'quantity' => $quantity,
-                'distribution_date' => now(),
+                'issued_to' => $employee->id,
+                'issued_by' => $uc->id,
+                'issuance_date' => now(),
             ]);
         }
 

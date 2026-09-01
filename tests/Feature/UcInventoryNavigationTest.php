@@ -2,8 +2,6 @@
 
 namespace Tests\Feature;
 
-use App\Filament\Resources\Distributions\DistributionResource;
-use App\Filament\Resources\Distributions\Pages\ListDistributions;
 use App\Models\ItemCategory;
 use App\Models\Office;
 use App\Models\User;
@@ -11,7 +9,6 @@ use App\Providers\Filament\AdminPanelProvider;
 use Filament\Facades\Filament;
 use Filament\Navigation\NavigationItem;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Livewire\Livewire;
 use Tests\TestCase;
 
 class UcInventoryNavigationTest extends TestCase
@@ -47,7 +44,7 @@ class UcInventoryNavigationTest extends TestCase
             ->values()
             ->all();
 
-        $this->assertContains('Distributions', $labels);
+        $this->assertNotContains('Distributions', $labels);
         $this->assertContains('Office Property Registry', $labels);
         $this->assertContains('Employee Custody', $labels);
         $this->assertNotContains('Consumables', $labels);
@@ -100,23 +97,9 @@ class UcInventoryNavigationTest extends TestCase
         $this->assertNotContains('Inventory', $groups);
     }
 
-    public function test_uc_can_open_distributions_without_category_dashboard_redirect(): void
+    public function test_distributions_module_is_removed(): void
     {
-        $office = Office::factory()->create();
-        ItemCategory::factory()->create(['name' => 'Consumables']);
-
-        $uc = User::factory()->create([
-            'role' => User::ROLE_UNIT_CONSOLIDATOR,
-            'office_id' => $office->id,
-        ]);
-
-        $this->actingAs($uc)
-            ->get(DistributionResource::getUrl('index'))
-            ->assertOk();
-
-        Livewire::actingAs($uc)
-            ->test(ListDistributions::class)
-            ->assertOk()
-            ->assertSee('Distributions');
+        $this->assertFileDoesNotExist(app_path('Filament/Resources/Distributions/DistributionResource.php'));
+        $this->assertFileDoesNotExist(app_path('Services/DistributionCompileService.php'));
     }
 }

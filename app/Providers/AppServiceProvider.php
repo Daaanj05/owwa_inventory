@@ -5,7 +5,6 @@ namespace App\Providers;
 use App\Models\Acquisition;
 use App\Models\Disposal;
 use App\Models\DisposalBatch;
-use App\Models\Distribution;
 use App\Models\Issuance;
 use App\Models\IssuanceBatch;
 use App\Models\Item;
@@ -16,7 +15,6 @@ use App\Models\Transfer;
 use App\Observers\AcquisitionObserver;
 use App\Observers\DisposalBatchObserver;
 use App\Observers\DisposalObserver;
-use App\Observers\DistributionObserver;
 use App\Observers\IssuanceBatchObserver;
 use App\Observers\IssuanceObserver;
 use App\Observers\ItemObserver;
@@ -82,7 +80,6 @@ class AppServiceProvider extends ServiceProvider
         DisposalBatch::observe(DisposalBatchObserver::class);
         Disposal::observe(DisposalObserver::class);
         Requisition::observe(RequisitionObserver::class);
-        Distribution::observe(DistributionObserver::class);
         PhysicalCountSession::observe(PhysicalCountSessionObserver::class);
         PropertyActionRequest::observe(PropertyActionRequestObserver::class);
 

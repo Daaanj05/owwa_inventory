@@ -15,6 +15,8 @@ class IssuanceDistributionVisibility
 
     public const STATUS_DISTRIBUTED = 'distributed';
 
+    public const STATUS_ISSUED = 'issued';
+
     /**
      * @return array{
      *     unit_consolidator: string|null,
@@ -27,10 +29,30 @@ class IssuanceDistributionVisibility
      */
     public static function forIssuance(Issuance $issuance): array
     {
-        $issuance->loadMissing(['issuedTo', 'requisition.requestedBy', 'item', 'batch.lines']);
+        $issuance->loadMissing(['issuedTo', 'requisition.requestedBy', 'consolidatedRequisition.requestedBy', 'item', 'batch.lines']);
         $lines = $issuance->batchLines();
         $issuedQuantity = (int) $lines->sum('quantity');
         $unitConsolidator = self::resolveUnitConsolidatorName($issuance);
+
+        if ($issuance->isEmployeeDirectIssuance()) {
+            $employee = $issuance->issuedTo;
+            $employees = $employee instanceof User
+                ? [[
+                    'name' => $employee->name,
+                    'quantity' => (int) $issuance->quantity,
+                    'date' => $issuance->issuance_date?->format('M j, Y'),
+                ]]
+                : [];
+
+            return [
+                'unit_consolidator' => $unitConsolidator,
+                'distribution_status' => self::STATUS_ISSUED,
+                'distribution_status_label' => self::statusLabel(self::STATUS_ISSUED),
+                'issued_quantity' => $issuedQuantity,
+                'distributed_quantity' => (int) $issuance->quantity,
+                'employees' => $employees,
+            ];
+        }
 
         $distributions = self::distributionsForIssuance($issuance);
         $distributedQuantity = (int) $distributions->sum('quantity');
@@ -48,12 +70,18 @@ class IssuanceDistributionVisibility
     }
 
     /**
-     * SC issues to the Unit Consolidator; UC then distributes to employees.
-     * Never treat Supply Custodian (or other non-UC roles) as the UC label.
+     * SC issues to employees directly on consolidated RIS; UC is the consolidator/endorser.
      */
     public static function resolveUnitConsolidatorName(Issuance $issuance): ?string
     {
-        $issuance->loadMissing(['issuedTo', 'requisition.requestedBy']);
+        $issuance->loadMissing(['issuedTo', 'requisition.requestedBy', 'consolidatedRequisition.requestedBy']);
+
+        if ($issuance->consolidated_requisition_id) {
+            $uc = $issuance->consolidatedRequisition?->requestedBy;
+            if ($uc instanceof User && $uc->isUnitConsolidator()) {
+                return $uc->name;
+            }
+        }
 
         $issuedTo = $issuance->issuedTo;
         if ($issuedTo instanceof User && $issuedTo->isUnitConsolidator()) {
@@ -74,26 +102,31 @@ class IssuanceDistributionVisibility
     }
 
     /**
-     * Compact holder label for Stock Levels / ledger: employee when distributed, else UC.
+     * Compact holder label for Stock Levels / ledger: employee when issued, with UC as endorser.
      */
     public static function holderLabelForIssuance(Issuance $issuance): ?string
     {
         $summary = self::forIssuance($issuance);
         $employees = $summary['employees'];
+        $uc = $summary['unit_consolidator'];
+
+        if ($issuance->isEmployeeDirectIssuance()) {
+            $employeeName = $employees[0]['name'] ?? $issuance->issuedTo?->name ?? '—';
+
+            return filled($uc) ? "{$employeeName} (via {$uc})" : $employeeName;
+        }
 
         if ($employees === []) {
-            return $summary['unit_consolidator'];
+            return $uc;
         }
 
         if (count($employees) === 1) {
             $name = $employees[0]['name'];
-            $uc = $summary['unit_consolidator'];
 
             return filled($uc) ? "{$name} (via {$uc})" : $name;
         }
 
         $names = collect($employees)->pluck('name')->filter()->unique()->values();
-        $uc = $summary['unit_consolidator'];
         $list = $names->take(2)->implode(', ');
         if ($names->count() > 2) {
             $list .= ' +'.($names->count() - 2);
@@ -115,6 +148,10 @@ class IssuanceDistributionVisibility
 
         if ($issuance->requisition_id) {
             $requisitionIds = $requisitionIds->push((int) $issuance->requisition_id)->unique()->values();
+        }
+
+        if ($issuance->consolidated_requisition_id) {
+            $requisitionIds = $requisitionIds->push((int) $issuance->consolidated_requisition_id)->unique()->values();
         }
 
         $itemIds = $issuance->batchLines()
@@ -181,6 +218,7 @@ class IssuanceDistributionVisibility
         return match ($status) {
             self::STATUS_DISTRIBUTED => 'Distributed',
             self::STATUS_PARTIAL => 'Partially distributed',
+            self::STATUS_ISSUED => 'Issued to employee',
             default => 'Pending distribution',
         };
     }

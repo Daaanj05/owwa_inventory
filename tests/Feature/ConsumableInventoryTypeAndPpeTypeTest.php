@@ -59,6 +59,43 @@ class ConsumableInventoryTypeAndPpeTypeTest extends TestCase
         $this->assertNull($ppeItem->fresh()->inventory_type);
     }
 
+    public function test_resolve_maps_janitorial_supplies_label(): void
+    {
+        $this->assertSame(
+            ConsumableInventoryType::JanitorialSupplies,
+            ConsumableInventoryType::resolve('Janitorial supplies'),
+        );
+        $this->assertSame(
+            ConsumableInventoryType::JanitorialSupplies,
+            ConsumableInventoryType::resolve('Janitorial Supplies Inventory'),
+        );
+        $this->assertSame(
+            'Janitorial Supplies Inventory',
+            ConsumableInventoryType::label(ConsumableInventoryType::JanitorialSupplies),
+        );
+    }
+
+    public function test_resolve_accepts_custom_inventory_type_and_keeps_official_aliases(): void
+    {
+        $this->assertSame(
+            ConsumableInventoryType::OfficeSupplies,
+            ConsumableInventoryType::resolve('Office Supply'),
+        );
+        $this->assertSame(
+            'vehicle_maintenance_supply',
+            ConsumableInventoryType::resolve('Vehicle Maintenance Supply'),
+        );
+        $this->assertSame(
+            'Vehicle Maintenance Supply',
+            ConsumableInventoryType::label('vehicle_maintenance_supply'),
+        );
+        $this->assertSame(
+            'tools_and_hardware',
+            ConsumableInventoryType::resolve('Tools & hardware'),
+        );
+        $this->assertNull(ConsumableInventoryType::resolve('???'));
+    }
+
     public function test_rpci_header_uses_session_inventory_type_label(): void
     {
         $office = Office::factory()->create();

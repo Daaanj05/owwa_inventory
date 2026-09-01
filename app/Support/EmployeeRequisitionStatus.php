@@ -3,6 +3,7 @@
 namespace App\Support;
 
 use App\Models\Distribution;
+use App\Models\Issuance;
 use App\Models\Requisition;
 use App\Models\RequisitionSourceEndorsement;
 use Illuminate\Support\Carbon;
@@ -28,16 +29,16 @@ class EmployeeRequisitionStatus
         }
 
         if ($requisition->closed_at !== null) {
-            return self::distributedTotal($requisition) < self::fulfillmentTargetTotal($requisition)
-                ? 'Partially distributed — Closed'
-                : 'Fully distributed — Closed';
+            return self::issuedTotal($requisition) < self::fulfillmentTargetTotal($requisition)
+                ? 'Partially issued — Closed'
+                : 'Fully issued — Closed';
         }
 
-        $distributed = self::distributedTotal($requisition);
+        $issued = self::issuedTotal($requisition);
         $target = self::fulfillmentTargetTotal($requisition);
 
-        if ($distributed > 0 && $distributed < $target) {
-            return 'Partially distributed — Awaiting balance';
+        if ($issued > 0 && $issued < $target) {
+            return 'Partially issued — Awaiting balance';
         }
 
         if ($requisition->hasBackorderedLines()) {
@@ -135,18 +136,51 @@ class EmployeeRequisitionStatus
 
     public static function remainingToFulfill(Requisition $requisition): int
     {
-        return max(0, self::fulfillmentTargetTotal($requisition) - self::distributedTotal($requisition));
+        return max(0, self::fulfillmentTargetTotal($requisition) - self::issuedTotal($requisition));
     }
 
+    public static function issuedTotal(Requisition $requisition): int
+    {
+        return (int) Issuance::query()
+            ->where('requisition_id', $requisition->id)
+            ->sum('quantity');
+    }
+
+    /**
+     * @deprecated Use issuedTotal() — kept for legacy distribution reads.
+     */
     public static function distributedTotal(Requisition $requisition): int
     {
+        $issued = self::issuedTotal($requisition);
+
+        if ($issued > 0) {
+            return $issued;
+        }
+
         return (int) Distribution::query()
             ->where('requisition_id', $requisition->id)
             ->sum('quantity');
     }
 
+    public static function issuedTotalForItem(Requisition $requisition, int $itemId): int
+    {
+        return (int) Issuance::query()
+            ->where('requisition_id', $requisition->id)
+            ->where('item_id', $itemId)
+            ->sum('quantity');
+    }
+
+    /**
+     * @deprecated Use issuedTotalForItem() — kept for legacy distribution reads.
+     */
     public static function distributedTotalForItem(Requisition $requisition, int $itemId): int
     {
+        $issued = self::issuedTotalForItem($requisition, $itemId);
+
+        if ($issued > 0) {
+            return $issued;
+        }
+
         return (int) Distribution::query()
             ->where('requisition_id', $requisition->id)
             ->where('item_id', $itemId)
@@ -178,20 +212,36 @@ class EmployeeRequisitionStatus
 
     public static function remainingToFulfillForItem(Requisition $requisition, int $itemId): int
     {
-        return max(0, self::fulfillmentTargetForItem($requisition, $itemId) - self::distributedTotalForItem($requisition, $itemId));
+        return max(0, self::fulfillmentTargetForItem($requisition, $itemId) - self::issuedTotalForItem($requisition, $itemId));
     }
 
-    public static function latestDistributionDate(Requisition $requisition): ?Carbon
+    public static function latestIssuanceDate(Requisition $requisition): ?Carbon
     {
-        $date = Distribution::query()
+        $date = Issuance::query()
+            ->where('requisition_id', $requisition->id)
+            ->max('issuance_date');
+
+        if ($date) {
+            return Carbon::parse($date);
+        }
+
+        $distributionDate = Distribution::query()
             ->where('requisition_id', $requisition->id)
             ->max('distribution_date');
 
-        return $date ? Carbon::parse($date) : null;
+        return $distributionDate ? Carbon::parse($distributionDate) : null;
     }
 
-    public static function formatSummary(int $distributed, int $target): string
+    /**
+     * @deprecated Use latestIssuanceDate()
+     */
+    public static function latestDistributionDate(Requisition $requisition): ?Carbon
     {
-        return "Distributed {$distributed} of {$target}";
+        return self::latestIssuanceDate($requisition);
+    }
+
+    public static function formatSummary(int $fulfilled, int $target): string
+    {
+        return "Issued {$fulfilled} of {$target}";
     }
 }

@@ -3,15 +3,17 @@
 namespace Tests\Feature;
 
 use App\Filament\Resources\Issuances\IssuanceResource;
-use App\Filament\Resources\Requisitions\Actions\CustodianRequisitionActions;
 use App\Filament\Resources\Requisitions\Pages\ListRequisitions;
 use App\Filament\Resources\Requisitions\Schemas\RequisitionIssuanceFormSchema;
+use App\Models\Acquisition;
+use App\Models\InventoryUnit;
 use App\Models\Issuance;
 use App\Models\Item;
 use App\Models\ItemCategory;
 use App\Models\Office;
 use App\Models\Requisition;
 use App\Models\RequisitionItem;
+use App\Models\RequisitionSourceEndorsement;
 use App\Models\User;
 use App\Services\OwwaTemplateExportService;
 use App\Services\RequisitionFulfillmentService;
@@ -78,7 +80,8 @@ class RecordIssuanceFromRequisitionTest extends TestCase
 
         Livewire::test(ListRequisitions::class)
             ->assertCanSeeTableRecords([$requisition])
-            ->assertActionVisible(TestAction::make('acceptAndIssue')->table($requisition));
+            ->mountTableAction('view', $requisition)
+            ->assertActionVisible(TestAction::make('acceptAndIssue'));
 
         $result = app(RequisitionFulfillmentService::class)->issueLines(
             $requisition,
@@ -155,7 +158,8 @@ class RecordIssuanceFromRequisitionTest extends TestCase
         $this->actingAs($custodian);
 
         Livewire::test(ListRequisitions::class)
-            ->callAction(TestAction::make('acceptAndIssue')->table($requisition), [
+            ->mountTableAction('view', $requisition)
+            ->callAction(TestAction::make('acceptAndIssue'), [
                 'issuance_date' => '2026-06-07',
                 'lines' => RequisitionIssuanceFormSchema::defaultLines($requisition->fresh(), false),
             ])
@@ -166,33 +170,12 @@ class RecordIssuanceFromRequisitionTest extends TestCase
         $this->assertSame(2, $line->fresh()->quantity_issued);
     }
 
-    public function test_custodian_reject_action_is_visible_on_pending_uc_requisition(): void
+    public function test_custodian_reject_action_was_removed(): void
     {
-        Filament::setCurrentPanel(Filament::getPanel('admin'));
-
-        $office = Office::factory()->create();
-        /** @var User $uc */
-        $uc = User::factory()->create([
-            'role' => User::ROLE_UNIT_CONSOLIDATOR,
-            'office_id' => $office->id,
-        ]);
-        /** @var User $custodian */
-        $custodian = User::factory()->create(['role' => User::ROLE_SUPPLY_CUSTODIAN]);
-
-        $requisition = Requisition::query()->create([
-            'reference_code' => '2026-01-0099',
-            'office_id' => $office->id,
-            'requested_by' => $uc->id,
-            'status' => Requisition::STATUS_PENDING,
-        ]);
-
-        $this->actingAs($custodian);
-
-        Livewire::test(ListRequisitions::class)
-            ->assertCanSeeTableRecords([$requisition])
-            ->assertActionVisible(TestAction::make('custodianReject')->table($requisition));
-
-        $this->assertTrue(CustodianRequisitionActions::canReject($requisition));
+        $this->assertFalse(method_exists(
+            \App\Filament\Resources\Requisitions\Actions\CustodianRequisitionActions::class,
+            'rejectAction',
+        ));
     }
 
     public function test_mixed_category_requisition_issues_to_separate_category_lists(): void
@@ -214,27 +197,43 @@ class RecordIssuanceFromRequisitionTest extends TestCase
             'estimated_useful_life' => '5 yrs',
         ]);
 
-        foreach ([$consumableItem, $semiItem] as $item) {
-            DB::table('acquisitions')->insert([
-                'reference_code' => 'ACQ-MIX-'.$item->id,
-                'item_id' => $item->id,
-                'office_id' => $office->id,
-                'quantity' => 50,
-                'acquisition_date' => now()->toDateString(),
-                'created_at' => now(),
-                'updated_at' => now(),
-            ]);
-        }
+        /** @var User $custodian */
+        $custodian = User::factory()->create([
+            'role' => User::ROLE_SUPPLY_CUSTODIAN,
+        ]);
+
+        DB::table('acquisitions')->insert([
+            'reference_code' => 'ACQ-MIX-'.$consumableItem->id,
+            'item_id' => $consumableItem->id,
+            'office_id' => $office->id,
+            'quantity' => 50,
+            'acquisition_date' => now()->toDateString(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $semiAcquisition = Acquisition::query()->create([
+            'reference_code' => 'ACQ-MIX-'.$semiItem->id,
+            'item_id' => $semiItem->id,
+            'office_id' => $office->id,
+            'quantity' => 1,
+            'unit_cost' => 1000,
+            'acquisition_date' => now()->toDateString(),
+            'recorded_by' => $custodian->id,
+        ]);
+
+        InventoryUnit::query()->create([
+            'property_number' => 'SEMI-MIX-001',
+            'acquisition_id' => $semiAcquisition->id,
+            'item_id' => $semiItem->id,
+            'office_id' => $office->id,
+            'status' => InventoryUnit::STATUS_IN_STOCK,
+        ]);
 
         /** @var User $uc */
         $uc = User::factory()->create([
             'role' => User::ROLE_UNIT_CONSOLIDATOR,
             'office_id' => $office->id,
-        ]);
-
-        /** @var User $custodian */
-        $custodian = User::factory()->create([
-            'role' => User::ROLE_SUPPLY_CUSTODIAN,
         ]);
 
         $requisition = Requisition::query()->create([
@@ -302,6 +301,137 @@ class RecordIssuanceFromRequisitionTest extends TestCase
             $semiItem->id,
             Issuance::query()->find($semiIssuanceIds[0])?->item_id,
         );
+    }
+
+    public function test_custodian_issues_split_quantities_per_employee_from_consolidated_ris(): void
+    {
+        $office = Office::factory()->create();
+        $category = ItemCategory::factory()->create(['name' => 'Consumables']);
+        $item = Item::factory()->create(['item_category_id' => $category->id, 'name' => 'Ballpen']);
+
+        DB::table('acquisitions')->insert([
+            'reference_code' => 'ACQ-SPLIT-1',
+            'item_id' => $item->id,
+            'office_id' => $office->id,
+            'quantity' => 50,
+            'acquisition_date' => now()->toDateString(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $employeeA = User::factory()->create([
+            'role' => User::ROLE_EMPLOYEE,
+            'office_id' => $office->id,
+            'name' => 'Employee A',
+        ]);
+        $employeeB = User::factory()->create([
+            'role' => User::ROLE_EMPLOYEE,
+            'office_id' => $office->id,
+            'name' => 'Employee B',
+        ]);
+        $uc = User::factory()->create([
+            'role' => User::ROLE_UNIT_CONSOLIDATOR,
+            'office_id' => $office->id,
+            'name' => 'Unit Consolidator',
+        ]);
+        $custodian = User::factory()->create([
+            'role' => User::ROLE_SUPPLY_CUSTODIAN,
+        ]);
+
+        $reqA = Requisition::query()->create([
+            'office_id' => $office->id,
+            'requested_by' => $employeeA->id,
+            'status' => Requisition::STATUS_ACCEPTED,
+            'transaction_number' => 'EMP-A-1',
+        ]);
+        $lineA = RequisitionItem::query()->create([
+            'requisition_id' => $reqA->id,
+            'item_id' => $item->id,
+            'quantity' => 10,
+        ]);
+
+        $reqB = Requisition::query()->create([
+            'office_id' => $office->id,
+            'requested_by' => $employeeB->id,
+            'status' => Requisition::STATUS_ACCEPTED,
+            'transaction_number' => 'EMP-B-1',
+        ]);
+        $lineB = RequisitionItem::query()->create([
+            'requisition_id' => $reqB->id,
+            'item_id' => $item->id,
+            'quantity' => 8,
+        ]);
+
+        $consolidated = Requisition::query()->create([
+            'reference_code' => '2026-01-0500',
+            'office_id' => $office->id,
+            'requested_by' => $uc->id,
+            'status' => Requisition::STATUS_PENDING,
+        ]);
+        $consolidatedLine = RequisitionItem::query()->create([
+            'requisition_id' => $consolidated->id,
+            'item_id' => $item->id,
+            'quantity' => 15,
+        ]);
+
+        $endorsementA = RequisitionSourceEndorsement::query()->create([
+            'consolidated_requisition_id' => $consolidated->id,
+            'source_requisition_id' => $reqA->id,
+            'requisition_item_id' => $lineA->id,
+            'requested_by_user_id' => $employeeA->id,
+            'item_id' => $item->id,
+            'requested_quantity' => 10,
+            'endorsed_quantity' => 8,
+        ]);
+        $endorsementB = RequisitionSourceEndorsement::query()->create([
+            'consolidated_requisition_id' => $consolidated->id,
+            'source_requisition_id' => $reqB->id,
+            'requisition_item_id' => $lineB->id,
+            'requested_by_user_id' => $employeeB->id,
+            'item_id' => $item->id,
+            'requested_quantity' => 8,
+            'endorsed_quantity' => 7,
+        ]);
+
+        $result = app(RequisitionFulfillmentService::class)->issueLines(
+            $consolidated,
+            $custodian,
+            [
+                ['source_endorsement_id' => $endorsementA->id, 'quantity_to_issue' => 5],
+                ['source_endorsement_id' => $endorsementB->id, 'quantity_to_issue' => 6],
+            ],
+            '2026-06-10',
+        );
+
+        $this->assertSame(2, $result['created']);
+
+        $issuanceA = Issuance::query()->where('source_endorsement_id', $endorsementA->id)->first();
+        $issuanceB = Issuance::query()->where('source_endorsement_id', $endorsementB->id)->first();
+
+        $this->assertNotNull($issuanceA);
+        $this->assertNotNull($issuanceB);
+        $this->assertSame($employeeA->id, $issuanceA->issued_to);
+        $this->assertSame($employeeB->id, $issuanceB->issued_to);
+        $this->assertSame($reqA->id, $issuanceA->requisition_id);
+        $this->assertSame($reqB->id, $issuanceB->requisition_id);
+        $this->assertSame($consolidated->id, $issuanceA->consolidated_requisition_id);
+        $this->assertSame(5, $issuanceA->quantity);
+        $this->assertSame(6, $issuanceB->quantity);
+        $this->assertSame(11, (int) $consolidatedLine->fresh()->quantity_issued);
+
+        $values = app(OwwaTemplateExportService::class)->cellValuesForIssuance(
+            $issuanceA->loadMissing(['office', 'department', 'item', 'requisition', 'consolidatedRequisition.requestedBy', 'batch']),
+            'Consumable/Issuances/Appendix 64 - RSMI.xls'
+        );
+
+        $this->assertSame($consolidated->reference_code, $values['A12']);
+
+        $paperworkValues = app(OwwaTemplateExportService::class)->cellValuesForIssuance(
+            $issuanceA->fresh()->loadMissing(['batch', 'consolidatedRequisition.requestedBy', 'issuedTo']),
+            null,
+        );
+
+        $this->assertSame($uc->name, $paperworkValues['B8']);
     }
 
     public function test_issuance_without_requisition_is_blocked(): void

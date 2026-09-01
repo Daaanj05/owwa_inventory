@@ -24,7 +24,6 @@ use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\BulkAction;
 use Filament\Actions\BulkActionGroup;
-use Filament\Forms\Components\Textarea;
 use Filament\Notifications\Notification;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
@@ -139,16 +138,15 @@ class RequisitionsTable
                         RequisitionExportActions::exportRisAction(),
                         RequisitionExportActions::exportRisPdfAction(),
                         CustodianRequisitionActions::createPurchaseRequestAction(),
-                        CustodianRequisitionActions::acceptAndIssueAction(),
+                        CustodianRequisitionActions::reviewAndIssueAction(),
                         CustodianRequisitionActions::issueRemainderAction(),
-                        CustodianRequisitionActions::rejectAction(),
-                        Action::make('approveFromView')
-                            ->label('Approve')
+                        Action::make('reviewFromView')
+                            ->label('Mark as reviewed')
                             ->icon('heroicon-o-check')
                             ->color('success')
                             ->requiresConfirmation()
-                            ->modalHeading('Approve requisition')
-                            ->modalDescription('This will mark the requisition as accepted.')
+                            ->modalHeading('Mark employee requisition as reviewed')
+                            ->modalDescription('This confirms the Unit Consolidator has reviewed the request. You can endorse quantities when compiling to Supply Custodian.')
                             ->visible(function (Requisition $record): bool {
                                 $user = Auth::user();
 
@@ -163,39 +161,7 @@ class RequisitionsTable
                                     'approved_by' => Auth::id(),
                                     'approved_at' => now(),
                                 ]);
-                                Notification::make()->title('Requisition accepted')->success()->send();
-                            }),
-                        Action::make('rejectFromView')
-                            ->label('Reject')
-                            ->icon('heroicon-o-x-mark')
-                            ->color('danger')
-                            ->requiresConfirmation()
-                            ->modalHeading('Reject this requisition?')
-                            ->modalDescription('Are you sure you want to reject this requisition? Please provide a reason below.')
-                            ->modalSubmitActionLabel('Yes, reject')
-                            ->form([
-                                Textarea::make('remarks')
-                                    ->label('Reason for rejection')
-                                    ->required()
-                                    ->rows(4)
-                                    ->placeholder('Explain why this requisition is being rejected.'),
-                            ])
-                            ->visible(function (Requisition $record): bool {
-                                $user = Auth::user();
-
-                                return $user instanceof User
-                                    && $user->isUnitConsolidator()
-                                    && $record->status === Requisition::STATUS_PENDING
-                                    && $record->requestedBy?->role === User::ROLE_EMPLOYEE;
-                            })
-                            ->action(function (Requisition $record, array $data): void {
-                                $record->update([
-                                    'status' => Requisition::STATUS_REJECTED,
-                                    'remarks' => $data['remarks'] ?? null,
-                                    'approved_by' => Auth::id(),
-                                    'approved_at' => now(),
-                                ]);
-                                Notification::make()->title('Requisition rejected')->danger()->send();
+                                Notification::make()->title('Requisition reviewed')->success()->send();
                             }),
                         self::submitToScAction($table),
                     ],

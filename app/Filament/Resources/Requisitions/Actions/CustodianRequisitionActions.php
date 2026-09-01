@@ -13,7 +13,6 @@ use App\Support\RequisitionLineDisplay;
 use App\Support\RequisitionStatus;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Select;
-use Filament\Forms\Components\Textarea;
 use Filament\Notifications\Notification;
 use Illuminate\Support\Facades\Auth;
 
@@ -54,11 +53,6 @@ class CustodianRequisitionActions
         return self::hasActionableIssueLines($record, requireStock: true);
     }
 
-    public static function canReject(Requisition $record): bool
-    {
-        return false;
-    }
-
     /**
      * True when at least one remaining line can be issued (has stock) or still needs
      * a first-time zero-stock acknowledgement (no issue remarks yet).
@@ -96,22 +90,30 @@ class CustodianRequisitionActions
         return false;
     }
 
-    public static function acceptAndIssueAction(): Action
+    public static function reviewAndIssueAction(): Action
     {
         return Action::make('acceptAndIssue')
-            ->label('Accept & issue')
+            ->label('Review & issue')
             ->icon('heroicon-o-check-circle')
             ->color('success')
             ->requiresConfirmation()
-            ->modalHeading('Accept Requisition And Issue Stock')
+            ->modalHeading('Review And Issue Stock')
             ->modalDescription(fn (Requisition $record): string|\Illuminate\Contracts\Support\Htmlable => RequisitionInfolistSchema::acceptIssueModalDescription($record))
-            ->modalSubmitActionLabel('Yes, accept & issue')
+            ->modalSubmitActionLabel('Yes, issue stock')
             ->visible(fn (Requisition $record): bool => self::canAcceptAndIssue($record))
             ->fillForm(fn (Requisition $record): array => RequisitionIssuanceFormSchema::defaultFormState($record, remainderOnly: false))
             ->form(fn (Requisition $record): array => RequisitionIssuanceFormSchema::issueModalFields($record, remainderOnly: false))
             ->action(function (Requisition $record, array $data): void {
-                self::runIssueAction($record, $data, 'Requisition accepted');
+                self::runIssueAction($record, $data, 'Stock issued');
             });
+    }
+
+    /**
+     * @deprecated Use reviewAndIssueAction()
+     */
+    public static function acceptAndIssueAction(): Action
+    {
+        return self::reviewAndIssueAction();
     }
 
     public static function issueRemainderAction(): Action
@@ -129,43 +131,6 @@ class CustodianRequisitionActions
             ->form(fn (Requisition $record): array => RequisitionIssuanceFormSchema::issueModalFields($record, remainderOnly: true))
             ->action(function (Requisition $record, array $data): void {
                 self::runIssueAction($record, $data, 'Stock issued');
-            });
-    }
-
-    public static function rejectAction(): Action
-    {
-        return Action::make('custodianReject')
-            ->label('Reject')
-            ->icon('heroicon-o-x-mark')
-            ->color('danger')
-            ->requiresConfirmation()
-            ->modalHeading('Reject this requisition?')
-            ->modalDescription('The requestor will see your reason. No stock will be issued.')
-            ->modalSubmitActionLabel('Yes, reject')
-            ->form([
-                Textarea::make('remarks')
-                    ->label('Reason for rejection')
-                    ->required()
-                    ->rows(4)
-                    ->placeholder('Explain why this requisition is being rejected.'),
-            ])
-            ->visible(fn (Requisition $record): bool => self::canReject($record))
-            ->action(function (Requisition $record, array $data): void {
-                $user = Auth::user();
-                if (! $user instanceof User) {
-                    return;
-                }
-
-                app(RequisitionFulfillmentService::class)->reject(
-                    $record,
-                    $user,
-                    (string) ($data['remarks'] ?? ''),
-                );
-
-                Notification::make()
-                    ->title('Requisition rejected')
-                    ->danger()
-                    ->send();
             });
     }
 
@@ -226,7 +191,10 @@ class CustodianRequisitionActions
                     return false;
                 }
 
-                if ((int) ($row['requisition_item_id'] ?? 0) <= 0) {
+                $lineId = (int) ($row['requisition_item_id'] ?? 0);
+                $endorsementId = (int) ($row['source_endorsement_id'] ?? 0);
+
+                if ($lineId <= 0 && $endorsementId <= 0) {
                     return false;
                 }
 
@@ -234,7 +202,9 @@ class CustodianRequisitionActions
 
                 return $qty > 0 || filled($row['issue_remarks'] ?? null);
             })
-            ->unique(fn (array $row): int => (int) $row['requisition_item_id'])
+            ->unique(fn (array $row): string => ($row['source_endorsement_id'] ?? null) !== null
+                ? 'endorsement:'.(int) $row['source_endorsement_id']
+                : 'item:'.(int) $row['requisition_item_id'])
             ->values()
             ->all();
 

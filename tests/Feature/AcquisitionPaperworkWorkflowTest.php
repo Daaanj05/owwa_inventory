@@ -219,6 +219,8 @@ class AcquisitionPaperworkWorkflowTest extends TestCase
 
     public function test_pr_pdf_export_is_generated_from_spreadsheet(): void
     {
+        $this->skipUnlessLibreOfficeAvailable();
+
         if (! $this->acquisitionPaperworkTemplatesExist()) {
             $this->markTestSkipped('OWWA acquisition paperwork templates are not installed.');
         }

@@ -68,7 +68,11 @@ class LowStockWidget extends StatsOverviewWidget implements HasActions
         $user = Filament::auth()->user();
 
         if ($user?->isSupplyCustodian()) {
-            return 3;
+            return [
+                'default' => 1,
+                'md' => 2,
+                'xl' => 3,
+            ];
         }
 
         return $this->columns;

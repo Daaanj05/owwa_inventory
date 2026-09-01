@@ -17,6 +17,7 @@ class Issuance extends Model
 
     protected $fillable = [
         'issuance_batch_id', 'reference_code', 'item_id', 'office_id', 'department_id', 'requisition_id',
+        'consolidated_requisition_id', 'source_endorsement_id',
         'quantity', 'unit_cost', 'amount', 'issuance_date', 'remarks',
         'property_number', 'estimated_useful_life', 'eul_expires_at', 'received_from_name',
         'custodian_printed_name', 'accounting_staff_printed_name',
@@ -145,6 +146,21 @@ class Issuance extends Model
     public function requisition(): BelongsTo
     {
         return $this->belongsTo(Requisition::class);
+    }
+
+    public function consolidatedRequisition(): BelongsTo
+    {
+        return $this->belongsTo(Requisition::class, 'consolidated_requisition_id');
+    }
+
+    public function sourceEndorsement(): BelongsTo
+    {
+        return $this->belongsTo(RequisitionSourceEndorsement::class, 'source_endorsement_id');
+    }
+
+    public function isEmployeeDirectIssuance(): bool
+    {
+        return $this->consolidated_requisition_id !== null;
     }
 
     public function issuedBy(): BelongsTo

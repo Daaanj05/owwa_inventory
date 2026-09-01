@@ -83,6 +83,31 @@ class PpePropertyType
         return self::LegacyMap[$ppeType] ?? null;
     }
 
+    public static function resolve(?string $value): ?string
+    {
+        if (blank($value)) {
+            return null;
+        }
+
+        $normalized = self::normalize($value);
+        if ($normalized !== null) {
+            return $normalized;
+        }
+
+        return self::resolveFromInventoryTypeLabel($value);
+    }
+
+    public static function label(?string $ppeType): ?string
+    {
+        if (blank($ppeType)) {
+            return null;
+        }
+
+        $normalized = self::normalize($ppeType);
+
+        return $normalized !== null ? (self::options()[$normalized] ?? null) : null;
+    }
+
     public static function resolveForExport(?string $ppeType): string
     {
         return self::normalize($ppeType) ?? self::OfficeEquipment;

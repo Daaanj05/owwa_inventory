@@ -56,7 +56,7 @@ class ItemInfolist
                 TextEntry::make('inventory_type')
                     ->label('Inventory type')
                     ->formatStateUsing(fn (?string $state): string => filled($state)
-                        ? (ConsumableInventoryType::options()[$state] ?? $state)
+                        ? (ConsumableInventoryType::label($state) ?: $state)
                         : '—')
                     ->placeholder('—')
                     ->visible(fn (Item $record): bool => $record->category?->getTemplateSlug() === 'consumables'),

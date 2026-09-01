@@ -203,6 +203,8 @@ class AcquisitionProcurementUxTest extends TestCase
 
     public function test_bulk_procurement_pdf_export_returns_pdf_for_single_record(): void
     {
+        $this->skipUnlessLibreOfficeAvailable();
+
         if (! $this->acquisitionPaperworkTemplatesExist()) {
             $this->markTestSkipped('OWWA acquisition paperwork templates are not installed.');
         }
@@ -229,6 +231,8 @@ class AcquisitionProcurementUxTest extends TestCase
 
     public function test_bulk_procurement_pdf_export_merges_multiple_records_into_one_pdf(): void
     {
+        $this->skipUnlessLibreOfficeAvailable();
+
         if (! $this->acquisitionPaperworkTemplatesExist()) {
             $this->markTestSkipped('OWWA acquisition paperwork templates are not installed.');
         }
@@ -269,6 +273,8 @@ class AcquisitionProcurementUxTest extends TestCase
 
     public function test_bulk_po_pdf_export_includes_technical_specification_sheet(): void
     {
+        $this->skipUnlessLibreOfficeAvailable();
+
         if (! $this->acquisitionPaperworkTemplatesExist()) {
             $this->markTestSkipped('OWWA acquisition paperwork templates are not installed.');
         }
@@ -327,17 +333,10 @@ class AcquisitionProcurementUxTest extends TestCase
             'Bulk PO PDF must include the form and Technical Specification pages.',
         );
 
-        // Prefer extractable text when present (Dompdf). LibreOffice PDFs often use
-        // CID/glyph encodings, so page count + spreadsheet sheet coverage is the gate.
-        if (
-            str_contains($pdf, '/Producer (DomPdf')
-            || str_contains($pdf, '/Producer (Dompdf')
-        ) {
-            $this->assertTrue(
-                $this->pdfBinaryContainsText($pdf, 'TECHNICAL SPECIFICATION')
-                || $this->pdfBinaryContainsText($pdf, $uniqueSpecs),
-                'Bulk PO PDF must include Technical Specification content.',
-            );
+        // LibreOffice PDFs often use CID/glyph encodings, so page count + spreadsheet
+        // sheet coverage is the gate when text is not directly extractable.
+        if (str_contains($pdf, '/Producer (DomPdf') || str_contains($pdf, '/Producer (Dompdf')) {
+            $this->fail('PDF export must use LibreOffice, not Dompdf.');
         }
     }
 

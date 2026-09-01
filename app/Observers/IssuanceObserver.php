@@ -5,12 +5,14 @@ namespace App\Observers;
 use App\Events\IssuanceChanged;
 use App\Models\Issuance;
 use App\Models\Item;
+use App\Services\EmployeeRequisitionClosureService;
 use App\Services\InventoryStockService;
 use App\Services\IssuanceNotificationService;
 use App\Services\IssuanceUnitAssignmentService;
 use App\Services\ReferenceCodeService;
 use App\Support\SemiExpendableUsefulLife;
 use App\Support\SemiExpendableValueCategory;
+use Illuminate\Broadcasting\BroadcastException;
 use Illuminate\Validation\ValidationException;
 
 class IssuanceObserver
@@ -18,7 +20,7 @@ class IssuanceObserver
     public function creating(Issuance $issuance): void
     {
         if (blank($issuance->requisition_id)) {
-            throw new \InvalidArgumentException('Issuance must be linked to a requisition. Use Requisitions → Accept & issue.');
+            throw new \InvalidArgumentException('Issuance must be linked to a requisition. Use Requisitions → Review & issue.');
         }
 
         if (filled($issuance->issuance_batch_id)) {
@@ -77,9 +79,14 @@ class IssuanceObserver
     {
         app(InventoryStockService::class)->forgetMovementTotalsCache();
         app(IssuanceNotificationService::class)->handleCreated($issuance);
+        app(EmployeeRequisitionClosureService::class)->closeFromIssuance($issuance);
 
         if (filled(config('filament.broadcasting.echo.key'))) {
-            IssuanceChanged::dispatch($issuance);
+            try {
+                IssuanceChanged::dispatch($issuance);
+            } catch (BroadcastException $exception) {
+                report($exception);
+            }
         }
     }
 

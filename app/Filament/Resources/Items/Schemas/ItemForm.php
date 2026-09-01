@@ -23,6 +23,7 @@ use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
+use Illuminate\Support\Str;
 
 class ItemForm
 {
@@ -144,46 +145,164 @@ class ItemForm
                             ->default(0)
                             ->minValue(0),
 
-                        Select::make('inventory_type')
+                        TextInput::make('inventory_type')
                             ->label('Inventory type')
-                            ->options(ConsumableInventoryType::options())
+                            ->datalist(fn (): array => ConsumableInventoryType::suggestionLabels())
                             ->required(fn (Get $get): bool => self::isConsumablesCategory($get('item_category_id')))
-                            ->searchable()
                             ->visible(fn (Get $get): bool => self::isConsumablesCategory($get('item_category_id')))
-                            ->dehydrated(fn (Get $get): bool => self::isConsumablesCategory($get('item_category_id'))),
+                            ->dehydrated(fn (Get $get): bool => self::isConsumablesCategory($get('item_category_id')))
+                            ->live(onBlur: true)
+                            ->formatStateUsing(function (mixed $state): ?string {
+                                if (blank($state)) {
+                                    return null;
+                                }
+
+                                $label = ConsumableInventoryType::label((string) $state);
+
+                                return $label !== '' ? $label : (string) $state;
+                            })
+                            ->dehydrateStateUsing(function (mixed $state): ?string {
+                                if (blank($state)) {
+                                    return null;
+                                }
+
+                                return ConsumableInventoryType::resolve((string) $state) ?? trim((string) $state);
+                            })
+                            ->afterStateUpdated(function (Set $set, mixed $state): void {
+                                if (blank($state)) {
+                                    $set('inventory_type', null);
+
+                                    return;
+                                }
+
+                                $resolved = ConsumableInventoryType::resolve((string) $state);
+                                if ($resolved !== null) {
+                                    $set('inventory_type', ConsumableInventoryType::label($resolved));
+
+                                    return;
+                                }
+
+                                $set('inventory_type', Str::title(trim((string) $state)));
+                            })
+                            ->rule(function (Get $get) {
+                                return function (string $attribute, mixed $value, \Closure $fail) use ($get): void {
+                                    if (! self::isConsumablesCategory($get('item_category_id')) || blank($value)) {
+                                        return;
+                                    }
+
+                                    if (ConsumableInventoryType::resolve((string) $value) === null) {
+                                        $fail('Inventory type must include letters (e.g. Vehicle Maintenance Supply).');
+                                    }
+                                };
+                            })
+                            ->helperText('Type or pick a suggestion. New types are saved and offered on later imports.'),
                         TextInput::make('days_to_consume')
                             ->label('Days to consume')
                             ->numeric()
                             ->minValue(0)
                             ->visible(fn (Get $get): bool => self::isConsumablesCategory($get('item_category_id'))),
 
-                        Select::make('property_class')
+                        TextInput::make('property_class')
                             ->label('Property class')
-                            ->options(ItemPropertyClass::options())
+                            ->datalist(fn (): array => array_values(ItemPropertyClass::options()))
                             ->required(fn (Get $get): bool => self::isSemiExpendableCategory($get('item_category_id')))
-                            ->searchable()
-                            ->live()
-                            ->afterStateUpdated(function ($state, Set $set, Get $get): void {
+                            ->live(onBlur: true)
+                            ->formatStateUsing(function (mixed $state): ?string {
+                                if (blank($state)) {
+                                    return null;
+                                }
+
+                                return ItemPropertyClass::label((string) $state) ?? (string) $state;
+                            })
+                            ->dehydrateStateUsing(function (mixed $state): ?string {
+                                if (blank($state)) {
+                                    return null;
+                                }
+
+                                return ItemPropertyClass::resolve((string) $state);
+                            })
+                            ->afterStateUpdated(function (mixed $state, Set $set, Get $get): void {
                                 if (blank($state) || ! self::isSemiExpendableCategory($get('item_category_id'))) {
                                     return;
                                 }
 
-                                if (blank($get('estimated_useful_life'))) {
-                                    $default = SemiExpendableUsefulLife::defaultForPropertyClass($state);
-                                    if ($default !== null) {
-                                        $set('estimated_useful_life', $default);
+                                $resolved = ItemPropertyClass::resolve((string) $state);
+                                if ($resolved !== null) {
+                                    $set('property_class', ItemPropertyClass::label($resolved));
+
+                                    if (blank($get('estimated_useful_life'))) {
+                                        $default = SemiExpendableUsefulLife::defaultForPropertyClass($resolved);
+                                        if ($default !== null) {
+                                            $set('estimated_useful_life', $default);
+                                        }
                                     }
+
+                                    return;
                                 }
+
+                                $set('property_class', trim((string) $state));
                             })
-                            ->helperText('Category code in Inventory item no. (IT, FF, OE, …).')
+                            ->rule(function (Get $get) {
+                                return function (string $attribute, mixed $value, \Closure $fail) use ($get): void {
+                                    if (! self::isSemiExpendableCategory($get('item_category_id')) || blank($value)) {
+                                        return;
+                                    }
+
+                                    if (ItemPropertyClass::resolve((string) $value) === null) {
+                                        $fail('Property class must be an official COA label (e.g. Office Equipment).');
+                                    }
+                                };
+                            })
+                            ->helperText('Type or pick an official COA label. Category code in Inventory item no. (IT, FF, OE, …).')
                             ->visible(fn (Get $get): bool => self::isSemiExpendableCategory($get('item_category_id')))
                             ->dehydrated(fn (Get $get): bool => self::isSemiExpendableCategory($get('item_category_id'))),
-                        Select::make('ppe_type')
+                        TextInput::make('ppe_type')
                             ->label('Type of PPE')
-                            ->options(PpePropertyType::options())
+                            ->datalist(fn (): array => array_values(PpePropertyType::options()))
                             ->required(fn (Get $get): bool => self::isPpeCategory($get('item_category_id')))
-                            ->searchable()
-                            ->helperText('Printed on Appendix 73 RPCPPE as Type of Property, Plant and Equipment.')
+                            ->live(onBlur: true)
+                            ->formatStateUsing(function (mixed $state): ?string {
+                                if (blank($state)) {
+                                    return null;
+                                }
+
+                                return PpePropertyType::label((string) $state) ?? (string) $state;
+                            })
+                            ->dehydrateStateUsing(function (mixed $state): ?string {
+                                if (blank($state)) {
+                                    return null;
+                                }
+
+                                return PpePropertyType::resolve((string) $state);
+                            })
+                            ->afterStateUpdated(function (mixed $state, Set $set): void {
+                                if (blank($state)) {
+                                    $set('ppe_type', null);
+
+                                    return;
+                                }
+
+                                $resolved = PpePropertyType::resolve((string) $state);
+                                if ($resolved !== null) {
+                                    $set('ppe_type', PpePropertyType::label($resolved));
+
+                                    return;
+                                }
+
+                                $set('ppe_type', trim((string) $state));
+                            })
+                            ->rule(function (Get $get) {
+                                return function (string $attribute, mixed $value, \Closure $fail) use ($get): void {
+                                    if (! self::isPpeCategory($get('item_category_id')) || blank($value)) {
+                                        return;
+                                    }
+
+                                    if (PpePropertyType::resolve((string) $value) === null) {
+                                        $fail('Type of PPE must be an official COA label (e.g. Office Equipment).');
+                                    }
+                                };
+                            })
+                            ->helperText('Type or pick an official COA label. Printed on Appendix 73 RPCPPE as Type of Property, Plant and Equipment.')
                             ->visible(fn (Get $get): bool => self::isPpeCategory($get('item_category_id')))
                             ->dehydrated(fn (Get $get): bool => self::isPpeCategory($get('item_category_id'))),
                         Select::make('uacs_object_code_id')

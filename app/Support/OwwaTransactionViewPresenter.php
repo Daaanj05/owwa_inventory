@@ -164,8 +164,6 @@ class OwwaTransactionViewPresenter
                 ],
                 ['label' => 'Category', 'value' => $record->category?->name ?? '—'],
                 ['label' => 'Unit', 'value' => $record->unit ?? '—'],
-            ],
-            kpis: [
                 ['label' => 'Reorder point', 'value' => (string) ($record->reorder_level ?? '—')],
             ],
         );

@@ -13,7 +13,7 @@ class AnnexA4PdfExportService
     ) {}
 
     /**
-     * PDF from the same filled Annex A.4 spreadsheet used for Excel (LibreOffice → Dompdf fallback).
+     * PDF from the same filled Annex A.4 spreadsheet used for Excel (LibreOffice headless).
      *
      * @param  Collection<int, array{item_id: int, office_id: int, unit_cost?: float|null}>  $pairs
      */

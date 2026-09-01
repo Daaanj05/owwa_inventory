@@ -23,6 +23,7 @@ use App\Models\Transfer;
 use App\Models\User;
 use App\Services\AcquisitionPaperworkPdfExportService;
 use App\Services\AnnexA4PdfExportService;
+use App\Services\LibreOfficePdfConverter;
 use App\Services\OwwaItemReportService;
 use App\Services\OwwaTemplateExportService;
 use App\Services\StockCardPdfExportService;
@@ -707,7 +708,7 @@ class OwwaBulkExportController extends Controller
     /**
      * Bulk PDF must match single-record “Save as PDF” fidelity (LibreOffice).
      * Prefer per-record LibreOffice PDFs merged into one file; fall back to one
-     * LibreOffice convert of the merged workbook; Dompdf only if LO is unavailable.
+     * LibreOffice convert of the merged workbook.
      *
      * @param  Collection<int, AcquisitionPaperwork|PurchaseOrder|InspectionAcceptanceReport>  $records
      */
@@ -764,12 +765,12 @@ class OwwaBulkExportController extends Controller
             );
             $binary = $this->owwaExport->spreadsheetToLibreOfficePdfBinary($merged, $mergedTimeout);
 
-            if ($binary === null) {
-                $binary = $this->owwaExport->spreadsheetToDompdfBinary($merged);
-            }
-
             $merged->disconnectWorksheets();
             unset($merged);
+        }
+
+        if ($binary === null) {
+            abort(503, LibreOfficePdfConverter::unavailableMessage());
         }
 
         $filename = OwwaExportFilename::batch($formCode, ext: 'pdf');

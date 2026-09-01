@@ -23,4 +23,15 @@ class Dashboard extends BaseDashboard
     {
         return ['owwa-dashboard-page'];
     }
+
+    /**
+     * @return int|array<string, int>
+     */
+    public function getColumns(): int|array
+    {
+        return [
+            'default' => 1,
+            'xl' => 2,
+        ];
+    }
 }

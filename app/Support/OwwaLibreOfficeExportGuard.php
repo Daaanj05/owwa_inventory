@@ -19,10 +19,7 @@ class OwwaLibreOfficeExportGuard
 
         Notification::make()
             ->title('LibreOffice not available')
-            ->body(
-                'Excel-like PDF needs LibreOffice. Install it and set LIBREOFFICE_BINARY '
-                ."(current: {$binary}). Export will use a simplified Dompdf fallback until then."
-            )
+            ->body(LibreOfficePdfConverter::unavailableMessage($binary))
             ->warning()
             ->persistent()
             ->send();

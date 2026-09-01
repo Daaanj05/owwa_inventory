@@ -194,9 +194,29 @@ class OfficePropertyRegisterService
         $events = collect();
 
         foreach ($issuances as $issuance) {
+            $issuance->loadMissing(['issuedTo', 'consolidatedRequisition.requestedBy']);
             $reference = $issuance->controlNumber() ?? 'Issuance #'.$issuance->id;
             if (filled($issuance->property_number)) {
                 $reference = trim($issuance->property_number.' — '.$reference);
+            }
+
+            if ($issuance->isEmployeeDirectIssuance()) {
+                $employee = $issuance->issuedTo?->name ?? '—';
+                $uc = $issuance->consolidatedRequisition?->requestedBy?->name;
+                $employeeLabel = filled($uc) ? "{$employee} (via {$uc})" : $employee;
+
+                $events->push([
+                    'sort_date' => $issuance->issuance_date?->format('Y-m-d') ?? '0000-01-01',
+                    'sort_id' => $issuance->id,
+                    'date' => $issuance->issuance_date?->format('M j, Y') ?? '—',
+                    'reference' => $issuance->consolidatedRequisition?->reference_code ?? $reference,
+                    'employee' => $employeeLabel,
+                    'type' => 'Issued',
+                    'quantity' => (int) $issuance->quantity,
+                    'direction' => 0,
+                ]);
+
+                continue;
             }
 
             $events->push([

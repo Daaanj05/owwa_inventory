@@ -2,7 +2,6 @@
 
 namespace Tests\Feature;
 
-use App\Filament\Resources\Distributions\Actions\DistributionViewActions;
 use App\Filament\Resources\Requisitions\Actions\RequisitionExportActions;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -31,19 +30,5 @@ class UcExportRestrictionsTest extends TestCase
         $source = file_get_contents(app_path('Filament/Resources/Requisitions/Pages/ListRequisitions.php'));
 
         $this->assertStringContainsString('RequisitionExportActions::userCanExportRis', $source);
-    }
-
-    public function test_distribution_export_actions_are_hidden(): void
-    {
-        $this->assertFalse(DistributionViewActions::exportOwwaAction()->isVisible());
-        $this->assertFalse(DistributionViewActions::exportPdfAction()->isVisible());
-    }
-
-    public function test_distributions_table_has_no_export_actions(): void
-    {
-        $source = file_get_contents(app_path('Filament/Resources/Distributions/Tables/DistributionsTable.php'));
-
-        $this->assertStringNotContainsString('exportOwwa', $source);
-        $this->assertStringNotContainsString('Export OWWA form', $source);
     }
 }

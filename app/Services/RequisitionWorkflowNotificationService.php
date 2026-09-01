@@ -86,7 +86,7 @@ class RequisitionWorkflowNotificationService
             && $requester->isEmployee()) {
             $this->notifyUser(
                 $requester,
-                'Requisition approved',
+                'Requisition reviewed',
                 $this->bodyFor($requisition),
                 $requisition,
             );

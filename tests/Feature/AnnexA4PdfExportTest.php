@@ -15,6 +15,8 @@ class AnnexA4PdfExportTest extends TestCase
 
     public function test_annex_a4_pdf_export_downloads_pdf(): void
     {
+        $this->skipUnlessLibreOfficeAvailable();
+
         $fixture = $this->createSemiItemWithIssuance(ItemPropertyClass::OfficeEquipment, 'Desk Organizer');
         $token = 'owwaPdfToken99';
 

@@ -9,7 +9,6 @@ use App\Filament\Resources\Acquisitions\InspectionAcceptanceReports\InspectionAc
 use App\Filament\Resources\Acquisitions\Paperwork\AcquisitionPaperworkResource;
 use App\Filament\Resources\Acquisitions\PurchaseOrders\PurchaseOrderResource;
 use App\Filament\Resources\Disposals\DisposalResource;
-use App\Filament\Resources\Distributions\DistributionResource;
 use App\Filament\Resources\Issuances\IssuanceResource;
 use App\Filament\Resources\Items\ItemResource;
 use App\Filament\Resources\PhysicalCountSessions\PhysicalCountSessionResource;
@@ -77,8 +76,6 @@ trait AuthorizesOwwaExports
 
     protected function authorizeDistributionExport(Distribution $distribution): void
     {
-        abort_unless(DistributionResource::canViewAny(), 403);
-
         $user = Auth::user();
         abort_unless($user instanceof User && $user->isUnitConsolidator(), 403);
 

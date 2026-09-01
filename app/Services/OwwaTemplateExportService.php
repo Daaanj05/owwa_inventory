@@ -81,7 +81,7 @@ class OwwaTemplateExportService
     }
 
     /**
-     * Same filled OWWA spreadsheet as Excel export, converted via LibreOffice (Dompdf fallback).
+     * Same filled OWWA spreadsheet as Excel export, converted via LibreOffice headless.
      *
      * @param  array<string, string|int|float|null>  $cellValues
      * @param  array{formCode?: string, signatures?: array<string, string|int|float|null>, useMasterSignatures?: bool}|null  $physicalCountExport
@@ -109,6 +109,8 @@ class OwwaTemplateExportService
     {
         try {
             $binary = $this->spreadsheetToPdfBinary($spreadsheet);
+        } catch (\RuntimeException $exception) {
+            abort(503, $exception->getMessage());
         } finally {
             $spreadsheet->disconnectWorksheets();
         }
@@ -1439,22 +1441,19 @@ class OwwaTemplateExportService
     }
 
     /**
-     * Serialize a spreadsheet to PDF bytes.
-     * Prefers LibreOffice headless (Excel-like layout); falls back to Dompdf.
+     * Serialize a spreadsheet to PDF bytes via LibreOffice headless (Excel-like layout).
+     *
+     * @throws \RuntimeException when LibreOffice is unavailable or conversion fails
      */
     public function spreadsheetToPdfBinary(Spreadsheet $spreadsheet, ?int $libreOfficeTimeoutSeconds = null): string
     {
-        $xlsxBinary = $this->spreadsheetToXlsxBinary($spreadsheet);
+        $pdf = $this->spreadsheetToLibreOfficePdfBinary($spreadsheet, $libreOfficeTimeoutSeconds);
 
-        $libreOfficePdf = app(LibreOfficePdfConverter::class)->convertXlsxBinary(
-            $xlsxBinary,
-            $libreOfficeTimeoutSeconds,
-        );
-        if (is_string($libreOfficePdf) && str_starts_with($libreOfficePdf, '%PDF')) {
-            return $libreOfficePdf;
+        if ($pdf === null) {
+            throw new \RuntimeException(LibreOfficePdfConverter::unavailableMessage());
         }
 
-        return $this->spreadsheetToDompdfBinary($spreadsheet);
+        return $pdf;
     }
 
     /**
@@ -1466,37 +1465,6 @@ class OwwaTemplateExportService
         $pdf = app(LibreOfficePdfConverter::class)->convertXlsxBinary($xlsxBinary, $timeoutSeconds);
 
         return is_string($pdf) && str_starts_with($pdf, '%PDF') ? $pdf : null;
-    }
-
-    /**
-     * Dompdf fallback when LibreOffice is unavailable (layout is approximate).
-     */
-    public function spreadsheetToDompdfBinary(Spreadsheet $spreadsheet): string
-    {
-        PhpExtensionGuard::ensureZipArchive();
-
-        $sheetCount = $spreadsheet->getSheetCount();
-        for ($index = 0; $index < $sheetCount; $index++) {
-            $sheet = $spreadsheet->getSheet($index);
-            $setup = $sheet->getPageSetup();
-            $setup->setOrientation(\PhpOffice\PhpSpreadsheet\Worksheet\PageSetup::ORIENTATION_PORTRAIT);
-            $setup->setPaperSize(\PhpOffice\PhpSpreadsheet\Worksheet\PageSetup::PAPERSIZE_LEGAL);
-            $setup->setFitToPage(true);
-            $setup->setFitToWidth(1);
-            $setup->setFitToHeight(0);
-            $sheet->getPageMargins()->setTop(0.4);
-            $sheet->getPageMargins()->setBottom(0.4);
-            $sheet->getPageMargins()->setLeft(0.35);
-            $sheet->getPageMargins()->setRight(0.35);
-        }
-
-        $writer = new \PhpOffice\PhpSpreadsheet\Writer\Pdf\Dompdf($spreadsheet);
-        $writer->writeAllSheets();
-
-        ob_start();
-        $writer->save('php://output');
-
-        return ob_get_clean() ?: '';
     }
 
     /**
@@ -2540,7 +2508,7 @@ class OwwaTemplateExportService
             'B5' => (string) $representative->quantity,
             'B6' => $representative->office?->name,
             'B7' => $representative->department?->name ?? '',
-            'B8' => $representative->issuedTo?->name ?? '',
+            'B8' => $this->paperworkReceivedBy($representative)?->name ?? '',
             'B9' => $representative->issuedBy?->name ?? '',
             'B10' => $representative->remarks ?? '',
         ];
@@ -2614,13 +2582,7 @@ class OwwaTemplateExportService
             $quantity = (int) $issuance->quantity;
             $lineAmount = $this->resolveIssuanceLineAmount($issuance, $unitCost);
             $responsibilityCenter = $issuance->department?->code ?? $lineOffice?->code ?? $lineOffice?->name ?? '';
-            $risNumber = $issuance->requisition?->reference_code
-                ?? $issuance->requisition?->getAttribute('ris_number')
-                ?? '';
-            if ($risNumber === '' && filled($issuance->requisition_id)) {
-                $issuance->loadMissing('requisition');
-                $risNumber = (string) ($issuance->requisition?->reference_code ?? '');
-            }
+            $risNumber = $this->paperworkRisNumber($issuance);
             $stockNo = $item?->item_code ?? '';
 
             $values[OwwaCellMapping::columnCell($detailColumns['ris_no'] ?? 'A', $row)] = $risNumber;
@@ -2769,16 +2731,16 @@ class OwwaTemplateExportService
             $row++;
         }
 
-        $receivedByName = $first->issuedTo?->name ?? '';
+        $receivedByName = $this->paperworkReceivedBy($first)?->name ?? '';
         $issuedByName = $batch?->custodian_printed_name
             ?? $first->custodian_printed_name
             ?? $first->issuedBy?->name
             ?? '';
         $receivedByPosition = $batch?->issued_to_designation
             ?? $first->issued_to_designation
-            ?? $first->issuedTo?->department?->name
+            ?? $this->paperworkReceivedBy($first)?->department?->name
             ?? $first->department?->name
-            ?? $first->issuedTo?->office?->name
+            ?? $this->paperworkReceivedBy($first)?->office?->name
             ?? '';
         $issuedByPosition = $batch?->custodian_designation
             ?? $first->custodian_designation
@@ -2838,7 +2800,7 @@ class OwwaTemplateExportService
             ?? $first->custodian_printed_name
             ?? $first->issuedBy?->name
             ?? '';
-        $receivedByName = $first->issuedTo?->name ?? '';
+        $receivedByName = $this->paperworkReceivedBy($first)?->name ?? '';
         $receivedFromPosition = $batch?->custodian_designation
             ?? $first->custodian_designation
             ?? $office?->supply_custodian_designation
@@ -2847,9 +2809,9 @@ class OwwaTemplateExportService
             ?? '';
         $receivedByPosition = $batch?->issued_to_designation
             ?? $first->issued_to_designation
-            ?? $first->issuedTo?->department?->name
+            ?? $this->paperworkReceivedBy($first)?->department?->name
             ?? $first->department?->name
-            ?? $first->issuedTo?->office?->name
+            ?? $this->paperworkReceivedBy($first)?->office?->name
             ?? '';
 
         $icsMap = OwwaCellMapping::form('ICS');
@@ -4358,6 +4320,29 @@ class OwwaTemplateExportService
         $middle = $series === 'monthly' ? $month : '01';
 
         return "{$year}-{$middle}-{$serialPart}";
+    }
+
+    protected function paperworkReceivedBy(Issuance $issuance): ?\App\Models\User
+    {
+        $issuance->loadMissing(['batch.issuedTo', 'consolidatedRequisition.requestedBy', 'issuedTo']);
+
+        if ($issuance->consolidated_requisition_id) {
+            return $issuance->consolidatedRequisition?->requestedBy;
+        }
+
+        return $issuance->batch?->issuedTo ?? $issuance->issuedTo;
+    }
+
+    protected function paperworkRisNumber(Issuance $issuance): string
+    {
+        $issuance->loadMissing(['consolidatedRequisition', 'requisition']);
+
+        return (string) (
+            $issuance->consolidatedRequisition?->reference_code
+            ?? $issuance->requisition?->reference_code
+            ?? $issuance->requisition?->getAttribute('ris_number')
+            ?? ''
+        );
     }
 
     protected function formatItemDescription(?\App\Models\Item $item): string
