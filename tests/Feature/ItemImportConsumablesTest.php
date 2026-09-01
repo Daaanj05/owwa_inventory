@@ -675,8 +675,7 @@ class ItemImportConsumablesTest extends TestCase
         $tabs = $schema[1]->getDefaultChildComponents();
         $skippedHtml = $tabs[2]->getDefaultChildComponents()[0]->getContent()->toHtml();
 
-        $this->assertStringContainsString('Showing 2 rows', $skippedHtml);
-        $this->assertStringContainsString('1 of 2', $skippedHtml);
+        $this->assertStringNotContainsString('Showing ', $skippedHtml);
         $this->assertStringContainsString('>1</', $skippedHtml);
         $this->assertStringContainsString('>2</', $skippedHtml);
 
@@ -684,11 +683,177 @@ class ItemImportConsumablesTest extends TestCase
         $this->assertMatchesRegularExpression('/created.*·.*updated.*·.*skipped.*·.*invalid/s', $summaryHtml);
     }
 
-    public function test_import_results_preview_caps_large_tabs(): void
+    public function test_import_results_paginates_updated_tab_five_per_page(): void
     {
-        $limit = ItemImportAction::RESULTS_PREVIEW_LIMIT;
+        $rows = $this->buildUpdatedImportResultRows(45);
+
+        $schema = ItemImportAction::resultsSchema([
+            'created' => 0,
+            'rows' => $rows,
+        ]);
+        $tabs = $schema[1]->getDefaultChildComponents();
+        $updatedHtml = $tabs[1]->getDefaultChildComponents()[0]->getContent()->toHtml();
+
+        $this->assertStringContainsString('owwa-pagination-page-active">1</span>', $updatedHtml);
+        $this->assertStringContainsString('>Item 1</', $updatedHtml);
+        $this->assertStringContainsString('>Item 5</', $updatedHtml);
+        $this->assertStringNotContainsString('>Item 6</', $updatedHtml);
+        $this->assertStringNotContainsString('Showing ', $updatedHtml);
+        $this->assertStringNotContainsString('Only the first ', $updatedHtml);
+    }
+
+    public function test_import_results_show_ellipsis_for_many_pages(): void
+    {
+        $rows = $this->buildUpdatedImportResultRows(60);
+        $office = Office::factory()->create(['is_regional_supply' => true]);
+        $category = ItemCategory::factory()->create(['name' => 'Consumables']);
+        $user = User::factory()->create([
+            'role' => User::ROLE_SUPPLY_CUSTODIAN,
+            'office_id' => $office->id,
+            'email_verified_at' => now(),
+        ]);
+
+        $this->actingAs($user);
+        session(['active_item_category_id' => $category->id]);
+
+        $component = Livewire::withQueryParams(['category' => (string) $category->id])
+            ->test(ListItems::class);
+
+        $component->instance()->goToImportResultsPage('updated', 6);
+
+        $updatedHtml = ItemImportAction::resultsSchema([
+            'created' => 0,
+            'rows' => $rows,
+        ], $component->instance())[1]
+            ->getDefaultChildComponents()[1]
+            ->getDefaultChildComponents()[0]
+            ->getContent()
+            ->toHtml();
+
+        $this->assertStringContainsString('owwa-pagination-ellipsis', $updatedHtml);
+        $this->assertStringContainsString('owwa-pagination-page-active">6</span>', $updatedHtml);
+    }
+
+    public function test_import_results_livewire_page_navigation(): void
+    {
+        $rows = $this->buildUpdatedImportResultRows(12);
+        $office = Office::factory()->create(['is_regional_supply' => true]);
+        $category = ItemCategory::factory()->create(['name' => 'Consumables']);
+        $user = User::factory()->create([
+            'role' => User::ROLE_SUPPLY_CUSTODIAN,
+            'office_id' => $office->id,
+            'email_verified_at' => now(),
+        ]);
+
+        $this->actingAs($user);
+        session(['active_item_category_id' => $category->id]);
+
+        $component = Livewire::withQueryParams(['category' => (string) $category->id])
+            ->test(ListItems::class);
+
+        $component->instance()->importConsumableResult = [
+            'created' => 0,
+            'rows' => $rows,
+        ];
+
+        $pageOneHtml = ItemImportAction::resultsSchema([
+            'created' => 0,
+            'rows' => $rows,
+        ], $component->instance())[1]
+            ->getDefaultChildComponents()[1]
+            ->getDefaultChildComponents()[0]
+            ->getContent()
+            ->toHtml();
+
+        $this->assertStringContainsString('>Item 1</', $pageOneHtml);
+        $this->assertStringNotContainsString('>Item 6</', $pageOneHtml);
+
+        $component->instance()->goToImportResultsPage('updated', 2);
+
+        $pageTwoHtml = ItemImportAction::resultsSchema([
+            'created' => 0,
+            'rows' => $rows,
+        ], $component->instance())[1]
+            ->getDefaultChildComponents()[1]
+            ->getDefaultChildComponents()[0]
+            ->getContent()
+            ->toHtml();
+
+        $this->assertStringContainsString('owwa-pagination-page-active">2</span>', $pageTwoHtml);
+        $this->assertStringContainsString('>Item 6</', $pageTwoHtml);
+        $this->assertStringNotContainsString('>Item 1</', $pageTwoHtml);
+    }
+
+    public function test_import_results_pagination_is_independent_per_tab(): void
+    {
+        $updatedRows = $this->buildUpdatedImportResultRows(10);
+        $skippedRows = [];
+        for ($i = 1; $i <= 10; $i++) {
+            $skippedRows[] = [
+                'status' => 'skipped_existing',
+                'excel_row' => $i,
+                'excel' => [
+                    'base' => 'Skipped '.$i,
+                    'sub' => null,
+                    'unit' => 'piece',
+                    'qty' => 0,
+                    'item_name' => null,
+                    'reorder_level' => 0,
+                    'inventory_type' => null,
+                    'inventory_type_label' => null,
+                    'days_to_consume' => null,
+                    'description' => null,
+                    'unit_cost' => null,
+                ],
+                'actual' => [
+                    'base' => 'Skipped '.$i,
+                    'sub' => null,
+                    'unit' => 'piece',
+                    'name' => 'Skipped '.$i,
+                    'reorder_level' => 0,
+                    'inventory_type' => null,
+                    'inventory_type_label' => null,
+                    'days_to_consume' => null,
+                    'description' => null,
+                    'unit_cost' => null,
+                ],
+                'reason' => 'Already in catalog; no starting quantity in file.',
+            ];
+        }
+
+        $rows = array_merge($updatedRows, $skippedRows);
+        $office = Office::factory()->create(['is_regional_supply' => true]);
+        $category = ItemCategory::factory()->create(['name' => 'Consumables']);
+        $user = User::factory()->create([
+            'role' => User::ROLE_SUPPLY_CUSTODIAN,
+            'office_id' => $office->id,
+            'email_verified_at' => now(),
+        ]);
+
+        $this->actingAs($user);
+        session(['active_item_category_id' => $category->id]);
+
+        $component = Livewire::withQueryParams(['category' => (string) $category->id])
+            ->test(ListItems::class);
+
+        $component->instance()->importConsumableResult = [
+            'created' => 0,
+            'rows' => $rows,
+        ];
+        $component->instance()->goToImportResultsPage('skipped', 3);
+        $component->instance()->goToImportResultsPage('updated', 1);
+
+        $this->assertSame(1, $component->instance()->importResultsPage('updated'));
+        $this->assertSame(3, $component->instance()->importResultsPage('skipped'));
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    protected function buildUpdatedImportResultRows(int $count): array
+    {
         $rows = [];
-        for ($i = 1; $i <= $limit + 5; $i++) {
+        for ($i = 1; $i <= $count; $i++) {
             $rows[] = [
                 'status' => 'updated',
                 'excel_row' => $i,
@@ -721,17 +886,7 @@ class ItemImportConsumablesTest extends TestCase
             ];
         }
 
-        $schema = ItemImportAction::resultsSchema([
-            'created' => 0,
-            'rows' => $rows,
-        ]);
-        $tabs = $schema[1]->getDefaultChildComponents();
-        $updatedHtml = $tabs[1]->getDefaultChildComponents()[0]->getContent()->toHtml();
-
-        $this->assertStringContainsString('Showing '.$limit.' of '.($limit + 5).' rows', $updatedHtml);
-        $this->assertStringContainsString('Only the first '.$limit.' are listed here', $updatedHtml);
-        $this->assertStringContainsString('>'.$limit.'</', $updatedHtml);
-        $this->assertStringNotContainsString('>'.($limit + 1).'</', $updatedHtml);
+        return $rows;
     }
 
     public function test_import_action_registered_and_consumables_detection(): void

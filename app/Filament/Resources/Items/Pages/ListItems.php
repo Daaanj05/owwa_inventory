@@ -40,6 +40,16 @@ class ListItems extends ListRecords
      */
     public ?array $importConsumableResult = null;
 
+    /**
+     * @var array<string, int>
+     */
+    public array $importResultsPages = [
+        'success' => 1,
+        'updated' => 1,
+        'skipped' => 1,
+        'invalid' => 1,
+    ];
+
     protected static string $resource = ItemResource::class;
 
     /**
@@ -183,8 +193,38 @@ class ListItems extends ListRecords
                     return [];
                 }
 
-                return ItemImportAction::resultsSchema($result);
+                return ItemImportAction::resultsSchema($result, $this);
             });
+    }
+
+    public function importResultsPage(string $tab): int
+    {
+        return max(1, (int) ($this->importResultsPages[$tab] ?? 1));
+    }
+
+    public function resetImportResultsPages(): void
+    {
+        foreach (ItemImportAction::IMPORT_RESULT_TABS as $tab) {
+            $this->importResultsPages[$tab] = 1;
+        }
+    }
+
+    public function clampImportResultsPage(string $tab, int $totalRows): void
+    {
+        $totalPages = max(1, (int) ceil($totalRows / ItemImportAction::RESULTS_PER_PAGE));
+
+        if ($this->importResultsPage($tab) > $totalPages) {
+            $this->importResultsPages[$tab] = $totalPages;
+        }
+    }
+
+    public function goToImportResultsPage(string $tab, int $page): void
+    {
+        if (! in_array($tab, ItemImportAction::IMPORT_RESULT_TABS, true)) {
+            return;
+        }
+
+        $this->importResultsPages[$tab] = max(1, $page);
     }
 
     #[On('open-consumable-import-results')]

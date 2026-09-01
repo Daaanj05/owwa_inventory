@@ -4968,6 +4968,192 @@ select.owwa-search-bar {
     gap: 0.75rem;
     padding: 0.5rem 0;
 }
+.owwa-import-results .owwa-import-results-pagination.owwa-pagination-nav {
+    justify-content: center;
+    margin-top: 0.5rem;
+}
+.owwa-import-results .owwa-import-results-pagination .owwa-pagination-controls {
+    margin-left: 0;
+}
+
+.owwa-import-results-table-wrap {
+    overflow-x: auto;
+    max-width: 100%;
+}
+
+.owwa-import-results-table {
+    width: 100%;
+    table-layout: fixed;
+    border-collapse: collapse;
+    font-size: 0.8125rem;
+    line-height: 1.35;
+}
+
+.owwa-import-results-th {
+    padding: 0.5rem;
+    text-align: left;
+    font-weight: 600;
+    color: #4b5563;
+    border-bottom: 1px solid #e5e7eb;
+    border-right: 1px solid #e5e7eb;
+    white-space: nowrap;
+}
+
+.owwa-import-results-th:last-child {
+    border-right: none;
+}
+
+.owwa-import-results-th-num {
+    width: 2.25rem;
+    text-align: center;
+}
+
+.owwa-import-results-tr-last .owwa-import-results-td {
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.owwa-import-results-td {
+    padding: 0.2rem 0.5rem;
+    vertical-align: top;
+    border-right: 1px solid #e5e7eb;
+    overflow: hidden;
+    max-width: 0;
+}
+
+.owwa-import-results-td:last-child {
+    border-right: none;
+}
+
+.owwa-import-results-td-num {
+    width: 2.25rem;
+    max-width: 2.25rem;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+    color: #6b7280;
+    vertical-align: top;
+    padding-top: 0.35rem;
+}
+
+.owwa-import-results-cell-line {
+    display: flex;
+    align-items: baseline;
+    gap: 0.25rem;
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+}
+
+.owwa-import-results-cell-label {
+    flex: 0 0 auto;
+    color: #9ca3af;
+    white-space: nowrap;
+}
+
+.owwa-import-results-cell-value {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: #1f2937;
+}
+
+.owwa-import-results-cell-value--diff {
+    font-weight: 600;
+    color: #92400e;
+}
+
+.owwa-import-results-cell-empty {
+    color: #9ca3af;
+}
+
+.owwa-import-results-reason {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.6875rem;
+    color: #b45309;
+}
+
+.owwa-import-results-reason-muted {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.6875rem;
+    color: #9ca3af;
+}
+
+.owwa-import-results-section {
+    margin-bottom: 1rem;
+}
+
+.owwa-import-results-section:last-child {
+    margin-bottom: 0;
+}
+
+.owwa-import-results-section-heading {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+}
+
+.owwa-import-results-section-title {
+    margin: 0;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #1f2937;
+}
+
+.owwa-import-results-section-count {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.125rem 0.5rem;
+    border-radius: 0.375rem;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    line-height: 1.25;
+    white-space: nowrap;
+}
+
+.owwa-import-results-section-count-num {
+    font-variant-numeric: tabular-nums;
+}
+
+.owwa-import-results-section-count-label {
+    font-weight: 500;
+    opacity: 0.85;
+}
+
+.owwa-import-results-section-count--success {
+    background: #ecfdf5;
+    color: #047857;
+}
+
+.owwa-import-results-section-count--info {
+    background: #eff6ff;
+    color: #1d4ed8;
+}
+
+.owwa-import-results-section-count--warning {
+    background: #fffbeb;
+    color: #b45309;
+}
+
+.owwa-import-results-section-count--danger {
+    background: #fef2f2;
+    color: #b91c1c;
+}
+
+.owwa-import-results-section-count--neutral {
+    background: #f3f4f6;
+    color: #4b5563;
+}
+
 .owwa-pagination-info {
     font-size: 0.8125rem;
     color: #6b7280;

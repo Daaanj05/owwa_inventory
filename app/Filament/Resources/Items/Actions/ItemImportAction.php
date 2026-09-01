@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Items\Actions;
 
 use App\Filament\Concerns\SyncsActiveItemCategory;
+use App\Filament\Resources\Items\Pages\ListItems;
 use App\Filament\Resources\Items\Support\ItemOpeningStockFields;
 use App\Filament\Support\OwwaFormModalDefaults;
 use App\Models\ItemCategory;
@@ -16,6 +17,8 @@ use Filament\Notifications\Notification;
 use Filament\Schemas\Components\Tabs;
 use Filament\Schemas\Components\Tabs\Tab;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Pagination\UrlWindow;
 use Illuminate\Support\Arr;
 use Illuminate\Support\HtmlString;
 use Illuminate\Support\Str;
@@ -26,7 +29,15 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ItemImportAction
 {
-    public const RESULTS_PREVIEW_LIMIT = 40;
+    public const RESULTS_PER_PAGE = 5;
+
+    /** @var list<string> */
+    public const IMPORT_RESULT_TABS = [
+        'success',
+        'updated',
+        'skipped',
+        'invalid',
+    ];
 
     public static function make(): Action
     {
@@ -116,6 +127,10 @@ class ItemImportAction
                         $livewire->importConsumableResult = $result;
                     }
 
+                    if (method_exists($livewire, 'resetImportResultsPages')) {
+                        $livewire->resetImportResultsPages();
+                    }
+
                     // Replace (do not nest): nesting looks for a child modal action of Import and fails silently.
                     $livewire->replaceMountedAction('importConsumableResults');
                 }),
@@ -142,7 +157,7 @@ class ItemImportAction
      * @param  array<string, mixed>  $result
      * @return array<int, \Filament\Schemas\Components\Component>
      */
-    public static function resultsSchema(array $result): array
+    public static function resultsSchema(array $result, ?ListItems $livewire = null): array
     {
         /** @var list<array<string, mixed>> $rows */
         $rows = $result['rows'] ?? [];
@@ -197,6 +212,8 @@ class ItemImportAction
                                     'created' => 'Created',
                                     'stock_filled' => 'Starting stock added',
                                 ],
+                                tabKey: 'success',
+                                livewire: $livewire,
                             )),
                     ]),
                 Tab::make('Updated')
@@ -211,6 +228,8 @@ class ItemImportAction
                                 sections: [
                                     'updated' => 'Blank catalog fields filled',
                                 ],
+                                tabKey: 'updated',
+                                livewire: $livewire,
                             )),
                     ]),
                 Tab::make('Skipped')
@@ -227,6 +246,8 @@ class ItemImportAction
                                     'skipped_existing' => 'Skipped — already in catalog',
                                     'skipped_duplicate' => 'Skipped — duplicate in this file',
                                 ],
+                                tabKey: 'skipped',
+                                livewire: $livewire,
                             )),
                     ]),
                 Tab::make('Invalid')
@@ -241,6 +262,8 @@ class ItemImportAction
                                 sections: [
                                     'invalid' => 'Invalid rows',
                                 ],
+                                tabKey: 'invalid',
+                                livewire: $livewire,
                             )),
                     ]),
             ]);
@@ -508,8 +531,13 @@ class ItemImportAction
      * @param  list<array<string, mixed>>  $rows
      * @param  array<string, string>  $sections
      */
-    protected static function tabPanelHtml(array $rows, string $tone, array $sections): HtmlString
-    {
+    protected static function tabPanelHtml(
+        array $rows,
+        string $tone,
+        array $sections,
+        string $tabKey,
+        ?ListItems $livewire = null,
+    ): HtmlString {
         $borderClass = match ($tone) {
             'success' => 'border-success-500',
             'info' => 'border-info-500',
@@ -518,18 +546,16 @@ class ItemImportAction
             default => 'border-gray-300',
         };
 
-        $badgeClass = match ($tone) {
-            'success' => 'bg-success-50 text-success-700 dark:bg-success-400/10 dark:text-success-400',
-            'info' => 'bg-info-50 text-info-700 dark:bg-info-400/10 dark:text-info-400',
-            'warning' => 'bg-warning-50 text-warning-700 dark:bg-warning-400/10 dark:text-warning-400',
-            'danger' => 'bg-danger-50 text-danger-700 dark:bg-danger-400/10 dark:text-danger-400',
-            default => 'bg-gray-50 text-gray-700 dark:bg-gray-400/10 dark:text-gray-300',
+        $sectionCountToneClass = match ($tone) {
+            'success' => 'owwa-import-results-section-count--success',
+            'info' => 'owwa-import-results-section-count--info',
+            'warning' => 'owwa-import-results-section-count--warning',
+            'danger' => 'owwa-import-results-section-count--danger',
+            default => 'owwa-import-results-section-count--neutral',
         };
 
         $total = count($rows);
-        $displayRows = array_slice($rows, 0, self::RESULTS_PREVIEW_LIMIT);
-        $hiddenCount = $total - count($displayRows);
-        $html = '<div class="owwa-import-results max-h-[60vh] overflow-y-auto space-y-4 text-sm pe-1 border-s-4 ps-3 '.$borderClass.'">';
+        $html = '<div class="owwa-import-results space-y-4 text-sm pe-1 border-s-4 ps-3 '.$borderClass.'">';
 
         if ($total === 0) {
             $html .= '<p class="text-gray-500">No rows in this category.</p></div>';
@@ -537,15 +563,22 @@ class ItemImportAction
             return new HtmlString($html);
         }
 
-        $html .= '<p class="text-xs text-gray-500 dark:text-gray-400">'
-            .'Showing '.count($displayRows).($hiddenCount > 0 ? ' of '.$total : '').' row'.($total === 1 ? '' : 's')
-            .' (numbers continue across subsections below).'
-            .($hiddenCount > 0
-                ? ' Only the first '.self::RESULTS_PREVIEW_LIMIT.' are listed here so the page stays responsive.'
-                : '')
-            .'</p>';
+        if ($livewire !== null) {
+            $livewire->clampImportResultsPage($tabKey, $total);
+        }
 
-        $nextNumber = 1;
+        $page = $livewire?->importResultsPage($tabKey) ?? 1;
+        $offset = ($page - 1) * self::RESULTS_PER_PAGE;
+        $displayRows = array_slice($rows, $offset, self::RESULTS_PER_PAGE);
+        $paginator = new LengthAwarePaginator(
+            $displayRows,
+            $total,
+            self::RESULTS_PER_PAGE,
+            $page,
+        );
+        $paginator->onEachSide(1);
+
+        $nextNumber = $offset + 1;
 
         foreach ($sections as $status => $heading) {
             $sectionRows = array_values(array_filter(
@@ -558,11 +591,12 @@ class ItemImportAction
             }
 
             $sectionCount = count($sectionRows);
-            $html .= '<div>';
-            $html .= '<div class="mb-2 flex flex-wrap items-center gap-2">'
-                .'<p class="font-medium text-gray-800 dark:text-gray-100">'.e($heading).'</p>'
-                .'<span class="inline-flex items-center rounded-md px-1.5 py-0.5 text-[11px] font-medium '.$badgeClass.'">'
-                .$sectionCount.' of '.$total
+            $html .= '<div class="owwa-import-results-section">';
+            $html .= '<div class="owwa-import-results-section-heading">'
+                .'<p class="owwa-import-results-section-title">'.e($heading).'</p>'
+                .'<span class="owwa-import-results-section-count '.$sectionCountToneClass.'" title="'.$sectionCount.' on this page">'
+                .'<span class="owwa-import-results-section-count-num">'.$sectionCount.'</span>'
+                .'<span class="owwa-import-results-section-count-label">on this page</span>'
                 .'</span></div>';
             $html .= self::comparisonTableHtml($sectionRows, $nextNumber);
             $html .= '</div>';
@@ -570,9 +604,78 @@ class ItemImportAction
             $nextNumber += $sectionCount;
         }
 
+        if ($paginator->lastPage() > 1) {
+            $html .= self::paginationControlsHtml($tabKey, $paginator, $livewire !== null);
+        }
+
         $html .= '</div>';
 
         return new HtmlString($html);
+    }
+
+    protected static function paginationControlsHtml(
+        string $tabKey,
+        LengthAwarePaginator $paginator,
+        bool $interactive,
+    ): string {
+        $currentPage = $paginator->currentPage();
+        $lastPage = $paginator->lastPage();
+        $window = UrlWindow::make($paginator);
+        $elements = array_values(array_filter([
+            $window['first'],
+            is_array($window['slider']) ? '...' : null,
+            $window['slider'],
+            is_array($window['last']) ? '...' : null,
+            $window['last'],
+        ]));
+
+        $html = '<nav role="navigation" class="owwa-pagination-nav owwa-import-results-pagination">'
+            .'<div class="owwa-pagination-controls">';
+
+        if ($paginator->onFirstPage()) {
+            $html .= '<span class="owwa-pagination-btn owwa-pagination-disabled">Previous</span>';
+        } elseif ($interactive) {
+            $html .= '<button type="button" wire:click="goToImportResultsPage(\''.e($tabKey).'\', '.($currentPage - 1).')" class="owwa-pagination-btn">Previous</button>';
+        } else {
+            $html .= '<span class="owwa-pagination-btn owwa-pagination-disabled">Previous</span>';
+        }
+
+        foreach ($elements as $element) {
+            if (is_string($element)) {
+                $html .= '<span class="owwa-pagination-ellipsis" aria-hidden="true">...</span>';
+
+                continue;
+            }
+
+            if (! is_array($element)) {
+                continue;
+            }
+
+            foreach ($element as $page => $_url) {
+                $pageNumber = (int) $page;
+                if ($pageNumber === $currentPage) {
+                    $html .= '<span class="owwa-pagination-page owwa-pagination-page-active">'.$pageNumber.'</span>';
+                } elseif ($interactive) {
+                    $html .= '<button type="button" wire:click="goToImportResultsPage(\''.e($tabKey).'\', '.$pageNumber.')" class="owwa-pagination-page">'.$pageNumber.'</button>';
+                } else {
+                    $html .= '<span class="owwa-pagination-page">'.$pageNumber.'</span>';
+                }
+            }
+        }
+
+        if ($paginator->hasMorePages()) {
+            if ($interactive) {
+                $html .= '<button type="button" wire:click="goToImportResultsPage(\''.e($tabKey).'\', '.($currentPage + 1).')" class="owwa-pagination-btn">Next</button>';
+            } else {
+                $html .= '<span class="owwa-pagination-btn owwa-pagination-disabled">Next</span>';
+            }
+        } else {
+            $html .= '<span class="owwa-pagination-btn owwa-pagination-disabled">Next</span>';
+        }
+
+        $html .= '</div></nav>';
+
+        return $html;
     }
 
     /**
@@ -580,13 +683,13 @@ class ItemImportAction
      */
     protected static function comparisonTableHtml(array $rows, int $startNumber = 1): string
     {
-        $html = '<div class="overflow-x-auto">'
-            .'<table class="owwa-import-results-table w-full border-collapse text-left text-xs sm:text-sm">'
-            .'<thead class="text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-700">'
+        $html = '<div class="owwa-import-results-table-wrap">'
+            .'<table class="owwa-import-results-table">'
+            .'<thead>'
             .'<tr>'
-            .'<th class="px-2 py-2 font-medium w-10 text-center border-r border-gray-200 dark:border-gray-700">#</th>'
-            .'<th class="px-2 py-2 font-medium border-r border-gray-200 dark:border-gray-700">Excel</th>'
-            .'<th class="px-2 py-2 font-medium">In system</th>'
+            .'<th class="owwa-import-results-th owwa-import-results-th-num">#</th>'
+            .'<th class="owwa-import-results-th">Excel</th>'
+            .'<th class="owwa-import-results-th">In system</th>'
             .'</tr></thead><tbody>';
 
         foreach ($rows as $index => $row) {
@@ -809,40 +912,41 @@ class ItemImportAction
             foreach ($fieldRows as $fieldIndex => $field) {
                 $isFirst = $fieldIndex === 0;
                 $isLast = $fieldIndex === ($rowCount - 1);
-                $rowClass = 'align-top text-gray-700 dark:text-gray-200'
-                    .($isLast ? ' border-b border-gray-200 dark:border-gray-700' : '');
+                $rowClass = 'owwa-import-results-tr'
+                    .($isLast ? ' owwa-import-results-tr-last' : '');
 
                 $html .= '<tr class="'.$rowClass.'">';
 
                 if ($isFirst) {
-                    $html .= '<td class="px-2 py-0.5 tabular-nums text-gray-500 text-center align-top border-r border-gray-200 dark:border-gray-700">'
+                    $html .= '<td rowspan="'.$rowCount.'" class="owwa-import-results-td owwa-import-results-td-num">'
                         .e((string) $n).'</td>';
-                } else {
-                    $html .= '<td class="px-2 py-0.5 border-r border-gray-200 dark:border-gray-700"></td>';
                 }
 
-                $html .= '<td class="px-2 py-0.5 leading-snug align-top border-r border-gray-200 dark:border-gray-700">'
+                $html .= '<td class="owwa-import-results-td">'
                     .self::comparisonCellHtml(
                         label: $field['label'] ?? null,
                         value: $field['excel'] ?? null,
                         differs: (bool) ($field['diff'] ?? false),
                     )
-                    .'</td><td class="px-2 py-0.5 leading-snug align-top">';
+                    .'</td><td class="owwa-import-results-td">';
 
                 if (($field['label'] ?? null) === 'Sheet row' || ($field['label'] ?? null) === null) {
                     $systemValue = $field['system'] ?? null;
                     if ($systemValue === null || $systemValue === '') {
-                        $html .= '<span class="text-gray-400">—</span>';
+                        $html .= '<span class="owwa-import-results-cell-empty">—</span>';
                     } else {
-                        $tone = ($field['systemMuted'] ?? false) ? 'text-gray-400' : 'text-amber-700 dark:text-amber-300';
-                        $html .= '<span class="text-[11px] '.$tone.'">'.e((string) $systemValue).'</span>';
+                        $tone = ($field['systemMuted'] ?? false)
+                            ? 'owwa-import-results-reason-muted'
+                            : 'owwa-import-results-reason';
+                        $html .= '<span class="'.$tone.'" title="'.e((string) $systemValue).'">'
+                            .e((string) $systemValue).'</span>';
                     }
                 } elseif ($actual === null && ($field['label'] ?? null) === 'Base') {
-                    $html .= '<span class="text-gray-400">Not saved</span>';
+                    $html .= '<span class="owwa-import-results-cell-empty">Not saved</span>';
                 } elseif ($actual === null) {
-                    $html .= '<span class="text-gray-400">—</span>';
+                    $html .= '<span class="owwa-import-results-cell-empty">—</span>';
                 } elseif (($field['label'] ?? null) === 'Qty') {
-                    $html .= '<span class="text-gray-400">—</span>';
+                    $html .= '<span class="owwa-import-results-cell-empty">—</span>';
                 } elseif (($field['label'] ?? null) === 'Item name') {
                     $html .= self::comparisonCellHtml(
                         label: $field['systemLabel'] ?? 'Name',
@@ -869,19 +973,23 @@ class ItemImportAction
     protected static function comparisonCellHtml(?string $label, ?string $value, bool $differs = false): string
     {
         if ($value === null || $value === '') {
-            return '<span class="text-gray-400">—</span>';
+            return '<span class="owwa-import-results-cell-empty">—</span>';
         }
 
         $valueClass = $differs
-            ? 'font-medium text-amber-800 dark:text-amber-200'
-            : 'text-gray-800 dark:text-gray-100';
+            ? 'owwa-import-results-cell-value owwa-import-results-cell-value--diff'
+            : 'owwa-import-results-cell-value';
+
+        $title = $label === null ? $value : "{$label}: {$value}";
 
         if ($label === null) {
-            return '<span class="'.$valueClass.'">'.e($value).'</span>';
+            return '<span class="'.$valueClass.'" title="'.e($title).'">'.e($value).'</span>';
         }
 
-        return '<span class="text-gray-400">'.e($label).':</span> '
-            .'<span class="'.$valueClass.'">'.e($value).'</span>';
+        return '<span class="owwa-import-results-cell-line" title="'.e($title).'">'
+            .'<span class="owwa-import-results-cell-label">'.e($label).':</span>'
+            .'<span class="'.$valueClass.'">'.e($value).'</span>'
+            .'</span>';
     }
 
     protected static function formatUnitCostDisplay(mixed $value): string
