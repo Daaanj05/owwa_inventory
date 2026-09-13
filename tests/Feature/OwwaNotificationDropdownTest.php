@@ -2,11 +2,16 @@
 
 namespace Tests\Feature;
 
+use App\Filament\Pages\ProcurementAnalytics;
 use App\Livewire\OwwaNotificationDropdown;
 use App\Models\User;
 use App\Notifications\RequisitionWorkflowDatabaseNotification;
+use App\Support\AiProcurementSummaryRestore;
+use Filament\Actions\Action;
 use Filament\Facades\Filament;
+use Filament\Notifications\Notification as FilamentNotification;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Livewire\Livewire;
 use Tests\TestCase;
 
@@ -102,6 +107,54 @@ class OwwaNotificationDropdownTest extends TestCase
             ->call('openNotification', $notification->id);
 
         $this->assertNotNull($notification->fresh()->read_at);
+    }
+
+    public function test_open_notification_strips_legacy_ai_run_and_queues_summary_restore(): void
+    {
+        $user = User::factory()->create([
+            'role' => User::ROLE_SUPPLY_CUSTODIAN,
+            'email_verified_at' => now(),
+        ]);
+
+        $legacyUrl = ProcurementAnalytics::getUrl(panel: 'admin').'?ai_run=18#procurement-summary';
+        $cleanUrl = ProcurementAnalytics::getUrl(panel: 'admin').'#procurement-summary';
+
+        $user->notifyNow(new class($legacyUrl) extends \Illuminate\Notifications\Notification
+        {
+            public function __construct(private string $url) {}
+
+            public function via(object $notifiable): array
+            {
+                return ['database'];
+            }
+
+            public function toDatabase(object $notifiable): array
+            {
+                return FilamentNotification::make()
+                    ->title('AI recommendation ready')
+                    ->body('Your procurement recommendation is ready.')
+                    ->success()
+                    ->actions([
+                        Action::make('viewResult')
+                            ->label('View the result')
+                            ->url($this->url)
+                            ->markAsRead(),
+                    ])
+                    ->getDatabaseMessage();
+            }
+        });
+
+        $notification = $user->notifications()->first();
+        $this->assertNotNull($notification);
+
+        $this->actingAs($user);
+
+        Livewire::test(OwwaNotificationDropdown::class)
+            ->call('openNotification', $notification->id)
+            ->assertRedirect($cleanUrl);
+
+        $this->assertSame(18, AiProcurementSummaryRestore::pull((int) $user->id));
+        $this->assertNull(Cache::get(AiProcurementSummaryRestore::cacheKey((int) $user->id)));
     }
 
     public function test_read_all_button_remains_visible_after_opening_notifications_individually(): void

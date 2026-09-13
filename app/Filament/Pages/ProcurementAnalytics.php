@@ -96,6 +96,27 @@ class ProcurementAnalytics extends Page
         }
 
         $this->restoreRecommendationState();
+        $this->stripLegacyAiRunQueryFromBrowserUrl();
+    }
+
+    protected function stripLegacyAiRunQueryFromBrowserUrl(): void
+    {
+        if (! request()->has('ai_run')) {
+            return;
+        }
+
+        // Old toast/DB notification links used ?ai_run=N; strip it so it never sticks in the bar.
+        $this->js(<<<'JS'
+            (() => {
+                const url = new URL(window.location.href);
+                if (! url.searchParams.has('ai_run')) {
+                    return;
+                }
+                url.searchParams.delete('ai_run');
+                const next = url.pathname + url.search + url.hash;
+                window.history.replaceState(window.history.state, '', next);
+            })();
+        JS);
     }
 
     protected function restoreRecommendationState(): void

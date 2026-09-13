@@ -2,6 +2,7 @@
 
 namespace App\Livewire;
 
+use App\Support\AiProcurementSummaryRestore;
 use Filament\Facades\Filament;
 use Filament\Livewire\DatabaseNotifications as BaseDatabaseNotifications;
 use Filament\Notifications\Notification;
@@ -9,6 +10,7 @@ use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Notifications\DatabaseNotification;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\On;
 
 class OwwaNotificationDropdown extends BaseDatabaseNotifications
@@ -124,11 +126,55 @@ class OwwaNotificationDropdown extends BaseDatabaseNotifications
 
         foreach ($actions as $action) {
             if (filled($action['url'] ?? null)) {
-                return $action['url'];
+                return $this->sanitizeNotificationActionUrl((string) $action['url']);
             }
         }
 
         return null;
+    }
+
+    /**
+     * Legacy AI completion links used ?ai_run=N. Strip that query and queue a one-shot summary restore.
+     */
+    protected function sanitizeNotificationActionUrl(string $url): string
+    {
+        $parts = parse_url($url);
+        if ($parts === false) {
+            return $url;
+        }
+
+        $query = [];
+        if (! empty($parts['query'])) {
+            parse_str($parts['query'], $query);
+        }
+
+        if (isset($query['ai_run']) && is_numeric($query['ai_run']) && Auth::id() !== null) {
+            AiProcurementSummaryRestore::remember((int) Auth::id(), (int) $query['ai_run']);
+        }
+
+        unset($query['ai_run']);
+
+        $path = $parts['path'] ?? '';
+        $rebuilt = '';
+
+        if (isset($parts['scheme'], $parts['host'])) {
+            $rebuilt = $parts['scheme'].'://'.$parts['host'];
+            if (isset($parts['port'])) {
+                $rebuilt .= ':'.$parts['port'];
+            }
+        }
+
+        $rebuilt .= $path;
+
+        if ($query !== []) {
+            $rebuilt .= '?'.http_build_query($query);
+        }
+
+        if (isset($parts['fragment'])) {
+            $rebuilt .= '#'.$parts['fragment'];
+        }
+
+        return $rebuilt !== '' ? $rebuilt : $url;
     }
 
     #[On('databaseNotificationsSent')]
