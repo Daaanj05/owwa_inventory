@@ -108,10 +108,9 @@
                         window.__owwaAiBusyGuardInstance = this;
                     } else {
                         window.__owwaBusyGuardInstance = this;
+                        window.addEventListener('beforeunload', (event) => this.onBeforeUnload(event));
+                        document.addEventListener('click', (event) => this.onDocumentClick(event), true);
                     }
-
-                    window.addEventListener('beforeunload', (event) => this.onBeforeUnload(event));
-                    document.addEventListener('click', (event) => this.onDocumentClick(event), true);
 
                     this.$watch('busy', () => this.syncBusyActiveClass());
                     this.$watch('minimized', () => this.syncBusyActiveClass());
@@ -147,6 +146,7 @@
 
                                 instance.aiRequestPending = false;
                                 instance.syncFromLivewire();
+                                window.Livewire?.dispatch('ai-procurement-busy-refresh');
                             };
 
                             succeed(finish);
@@ -216,6 +216,7 @@
                     }
 
                     this.minimized = true;
+                    window.Livewire?.dispatch('ai-procurement-busy-refresh');
                 },
                 expand() {
                     this.minimized = false;
@@ -411,7 +412,7 @@
                     }, Math.min(Number(autoClearMs) || 120000, 120000));
                 },
                 onBeforeUnload(event) {
-                    if (! this.busy || this.allowUnload) {
+                    if (this.allowMinimize || ! this.busy || this.allowUnload) {
                         return;
                     }
 
@@ -421,7 +422,7 @@
                     return this.leaveMessage;
                 },
                 onDocumentClick(event) {
-                    if (! this.busy) {
+                    if (this.allowMinimize || ! this.busy) {
                         return;
                     }
 

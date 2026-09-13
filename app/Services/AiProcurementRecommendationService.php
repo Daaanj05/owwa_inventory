@@ -2,10 +2,14 @@
 
 namespace App\Services;
 
+use App\Filament\Pages\ProcurementAnalytics;
 use App\Models\AiProcurementItem;
 use App\Models\AiProcurementRun;
 use App\Models\ItemCategory;
+use App\Models\User;
 use Carbon\Carbon;
+use Filament\Actions\Action;
+use Filament\Notifications\Notification;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 use Throwable;
@@ -109,11 +113,13 @@ class AiProcurementRecommendationService
                 : trim($summary)."\n\n".$table;
 
             $this->finalizeRun($run, $rawForStorage, $rows);
+            $this->notifyCreatorOfCompletedRun($run->fresh());
         } catch (Throwable $exception) {
             $run->update([
                 'status' => 'failed',
                 'error_message' => $this->formatErrorMessage($exception->getMessage()),
             ]);
+            $this->notifyCreatorOfCompletedRun($run->fresh());
         }
     }
 
@@ -126,6 +132,11 @@ class AiProcurementRecommendationService
                 'status' => 'failed',
                 'error_message' => $this->formatErrorMessage($message),
             ]);
+
+        $run = AiProcurementRun::query()->find($runId);
+        if ($run !== null) {
+            $this->notifyCreatorOfCompletedRun($run);
+        }
     }
 
     /**
@@ -182,6 +193,52 @@ class AiProcurementRecommendationService
                 'include_in_request' => true,
             ]);
         }
+    }
+
+    protected function notifyCreatorOfCompletedRun(?AiProcurementRun $run): void
+    {
+        if ($run === null || $run->created_by === null) {
+            return;
+        }
+
+        $user = User::query()->find($run->created_by);
+        if ($user === null) {
+            return;
+        }
+
+        $analyticsUrl = ProcurementAnalytics::getUrl(panel: 'admin').'#procurement-summary';
+
+        if ($run->status === 'failed') {
+            Notification::make()
+                ->title('AI recommendation failed')
+                ->body($run->error_message ?: 'The recommendation could not be completed.')
+                ->danger()
+                ->actions([
+                    Action::make('viewResult')
+                        ->label('View the result')
+                        ->url($analyticsUrl)
+                        ->markAsRead(),
+                ])
+                ->sendToDatabase($user);
+
+            return;
+        }
+
+        if ($run->status !== 'draft') {
+            return;
+        }
+
+        Notification::make()
+            ->title('AI recommendation ready')
+            ->body('Your procurement recommendation is ready on Procurement Analytics.')
+            ->success()
+            ->actions([
+                Action::make('viewResult')
+                    ->label('View the result')
+                    ->url($analyticsUrl)
+                    ->markAsRead(),
+            ])
+            ->sendToDatabase($user);
     }
 
     /**

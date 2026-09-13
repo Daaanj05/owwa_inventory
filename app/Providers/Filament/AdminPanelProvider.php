@@ -46,6 +46,7 @@ use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
 use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Session\Middleware\StartSession;
+use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
 
@@ -108,7 +109,8 @@ class AdminPanelProvider extends PanelProvider
                         'title' => 'Preparing export…',
                         'message' => 'Your file is being prepared. Please stay on this page until the download finishes.',
                         'leaveMessage' => 'Your export is still preparing. Are you sure you want to leave this page?',
-                    ])->render();
+                    ])->render()
+                    .Blade::render('@livewire(\App\Livewire\AiProcurementBusyChip::class)');
             })
             ->navigationGroups([
                 NavigationGroup::make('My items'),

@@ -4,6 +4,7 @@ namespace App\Filament\Pages\Auth;
 
 use App\Models\User;
 use App\Support\FriendlyMessages;
+use App\Support\LoginRememberedEmail;
 use Filament\Auth\Http\Responses\Contracts\LoginResponse;
 use Filament\Auth\Pages\Login as BaseLogin;
 use Filament\Facades\Filament;
@@ -23,6 +24,26 @@ class Login extends BaseLogin
 
     private const int LOGIN_DECAY_SECONDS = 60;
 
+    public function mount(): void
+    {
+        parent::mount();
+
+        $rememberedEmail = LoginRememberedEmail::read();
+        if ($rememberedEmail === null) {
+            return;
+        }
+
+        $this->form->fill([
+            'email' => $rememberedEmail,
+            'remember' => true,
+        ]);
+
+        $this->data = array_merge($this->data ?? [], [
+            'email' => $rememberedEmail,
+            'remember' => true,
+        ]);
+    }
+
     public function authenticate(): ?LoginResponse
     {
         // Always send users back to the current panel's dashboard,
@@ -31,7 +52,11 @@ class Login extends BaseLogin
 
         $this->form->fill(array_merge(
             $this->form->getRawState(),
-            array_filter($this->data ?? [], fn ($value): bool => filled($value)),
+            array_filter(
+                $this->data ?? [],
+                fn (mixed $value, string|int $key): bool => $key === 'remember' || filled($value),
+                ARRAY_FILTER_USE_BOTH,
+            ),
         ));
 
         $this->ensureIsNotRateLimited();
@@ -48,7 +73,25 @@ class Login extends BaseLogin
 
         RateLimiter::clear($this->throttleKey());
 
+        if ($response !== null) {
+            $this->syncRememberedEmailCookie();
+        }
+
         return $response;
+    }
+
+    protected function syncRememberedEmailCookie(): void
+    {
+        $remember = (bool) ($this->data['remember'] ?? false);
+        $email = (string) ($this->data['email'] ?? '');
+
+        if ($remember) {
+            LoginRememberedEmail::remember($email);
+
+            return;
+        }
+
+        LoginRememberedEmail::forget();
     }
 
     protected function ensureIsNotRateLimited(): void
