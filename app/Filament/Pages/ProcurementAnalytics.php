@@ -768,13 +768,17 @@ class ProcurementAnalytics extends Page
         $this->hydrateRecommendationFromRun($run);
 
         Notification::make()
-            ->title('AI recommendation saved')
-            ->body('Review the recommendation below or open the saved run.')
+            ->title('AI recommendation ready')
+            ->body('Your procurement recommendation is ready on this page.')
             ->success()
+            ->seconds(10)
             ->actions([
-                \Filament\Actions\Action::make('view')
-                    ->label('View run')
-                    ->url(AiProcurementRunResource::getUrl('view', ['record' => $run->id])),
+                \Filament\Actions\Action::make('viewResult')
+                    ->label('View the result')
+                    ->button()
+                    ->alpineClickHandler(<<<'JS'
+                        document.getElementById('procurement-summary')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                    JS),
             ])
             ->send();
     }

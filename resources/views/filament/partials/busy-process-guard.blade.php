@@ -6,6 +6,7 @@
     - $message (string)
     - $leaveMessage (string)
     - $busyProperty (optional Livewire bool property name to entangle, e.g. exportBusy)
+    - $allowMinimize (bool) — AI-only: Minimize collapses to a corner chip instead of Dismiss
 --}}
 @php
     $busy = (bool) ($busy ?? false);
@@ -13,6 +14,7 @@
     $message = $message ?? 'This may take a moment. Please stay on this page until it finishes.';
     $leaveMessage = $leaveMessage ?? 'A process is still running. Are you sure you want to leave this page?';
     $busyProperty = $busyProperty ?? null;
+    $allowMinimize = (bool) ($allowMinimize ?? false);
 @endphp
 
 @once
@@ -86,6 +88,9 @@
         window.owwaBusyGuard = function (config) {
             return {
                 busy: Boolean(config.initialBusy),
+                minimized: false,
+                allowMinimize: Boolean(config.allowMinimize),
+                aiRequestPending: false,
                 title: config.defaultTitle || 'Please wait…',
                 message: config.defaultMessage || '',
                 leaveMessage: config.leaveMessage || 'A process is still running. Are you sure you want to leave this page?',
@@ -94,25 +99,126 @@
                 tokenQuery: config.tokenQuery || 'owwa_download_token',
                 downloadTimer: null,
                 cookiePollTimer: null,
+                aiClearTimer: null,
                 expectedToken: null,
                 suppressBusySync: false,
                 allowUnload: false,
                 init() {
-                    window.__owwaBusyGuardInstance = this;
+                    if (this.allowMinimize) {
+                        window.__owwaAiBusyGuardInstance = this;
+                    } else {
+                        window.__owwaBusyGuardInstance = this;
+                    }
+
                     window.addEventListener('beforeunload', (event) => this.onBeforeUnload(event));
                     document.addEventListener('click', (event) => this.onDocumentClick(event), true);
 
-                    this.$watch('busy', (value) => {
-                        document.body.classList.toggle('owwa-busy-active', Boolean(value));
-                    });
-
-                    if (this.busy) {
-                        document.body.classList.add('owwa-busy-active');
-                    }
+                    this.$watch('busy', () => this.syncBusyActiveClass());
+                    this.$watch('minimized', () => this.syncBusyActiveClass());
+                    this.syncBusyActiveClass();
 
                     this.$el.addEventListener('livewire:navigated', () => this.syncFromLivewire());
                     queueMicrotask(() => this.syncFromLivewire());
                     setInterval(() => this.syncFromLivewire(), 1000);
+
+                    if (this.allowMinimize) {
+                        this.bindAiLivewireHooks();
+                    }
+                },
+                bindAiLivewireHooks() {
+                    if (window.__owwaAiBusyHookBound) {
+                        return;
+                    }
+
+                    const register = () => {
+                        if (! window.Livewire || typeof window.Livewire.hook !== 'function') {
+                            return;
+                        }
+
+                        window.__owwaAiBusyHookBound = true;
+
+                        window.Livewire.hook('commit', ({ succeed, fail }) => {
+                            const finish = () => {
+                                const instance = window.__owwaAiBusyGuardInstance;
+
+                                if (! instance || ! instance.aiRequestPending) {
+                                    return;
+                                }
+
+                                instance.aiRequestPending = false;
+                                instance.syncFromLivewire();
+                            };
+
+                            succeed(finish);
+                            fail(finish);
+                        });
+                    };
+
+                    if (window.Livewire) {
+                        register();
+                    } else {
+                        document.addEventListener('livewire:init', register, { once: true });
+                    }
+                },
+                syncBusyActiveClass() {
+                    document.body.classList.toggle('owwa-busy-active', Boolean(this.busy && ! this.minimized));
+                },
+                startAiBusy() {
+                    if (! this.allowMinimize) {
+                        return;
+                    }
+
+                    this.cancelAiBusyClear();
+                    document.getElementById('procurement-summary')?.classList.remove('owwa-pa-summary-awaiting-reveal');
+                    this.suppressBusySync = false;
+                    this.aiRequestPending = true;
+                    this.allowUnload = false;
+                    this.minimized = false;
+                    this.title = config.defaultTitle || this.title || 'Generating recommendation…';
+                    this.message = config.defaultMessage || this.message || '';
+                    this.busy = true;
+                },
+                cancelAiBusyClear() {
+                    if (this.aiClearTimer) {
+                        clearTimeout(this.aiClearTimer);
+                        this.aiClearTimer = null;
+                    }
+                },
+                scheduleAiBusyClear() {
+                    this.cancelAiBusyClear();
+
+                    if (this.aiRequestPending || this.suppressBusySync) {
+                        return;
+                    }
+
+                    const component = this.livewireComponent();
+                    if (component && typeof component.get === 'function') {
+                        const stillProcessing = Boolean(component.get('loading') || component.get('processingRunId'));
+                        if (stillProcessing) {
+                            return;
+                        }
+                    }
+
+                    const summary = document.getElementById('procurement-summary');
+                    // Hold the result hidden, drop the chip first, then reveal after a short beat.
+                    summary?.classList.add('owwa-pa-summary-awaiting-reveal');
+                    this.busy = false;
+                    this.minimized = false;
+
+                    this.aiClearTimer = setTimeout(() => {
+                        this.aiClearTimer = null;
+                        summary?.classList.remove('owwa-pa-summary-awaiting-reveal');
+                    }, 350);
+                },
+                minimize() {
+                    if (! this.allowMinimize || ! this.busy) {
+                        return;
+                    }
+
+                    this.minimized = true;
+                },
+                expand() {
+                    this.minimized = false;
                 },
                 livewireComponent() {
                     if (! window.Livewire || ! this.$el) {
@@ -140,13 +246,26 @@
 
                     const loading = typeof component.get === 'function' ? Boolean(component.get('loading')) : false;
                     const processingRunId = typeof component.get === 'function' ? component.get('processingRunId') : null;
+                    const stillProcessing = Boolean(loading || processingRunId);
 
-                    if (! this.busyProperty && (loading || processingRunId)) {
+                    if (! this.busyProperty && (stillProcessing || this.aiRequestPending)) {
+                        this.cancelAiBusyClear();
+                        document.getElementById('procurement-summary')?.classList.remove('owwa-pa-summary-awaiting-reveal');
+
+                        if (! this.busy) {
+                            this.minimized = false;
+                        }
+
                         this.busy = true;
                         this.title = config.defaultTitle || this.title;
                         this.message = config.defaultMessage || this.message;
-                    } else if (! this.busyProperty && ! loading && ! processingRunId && ! this.downloadTimer) {
-                        this.busy = false;
+                    } else if (! this.busyProperty && ! stillProcessing && ! this.aiRequestPending && ! this.downloadTimer) {
+                        if (this.allowMinimize && this.busy) {
+                            this.scheduleAiBusyClear();
+                        } else {
+                            this.busy = false;
+                            this.minimized = false;
+                        }
                     }
                 },
                 readCookie(name) {
@@ -159,6 +278,7 @@
                 start(detail = {}) {
                     this.suppressBusySync = false;
                     this.allowUnload = false;
+                    this.minimized = false;
                     this.title = detail.title || config.defaultTitle || 'Please wait…';
                     this.message = detail.message || config.defaultMessage || '';
                     this.clearFilamentModalShell();
@@ -226,7 +346,10 @@
                     }, Math.min(Number(autoClearMs) || 120000, 120000));
                 },
                 end() {
+                    this.cancelAiBusyClear();
                     this.busy = false;
+                    this.minimized = false;
+                    this.aiRequestPending = false;
                     this.allowUnload = false;
                     this.suppressBusySync = true;
                     this.title = config.defaultTitle || 'Please wait…';
@@ -344,6 +467,14 @@
                 @js(\App\Support\OwwaExportDownloadCookie::TOKEN_QUERY),
             );
         });
+
+        window.addEventListener('owwa-ai-busy-start', () => {
+            const instance = window.__owwaAiBusyGuardInstance;
+
+            if (instance && typeof instance.startAiBusy === 'function') {
+                instance.startAiBusy();
+            }
+        });
     </script>
 @endonce
 
@@ -354,6 +485,7 @@
         defaultMessage: @js($message),
         leaveMessage: @js($leaveMessage),
         busyProperty: @js($busyProperty),
+        allowMinimize: @js($allowMinimize),
         doneCookie: @js(\App\Support\OwwaExportDownloadCookie::DONE_COOKIE),
         tokenQuery: @js(\App\Support\OwwaExportDownloadCookie::TOKEN_QUERY),
     })"
@@ -362,26 +494,57 @@
 >
     <div
         class="owwa-busy-overlay"
-        x-show="busy"
+        x-show="busy && !minimized"
         x-cloak
         x-transition.opacity
         role="alertdialog"
         aria-modal="true"
         aria-live="assertive"
-        :aria-hidden="busy ? 'false' : 'true'"
+        :aria-hidden="busy && !minimized ? 'false' : 'true'"
     >
         <div class="owwa-busy-dialog">
             <div class="owwa-busy-spinner" aria-hidden="true"></div>
             <p class="owwa-busy-title" x-text="title"></p>
             <p class="owwa-busy-message" x-text="message"></p>
             <p class="owwa-busy-hint">Please don’t close or leave this page until it finishes.</p>
-            <button
-                type="button"
-                class="owwa-busy-dismiss"
-                x-on:click="end()"
-            >
-                Dismiss
-            </button>
+            <template x-if="allowMinimize">
+                <button
+                    type="button"
+                    class="owwa-busy-dismiss"
+                    x-on:click="minimize()"
+                >
+                    Minimize
+                </button>
+            </template>
+            <template x-if="!allowMinimize">
+                <button
+                    type="button"
+                    class="owwa-busy-dismiss"
+                    x-on:click="end()"
+                >
+                    Dismiss
+                </button>
+            </template>
         </div>
+    </div>
+
+    <div
+        class="owwa-busy-chip"
+        x-show="busy && minimized && allowMinimize"
+        x-cloak
+        x-transition.opacity
+        role="status"
+        aria-live="polite"
+        :aria-hidden="busy && minimized && allowMinimize ? 'false' : 'true'"
+    >
+        <div class="owwa-busy-chip-spinner" aria-hidden="true"></div>
+        <p class="owwa-busy-chip-title" x-text="title"></p>
+        <button
+            type="button"
+            class="owwa-busy-chip-expand"
+            x-on:click="expand()"
+        >
+            Expand
+        </button>
     </div>
 </div>

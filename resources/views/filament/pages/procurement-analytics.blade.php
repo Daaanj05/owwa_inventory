@@ -95,6 +95,7 @@
 
     {{-- Procurement summary + optional AI recommendation --}}
     <div
+        id="procurement-summary"
         class="owwa-pa-card owwa-pa-card--summary fi-section rounded-xl bg-white shadow-sm ring-1 ring-gray-950/5 dark:bg-gray-900 dark:ring-white/10"
         @if($processingRunId) wire:poll.5s="syncProcessingRun" @endif
     >
@@ -171,6 +172,7 @@
             <button
                 type="button"
                 wire:click="generateAiRecommendation"
+                x-on:click="window.dispatchEvent(new CustomEvent('owwa-ai-busy-start'))"
                 wire:loading.attr="disabled"
                 wire:target="generateAiRecommendation"
                 class="owwa-pa-generate-btn owwa-pa-generate-btn--footer"
@@ -188,5 +190,6 @@
         'title' => 'Generating recommendation…',
         'message' => 'AI narrative and reorder items are being prepared. This can take a short while.',
         'leaveMessage' => 'Recommendation generation is still in progress. Are you sure you want to leave this page?',
+        'allowMinimize' => true,
     ])
 </x-filament-panels::page>
