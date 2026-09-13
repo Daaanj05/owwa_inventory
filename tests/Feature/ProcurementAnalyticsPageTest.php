@@ -558,7 +558,37 @@ class ProcurementAnalyticsPageTest extends TestCase
             ->assertDontSee('AI offline');
     }
 
-    public function test_mount_restores_completed_draft_run_into_procurement_summary(): void
+    public function test_mount_does_not_restore_completed_draft_without_pending_flag(): void
+    {
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+
+        $office = Office::factory()->create();
+        $custodian = User::factory()->create([
+            'role' => User::ROLE_SUPPLY_CUSTODIAN,
+            'office_id' => $office->id,
+            'email_verified_at' => now(),
+        ]);
+
+        AiProcurementRun::query()->create([
+            'ran_at' => now(),
+            'period_from' => now()->subMonths(11)->startOfMonth()->toDateString(),
+            'period_to' => now()->endOfMonth()->toDateString(),
+            'status' => 'draft',
+            'raw_response' => "Stock gaps need attention now.\n\n| Priority | Item |",
+            'created_by' => $custodian->id,
+        ]);
+
+        Livewire::actingAs($custodian)
+            ->test(ProcurementAnalytics::class)
+            ->assertSet('processingRunId', null)
+            ->assertSet('loading', false)
+            ->assertSet('lastAiRunId', null)
+            ->assertSet('recommendation', null)
+            ->assertDontSee('AI offline')
+            ->assertSee('Generate a recommendation from the current at-risk table');
+    }
+
+    public function test_mount_restores_completed_draft_once_from_pending_flag(): void
     {
         Filament::setCurrentPanel(Filament::getPanel('admin'));
 
@@ -578,14 +608,21 @@ class ProcurementAnalyticsPageTest extends TestCase
             'created_by' => $custodian->id,
         ]);
 
+        \App\Support\AiProcurementSummaryRestore::remember($custodian->id, $run->id);
+
         Livewire::actingAs($custodian)
             ->test(ProcurementAnalytics::class)
             ->assertSet('processingRunId', null)
             ->assertSet('loading', false)
             ->assertSet('lastAiRunId', $run->id)
             ->assertSet('recommendation', 'Stock gaps need attention now.')
-            ->assertDontSee('AI offline')
             ->assertSee('Stock gaps need attention now.');
+
+        Livewire::actingAs($custodian)
+            ->test(ProcurementAnalytics::class)
+            ->assertSet('lastAiRunId', null)
+            ->assertSet('recommendation', null)
+            ->assertSee('Generate a recommendation from the current at-risk table');
     }
 
     protected function seedMonthlyIssuances(int $itemId, int $officeId, int $monthlyQty, int $months): void

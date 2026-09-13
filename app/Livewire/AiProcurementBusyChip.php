@@ -4,6 +4,7 @@ namespace App\Livewire;
 
 use App\Filament\Pages\ProcurementAnalytics;
 use App\Models\AiProcurementRun;
+use App\Support\AiProcurementSummaryRestore;
 use Filament\Actions\Action;
 use Filament\Notifications\Notification;
 use Illuminate\Contracts\View\View;
@@ -58,6 +59,10 @@ class AiProcurementBusyChip extends Component
 
     protected function notifyRunCompleted(AiProcurementRun $run): void
     {
+        if (! AiProcurementSummaryRestore::claimSessionToast($run->id)) {
+            return;
+        }
+
         $analyticsUrl = ProcurementAnalytics::getUrl().'#procurement-summary';
 
         if ($run->status === 'failed') {

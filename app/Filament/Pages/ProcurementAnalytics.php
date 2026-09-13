@@ -2,7 +2,6 @@
 
 namespace App\Filament\Pages;
 
-use App\Filament\Resources\AiProcurementRunResource;
 use App\Jobs\GenerateAiProcurementRecommendationJob;
 use App\Models\AiProcurementRun;
 use App\Models\ItemCategory;
@@ -10,6 +9,7 @@ use App\Services\AiProcurementRecommendationService;
 use App\Services\OllamaClient;
 use App\Services\ProcurementDecisionSupportService;
 use App\Services\SemiExpendableEulAnalyticsService;
+use App\Support\AiProcurementSummaryRestore;
 use App\Support\InventoryCategoryOptions;
 use App\Support\OwwaExportFilename;
 use BackedEnum;
@@ -121,10 +121,16 @@ class ProcurementAnalytics extends Page
             return;
         }
 
+        // One-shot only: completed runs hydrate once after off-page finish, then clear on refresh.
+        $pendingRunId = AiProcurementSummaryRestore::pull($userId);
+        if ($pendingRunId === null) {
+            return;
+        }
+
         $latest = AiProcurementRun::query()
+            ->whereKey($pendingRunId)
             ->where('created_by', $userId)
             ->whereIn('status', ['draft', 'failed'])
-            ->latest('id')
             ->first();
 
         if ($latest === null) {
@@ -758,17 +764,6 @@ class ProcurementAnalytics extends Page
 
             if (config('queue.default') === 'sync') {
                 $this->syncProcessingRun();
-            } else {
-                Notification::make()
-                    ->title('Recommendation queued')
-                    ->body('The AI narrative will appear when processing completes.')
-                    ->success()
-                    ->actions([
-                        \Filament\Actions\Action::make('view')
-                            ->label('View run')
-                            ->url(AiProcurementRunResource::getUrl('view', ['record' => $run->id])),
-                    ])
-                    ->send();
             }
         } catch (\Throwable $e) {
             $this->recommendation = app(AiProcurementRecommendationService::class)
@@ -800,20 +795,30 @@ class ProcurementAnalytics extends Page
         $this->loading = false;
         $this->lastAiRunId = $run->id;
 
+        if (Auth::id() !== null) {
+            AiProcurementSummaryRestore::forget((int) Auth::id());
+        }
+
         if ($run->status === 'failed') {
             $this->recommendation = $run->error_message
                 ?? 'AI recommendation failed. Check that the device worker is active on the operation device.';
 
-            Notification::make()
-                ->title('AI recommendation failed')
-                ->body($this->recommendation)
-                ->danger()
-                ->send();
+            if (AiProcurementSummaryRestore::claimSessionToast($run->id)) {
+                Notification::make()
+                    ->title('AI recommendation failed')
+                    ->body($this->recommendation)
+                    ->danger()
+                    ->send();
+            }
 
             return;
         }
 
         $this->hydrateRecommendationFromRun($run);
+
+        if (! AiProcurementSummaryRestore::claimSessionToast($run->id)) {
+            return;
+        }
 
         Notification::make()
             ->title('AI recommendation ready')

@@ -7,6 +7,7 @@ use App\Models\AiProcurementItem;
 use App\Models\AiProcurementRun;
 use App\Models\ItemCategory;
 use App\Models\User;
+use App\Support\AiProcurementSummaryRestore;
 use Carbon\Carbon;
 use Filament\Actions\Action;
 use Filament\Notifications\Notification;
@@ -207,6 +208,8 @@ class AiProcurementRecommendationService
         }
 
         $analyticsUrl = ProcurementAnalytics::getUrl(panel: 'admin').'#procurement-summary';
+
+        AiProcurementSummaryRestore::remember((int) $user->id, (int) $run->id);
 
         if ($run->status === 'failed') {
             Notification::make()
