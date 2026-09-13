@@ -3,7 +3,7 @@
 @endphp
 
 @if($rows->isNotEmpty())
-    <div class="owwa-pa-summary-table-wrap">
+    <div class="owwa-pa-summary-table-wrap owwa-pa-table-scroll">
         <table class="owwa-pa-summary-table">
             <thead>
                 <tr>

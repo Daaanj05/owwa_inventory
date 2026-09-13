@@ -3987,6 +3987,7 @@ select.owwa-search-bar {
 .owwa-pa-summary-table-wrap {
     margin-top: 0.75rem;
     border-top: 1px solid #e2e8f0;
+    overscroll-behavior: contain;
 }
 
 .owwa-pa-summary-table {
@@ -4008,12 +4009,22 @@ select.owwa-search-bar {
 }
 
 .owwa-pa-summary-table th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
     font-size: 0.6875rem;
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.04em;
     color: #64748b;
     background: #f8fafc;
+    box-shadow: 0 1px 0 #e2e8f0;
+}
+
+.dark .owwa-pa-summary-table th {
+    background: #0f172a;
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.1);
+    color: #94a3b8;
 }
 
 .owwa-pa-summary-table td:nth-child(2),
