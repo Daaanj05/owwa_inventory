@@ -106,6 +106,44 @@ class ProcurementAnalytics extends Page
             return;
         }
 
+        $aiRunId = request()->integer('ai_run') ?: null;
+
+        if ($aiRunId !== null) {
+            $fromQuery = AiProcurementRun::query()
+                ->whereKey($aiRunId)
+                ->where('created_by', $userId)
+                ->whereIn('status', ['draft', 'failed', 'processing'])
+                ->first();
+
+            AiProcurementSummaryRestore::forget($userId);
+
+            if ($fromQuery !== null) {
+                if ($fromQuery->status === 'processing') {
+                    $this->processingRunId = $fromQuery->id;
+                    $this->lastAiRunId = $fromQuery->id;
+                    $this->loading = true;
+                    $this->recommendation = null;
+                } else {
+                    $this->hydrateCompletedRunIntoSummary($fromQuery);
+                }
+
+                // Drop ai_run from the address bar so refresh does not re-hydrate.
+                $this->js(<<<'JS'
+                    (() => {
+                        const url = new URL(window.location.href);
+                        if (! url.searchParams.has('ai_run')) {
+                            return;
+                        }
+                        url.searchParams.delete('ai_run');
+                        const next = url.pathname + url.search + url.hash;
+                        window.history.replaceState(window.history.state, '', next);
+                    })();
+                JS);
+
+                return;
+            }
+        }
+
         $processing = AiProcurementRun::query()
             ->where('created_by', $userId)
             ->where('status', 'processing')
@@ -137,18 +175,28 @@ class ProcurementAnalytics extends Page
             return;
         }
 
-        $this->lastAiRunId = $latest->id;
+        $this->hydrateCompletedRunIntoSummary($latest);
+    }
+
+    protected function hydrateCompletedRunIntoSummary(AiProcurementRun $run): void
+    {
+        $this->lastAiRunId = $run->id;
         $this->processingRunId = null;
         $this->loading = false;
 
-        if ($latest->status === 'failed') {
-            $this->recommendation = $latest->error_message
+        if ($run->status === 'failed') {
+            $this->recommendation = $run->error_message
                 ?? 'AI recommendation failed. Check that the device worker is active on the operation device.';
 
             return;
         }
 
-        $this->hydrateRecommendationFromRun($latest);
+        $this->hydrateRecommendationFromRun($run);
+    }
+
+    public static function resultUrl(int $runId): string
+    {
+        return static::getUrl(['ai_run' => $runId], panel: 'admin').'#procurement-summary';
     }
 
     /**

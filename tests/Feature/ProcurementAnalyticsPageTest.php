@@ -625,6 +625,44 @@ class ProcurementAnalyticsPageTest extends TestCase
             ->assertSee('Generate a recommendation from the current at-risk table');
     }
 
+    public function test_mount_hydrates_completed_run_once_from_ai_run_query(): void
+    {
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+
+        $office = Office::factory()->create();
+        $custodian = User::factory()->create([
+            'role' => User::ROLE_SUPPLY_CUSTODIAN,
+            'office_id' => $office->id,
+            'email_verified_at' => now(),
+        ]);
+
+        $run = AiProcurementRun::query()->create([
+            'ran_at' => now(),
+            'period_from' => now()->subMonths(11)->startOfMonth()->toDateString(),
+            'period_to' => now()->endOfMonth()->toDateString(),
+            'status' => 'draft',
+            'raw_response' => "View-result narrative ready.\n\n| Priority | Item |",
+            'created_by' => $custodian->id,
+        ]);
+
+        $this->assertStringContainsString('ai_run='.$run->id, ProcurementAnalytics::resultUrl($run->id));
+
+        Livewire::actingAs($custodian)
+            ->withQueryParams(['ai_run' => $run->id])
+            ->test(ProcurementAnalytics::class)
+            ->assertSet('lastAiRunId', $run->id)
+            ->assertSet('recommendation', 'View-result narrative ready.')
+            ->assertSee('View-result narrative ready.');
+
+        // Fresh request without ai_run must not keep showing the summary.
+        Livewire::actingAs($custodian)
+            ->withQueryParams([])
+            ->test(ProcurementAnalytics::class)
+            ->assertSet('lastAiRunId', null)
+            ->assertSet('recommendation', null)
+            ->assertSee('Generate a recommendation from the current at-risk table');
+    }
+
     protected function seedMonthlyIssuances(int $itemId, int $officeId, int $monthlyQty, int $months): void
     {
         for ($i = $months - 1; $i >= 0; $i--) {

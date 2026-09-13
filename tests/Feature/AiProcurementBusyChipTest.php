@@ -132,5 +132,14 @@ class AiProcurementBusyChipTest extends TestCase
         ]);
 
         $this->assertSame('failed', $run->fresh()->status);
+
+        $notification = $user->notifications()->latest('id')->first();
+        $this->assertNotNull($notification);
+        $actions = data_get($notification->data, 'actions', []);
+        $actionUrl = data_get($actions, '0.url')
+            ?? data_get($actions, '0.data.url')
+            ?? collect($actions)->pluck('url')->filter()->first();
+        $this->assertNotNull($actionUrl);
+        $this->assertStringContainsString('ai_run='.$run->id, (string) $actionUrl);
     }
 }

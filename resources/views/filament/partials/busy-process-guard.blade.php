@@ -100,6 +100,7 @@
                 downloadTimer: null,
                 cookiePollTimer: null,
                 aiClearTimer: null,
+                aiPendingSettleTimer: null,
                 expectedToken: null,
                 suppressBusySync: false,
                 allowUnload: false,
@@ -150,9 +151,45 @@
                                     return;
                                 }
 
-                                instance.aiRequestPending = false;
-                                instance.syncFromLivewire();
-                                window.Livewire?.dispatch('ai-procurement-busy-refresh');
+                                const settleAiPending = () => {
+                                    if (! instance.aiRequestPending) {
+                                        return;
+                                    }
+
+                                    instance.syncFromLivewire();
+
+                                    const component = instance.livewireComponent();
+                                    const loading = component && typeof component.get === 'function'
+                                        ? Boolean(component.get('loading'))
+                                        : false;
+                                    const processingRunId = component && typeof component.get === 'function'
+                                        ? component.get('processingRunId')
+                                        : null;
+                                    const stillProcessing = Boolean(loading || processingRunId);
+
+                                    if (stillProcessing) {
+                                        instance.aiRequestPending = false;
+                                        window.Livewire?.dispatch('ai-procurement-busy-refresh');
+
+                                        return;
+                                    }
+
+                                    // Props may lag the commit callback — keep modal up briefly.
+                                    if (! instance.aiPendingSettleTimer) {
+                                        instance.aiPendingSettleTimer = setTimeout(() => {
+                                            instance.aiPendingSettleTimer = null;
+                                            if (! instance.aiRequestPending) {
+                                                return;
+                                            }
+
+                                            instance.aiRequestPending = false;
+                                            instance.syncFromLivewire();
+                                            window.Livewire?.dispatch('ai-procurement-busy-refresh');
+                                        }, 700);
+                                    }
+                                };
+
+                                queueMicrotask(settleAiPending);
                             };
 
                             succeed(finish);
@@ -175,6 +212,10 @@
                     }
 
                     this.cancelAiBusyClear();
+                    if (this.aiPendingSettleTimer) {
+                        clearTimeout(this.aiPendingSettleTimer);
+                        this.aiPendingSettleTimer = null;
+                    }
                     document.getElementById('procurement-summary')?.classList.remove('owwa-pa-summary-awaiting-reveal');
                     this.suppressBusySync = false;
                     this.aiRequestPending = true;
