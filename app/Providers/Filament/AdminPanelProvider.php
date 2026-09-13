@@ -110,6 +110,14 @@ class AdminPanelProvider extends PanelProvider
                         'message' => 'Your file is being prepared. Please stay on this page until the download finishes.',
                         'leaveMessage' => 'Your export is still preparing. Are you sure you want to leave this page?',
                     ])->render()
+                    .view('filament.partials.busy-process-guard', [
+                        'busy' => false,
+                        'busyProperty' => null,
+                        'title' => 'Generating recommendation…',
+                        'message' => 'AI narrative and reorder items are being prepared. This can take a short while.',
+                        'leaveMessage' => 'Recommendation generation is still in progress. Are you sure you want to leave this page?',
+                        'allowMinimize' => true,
+                    ])->render()
                     .Blade::render('@livewire(\App\Livewire\AiProcurementBusyChip::class)');
             })
             ->navigationGroups([

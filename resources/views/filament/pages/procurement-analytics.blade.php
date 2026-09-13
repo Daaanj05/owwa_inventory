@@ -179,12 +179,4 @@
             <p class="owwa-pa-generate-hint">Uses current at-risk table</p>
         </div>
     </div>
-
-    @include('filament.partials.busy-process-guard', [
-        'busy' => $loading || filled($processingRunId),
-        'title' => 'Generating recommendation…',
-        'message' => 'AI narrative and reorder items are being prepared. This can take a short while.',
-        'leaveMessage' => 'Recommendation generation is still in progress. Are you sure you want to leave this page?',
-        'allowMinimize' => true,
-    ])
 </x-filament-panels::page>

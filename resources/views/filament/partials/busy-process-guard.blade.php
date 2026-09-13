@@ -162,59 +162,37 @@
                                         return;
                                     }
 
-                                    instance.syncFromLivewire();
+                                    const trySettle = (attempt) => {
+                                        if (! instance.aiRequestPending) {
+                                            return;
+                                        }
 
-                                    const component = instance.livewireComponent();
-                                    const loading = component && typeof component.get === 'function'
-                                        ? Boolean(component.get('loading'))
-                                        : false;
-                                    const processingRunId = component && typeof component.get === 'function'
-                                        ? component.get('processingRunId')
-                                        : null;
-                                    const stillProcessing = Boolean(loading || processingRunId);
+                                        instance.syncFromLivewire();
 
-                                    // Only drop the click-pending flag once Livewire reports processing.
-                                    if (stillProcessing) {
-                                        instance.aiRequestPending = false;
-                                        window.Livewire?.dispatch('ai-procurement-busy-refresh');
-
-                                        return;
-                                    }
-
-                                    // Fail-safe if the request failed without starting a run.
-                                    if (! instance.aiPendingSettleTimer) {
-                                        instance.aiPendingSettleTimer = setTimeout(() => {
-                                            instance.aiPendingSettleTimer = null;
-                                            if (! instance.aiRequestPending) {
-                                                return;
-                                            }
-
-                                            instance.syncFromLivewire();
-                                            const lateComponent = instance.livewireComponent();
-                                            const lateLoading = lateComponent && typeof lateComponent.get === 'function'
-                                                ? Boolean(lateComponent.get('loading'))
-                                                : false;
-                                            const lateProcessingRunId = lateComponent && typeof lateComponent.get === 'function'
-                                                ? lateComponent.get('processingRunId')
-                                                : null;
-
-                                            if (lateLoading || lateProcessingRunId) {
-                                                instance.aiRequestPending = false;
-                                                window.__owwaAiBusyActive = true;
-                                                window.__owwaAiBusySeenProcessing = true;
-                                                instance.syncFromLivewire();
-                                                window.Livewire?.dispatch('ai-procurement-busy-refresh');
-
-                                                return;
-                                            }
-
+                                        if (instance.isAiStillProcessing()) {
                                             instance.aiRequestPending = false;
-                                            window.__owwaAiBusyActive = false;
-                                            window.__owwaAiBusySeenProcessing = false;
-                                            instance.syncFromLivewire();
+                                            window.__owwaAiBusyActive = true;
+                                            window.__owwaAiBusySeenProcessing = true;
                                             window.Livewire?.dispatch('ai-procurement-busy-refresh');
-                                        }, 5000);
-                                    }
+
+                                            return;
+                                        }
+
+                                        // Snapshot can lag a tick; retry briefly before treating as done/failed.
+                                        if (attempt < 10) {
+                                            setTimeout(() => trySettle(attempt + 1), 50);
+
+                                            return;
+                                        }
+
+                                        instance.aiRequestPending = false;
+                                        window.__owwaAiBusyActive = false;
+                                        window.__owwaAiBusySeenProcessing = false;
+                                        instance.syncFromLivewire();
+                                        window.Livewire?.dispatch('ai-procurement-busy-refresh');
+                                    };
+
+                                    queueMicrotask(() => trySettle(0));
                                 };
 
                                 queueMicrotask(settleAiPending);
@@ -269,12 +247,8 @@
                         return;
                     }
 
-                    const component = this.livewireComponent();
-                    if (component && typeof component.get === 'function') {
-                        const stillProcessing = Boolean(component.get('loading') || component.get('processingRunId'));
-                        if (stillProcessing) {
-                            return;
-                        }
+                    if (this.isAiStillProcessing()) {
+                        return;
                     }
 
                     const summary = document.getElementById('procurement-summary');
@@ -309,68 +283,118 @@
                     }
                 },
                 livewireComponent() {
-                    if (! window.Livewire || ! this.$el) {
+                    if (! window.Livewire) {
                         return null;
                     }
 
-                    const root = this.$el.closest('[wire\\:id]');
-                    const id = root ? root.getAttribute('wire:id') : null;
+                    if (this.$el) {
+                        const root = this.$el.closest('[wire\\:id]');
+                        const id = root ? root.getAttribute('wire:id') : null;
+                        if (id) {
+                            const local = window.Livewire.find(id);
+                            if (local) {
+                                return local;
+                            }
+                        }
+                    }
 
-                    return id ? window.Livewire.find(id) : null;
+                    // Global AI guard sits outside page Livewire — find Analytics or busy chip.
+                    if (! this.allowMinimize || typeof window.Livewire.all !== 'function') {
+                        return null;
+                    }
+
+                    const components = window.Livewire.all();
+                    for (const component of components) {
+                        try {
+                            if (typeof component.get !== 'function') {
+                                continue;
+                            }
+
+                            if (component.get('processingRunId') !== undefined) {
+                                return component;
+                            }
+                        } catch (error) {
+                            // Ignore components that cannot expose state.
+                        }
+                    }
+
+                    return null;
+                },
+                isAiStillProcessing() {
+                    if (! this.allowMinimize || ! window.Livewire || typeof window.Livewire.all !== 'function') {
+                        const component = this.livewireComponent();
+                        if (! component || typeof component.get !== 'function') {
+                            return false;
+                        }
+
+                        return Boolean(component.get('loading') || component.get('processingRunId'));
+                    }
+
+                    for (const component of window.Livewire.all()) {
+                        try {
+                            if (typeof component.get !== 'function') {
+                                continue;
+                            }
+
+                            // Analytics + global chip both expose processingRunId.
+                            if (component.get('processingRunId') !== undefined) {
+                                if (component.get('processingRunId') || component.get('loading')) {
+                                    return true;
+                                }
+                            }
+                        } catch (error) {
+                            // Ignore components that cannot expose state.
+                        }
+                    }
+
+                    return false;
                 },
                 syncFromLivewire() {
                     if (this.suppressBusySync) {
                         return;
                     }
 
-                    const component = this.livewireComponent();
-                    if (! component) {
-                        if (this.allowMinimize && window.__owwaAiBusyActive) {
-                            this.busy = true;
-                            this.minimized = Boolean(window.__owwaAiBusyMinimized);
-                            this.syncBusyActiveClass();
+                    if (this.busyProperty) {
+                        const component = this.livewireComponent();
+                        if (component && typeof component.get === 'function') {
+                            this.busy = Boolean(component.get(this.busyProperty));
                         }
 
                         return;
                     }
 
-                    if (this.busyProperty && typeof component.get === 'function') {
-                        this.busy = Boolean(component.get(this.busyProperty));
+                    if (! this.allowMinimize) {
+                        return;
                     }
 
-                    const loading = typeof component.get === 'function' ? Boolean(component.get('loading')) : false;
-                    const processingRunId = typeof component.get === 'function' ? component.get('processingRunId') : null;
-                    const stillProcessing = Boolean(loading || processingRunId);
+                    const stillProcessing = this.isAiStillProcessing();
 
-                    if (! this.busyProperty && (stillProcessing || this.aiRequestPending || (this.allowMinimize && window.__owwaAiBusyActive && ! window.__owwaAiBusySeenProcessing))) {
+                    if (stillProcessing || this.aiRequestPending || (window.__owwaAiBusyActive && ! window.__owwaAiBusySeenProcessing)) {
                         this.cancelAiBusyClear();
                         document.getElementById('procurement-summary')?.classList.remove('owwa-pa-summary-awaiting-reveal');
 
-                        if (stillProcessing && this.allowMinimize) {
+                        if (stillProcessing) {
                             window.__owwaAiBusyActive = true;
                             window.__owwaAiBusySeenProcessing = true;
                             this.aiRequestPending = false;
                         }
 
                         if (! this.busy) {
-                            this.minimized = Boolean(this.allowMinimize && window.__owwaAiBusyMinimized);
+                            this.minimized = Boolean(window.__owwaAiBusyMinimized);
                         }
 
                         this.busy = true;
                         this.title = config.defaultTitle || this.title;
                         this.message = config.defaultMessage || this.message;
-                    } else if (! this.busyProperty && this.allowMinimize && window.__owwaAiBusyActive && window.__owwaAiBusySeenProcessing && ! stillProcessing && ! this.aiRequestPending) {
+                    } else if (window.__owwaAiBusyActive && window.__owwaAiBusySeenProcessing && ! stillProcessing && ! this.aiRequestPending) {
                         window.__owwaAiBusyActive = false;
                         window.__owwaAiBusySeenProcessing = false;
                         if (this.busy) {
                             this.scheduleAiBusyClear();
                         }
-                    } else if (! this.busyProperty && ! stillProcessing && ! this.aiRequestPending && ! this.downloadTimer && ! (this.allowMinimize && window.__owwaAiBusyActive)) {
-                        if (this.allowMinimize && this.busy) {
+                    } else if (! stillProcessing && ! this.aiRequestPending && ! window.__owwaAiBusyActive && ! this.downloadTimer) {
+                        if (this.busy) {
                             this.scheduleAiBusyClear();
-                        } else {
-                            this.busy = false;
-                            this.minimized = false;
                         }
                     }
                 },
