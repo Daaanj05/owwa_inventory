@@ -15,7 +15,6 @@ use App\Support\OwwaExportFilename;
 use BackedEnum;
 use Carbon\Carbon;
 use Filament\Facades\Filament;
-use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Support\Collection;
@@ -412,6 +411,9 @@ class ProcurementAnalytics extends Page
         }
 
         $markdown = preg_replace('/\s+@\s+[^.,;]+/u', '', $markdown) ?? $markdown;
+        $markdown = preg_replace('/(?:^|\n)\s*Sentence\s+\d+\s*:\s*/iu', "\n", $markdown) ?? $markdown;
+        $markdown = preg_replace('/^\s*Sentence\s+\d+\s*:\s*/iu', '', $markdown) ?? $markdown;
+        $markdown = trim($markdown);
 
         $lines = explode("\n", $markdown);
         $out = [];
@@ -814,11 +816,14 @@ class ProcurementAnalytics extends Page
                 ?? 'AI recommendation failed. Check that the device worker is active on the operation device.';
 
             if (AiProcurementSummaryRestore::claimSessionToast($run->id)) {
-                Notification::make()
-                    ->title('AI recommendation failed')
-                    ->body($this->recommendation)
-                    ->danger()
-                    ->send();
+                $this->js(AiProcurementSummaryRestore::browserAnnounceScript([
+                    'title' => 'AI recommendation failed',
+                    'body' => $this->recommendation,
+                    'danger' => true,
+                    'seconds' => 10,
+                    'actionLabel' => 'View the result',
+                    'actionUrl' => '#procurement-summary',
+                ]));
             }
 
             return;
@@ -830,20 +835,13 @@ class ProcurementAnalytics extends Page
             return;
         }
 
-        Notification::make()
-            ->title('AI recommendation ready')
-            ->body('Your procurement recommendation is ready on this page.')
-            ->success()
-            ->seconds(10)
-            ->actions([
-                \Filament\Actions\Action::make('viewResult')
-                    ->label('View the result')
-                    ->button()
-                    ->alpineClickHandler(<<<'JS'
-                        document.getElementById('procurement-summary')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-                    JS),
-            ])
-            ->send();
+        $this->js(AiProcurementSummaryRestore::browserAnnounceScript([
+            'title' => 'AI recommendation ready',
+            'body' => 'Your procurement recommendation is ready on this page.',
+            'seconds' => 10,
+            'actionLabel' => 'View the result',
+            'actionUrl' => '#procurement-summary',
+        ]));
     }
 
     protected function hydrateRecommendationFromRun(AiProcurementRun $run): void

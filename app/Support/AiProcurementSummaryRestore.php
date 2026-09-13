@@ -35,4 +35,12 @@ class AiProcurementSummaryRestore
     {
         return Cache::add("ai-procurement-session-toast:{$runId}", true, now()->addDay());
     }
+
+    /**
+     * @param  array{title: string, body: string, danger?: bool, seconds?: int, actionLabel?: string, actionUrl?: string}  $detail
+     */
+    public static function browserAnnounceScript(array $detail): string
+    {
+        return 'window.owwaAnnounceAiRecommendationDone('.json_encode($detail, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT | JSON_UNESCAPED_SLASHES).')';
+    }
 }

@@ -69,8 +69,9 @@ class AiProcurementBusyChipTest extends TestCase
 
         $component
             ->call('refreshProcessingRun')
-            ->assertSet('processingRunId', null)
-            ->assertNotified();
+            ->assertSet('processingRunId', null);
+
+        $this->assertFalse(AiProcurementSummaryRestore::claimSessionToast($run->id));
     }
 
     public function test_second_completion_watcher_does_not_send_duplicate_toast(): void
@@ -98,9 +99,7 @@ class AiProcurementBusyChipTest extends TestCase
 
         $run->update(['status' => 'draft', 'summary' => 'Ready']);
 
-        $component
-            ->call('refreshProcessingRun')
-            ->assertNotified();
+        $component->call('refreshProcessingRun');
 
         $this->assertFalse(AiProcurementSummaryRestore::claimSessionToast($run->id));
     }

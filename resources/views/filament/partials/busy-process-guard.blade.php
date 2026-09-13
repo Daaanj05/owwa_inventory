@@ -561,6 +561,58 @@
                 instance.syncFromLivewire();
             }
         });
+
+        /**
+         * Hide the AI busy modal first, then show the completion toast so they feel simultaneous.
+         * detail: { title, body, danger?, seconds?, actionLabel?, actionUrl? }
+         */
+        window.owwaAnnounceAiRecommendationDone = function (detail = {}) {
+            const showToast = () => {
+                if (typeof window.FilamentNotification !== 'function') {
+                    return;
+                }
+
+                let notification = new window.FilamentNotification()
+                    .title(detail.title || 'AI recommendation ready')
+                    .body(detail.body || '');
+
+                notification = detail.danger ? notification.danger() : notification.success();
+
+                if (detail.seconds) {
+                    notification = notification.seconds(detail.seconds);
+                }
+
+                if (detail.actionLabel && typeof window.FilamentNotificationAction === 'function') {
+                    let action = new window.FilamentNotificationAction('viewResult')
+                        .label(detail.actionLabel)
+                        .button()
+                        .close();
+
+                    if (detail.actionUrl) {
+                        action = action.url(detail.actionUrl);
+                    }
+
+                    notification = notification.actions([action]);
+                }
+
+                notification.send();
+            };
+
+            const guard = window.__owwaAiBusyGuardInstance;
+            if (guard && guard.allowMinimize && guard.busy) {
+                guard.cancelAiBusyClear?.();
+                document.getElementById('procurement-summary')?.classList.remove('owwa-pa-summary-awaiting-reveal');
+                guard.busy = false;
+                guard.minimized = false;
+                window.__owwaAiBusyMinimized = false;
+                guard.syncBusyActiveClass?.();
+                requestAnimationFrame(() => setTimeout(showToast, 40));
+
+                return;
+            }
+
+            showToast();
+        };
     </script>
 @endonce
 
@@ -583,7 +635,7 @@
         class="owwa-busy-overlay"
         x-show="busy && !minimized"
         x-cloak
-        x-transition.opacity
+        @if(! $allowMinimize) x-transition.opacity @endif
         role="alertdialog"
         aria-modal="true"
         aria-live="assertive"

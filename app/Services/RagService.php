@@ -64,9 +64,10 @@ Top at-risk items (pre-computed):
 {$itemsText}
 {$retrievedText}
 
-Write at most 2 sentences. Do not output a table.
-Sentence 1 must frame this as decision support, close to: "The analysis below highlights urgent stock gaps requiring action. Kindly consider this result when preparing the next purchase request:"
-Then continue with High-priority items and suggested quantities only. Do not append office or location after each item. Never use "@".
+Write at most 2 sentences of plain prose. Do not output a table.
+Do not label sentences (never write "Sentence 1", "Sentence 2", or similar prefixes).
+Open with decision-support framing close to: "The analysis below highlights urgent stock gaps requiring action. Kindly consider this result when preparing the next purchase request:"
+Then continue in the same prose with High-priority items and suggested quantities only. Do not append office or location after each item. Never use "@".
 TXT;
 
         return $this->ollama->chat($systemPrompt, $userMessage);

@@ -5,8 +5,6 @@ namespace App\Livewire;
 use App\Filament\Pages\ProcurementAnalytics;
 use App\Models\AiProcurementRun;
 use App\Support\AiProcurementSummaryRestore;
-use Filament\Actions\Action;
-use Filament\Notifications\Notification;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\On;
@@ -70,32 +68,25 @@ class AiProcurementBusyChip extends Component
         $analyticsUrl = ProcurementAnalytics::resultUrl();
 
         if ($run->status === 'failed') {
-            Notification::make()
-                ->title('AI recommendation failed')
-                ->body($run->error_message ?: 'The recommendation could not be completed.')
-                ->danger()
-                ->seconds(10)
-                ->actions([
-                    Action::make('viewResult')
-                        ->label('View the result')
-                        ->url($analyticsUrl),
-                ])
-                ->send();
+            $this->js(AiProcurementSummaryRestore::browserAnnounceScript([
+                'title' => 'AI recommendation failed',
+                'body' => $run->error_message ?: 'The recommendation could not be completed.',
+                'danger' => true,
+                'seconds' => 10,
+                'actionLabel' => 'View the result',
+                'actionUrl' => $analyticsUrl,
+            ]));
 
             return;
         }
 
-        Notification::make()
-            ->title('AI recommendation ready')
-            ->body('Your procurement recommendation is ready on Procurement Analytics.')
-            ->success()
-            ->seconds(10)
-            ->actions([
-                Action::make('viewResult')
-                    ->label('View the result')
-                    ->url($analyticsUrl),
-            ])
-            ->send();
+        $this->js(AiProcurementSummaryRestore::browserAnnounceScript([
+            'title' => 'AI recommendation ready',
+            'body' => 'Your procurement recommendation is ready on Procurement Analytics.',
+            'seconds' => 10,
+            'actionLabel' => 'View the result',
+            'actionUrl' => $analyticsUrl,
+        ]));
     }
 
     public function getAnalyticsUrlProperty(): string
