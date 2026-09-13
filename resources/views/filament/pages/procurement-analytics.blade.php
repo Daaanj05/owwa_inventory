@@ -167,7 +167,6 @@
             <button
                 type="button"
                 wire:click="generateAiRecommendation"
-                x-on:click="window.dispatchEvent(new CustomEvent('owwa-ai-busy-start'))"
                 wire:loading.attr="disabled"
                 wire:target="generateAiRecommendation"
                 class="owwa-pa-generate-btn owwa-pa-generate-btn--footer"

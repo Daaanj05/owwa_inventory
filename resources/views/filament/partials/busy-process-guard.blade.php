@@ -87,10 +87,9 @@
 
         window.owwaBusyGuard = function (config) {
             return {
-                busy: Boolean(config.initialBusy || (config.allowMinimize && window.__owwaAiBusyActive)),
+                busy: Boolean(config.initialBusy),
                 minimized: Boolean(config.allowMinimize && window.__owwaAiBusyMinimized),
                 allowMinimize: Boolean(config.allowMinimize),
-                aiRequestPending: Boolean(config.allowMinimize && window.__owwaAiBusyActive && ! config.initialBusy),
                 title: config.defaultTitle || 'Please wait…',
                 message: config.defaultMessage || '',
                 leaveMessage: config.leaveMessage || 'A process is still running. Are you sure you want to leave this page?',
@@ -100,7 +99,6 @@
                 downloadTimer: null,
                 cookiePollTimer: null,
                 aiClearTimer: null,
-                aiPendingSettleTimer: null,
                 expectedToken: null,
                 suppressBusySync: false,
                 allowUnload: false,
@@ -108,12 +106,7 @@
                     if (this.allowMinimize) {
                         window.__owwaAiBusyGuardInstance = this;
                         this.minimized = Boolean(window.__owwaAiBusyMinimized);
-
-                        if (window.__owwaAiBusyActive) {
-                            this.busy = true;
-                            this.title = config.defaultTitle || this.title || 'Generating recommendation…';
-                            this.message = config.defaultMessage || this.message || '';
-                        }
+                        this.bindAiLivewireHooks();
                     } else {
                         window.__owwaBusyGuardInstance = this;
                         window.addEventListener('beforeunload', (event) => this.onBeforeUnload(event));
@@ -132,10 +125,6 @@
                     this.$el.addEventListener('livewire:navigated', () => this.syncFromLivewire());
                     queueMicrotask(() => this.syncFromLivewire());
                     setInterval(() => this.syncFromLivewire(), 1000);
-
-                    if (this.allowMinimize) {
-                        this.bindAiLivewireHooks();
-                    }
                 },
                 bindAiLivewireHooks() {
                     if (window.__owwaAiBusyHookBound) {
@@ -150,56 +139,17 @@
                         window.__owwaAiBusyHookBound = true;
 
                         window.Livewire.hook('commit', ({ succeed, fail }) => {
-                            const finish = () => {
+                            const refresh = () => {
                                 const instance = window.__owwaAiBusyGuardInstance;
-
-                                if (! instance || ! instance.aiRequestPending) {
+                                if (! instance) {
                                     return;
                                 }
 
-                                const settleAiPending = () => {
-                                    if (! instance.aiRequestPending) {
-                                        return;
-                                    }
-
-                                    const trySettle = (attempt) => {
-                                        if (! instance.aiRequestPending) {
-                                            return;
-                                        }
-
-                                        instance.syncFromLivewire();
-
-                                        if (instance.isAiStillProcessing()) {
-                                            instance.aiRequestPending = false;
-                                            window.__owwaAiBusyActive = true;
-                                            window.__owwaAiBusySeenProcessing = true;
-                                            window.Livewire?.dispatch('ai-procurement-busy-refresh');
-
-                                            return;
-                                        }
-
-                                        // Snapshot can lag a tick; retry briefly before treating as done/failed.
-                                        if (attempt < 10) {
-                                            setTimeout(() => trySettle(attempt + 1), 50);
-
-                                            return;
-                                        }
-
-                                        instance.aiRequestPending = false;
-                                        window.__owwaAiBusyActive = false;
-                                        window.__owwaAiBusySeenProcessing = false;
-                                        instance.syncFromLivewire();
-                                        window.Livewire?.dispatch('ai-procurement-busy-refresh');
-                                    };
-
-                                    queueMicrotask(() => trySettle(0));
-                                };
-
-                                queueMicrotask(settleAiPending);
+                                queueMicrotask(() => instance.syncFromLivewire());
                             };
 
-                            succeed(finish);
-                            fail(finish);
+                            succeed(refresh);
+                            fail(refresh);
                         });
                     };
 
@@ -212,28 +162,6 @@
                 syncBusyActiveClass() {
                     document.body.classList.toggle('owwa-busy-active', Boolean(this.busy && ! this.minimized));
                 },
-                startAiBusy() {
-                    if (! this.allowMinimize) {
-                        return;
-                    }
-
-                    this.cancelAiBusyClear();
-                    if (this.aiPendingSettleTimer) {
-                        clearTimeout(this.aiPendingSettleTimer);
-                        this.aiPendingSettleTimer = null;
-                    }
-                    document.getElementById('procurement-summary')?.classList.remove('owwa-pa-summary-awaiting-reveal');
-                    this.suppressBusySync = false;
-                    this.aiRequestPending = true;
-                    window.__owwaAiBusyActive = true;
-                    window.__owwaAiBusySeenProcessing = false;
-                    this.allowUnload = false;
-                    this.minimized = false;
-                    window.__owwaAiBusyMinimized = false;
-                    this.title = config.defaultTitle || this.title || 'Generating recommendation…';
-                    this.message = config.defaultMessage || this.message || '';
-                    this.busy = true;
-                },
                 cancelAiBusyClear() {
                     if (this.aiClearTimer) {
                         clearTimeout(this.aiClearTimer);
@@ -243,7 +171,7 @@
                 scheduleAiBusyClear() {
                     this.cancelAiBusyClear();
 
-                    if (this.aiRequestPending || this.suppressBusySync) {
+                    if (this.suppressBusySync) {
                         return;
                     }
 
@@ -258,8 +186,6 @@
                     this.minimized = false;
                     if (this.allowMinimize) {
                         window.__owwaAiBusyMinimized = false;
-                        window.__owwaAiBusyActive = false;
-                        window.__owwaAiBusySeenProcessing = false;
                     }
 
                     this.aiClearTimer = setTimeout(() => {
@@ -369,15 +295,9 @@
 
                     const stillProcessing = this.isAiStillProcessing();
 
-                    if (stillProcessing || this.aiRequestPending || (window.__owwaAiBusyActive && ! window.__owwaAiBusySeenProcessing)) {
+                    if (stillProcessing) {
                         this.cancelAiBusyClear();
                         document.getElementById('procurement-summary')?.classList.remove('owwa-pa-summary-awaiting-reveal');
-
-                        if (stillProcessing) {
-                            window.__owwaAiBusyActive = true;
-                            window.__owwaAiBusySeenProcessing = true;
-                            this.aiRequestPending = false;
-                        }
 
                         if (! this.busy) {
                             this.minimized = Boolean(window.__owwaAiBusyMinimized);
@@ -386,16 +306,8 @@
                         this.busy = true;
                         this.title = config.defaultTitle || this.title;
                         this.message = config.defaultMessage || this.message;
-                    } else if (window.__owwaAiBusyActive && window.__owwaAiBusySeenProcessing && ! stillProcessing && ! this.aiRequestPending) {
-                        window.__owwaAiBusyActive = false;
-                        window.__owwaAiBusySeenProcessing = false;
-                        if (this.busy) {
-                            this.scheduleAiBusyClear();
-                        }
-                    } else if (! stillProcessing && ! this.aiRequestPending && ! window.__owwaAiBusyActive && ! this.downloadTimer) {
-                        if (this.busy) {
-                            this.scheduleAiBusyClear();
-                        }
+                    } else if (this.busy) {
+                        this.scheduleAiBusyClear();
                     }
                 },
                 readCookie(name) {
@@ -479,7 +391,6 @@
                     this.cancelAiBusyClear();
                     this.busy = false;
                     this.minimized = false;
-                    this.aiRequestPending = false;
                     this.allowUnload = false;
                     this.suppressBusySync = true;
                     this.title = config.defaultTitle || 'Please wait…';
@@ -599,10 +510,10 @@
         });
 
         window.addEventListener('owwa-ai-busy-start', () => {
+            // Modal opens only after Livewire reports loading/processing — not on click.
             const instance = window.__owwaAiBusyGuardInstance;
-
-            if (instance && typeof instance.startAiBusy === 'function') {
-                instance.startAiBusy();
+            if (instance && typeof instance.syncFromLivewire === 'function') {
+                instance.syncFromLivewire();
             }
         });
     </script>
