@@ -11,8 +11,27 @@ class AiProcurementSummaryRestore
         return "ai-procurement-pending-summary:{$userId}";
     }
 
+    public static function shownKey(int $userId, int $runId): string
+    {
+        return "ai-procurement-summary-shown:{$userId}:{$runId}";
+    }
+
+    public static function hasBeenShown(int $userId, int $runId): bool
+    {
+        return Cache::has(self::shownKey($userId, $runId));
+    }
+
+    public static function markShown(int $userId, int $runId): void
+    {
+        Cache::put(self::shownKey($userId, $runId), true, now()->addDays(7));
+    }
+
     public static function remember(int $userId, int $runId): void
     {
+        if (self::hasBeenShown($userId, $runId)) {
+            return;
+        }
+
         Cache::put(self::cacheKey($userId), $runId, now()->addDay());
     }
 

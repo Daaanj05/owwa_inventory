@@ -166,6 +166,10 @@ class ProcurementAnalytics extends Page
         $this->processingRunId = null;
         $this->loading = false;
 
+        if (Auth::id() !== null) {
+            AiProcurementSummaryRestore::markShown((int) Auth::id(), (int) $run->id);
+        }
+
         if ($run->status === 'failed') {
             $this->recommendation = $run->error_message
                 ?? 'AI recommendation failed. Check that the device worker is active on the operation device.';
@@ -830,6 +834,7 @@ class ProcurementAnalytics extends Page
 
         if (Auth::id() !== null) {
             AiProcurementSummaryRestore::forget((int) Auth::id());
+            AiProcurementSummaryRestore::markShown((int) Auth::id(), (int) $run->id);
         }
 
         if ($run->status === 'failed') {

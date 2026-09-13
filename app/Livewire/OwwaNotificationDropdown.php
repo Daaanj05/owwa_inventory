@@ -148,6 +148,7 @@ class OwwaNotificationDropdown extends BaseDatabaseNotifications
             parse_str($parts['query'], $query);
         }
 
+        // One-shot: never re-queue a run the user already viewed (page or prior bell click).
         if (isset($query['ai_run']) && is_numeric($query['ai_run']) && Auth::id() !== null) {
             AiProcurementSummaryRestore::remember((int) Auth::id(), (int) $query['ai_run']);
         }
