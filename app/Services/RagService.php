@@ -65,8 +65,9 @@ Top at-risk items (pre-computed):
 {$retrievedText}
 
 Write at most 2 sentences of plain prose. Do not output a table.
-Do not label sentences (never write "Sentence 1", "Sentence 2", or similar prefixes).
-Open with decision-support framing close to: "The analysis below highlights urgent stock gaps requiring action. Kindly consider this result when preparing the next purchase request:"
+Do not number or label sentences. Never write scaffolding such as "Sentence 1", "Sentence 2", "must be", or similar.
+Do not wrap the answer in quotation marks.
+Start with decision-support framing in this spirit: The analysis below highlights urgent stock gaps requiring action. Kindly consider this result when preparing the next purchase request.
 Then continue in the same prose with High-priority items and suggested quantities only. Do not append office or location after each item. Never use "@".
 TXT;
 

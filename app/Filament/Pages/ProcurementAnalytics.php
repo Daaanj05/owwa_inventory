@@ -436,9 +436,20 @@ class ProcurementAnalytics extends Page
         }
 
         $markdown = preg_replace('/\s+@\s+[^.,;]+/u', '', $markdown) ?? $markdown;
-        $markdown = preg_replace('/(?:^|\n)\s*Sentence\s+\d+\s*:\s*/iu', "\n", $markdown) ?? $markdown;
-        $markdown = preg_replace('/^\s*Sentence\s+\d+\s*:\s*/iu', '', $markdown) ?? $markdown;
-        $markdown = trim($markdown);
+
+        // Models sometimes echo prompt scaffolding, e.g. Sentence 2 must be: "..."
+        $markdown = preg_replace(
+            '/(?:^|\n)\s*["“”\']*\s*Sentence\s+\d+\s*(?:must\s+be|should\s+be|is)?\s*:\s*["“”\']*/iu',
+            "\n",
+            $markdown,
+        ) ?? $markdown;
+        $markdown = preg_replace(
+            '/^\s*["“”\']*\s*Sentence\s+\d+\s*(?:must\s+be|should\s+be|is)?\s*:\s*["“”\']*/iu',
+            '',
+            $markdown,
+        ) ?? $markdown;
+
+        $markdown = $this->stripRedundantNarrativeQuotes(trim($markdown));
 
         $lines = explode("\n", $markdown);
         $out = [];
@@ -473,7 +484,29 @@ class ProcurementAnalytics extends Page
             }
         }
 
-        return trim(implode("\n", $out));
+        return $this->stripRedundantNarrativeQuotes(trim(implode("\n", $out)));
+    }
+
+    /**
+     * CSS already draws decorative quotes around the narrative; strip model-added wrappers.
+     */
+    protected function stripRedundantNarrativeQuotes(string $markdown): string
+    {
+        $markdown = trim($markdown);
+        if ($markdown === '') {
+            return '';
+        }
+
+        // Whole-string wrappers: "text" or “text”
+        if (preg_match('/^["“](.+)["”]$/su', $markdown, $matches) === 1) {
+            $markdown = trim($matches[1]);
+        }
+
+        // Leftover leading/trailing quote characters after label stripping.
+        $markdown = preg_replace('/^["“”\']+/u', '', $markdown) ?? $markdown;
+        $markdown = preg_replace('/["“”\']+$/u', '', $markdown) ?? $markdown;
+
+        return trim($markdown);
     }
 
     public static function canAccess(): bool

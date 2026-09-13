@@ -226,6 +226,31 @@ class ProcurementAnalyticsPageTest extends TestCase
             ->assertDontSee('AI recommendation unavailable');
     }
 
+    public function test_format_ai_narrative_strips_sentence_scaffolding_and_wrapping_quotes(): void
+    {
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+
+        $custodian = User::factory()->create([
+            'role' => User::ROLE_SUPPLY_CUSTODIAN,
+            'email_verified_at' => now(),
+        ]);
+
+        $raw = '"Sentence 2 must be: "Given these high-risk at-risk pairs, it is recommended to replenish Note Pad Sign Here (5)."';
+
+        $formatted = Livewire::actingAs($custodian)
+            ->test(ProcurementAnalytics::class)
+            ->instance()
+            ->formatAiNarrativeMarkdown($raw);
+
+        $this->assertSame(
+            'Given these high-risk at-risk pairs, it is recommended to replenish Note Pad Sign Here (5).',
+            $formatted,
+        );
+        $this->assertStringNotContainsString('Sentence', $formatted);
+        $this->assertDoesNotMatchRegularExpression('/^["“]/', $formatted);
+        $this->assertDoesNotMatchRegularExpression('/["”]$/', $formatted);
+    }
+
     public function test_procurement_summary_shown_after_generate(): void
     {
         Filament::setCurrentPanel(Filament::getPanel('admin'));
