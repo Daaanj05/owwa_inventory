@@ -123,6 +123,7 @@
                     this.syncBusyActiveClass();
 
                     this.$el.addEventListener('livewire:navigated', () => this.syncFromLivewire());
+                    window.addEventListener('livewire:navigated', () => this.syncFromLivewire());
                     queueMicrotask(() => this.syncFromLivewire());
                     setInterval(() => this.syncFromLivewire(), 1000);
                 },
@@ -161,6 +162,9 @@
                 },
                 syncBusyActiveClass() {
                     document.body.classList.toggle('owwa-busy-active', Boolean(this.busy && ! this.minimized));
+                },
+                isOnAiAnalyticsPage() {
+                    return window.location.pathname.includes('procurement-analytics');
                 },
                 cancelAiBusyClear() {
                     if (this.aiClearTimer) {
@@ -323,8 +327,20 @@
                     }
 
                     const stillProcessing = this.isAiStillProcessing();
+                    const onAnalytics = this.isOnAiAnalyticsPage();
 
-                    if (stillProcessing) {
+                    // Off Analytics: only the global Livewire corner chip should show.
+                    if (stillProcessing && ! onAnalytics) {
+                        this.cancelAiBusyClear();
+                        this.busy = false;
+                        this.minimized = true;
+                        window.__owwaAiBusyMinimized = true;
+                        this.syncBusyActiveClass();
+
+                        return;
+                    }
+
+                    if (stillProcessing && onAnalytics) {
                         this.cancelAiBusyClear();
                         document.getElementById('procurement-summary')?.classList.remove('owwa-pa-summary-awaiting-reveal');
 
