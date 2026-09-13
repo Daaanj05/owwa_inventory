@@ -347,6 +347,8 @@ class ProcurementAnalytics extends Page
             return '';
         }
 
+        $markdown = preg_replace('/\s+@\s+[^.,;]+/u', '', $markdown) ?? $markdown;
+
         $lines = explode("\n", $markdown);
         $out = [];
 

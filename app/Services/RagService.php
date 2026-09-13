@@ -28,7 +28,7 @@ class RagService
             return null;
         }
 
-        $systemPrompt = 'You are a procurement advisor for OWWA Regional Office IV-A. Use only the facts provided. Do not invent numbers. Prioritize High-risk items first. Never suggest deprioritizing High-risk items. Keep the summary to at most 2 sentences.';
+        $systemPrompt = 'You are a procurement advisor for OWWA Regional Office IV-A. Use only the facts provided. Do not invent numbers. Prioritize High-risk items first. Never suggest deprioritizing High-risk items. Keep the summary to at most 2 sentences. Name items and quantities only; never append office or location after an item name, and never use "@".';
 
         $itemsText = collect($items)
             ->take(8)
@@ -36,7 +36,7 @@ class RagService
                 $suggested = $i['suggested'] ?? 0;
                 $usageNote = ($i['has_recent_usage'] ?? true) ? '' : ', no recent usage';
 
-                return "- {$i['priority']}: {$i['item']} @ {$i['office']} (cover {$i['cover']} mo, forecast {$i['forecast']}/mo, suggested {$suggested}{$usageNote})";
+                return "- {$i['priority']}: {$i['item']} (cover {$i['cover']} mo, forecast {$i['forecast']}/mo, suggested {$suggested}{$usageNote})";
             })
             ->implode("\n");
 
@@ -64,7 +64,9 @@ Top at-risk items (pre-computed):
 {$itemsText}
 {$retrievedText}
 
-Write at most 2 sentences. Lead with High-priority reorders and suggested quantities. Do not output a table.
+Write at most 2 sentences. Do not output a table.
+Sentence 1 must frame this as decision support, close to: "The analysis below highlights urgent stock gaps requiring action. Kindly consider this result when preparing the next purchase request:"
+Then continue with High-priority items and suggested quantities only. Do not append office or location after each item. Never use "@".
 TXT;
 
         return $this->ollama->chat($systemPrompt, $userMessage);
