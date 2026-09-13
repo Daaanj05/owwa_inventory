@@ -531,6 +531,63 @@ class ProcurementAnalyticsPageTest extends TestCase
         $this->assertTrue($component->instance()->getEulReviewRows()->isEmpty());
     }
 
+    public function test_mount_restores_processing_run_into_summary_state(): void
+    {
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+
+        $office = Office::factory()->create();
+        $custodian = User::factory()->create([
+            'role' => User::ROLE_SUPPLY_CUSTODIAN,
+            'office_id' => $office->id,
+            'email_verified_at' => now(),
+        ]);
+
+        $run = AiProcurementRun::query()->create([
+            'ran_at' => now(),
+            'period_from' => now()->subMonths(11)->startOfMonth()->toDateString(),
+            'period_to' => now()->endOfMonth()->toDateString(),
+            'status' => 'processing',
+            'created_by' => $custodian->id,
+        ]);
+
+        Livewire::actingAs($custodian)
+            ->test(ProcurementAnalytics::class)
+            ->assertSet('processingRunId', $run->id)
+            ->assertSet('lastAiRunId', $run->id)
+            ->assertSet('loading', true)
+            ->assertDontSee('AI offline');
+    }
+
+    public function test_mount_restores_completed_draft_run_into_procurement_summary(): void
+    {
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+
+        $office = Office::factory()->create();
+        $custodian = User::factory()->create([
+            'role' => User::ROLE_SUPPLY_CUSTODIAN,
+            'office_id' => $office->id,
+            'email_verified_at' => now(),
+        ]);
+
+        $run = AiProcurementRun::query()->create([
+            'ran_at' => now(),
+            'period_from' => now()->subMonths(11)->startOfMonth()->toDateString(),
+            'period_to' => now()->endOfMonth()->toDateString(),
+            'status' => 'draft',
+            'raw_response' => "Stock gaps need attention now.\n\n| Priority | Item |",
+            'created_by' => $custodian->id,
+        ]);
+
+        Livewire::actingAs($custodian)
+            ->test(ProcurementAnalytics::class)
+            ->assertSet('processingRunId', null)
+            ->assertSet('loading', false)
+            ->assertSet('lastAiRunId', $run->id)
+            ->assertSet('recommendation', 'Stock gaps need attention now.')
+            ->assertDontSee('AI offline')
+            ->assertSee('Stock gaps need attention now.');
+    }
+
     protected function seedMonthlyIssuances(int $itemId, int $officeId, int $monthlyQty, int $months): void
     {
         for ($i = $months - 1; $i >= 0; $i--) {

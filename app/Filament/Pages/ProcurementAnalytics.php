@@ -95,6 +95,54 @@ class ProcurementAnalytics extends Page
                 $this->categoryId = '';
             }
         }
+
+        $this->restoreRecommendationState();
+    }
+
+    protected function restoreRecommendationState(): void
+    {
+        $userId = Auth::id();
+        if ($userId === null) {
+            return;
+        }
+
+        $processing = AiProcurementRun::query()
+            ->where('created_by', $userId)
+            ->where('status', 'processing')
+            ->latest('id')
+            ->first();
+
+        if ($processing !== null) {
+            $this->processingRunId = $processing->id;
+            $this->lastAiRunId = $processing->id;
+            $this->loading = true;
+            $this->recommendation = null;
+
+            return;
+        }
+
+        $latest = AiProcurementRun::query()
+            ->where('created_by', $userId)
+            ->whereIn('status', ['draft', 'failed'])
+            ->latest('id')
+            ->first();
+
+        if ($latest === null) {
+            return;
+        }
+
+        $this->lastAiRunId = $latest->id;
+        $this->processingRunId = null;
+        $this->loading = false;
+
+        if ($latest->status === 'failed') {
+            $this->recommendation = $latest->error_message
+                ?? 'AI recommendation failed. Check that the device worker is active on the operation device.';
+
+            return;
+        }
+
+        $this->hydrateRecommendationFromRun($latest);
     }
 
     /**

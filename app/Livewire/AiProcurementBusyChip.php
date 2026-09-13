@@ -5,7 +5,6 @@ namespace App\Livewire;
 use App\Filament\Pages\ProcurementAnalytics;
 use App\Models\AiProcurementRun;
 use Filament\Actions\Action;
-use Filament\Facades\Filament;
 use Filament\Notifications\Notification;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Auth;
@@ -97,27 +96,9 @@ class AiProcurementBusyChip extends Component
 
     public function getShouldShowChipProperty(): bool
     {
-        if ($this->processingRunId === null) {
-            return false;
-        }
-
-        if (! Filament::auth()->check()) {
-            return false;
-        }
-
-        try {
-            $analyticsUrl = rtrim(ProcurementAnalytics::getUrl(), '/');
-            $current = rtrim(url()->current(), '/');
-
-            // On Analytics the page-local overlay/chip handles UX.
-            if ($current === $analyticsUrl || str_starts_with($current, $analyticsUrl.'/')) {
-                return false;
-            }
-        } catch (\Throwable) {
-            // Panel URL helpers can throw outside a panel context.
-        }
-
-        return true;
+        // Visibility on Analytics is gated client-side (pathname) so Livewire
+        // poll requests do not incorrectly show this chip next to the page-local UI.
+        return $this->processingRunId !== null;
     }
 
     public function render(): View

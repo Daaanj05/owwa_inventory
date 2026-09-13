@@ -88,7 +88,7 @@
         window.owwaBusyGuard = function (config) {
             return {
                 busy: Boolean(config.initialBusy),
-                minimized: false,
+                minimized: Boolean(config.allowMinimize && window.__owwaAiBusyMinimized),
                 allowMinimize: Boolean(config.allowMinimize),
                 aiRequestPending: false,
                 title: config.defaultTitle || 'Please wait…',
@@ -106,6 +106,7 @@
                 init() {
                     if (this.allowMinimize) {
                         window.__owwaAiBusyGuardInstance = this;
+                        this.minimized = Boolean(window.__owwaAiBusyMinimized);
                     } else {
                         window.__owwaBusyGuardInstance = this;
                         window.addEventListener('beforeunload', (event) => this.onBeforeUnload(event));
@@ -113,7 +114,12 @@
                     }
 
                     this.$watch('busy', () => this.syncBusyActiveClass());
-                    this.$watch('minimized', () => this.syncBusyActiveClass());
+                    this.$watch('minimized', (value) => {
+                        if (this.allowMinimize) {
+                            window.__owwaAiBusyMinimized = Boolean(value);
+                        }
+                        this.syncBusyActiveClass();
+                    });
                     this.syncBusyActiveClass();
 
                     this.$el.addEventListener('livewire:navigated', () => this.syncFromLivewire());
@@ -174,6 +180,7 @@
                     this.aiRequestPending = true;
                     this.allowUnload = false;
                     this.minimized = false;
+                    window.__owwaAiBusyMinimized = false;
                     this.title = config.defaultTitle || this.title || 'Generating recommendation…';
                     this.message = config.defaultMessage || this.message || '';
                     this.busy = true;
@@ -204,6 +211,9 @@
                     summary?.classList.add('owwa-pa-summary-awaiting-reveal');
                     this.busy = false;
                     this.minimized = false;
+                    if (this.allowMinimize) {
+                        window.__owwaAiBusyMinimized = false;
+                    }
 
                     this.aiClearTimer = setTimeout(() => {
                         this.aiClearTimer = null;
@@ -216,10 +226,14 @@
                     }
 
                     this.minimized = true;
+                    window.__owwaAiBusyMinimized = true;
                     window.Livewire?.dispatch('ai-procurement-busy-refresh');
                 },
                 expand() {
                     this.minimized = false;
+                    if (this.allowMinimize) {
+                        window.__owwaAiBusyMinimized = false;
+                    }
                 },
                 livewireComponent() {
                     if (! window.Livewire || ! this.$el) {
@@ -254,7 +268,7 @@
                         document.getElementById('procurement-summary')?.classList.remove('owwa-pa-summary-awaiting-reveal');
 
                         if (! this.busy) {
-                            this.minimized = false;
+                            this.minimized = Boolean(this.allowMinimize && window.__owwaAiBusyMinimized);
                         }
 
                         this.busy = true;
@@ -480,6 +494,7 @@
 @endonce
 
 <div
+    @if($allowMinimize) wire:ignore @endif
     x-data="owwaBusyGuard({
         initialBusy: @js($busy),
         defaultTitle: @js($title),
@@ -507,7 +522,13 @@
             <div class="owwa-busy-spinner" aria-hidden="true"></div>
             <p class="owwa-busy-title" x-text="title"></p>
             <p class="owwa-busy-message" x-text="message"></p>
-            <p class="owwa-busy-hint">Please don’t close or leave this page until it finishes.</p>
+            <p class="owwa-busy-hint">
+                @if($allowMinimize)
+                    You can minimize this and keep browsing — generation continues in the background.
+                @else
+                    Please don’t close or leave this page until it finishes.
+                @endif
+            </p>
             <template x-if="allowMinimize">
                 <button
                     type="button"

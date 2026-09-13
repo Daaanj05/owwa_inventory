@@ -14,8 +14,6 @@
         && ! str_starts_with($recommendation, 'Cannot connect')
         && ! str_starts_with($recommendation, 'An error occurred')
         && ! str_starts_with($recommendation, 'The request took too long');
-    $showAiOffline = ! $this->isOllamaAvailable()
-        || $recommendation === '__OLLAMA_UNAVAILABLE__';
     $recommendationTableRows = $this->getRecommendationTableRows();
 @endphp
 
@@ -112,9 +110,6 @@
                     @if($lastGenerated = $this->getLastGeneratedLabel())
                         <span class="owwa-pa-summary-status-sep" aria-hidden="true">·</span>
                         <span class="owwa-pa-summary-status-generated">Last generated {{ $lastGenerated }}</span>
-                    @endif
-                    @if($showAiOffline)
-                        <span class="owwa-pa-summary-status-pill owwa-pa-summary-status-pill--offline">AI offline</span>
                     @endif
                 </div>
             </div>
