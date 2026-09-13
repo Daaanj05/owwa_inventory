@@ -208,6 +208,16 @@
                         window.__owwaAiBusyMinimized = false;
                     }
                 },
+                wireFromLivewireEntry(entry) {
+                    if (! entry) {
+                        return null;
+                    }
+
+                    // Livewire.find() returns $wire; Livewire.all() returns raw Component ($wire on it).
+                    const wire = entry.$wire ?? entry;
+
+                    return typeof wire.get === 'function' ? wire : null;
+                },
                 livewireComponent() {
                     if (! window.Livewire) {
                         return null;
@@ -217,7 +227,7 @@
                         const root = this.$el.closest('[wire\\:id]');
                         const id = root ? root.getAttribute('wire:id') : null;
                         if (id) {
-                            const local = window.Livewire.find(id);
+                            const local = this.wireFromLivewireEntry(window.Livewire.find(id));
                             if (local) {
                                 return local;
                             }
@@ -229,15 +239,15 @@
                         return null;
                     }
 
-                    const components = window.Livewire.all();
-                    for (const component of components) {
+                    for (const component of window.Livewire.all()) {
                         try {
-                            if (typeof component.get !== 'function') {
+                            const wire = this.wireFromLivewireEntry(component);
+                            if (! wire) {
                                 continue;
                             }
 
-                            if (component.get('processingRunId') !== undefined) {
-                                return component;
+                            if (wire.get('processingRunId') !== undefined) {
+                                return wire;
                             }
                         } catch (error) {
                             // Ignore components that cannot expose state.
@@ -247,24 +257,43 @@
                     return null;
                 },
                 isAiStillProcessing() {
-                    if (! this.allowMinimize || ! window.Livewire || typeof window.Livewire.all !== 'function') {
-                        const component = this.livewireComponent();
-                        if (! component || typeof component.get !== 'function') {
-                            return false;
-                        }
+                    if (! this.allowMinimize || ! window.Livewire) {
+                        return false;
+                    }
 
-                        return Boolean(component.get('loading') || component.get('processingRunId'));
+                    // Prefer Analytics page wire when present on this screen.
+                    const summary = document.getElementById('procurement-summary');
+                    if (summary) {
+                        const root = summary.closest('[wire\\:id]');
+                        const id = root ? root.getAttribute('wire:id') : null;
+                        if (id) {
+                            try {
+                                const wire = this.wireFromLivewireEntry(window.Livewire.find(id));
+                                if (wire && wire.get('processingRunId') !== undefined) {
+                                    return Boolean(wire.get('processingRunId') || wire.get('loading'));
+                                }
+                            } catch (error) {
+                                // Fall through to scanning all components.
+                            }
+                        }
+                    }
+
+                    if (typeof window.Livewire.all !== 'function') {
+                        const wire = this.livewireComponent();
+
+                        return Boolean(wire && (wire.get('loading') || wire.get('processingRunId')));
                     }
 
                     for (const component of window.Livewire.all()) {
                         try {
-                            if (typeof component.get !== 'function') {
+                            const wire = this.wireFromLivewireEntry(component);
+                            if (! wire) {
                                 continue;
                             }
 
                             // Analytics + global chip both expose processingRunId.
-                            if (component.get('processingRunId') !== undefined) {
-                                if (component.get('processingRunId') || component.get('loading')) {
+                            if (wire.get('processingRunId') !== undefined) {
+                                if (wire.get('processingRunId') || wire.get('loading')) {
                                     return true;
                                 }
                             }
