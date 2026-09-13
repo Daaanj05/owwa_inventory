@@ -625,7 +625,7 @@ class ProcurementAnalyticsPageTest extends TestCase
             ->assertSee('Generate a recommendation from the current at-risk table');
     }
 
-    public function test_mount_hydrates_completed_run_once_from_ai_run_query(): void
+    public function test_mount_ignores_ai_run_query_and_uses_pending_cache_once(): void
     {
         Filament::setCurrentPanel(Filament::getPanel('admin'));
 
@@ -645,16 +645,24 @@ class ProcurementAnalyticsPageTest extends TestCase
             'created_by' => $custodian->id,
         ]);
 
-        $this->assertStringContainsString('ai_run='.$run->id, ProcurementAnalytics::resultUrl($run->id));
+        $this->assertStringNotContainsString('ai_run=', ProcurementAnalytics::resultUrl($run->id));
 
         Livewire::actingAs($custodian)
             ->withQueryParams(['ai_run' => $run->id])
+            ->test(ProcurementAnalytics::class)
+            ->assertSet('lastAiRunId', null)
+            ->assertSet('recommendation', null)
+            ->assertSee('Generate a recommendation from the current at-risk table');
+
+        \App\Support\AiProcurementSummaryRestore::remember($custodian->id, $run->id);
+
+        Livewire::actingAs($custodian)
+            ->withQueryParams([])
             ->test(ProcurementAnalytics::class)
             ->assertSet('lastAiRunId', $run->id)
             ->assertSet('recommendation', 'View-result narrative ready.')
             ->assertSee('View-result narrative ready.');
 
-        // Fresh request without ai_run must not keep showing the summary.
         Livewire::actingAs($custodian)
             ->withQueryParams([])
             ->test(ProcurementAnalytics::class)

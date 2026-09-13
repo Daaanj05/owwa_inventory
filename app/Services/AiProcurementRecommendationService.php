@@ -207,7 +207,7 @@ class AiProcurementRecommendationService
             return;
         }
 
-        $analyticsUrl = ProcurementAnalytics::resultUrl((int) $run->id);
+        $analyticsUrl = ProcurementAnalytics::resultUrl();
 
         AiProcurementSummaryRestore::remember((int) $user->id, (int) $run->id);
 

@@ -140,6 +140,7 @@ class AiProcurementBusyChipTest extends TestCase
             ?? data_get($actions, '0.data.url')
             ?? collect($actions)->pluck('url')->filter()->first();
         $this->assertNotNull($actionUrl);
-        $this->assertStringContainsString('ai_run='.$run->id, (string) $actionUrl);
+        $this->assertStringNotContainsString('ai_run=', (string) $actionUrl);
+        $this->assertStringContainsString('procurement-analytics', (string) $actionUrl);
     }
 }

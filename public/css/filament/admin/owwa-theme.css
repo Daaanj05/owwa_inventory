@@ -6635,6 +6635,10 @@ body.owwa-busy-active {
     cursor: progress;
 }
 
+body.owwa-busy-active #procurement-summary .owwa-pr-ai-loading--inset {
+    display: none !important;
+}
+
 body.owwa-busy-active .fi-sidebar-nav-item,
 body.owwa-busy-active .fi-topbar a {
     pointer-events: auto;

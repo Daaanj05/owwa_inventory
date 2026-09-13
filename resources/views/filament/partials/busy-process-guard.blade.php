@@ -87,10 +87,10 @@
 
         window.owwaBusyGuard = function (config) {
             return {
-                busy: Boolean(config.initialBusy),
+                busy: Boolean(config.initialBusy || (config.allowMinimize && window.__owwaAiBusyActive)),
                 minimized: Boolean(config.allowMinimize && window.__owwaAiBusyMinimized),
                 allowMinimize: Boolean(config.allowMinimize),
-                aiRequestPending: false,
+                aiRequestPending: Boolean(config.allowMinimize && window.__owwaAiBusyActive && ! config.initialBusy),
                 title: config.defaultTitle || 'Please wait…',
                 message: config.defaultMessage || '',
                 leaveMessage: config.leaveMessage || 'A process is still running. Are you sure you want to leave this page?',
@@ -108,6 +108,12 @@
                     if (this.allowMinimize) {
                         window.__owwaAiBusyGuardInstance = this;
                         this.minimized = Boolean(window.__owwaAiBusyMinimized);
+
+                        if (window.__owwaAiBusyActive) {
+                            this.busy = true;
+                            this.title = config.defaultTitle || this.title || 'Generating recommendation…';
+                            this.message = config.defaultMessage || this.message || '';
+                        }
                     } else {
                         window.__owwaBusyGuardInstance = this;
                         window.addEventListener('beforeunload', (event) => this.onBeforeUnload(event));
@@ -167,6 +173,7 @@
                                         : null;
                                     const stillProcessing = Boolean(loading || processingRunId);
 
+                                    // Only drop the click-pending flag once Livewire reports processing.
                                     if (stillProcessing) {
                                         instance.aiRequestPending = false;
                                         window.Livewire?.dispatch('ai-procurement-busy-refresh');
@@ -174,7 +181,7 @@
                                         return;
                                     }
 
-                                    // Props may lag the commit callback — keep modal up briefly.
+                                    // Fail-safe if the request failed without starting a run.
                                     if (! instance.aiPendingSettleTimer) {
                                         instance.aiPendingSettleTimer = setTimeout(() => {
                                             instance.aiPendingSettleTimer = null;
@@ -182,10 +189,31 @@
                                                 return;
                                             }
 
+                                            instance.syncFromLivewire();
+                                            const lateComponent = instance.livewireComponent();
+                                            const lateLoading = lateComponent && typeof lateComponent.get === 'function'
+                                                ? Boolean(lateComponent.get('loading'))
+                                                : false;
+                                            const lateProcessingRunId = lateComponent && typeof lateComponent.get === 'function'
+                                                ? lateComponent.get('processingRunId')
+                                                : null;
+
+                                            if (lateLoading || lateProcessingRunId) {
+                                                instance.aiRequestPending = false;
+                                                window.__owwaAiBusyActive = true;
+                                                window.__owwaAiBusySeenProcessing = true;
+                                                instance.syncFromLivewire();
+                                                window.Livewire?.dispatch('ai-procurement-busy-refresh');
+
+                                                return;
+                                            }
+
                                             instance.aiRequestPending = false;
+                                            window.__owwaAiBusyActive = false;
+                                            window.__owwaAiBusySeenProcessing = false;
                                             instance.syncFromLivewire();
                                             window.Livewire?.dispatch('ai-procurement-busy-refresh');
-                                        }, 700);
+                                        }, 5000);
                                     }
                                 };
 
@@ -219,6 +247,8 @@
                     document.getElementById('procurement-summary')?.classList.remove('owwa-pa-summary-awaiting-reveal');
                     this.suppressBusySync = false;
                     this.aiRequestPending = true;
+                    window.__owwaAiBusyActive = true;
+                    window.__owwaAiBusySeenProcessing = false;
                     this.allowUnload = false;
                     this.minimized = false;
                     window.__owwaAiBusyMinimized = false;
@@ -254,6 +284,8 @@
                     this.minimized = false;
                     if (this.allowMinimize) {
                         window.__owwaAiBusyMinimized = false;
+                        window.__owwaAiBusyActive = false;
+                        window.__owwaAiBusySeenProcessing = false;
                     }
 
                     this.aiClearTimer = setTimeout(() => {
@@ -293,6 +325,12 @@
 
                     const component = this.livewireComponent();
                     if (! component) {
+                        if (this.allowMinimize && window.__owwaAiBusyActive) {
+                            this.busy = true;
+                            this.minimized = Boolean(window.__owwaAiBusyMinimized);
+                            this.syncBusyActiveClass();
+                        }
+
                         return;
                     }
 
@@ -304,9 +342,15 @@
                     const processingRunId = typeof component.get === 'function' ? component.get('processingRunId') : null;
                     const stillProcessing = Boolean(loading || processingRunId);
 
-                    if (! this.busyProperty && (stillProcessing || this.aiRequestPending)) {
+                    if (! this.busyProperty && (stillProcessing || this.aiRequestPending || (this.allowMinimize && window.__owwaAiBusyActive && ! window.__owwaAiBusySeenProcessing))) {
                         this.cancelAiBusyClear();
                         document.getElementById('procurement-summary')?.classList.remove('owwa-pa-summary-awaiting-reveal');
+
+                        if (stillProcessing && this.allowMinimize) {
+                            window.__owwaAiBusyActive = true;
+                            window.__owwaAiBusySeenProcessing = true;
+                            this.aiRequestPending = false;
+                        }
 
                         if (! this.busy) {
                             this.minimized = Boolean(this.allowMinimize && window.__owwaAiBusyMinimized);
@@ -315,7 +359,13 @@
                         this.busy = true;
                         this.title = config.defaultTitle || this.title;
                         this.message = config.defaultMessage || this.message;
-                    } else if (! this.busyProperty && ! stillProcessing && ! this.aiRequestPending && ! this.downloadTimer) {
+                    } else if (! this.busyProperty && this.allowMinimize && window.__owwaAiBusyActive && window.__owwaAiBusySeenProcessing && ! stillProcessing && ! this.aiRequestPending) {
+                        window.__owwaAiBusyActive = false;
+                        window.__owwaAiBusySeenProcessing = false;
+                        if (this.busy) {
+                            this.scheduleAiBusyClear();
+                        }
+                    } else if (! this.busyProperty && ! stillProcessing && ! this.aiRequestPending && ! this.downloadTimer && ! (this.allowMinimize && window.__owwaAiBusyActive)) {
                         if (this.allowMinimize && this.busy) {
                             this.scheduleAiBusyClear();
                         } else {

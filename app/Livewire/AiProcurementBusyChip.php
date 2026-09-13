@@ -67,7 +67,7 @@ class AiProcurementBusyChip extends Component
             AiProcurementSummaryRestore::remember((int) Auth::id(), (int) $run->id);
         }
 
-        $analyticsUrl = ProcurementAnalytics::resultUrl((int) $run->id);
+        $analyticsUrl = ProcurementAnalytics::resultUrl();
 
         if ($run->status === 'failed') {
             Notification::make()
@@ -100,11 +100,7 @@ class AiProcurementBusyChip extends Component
 
     public function getAnalyticsUrlProperty(): string
     {
-        if ($this->processingRunId !== null) {
-            return ProcurementAnalytics::resultUrl($this->processingRunId);
-        }
-
-        return ProcurementAnalytics::getUrl(panel: 'admin').'#procurement-summary';
+        return ProcurementAnalytics::resultUrl();
     }
 
     public function getShouldShowChipProperty(): bool
