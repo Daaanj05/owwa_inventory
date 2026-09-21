@@ -17,6 +17,7 @@ COPY vite.config.js ./
 COPY resources ./resources
 COPY app ./app
 COPY public ./public
+COPY scripts ./scripts
 
 RUN mkdir -p storage/framework/views \
     vendor/laravel/framework/src/Illuminate/Pagination/resources/views \
