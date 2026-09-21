@@ -36,7 +36,7 @@ class PhysicalCountSessionActions
             ->visible(fn (PhysicalCountSession $record): bool => $record->supportsUnitQrScanning() && ! $record->hasBookListLoaded() && ! $record->isArchived())
             ->requiresConfirmation()
             ->modalHeading('Load expected assets from custody records?')
-            ->modalDescription('Loads all property tags accountable to the regional office — warehouse stock and items issued for use. Excludes assets at satellite offices. Unscanned units appear as shortages.')
+            ->modalDescription('Loads all property tags accountable to this office — warehouse stock and items issued for use. Unscanned units appear as shortages.')
             ->action(function (PhysicalCountSession $record, Action $action) use ($afterSuccess): void {
                 $result = app(PhysicalCountPreloadService::class)->preloadFromCustodyRecords($record);
 

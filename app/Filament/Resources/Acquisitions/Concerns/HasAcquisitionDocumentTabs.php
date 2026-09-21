@@ -3,10 +3,10 @@
 namespace App\Filament\Resources\Acquisitions\Concerns;
 
 use App\Filament\Concerns\SyncsActiveItemCategory;
-use App\Filament\Pages\InventoryCategoryDashboard;
 use App\Filament\Resources\Acquisitions\AcquisitionResource;
 use App\Filament\Resources\Acquisitions\InspectionAcceptanceReports\InspectionAcceptanceReportResource;
 use App\Filament\Resources\Acquisitions\PurchaseOrders\PurchaseOrderResource;
+use App\Support\CategoryWizardBreadcrumb;
 use Filament\Support\Facades\FilamentView;
 use Filament\Tables\View\TablesRenderHook;
 use Illuminate\Support\HtmlString;
@@ -35,11 +35,16 @@ trait HasAcquisitionDocumentTabs
                     return new HtmlString('');
                 }
 
-                /** @var self $livewire */
+                /** @var self&HasAcquisitionListViewToggle $livewire */
+                $toggleHtml = method_exists($livewire, 'acquisitionViewToggleHtml')
+                    ? $livewire->acquisitionViewToggleHtml()
+                    : new HtmlString('');
+
                 return new HtmlString(
                     (string) view('filament.resources.acquisitions.partials.document-tabs', [
                         'active' => $active,
                         'tabsHtml' => $livewire->acquisitionDocumentTabsHtml($active),
+                        'toggleHtml' => $toggleHtml,
                     ])
                 );
             },
@@ -92,14 +97,13 @@ trait HasAcquisitionDocumentTabs
     protected function acquisitionWizardHeading(string $taskLabel): HtmlString
     {
         $categoryId = SyncsActiveItemCategory::resolveCategoryIdFromContext();
-        $categoryName = \App\Models\ItemCategory::query()->whereKey($categoryId)->value('name') ?? 'Inventory';
-        $dashboardUrl = InventoryCategoryDashboard::getUrl(['category' => $categoryId]);
+        $category = \App\Models\ItemCategory::query()->whereKey($categoryId)->first();
 
-        return new HtmlString(sprintf(
-            '<span class="owwa-wizard-title" role="list"><a class="owwa-wizard-step owwa-wizard-step-link" href="%s" role="listitem">%s</a><span class="owwa-wizard-separator" aria-hidden="true">&gt;</span><span class="owwa-wizard-step owwa-wizard-step-current" role="listitem">%s</span></span>',
-            e($dashboardUrl),
-            e($categoryName),
-            e($taskLabel),
-        ));
+        return CategoryWizardBreadcrumb::make(
+            $category?->name ?? 'Inventory',
+            $taskLabel,
+            $categoryId,
+            $category?->getTemplateSlug(),
+        );
     }
 }

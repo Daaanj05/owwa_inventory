@@ -7,12 +7,10 @@ use App\Models\Item;
 use App\Models\ItemCategory;
 use App\Models\Office;
 use App\Services\AnalyticsDateRangeService;
-use App\Support\CustodianOfficeScope;
 use App\Support\InventoryCategoryOptions;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Select;
-use Filament\Forms\Components\Toggle;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
@@ -27,41 +25,41 @@ trait ConfiguresConsumptionFilters
      * searchable JS selects keep multiple panels open and often fail to load
      * dynamic Closure options in that nested dropdown context.
      */
-    protected function configureConsumptionFiltersSchema(Schema $schema, bool $includeMovingAverage = false): Schema
+    protected function configureConsumptionFiltersSchema(Schema $schema): Schema
     {
         return $schema
             ->columns(2)
-            ->components($this->consumptionFilterComponents($includeMovingAverage));
+            ->components($this->consumptionFilterComponents());
     }
 
     protected function bootConsumptionFilterDefaults(): void
     {
         $this->mountHasFiltersSchema();
 
-        // Native selects with a disabled empty option only stay on "All …"
+        // Native selects with a disabled empty option only stay on the placeholder
         // when the bound state is "" (null lets the browser paint the first enabled option).
         $this->filters['item_category_ids'] = $this->normalizeEmptySelectValue($this->filters['item_category_ids'] ?? null);
         $this->filters['base_names'] = $this->normalizeEmptySelectValue($this->filters['base_names'] ?? null);
 
+        $dateRange = app(AnalyticsDateRangeService::class)->rollingMonthsRange(6);
+        if (blank($this->filters['date_from'] ?? null)) {
+            $this->filters['date_from'] = $dateRange['from']->toDateString();
+        }
+        if (blank($this->filters['date_to'] ?? null)) {
+            $this->filters['date_to'] = $dateRange['to']->toDateString();
+        }
+
+        // Empty office_ids = All offices (do not seed a regional-only default).
+        if (! array_key_exists('office_ids', $this->filters) || $this->filters['office_ids'] === null) {
+            $this->filters['office_ids'] = [];
+        }
+
         if (property_exists($this, 'deferredFilters') && is_array($this->deferredFilters)) {
             $this->deferredFilters['item_category_ids'] = $this->filters['item_category_ids'];
             $this->deferredFilters['base_names'] = $this->filters['base_names'];
-        }
-
-        $officeIds = $this->normalizeIds($this->filters['office_ids'] ?? null);
-        if ($officeIds !== []) {
-            return;
-        }
-
-        $defaults = array_map(strval(...), $this->defaultConsumptionOfficeIds());
-        if ($defaults === []) {
-            return;
-        }
-
-        $this->filters['office_ids'] = $defaults;
-
-        if (property_exists($this, 'deferredFilters') && is_array($this->deferredFilters)) {
-            $this->deferredFilters['office_ids'] = $defaults;
+            $this->deferredFilters['date_from'] = $this->filters['date_from'];
+            $this->deferredFilters['date_to'] = $this->filters['date_to'];
+            $this->deferredFilters['office_ids'] = $this->filters['office_ids'];
         }
     }
 
@@ -83,16 +81,15 @@ trait ConfiguresConsumptionFilters
     /**
      * @return array<int, \Filament\Schemas\Components\Component|\Filament\Forms\Components\Component>
      */
-    protected function consumptionFilterComponents(bool $includeMovingAverage = false): array
+    protected function consumptionFilterComponents(): array
     {
-        $dateRange = app(AnalyticsDateRangeService::class)->currentYearRange();
-        $defaultOfficeIds = array_map(strval(...), $this->defaultConsumptionOfficeIds());
+        $dateRange = app(AnalyticsDateRangeService::class)->rollingMonthsRange(6);
         $officeOptions = $this->consumptionOfficeOptions();
         $categoryOptions = InventoryCategoryOptions::procurementAnalyticsCategories()
             ->mapWithKeys(fn (ItemCategory $category): array => [(string) $category->id => (string) $category->name])
             ->all();
 
-        $components = [
+        return [
             DatePicker::make('date_from')
                 ->label('From')
                 ->default($dateRange['from']->toDateString())
@@ -100,24 +97,41 @@ trait ConfiguresConsumptionFilters
             DatePicker::make('date_to')
                 ->label('To')
                 ->default($dateRange['to']->toDateString())
-                ->minDate(fn (Get $get): mixed => $get('date_from') ?? now()->subMonths(11)),
+                ->minDate(fn (Get $get): mixed => $get('date_from') ?? now()->subMonths(5)->startOfMonth()),
             Select::make('office_ids')
                 ->label('Offices')
                 ->multiple()
                 ->options($officeOptions)
-                ->default($defaultOfficeIds)
+                ->default([])
                 ->placeholder('All offices')
                 ->live()
-                ->afterStateUpdated(fn (Set $set): mixed => $set('department_ids', [])),
+                ->afterStateUpdated(function (Set $set, mixed $state): void {
+                    // Department comparison requires exactly one office.
+                    if (count($this->normalizeIds($state)) !== 1) {
+                        $set('department_ids', []);
+                    }
+                }),
             Select::make('department_ids')
                 ->label('Departments')
                 ->multiple()
                 ->key(fn (): string => 'department_ids_'.$this->filterOptionsKey('office_ids'))
-                ->placeholder(fn (): string => $this->filterIdList('office_ids') !== []
-                    ? 'All departments'
-                    : 'Select office(s) first')
-                ->disabled(fn (): bool => $this->filterIdList('office_ids') === [])
-                ->options(fn (): array => $this->departmentOptionsForOffices($this->filterIdList('office_ids')))
+                ->placeholder(function (): string {
+                    $officeCount = count($this->filterIdList('office_ids'));
+
+                    if ($officeCount === 0) {
+                        return 'Select office first';
+                    }
+
+                    if ($officeCount > 1) {
+                        return 'Select one office to compare departments';
+                    }
+
+                    return 'All departments';
+                })
+                ->disabled(fn (): bool => count($this->filterIdList('office_ids')) !== 1)
+                ->options(fn (): array => count($this->filterIdList('office_ids')) === 1
+                    ? $this->departmentOptionsForOffices($this->filterIdList('office_ids'))
+                    : [])
                 ->getOptionLabelsUsing(fn (array $values): array => Department::query()
                     ->whereIn('id', $values)
                     ->pluck('name', 'id')
@@ -125,7 +139,7 @@ trait ConfiguresConsumptionFilters
                     ->all()),
             Select::make('item_category_ids')
                 ->label('Category')
-                ->options(['' => 'All categories'] + $categoryOptions)
+                ->options(['' => 'Select Category'] + $categoryOptions)
                 ->default('')
                 ->selectablePlaceholder(false)
                 ->disableOptionWhen(fn ($value): bool => blank($value))
@@ -149,7 +163,7 @@ trait ConfiguresConsumptionFilters
                         return ['' => 'Select category first'];
                     }
 
-                    return ['' => 'All base items'] + Item::query()
+                    return ['' => 'Select base item'] + Item::query()
                         ->active()
                         ->whereIn('item_category_id', $categoryIds)
                         ->orderByRaw('COALESCE(base_name, name)')
@@ -207,16 +221,6 @@ trait ConfiguresConsumptionFilters
                         : (string) $item->name)
                     ->first()),
         ];
-
-        if ($includeMovingAverage) {
-            $components[] = Toggle::make('show_moving_average')
-                ->label('3-month moving average')
-                ->default(false)
-                ->inline(false)
-                ->columnSpanFull();
-        }
-
-        return $components;
     }
 
     /**
@@ -252,30 +256,6 @@ trait ConfiguresConsumptionFilters
             : array_map(strval(...), $this->filterIdList($key));
 
         return implode('-', $values) ?: 'none';
-    }
-
-    /**
-     * @return array<int>
-     */
-    protected function defaultConsumptionOfficeIds(): array
-    {
-        $inventoryOfficeId = CustodianOfficeScope::inventoryOfficeId(Filament::auth()->user());
-
-        if ($inventoryOfficeId !== null) {
-            return [$inventoryOfficeId];
-        }
-
-        $userOfficeId = Filament::auth()->user()?->office_id;
-        if ($userOfficeId) {
-            return [(int) $userOfficeId];
-        }
-
-        $regionalId = Office::query()
-            ->active()
-            ->where('is_regional_supply', true)
-            ->value('id');
-
-        return $regionalId ? [(int) $regionalId] : [];
     }
 
     /**
@@ -369,6 +349,11 @@ trait ConfiguresConsumptionFilters
             }
         }
 
+        // Department chart mode is only valid with exactly one office.
+        if (count($officeIds) !== 1) {
+            $departmentIds = [];
+        }
+
         return [
             'department_ids' => $departmentIds,
             'office_ids' => $officeIds,
@@ -377,6 +362,59 @@ trait ConfiguresConsumptionFilters
             'to' => $resolved['to'],
             'includeYearInLabels' => $resolved['includeYearInLabels'],
         ];
+    }
+
+    /**
+     * Charts switch to department series when departments are selected under one office.
+     */
+    protected function isConsumptionDepartmentMode(?array $filters = null): bool
+    {
+        $resolved = $this->resolveConsumptionFilters($filters);
+
+        return $resolved['department_ids'] !== [] && count($resolved['office_ids']) === 1;
+    }
+
+    /**
+     * Selected office name for department-mode context (UI label only, not a chart series).
+     */
+    public function getConsumptionOfficeContextLabel(?array $filters = null): ?string
+    {
+        if (! $this->isConsumptionDepartmentMode($filters)) {
+            return null;
+        }
+
+        $officeId = $this->resolveConsumptionFilters($filters)['office_ids'][0] ?? null;
+        if ($officeId === null) {
+            return null;
+        }
+
+        $name = Office::query()->whereKey($officeId)->value('name');
+
+        return filled($name) ? (string) $name : null;
+    }
+
+    /**
+     * Selected base/sub-item label for chart context (UI only, not a chart series).
+     */
+    public function getConsumptionItemContextLabel(?array $filters = null): ?string
+    {
+        $f = $filters ?? $this->filters ?? [];
+
+        $itemIds = $this->normalizeIds($f['item_ids'] ?? []);
+        if ($itemIds !== []) {
+            $item = Item::query()->whereKey($itemIds[0])->first(['name', 'sub_item']);
+            if ($item === null) {
+                return null;
+            }
+
+            return filled($item->sub_item)
+                ? (string) $item->sub_item
+                : (string) $item->name;
+        }
+
+        $baseNames = $this->normalizeStringFilterValues($f['base_names'] ?? null);
+
+        return $baseNames[0] ?? null;
     }
 
     protected function isConsumptionItemScoped(?array $filters = null): bool
@@ -398,6 +436,8 @@ trait ConfiguresConsumptionFilters
         $baseNames = $this->normalizeStringFilterValues($filters['base_names'] ?? null);
         $categoryIds = $this->normalizeIds($filters['item_category_ids'] ?? null);
 
+        // No category/base → all items. Category alone → all items in that category
+        // (still office/department series; never one series per catalog item).
         if ($baseNames === [] && $categoryIds === []) {
             return [];
         }

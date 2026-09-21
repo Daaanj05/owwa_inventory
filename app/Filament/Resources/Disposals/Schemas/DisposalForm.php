@@ -7,11 +7,13 @@ use App\Models\InventoryUnit;
 use App\Models\Item;
 use App\Models\ItemCategory;
 use App\Models\Office;
+use App\Models\ProcurementSignatoryName;
 use App\Services\DisposalInventoryUnitService;
 use App\Services\InventoryStockService;
 use App\Support\CustodianOfficeScope;
 use App\Support\InventoryCategoryOptions;
 use App\Support\OwwaReferenceLabels;
+use App\Support\SignatorySelect;
 use App\Support\SupplyOfficeResolver;
 use Closure;
 use Filament\Facades\Filament;
@@ -142,23 +144,32 @@ class DisposalForm
                                 ))
                             ->rules([
                                 fn (Get $get): Closure => function (string $attribute, mixed $value, Closure $fail) use ($get): void {
-                                    if (self::activeCategorySlug() !== 'consumables') {
+                                    $itemId = self::intOrNull($get('item_id'));
+                                    $officeId = self::intOrNull($get('office_id'));
+                                    $inventoryUnitId = self::intOrNull($get('inventory_unit_id'));
+                                    $qty = (int) $value;
+
+                                    if ($inventoryUnitId !== null) {
+                                        if ($qty !== 1) {
+                                            $fail('Quantity must be 1 when a specific inventory unit is selected.');
+                                        }
+
                                         return;
                                     }
 
-                                    $itemId = self::intOrNull($get('item_id'));
-                                    $officeId = self::intOrNull($get('office_id'))
-                                        ?? app(SupplyOfficeResolver::class)->resolve();
+                                    if (self::activeCategorySlug() === 'consumables') {
+                                        $officeId = $officeId
+                                            ?? app(SupplyOfficeResolver::class)->resolve();
+                                    }
 
                                     if ($itemId === null || $officeId === null) {
                                         return;
                                     }
 
                                     $available = app(InventoryStockService::class)->getStock($itemId, $officeId);
-                                    $qty = (int) $value;
 
                                     if ($qty > $available) {
-                                        $fail("Quantity exceeds regional warehouse stock on hand ({$available}).");
+                                        $fail("Quantity exceeds stock on hand ({$available}).");
                                     }
                                 },
                             ]),
@@ -334,20 +345,12 @@ class DisposalForm
                             ->visible(fn (Get $get): bool => self::isIirupCategory()
                                 && $get('iirup_disposal_mode') === 'others')
                             ->columnSpanFull(),
-                        TextInput::make('accountable_officer_designation')
+                        SignatorySelect::make('accountable_officer_designation', ProcurementSignatoryName::ROLE_DISPOSAL_ACCOUNTABLE_DESIGNATION)
                             ->label('Accountable officer designation')
-                            ->maxLength(255)
-                            ->datalist(fn (): array => \App\Models\ProcurementSignatoryName::suggestionsForRole(
-                                \App\Models\ProcurementSignatoryName::ROLE_DISPOSAL_ACCOUNTABLE_DESIGNATION
-                            ))
                             ->required(fn (): bool => self::isIirupCategory())
                             ->visible(fn (): bool => self::isIirupCategory()),
-                        TextInput::make('accountable_officer_station')
+                        SignatorySelect::make('accountable_officer_station', ProcurementSignatoryName::ROLE_DISPOSAL_ACCOUNTABLE_STATION)
                             ->label('Station / office')
-                            ->maxLength(255)
-                            ->datalist(fn (): array => \App\Models\ProcurementSignatoryName::suggestionsForRole(
-                                \App\Models\ProcurementSignatoryName::ROLE_DISPOSAL_ACCOUNTABLE_STATION
-                            ))
                             ->required(fn (): bool => self::isIirupCategory())
                             ->visible(fn (): bool => self::isIirupCategory()),
                         TextInput::make('reason')
@@ -384,50 +387,36 @@ class DisposalForm
                     ->columnSpanFull()
                     ->compact()
                     ->schema([
-                        TextInput::make('custodian_printed_name')
-                            ->label(fn (): string => match (self::activeCategorySlug()) {
-                                'consumables' => 'Certified correct — Supply / Property Custodian',
-                                default => 'Requested by — Accountable Officer',
-                            })
-                            ->maxLength(255)
-                            ->required()
-                            ->datalist(fn (): array => \App\Models\ProcurementSignatoryName::suggestionsForRole(
-                                \App\Models\ProcurementSignatoryName::ROLE_CUSTODIAN
+                        SignatorySelect::make('custodian_printed_name', ProcurementSignatoryName::ROLE_CUSTODIAN)
+                            ->label('Certified Correct')
+                            ->helperText(fn (): ?string => SignatorySelect::disposalInstruction(
+                                self::activeCategorySlug() === 'consumables'
+                                    ? 'custodian_consumables'
+                                    : 'custodian_iirup'
                             ))
-                            ->placeholder('Full name'),
-                        TextInput::make('approved_by_printed_name')
-                            ->label(fn (): string => self::activeCategorySlug() === 'consumables'
-                                ? 'Disposal approved — Head / Authorized Representative'
-                                : 'Approved by — Authorized Official')
-                            ->maxLength(255)
                             ->required()
-                            ->datalist(fn (): array => \App\Models\ProcurementSignatoryName::suggestionsForRole(
-                                \App\Models\ProcurementSignatoryName::ROLE_APPROVED
-                            ))
                             ->placeholder('Full name'),
-                        TextInput::make('authorized_official_designation')
+                        SignatorySelect::make('approved_by_printed_name', ProcurementSignatoryName::ROLE_APPROVED)
+                            ->label('Disposal Approved')
+                            ->helperText(fn (): ?string => SignatorySelect::disposalInstruction(
+                                self::activeCategorySlug() === 'consumables'
+                                    ? 'approved_consumables'
+                                    : 'approved_iirup'
+                            ))
+                            ->required()
+                            ->placeholder('Full name'),
+                        SignatorySelect::make('authorized_official_designation', ProcurementSignatoryName::ROLE_DISPOSAL_AUTHORIZED_DESIGNATION)
                             ->label('Designation of authorized official')
-                            ->maxLength(255)
-                            ->datalist(fn (): array => \App\Models\ProcurementSignatoryName::suggestionsForRole(
-                                \App\Models\ProcurementSignatoryName::ROLE_DISPOSAL_AUTHORIZED_DESIGNATION
-                            ))
                             ->required(fn (): bool => self::isIirupCategory())
                             ->visible(fn (): bool => self::isIirupCategory()),
-                        TextInput::make('inspection_officer_printed_name')
-                            ->label('Certified correct — Inspection Officer')
-                            ->maxLength(255)
+                        SignatorySelect::make('inspection_officer_printed_name', ProcurementSignatoryName::ROLE_INSPECTION_OFFICER)
+                            ->label('Certified Correct')
+                            ->helperText(fn (): ?string => SignatorySelect::disposalInstruction('inspection_officer'))
                             ->required()
-                            ->datalist(fn (): array => \App\Models\ProcurementSignatoryName::suggestionsForRole(
-                                \App\Models\ProcurementSignatoryName::ROLE_INSPECTION_OFFICER
-                            ))
                             ->placeholder('Full name'),
-                        TextInput::make('witness_printed_name')
-                            ->label('Witness to disposal')
-                            ->maxLength(255)
-                            ->required()
-                            ->datalist(fn (): array => \App\Models\ProcurementSignatoryName::suggestionsForRole(
-                                \App\Models\ProcurementSignatoryName::ROLE_DISPOSAL_WITNESS
-                            ))
+                        SignatorySelect::make('witness_printed_name', ProcurementSignatoryName::ROLE_DISPOSAL_WITNESS)
+                            ->label('Witness to Disposal')
+                            ->helperText(fn (): ?string => SignatorySelect::disposalInstruction('witness'))
                             ->placeholder('Full name'),
                     ])
                     ->columns(2),

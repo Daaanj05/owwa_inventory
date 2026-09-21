@@ -1,0 +1,24 @@
+/* OWWA theme partial: _tokens.css (original lines 1-23) — edit then run: npm run build:owwa-theme */
+
+/**
+ * OWWA Inventory System — UI Theme
+ * Brand: Navy #003366 · Crimson #c41e3a
+ * Style: Clean, modern, government-grade admin panel.
+ * Design: Clear hierarchy, generous spacing, readable forms and tables.
+ */
+
+/* ═══════════════════════════════════════════════════════════
+   DESIGN TOKENS (used across inventory UI)
+═══════════════════════════════════════════════════════════ */
+:root {
+    --owwa-radius-sm: 0.5rem;
+    --owwa-radius-md: 0.75rem;
+    --owwa-radius-lg: 1rem;
+    --owwa-radius-xl: 1.25rem;
+    --owwa-shadow-card: 0 1px 3px 0 rgb(0 0 0 / 0.05), 0 1px 2px -1px rgb(0 0 0 / 0.05);
+    --owwa-shadow-card-hover: 0 4px 12px 0 rgb(0 0 0 / 0.08);
+    --owwa-space-content: 1rem;
+    --owwa-space-section: 1rem;
+    /* Procurement analytics — KPI row wrapper (change these to retint the container) */
+
+}

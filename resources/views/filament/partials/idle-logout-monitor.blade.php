@@ -5,8 +5,7 @@
         $warningMinutes = min($warningMinutes, max(0, $idleMinutes - 1));
         $idleMs = $idleMinutes * 60 * 1000;
         $warningMs = $warningMinutes * 60 * 1000;
-        $logoutUrl = route('audit.idle-logout');
-        $loginUrl = $loginUrl ?? url('/');
+        $recoverUrl = route('session.recover', ['reason' => 'idle_timeout']);
     @endphp
 
     <div
@@ -17,39 +16,36 @@
             secondsLeft: 0,
             timer: null,
             warningTimer: null,
+            countdown: null,
             resetIdle() {
                 clearTimeout(this.timer);
                 clearTimeout(this.warningTimer);
+                clearInterval(this.countdown);
+                this.countdown = null;
                 this.warningOpen = false;
+                this.secondsLeft = 0;
                 if (this.warningMs > 0 && this.idleMs > this.warningMs) {
                     this.warningTimer = setTimeout(() => {
                         this.warningOpen = true;
                         this.secondsLeft = Math.ceil((this.idleMs - this.warningMs) / 1000);
-                        const countdown = setInterval(() => {
+                        this.countdown = setInterval(() => {
                             this.secondsLeft--;
                             if (this.secondsLeft <= 0) {
-                                clearInterval(countdown);
+                                clearInterval(this.countdown);
+                                this.countdown = null;
                             }
                         }, 1000);
                     }, this.idleMs - this.warningMs);
                 }
                 this.timer = setTimeout(() => this.logout(), this.idleMs);
             },
-            async logout() {
-                const token = document.querySelector('meta[name=csrf-token]')?.getAttribute('content');
-                const body = new URLSearchParams();
-                body.set('_token', token ?? '');
-                body.set('redirect', @js($loginUrl));
-                await fetch(@js($logoutUrl), {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/x-www-form-urlencoded',
-                        'Accept': 'text/html',
-                    },
-                    body: body.toString(),
-                    credentials: 'same-origin',
-                });
-                window.location.href = @js($loginUrl);
+            logout() {
+                clearTimeout(this.timer);
+                clearTimeout(this.warningTimer);
+                clearInterval(this.countdown);
+                // Navigate to recover (GET logout). Do not POST with the page CSRF —
+                // a stale token returns 419 and leaves the user signed in.
+                window.location.replace(@js($recoverUrl));
             },
             init() {
                 const events = ['mousedown', 'mousemove', 'keydown', 'scroll', 'touchstart', 'click'];

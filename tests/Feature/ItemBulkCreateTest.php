@@ -51,8 +51,6 @@ class ItemBulkCreateTest extends TestCase
                         'reorder_level' => 10,
                         'days_to_consume' => 30,
                         'inventory_type' => 'office_supplies',
-                        'opening_quantity' => 100,
-                        'opening_unit_cost' => 10.5,
                     ],
                     [
                         'base_name' => 'Ballpen',
@@ -88,12 +86,9 @@ class ItemBulkCreateTest extends TestCase
 
         $bondPaper = Item::query()->where('name', 'Bond Paper A4')->first();
         $this->assertNotNull($bondPaper);
-        $this->assertDatabaseHas(\App\Models\StockOpeningBalance::class, [
+        $this->assertDatabaseMissing(\App\Models\StockOpeningBalance::class, [
             'item_id' => $bondPaper->id,
-            'office_id' => $office->id,
-            'quantity' => 100,
         ]);
-        $this->assertSame(100, app(\App\Services\InventoryStockService::class)->getStockForUnitCost($bondPaper->id, $office->id, 10.5));
 
         $ballpen = Item::query()->where('name', 'Ballpen Blue')->first();
         $this->assertNotNull($ballpen);

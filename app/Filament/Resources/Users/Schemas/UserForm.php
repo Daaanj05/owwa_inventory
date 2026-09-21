@@ -5,6 +5,7 @@ namespace App\Filament\Resources\Users\Schemas;
 use App\Models\Department;
 use App\Models\Office;
 use App\Models\User;
+use App\Support\SupplyOfficeResolver;
 use Closure;
 use Filament\Actions\Action;
 use Filament\Facades\Filament;
@@ -120,7 +121,20 @@ class UserForm
             ->selectablePlaceholder(false)
             ->required()
             ->disabled($isUnitConsolidator)
-            ->live();
+            ->live()
+            ->afterStateUpdated(function (mixed $state, Set $set): void {
+                $set('department_id', null);
+
+                if ($state === User::ROLE_SUPPLY_CUSTODIAN) {
+                    $set('office_id', app(SupplyOfficeResolver::class)->resolve());
+
+                    return;
+                }
+
+                if ($state === User::ROLE_UNIT_CONSOLIDATOR) {
+                    $set('office_id', null);
+                }
+            });
     }
 
     protected static function officeField(bool $isUnitConsolidator, ?User $user): Select
@@ -130,15 +144,29 @@ class UserForm
             ->relationship(
                 'office',
                 'name',
-                fn (Builder $query) => $isUnitConsolidator && $user?->office_id
-                    ? $query->where('id', $user->office_id)
-                    : $query->active()
+                function (Builder $query, Get $get) use ($isUnitConsolidator, $user): Builder {
+                    $query->active();
+
+                    if ($isUnitConsolidator && $user?->office_id) {
+                        return $query->where('id', $user->office_id);
+                    }
+
+                    if ($get('role') === User::ROLE_SUPPLY_CUSTODIAN) {
+                        return $query->where('is_regional_supply', true);
+                    }
+
+                    return $query;
+                }
             )
             ->searchable()
             ->preload()
             ->placeholder('None')
             ->default($isUnitConsolidator ? $user?->office_id : null)
             ->required(fn (Get $get): bool => self::officeIsRequired($get, $isUnitConsolidator))
+            ->helperText(fn (Get $get): ?string => $get('role') === User::ROLE_SUPPLY_CUSTODIAN
+                ? 'Supply Custodians are assigned to the regional supply office.'
+                : null)
+            ->rules(fn (Get $get): array => self::officeRules($get))
             ->live()
             ->afterStateUpdated(fn (Set $set) => $set('department_id', null));
     }
@@ -149,9 +177,12 @@ class UserForm
             ->label('Sub-Office/Department')
             ->options(fn (Get $get): array => self::departmentOptions($get, $isUnitConsolidator, $user))
             ->searchable()
-            ->placeholder('None')
+            ->placeholder(fn (Get $get): string => filled($get('office_id'))
+                ? 'Select department'
+                : 'Select office first')
             ->default($isUnitConsolidator ? $user?->department_id : null)
             ->disabled(fn (Get $get): bool => blank($get('office_id')))
+            ->required(fn (Get $get): bool => self::departmentIsRequired($get))
             ->rules(fn (Get $get): array => self::departmentRules($get));
     }
 
@@ -322,6 +353,19 @@ class UserForm
         return $get('role') === User::ROLE_UNIT_CONSOLIDATOR;
     }
 
+    protected static function isSupplyCustodianRole(Get $get): bool
+    {
+        return $get('role') === User::ROLE_SUPPLY_CUSTODIAN;
+    }
+
+    protected static function departmentIsRequired(Get $get): bool
+    {
+        return in_array($get('role'), [
+            User::ROLE_SUPPLY_CUSTODIAN,
+            User::ROLE_EMPLOYEE,
+        ], true);
+    }
+
     protected static function officeIsRequired(Get $get, bool $isUnitConsolidator): bool
     {
         if (self::isUnitConsolidatorRole($get)) {
@@ -363,10 +407,26 @@ class UserForm
     /**
      * @return array<int, mixed>
      */
+    protected static function officeRules(Get $get): array
+    {
+        if (! self::isSupplyCustodianRole($get)) {
+            return [];
+        }
+
+        return [
+            Rule::exists('offices', 'id')->where(
+                fn ($query) => $query->where('is_regional_supply', true)
+            ),
+        ];
+    }
+
+    /**
+     * @return array<int, mixed>
+     */
     protected static function departmentRules(Get $get): array
     {
         if (blank($get('department_id'))) {
-            return [];
+            return self::departmentIsRequired($get) ? ['required'] : [];
         }
 
         if (blank($get('office_id'))) {

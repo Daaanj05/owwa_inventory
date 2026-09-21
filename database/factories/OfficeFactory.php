@@ -14,7 +14,6 @@ class OfficeFactory extends Factory
         return [
             'name' => fake()->company(),
             'code' => strtoupper(fake()->unique()->lexify('???')),
-            'is_satellite' => fake()->boolean(20),
             'is_regional_supply' => false,
             'address' => fake()->address(),
         ];

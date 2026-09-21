@@ -79,7 +79,6 @@ class DashboardAcquisitionWidgetsTest extends TestCase
         $requestingOffice = Office::factory()->create([
             'name' => 'OWWA Satellite Office — Laguna',
             'code' => 'OWWA-LAG',
-            'is_satellite' => true,
         ]);
         $category = ItemCategory::factory()->create(['name' => 'Consumable']);
         $item = Item::factory()->create([

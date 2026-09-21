@@ -16,7 +16,6 @@ class EnsureOrgStructureSeeder extends Seeder
             [
                 'name' => 'OWWA Regional Office IV-A',
                 'fund_cluster' => '01',
-                'is_satellite' => false,
                 'is_regional_supply' => true,
                 'address' => 'CALABARZON',
                 'accountable_officer_name' => 'Marita C. Ablis',
@@ -31,7 +30,6 @@ class EnsureOrgStructureSeeder extends Seeder
             [
                 'name' => 'OWWA Satellite Office — Laguna',
                 'fund_cluster' => '01',
-                'is_satellite' => true,
                 'is_regional_supply' => false,
                 'address' => 'Sta. Cruz, Laguna',
                 'accountable_officer_name' => 'Pedro Santos',

@@ -3,7 +3,6 @@
 namespace App\Filament\Resources\PhysicalInventoryPlans\Pages;
 
 use App\Filament\Concerns\SyncsActiveItemCategory;
-use App\Filament\Pages\InventoryCategoryDashboard;
 use App\Filament\Resources\PhysicalCountSessions\PhysicalCountSessionResource;
 use App\Filament\Resources\PhysicalInventoryPlans\PhysicalInventoryPlanResource;
 use App\Filament\Support\OwwaFormModalDefaults;
@@ -12,6 +11,7 @@ use App\Models\PhysicalInventoryPlanLine;
 use App\Models\User;
 use App\Services\InventoryPlanStartCountService;
 use App\Services\InventoryPlanValidator;
+use App\Support\CategoryWizardBreadcrumb;
 use Filament\Actions\CreateAction;
 use Filament\Facades\Filament;
 use Filament\Resources\Pages\ListRecords;
@@ -24,7 +24,6 @@ use Filament\Schemas\Schema;
 use Filament\View\PanelsRenderHook;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Support\HtmlString;
 use Livewire\Attributes\Url;
 
 class ListPhysicalInventoryPlans extends ListRecords
@@ -52,7 +51,7 @@ class ListPhysicalInventoryPlans extends ListRecords
             return 'Inventory Schedules';
         }
 
-        return new HtmlString($this->getWizardHeaderBreadcrumb($categoryName, 'Inventory Schedules'));
+        return CategoryWizardBreadcrumb::make($categoryName, 'Inventory Schedules', $this->activeItemCategoryId());
     }
 
     /**
@@ -155,18 +154,5 @@ class ListPhysicalInventoryPlans extends ListRecords
     protected function getHeaderActions(): array
     {
         return [];
-    }
-
-    protected function getWizardHeaderBreadcrumb(string $categoryName, string $taskLabel): string
-    {
-        $categoryId = $this->activeItemCategoryId();
-        $dashboardUrl = InventoryCategoryDashboard::getUrl(['category' => $categoryId]);
-
-        return sprintf(
-            '<span class="owwa-wizard-title" role="list"><a class="owwa-wizard-step owwa-wizard-step-link" href="%s" role="listitem">%s</a><span class="owwa-wizard-separator" aria-hidden="true">&gt;</span><span class="owwa-wizard-step owwa-wizard-step-current" role="listitem">%s</span></span>',
-            e($dashboardUrl),
-            e($categoryName),
-            e($taskLabel),
-        );
     }
 }

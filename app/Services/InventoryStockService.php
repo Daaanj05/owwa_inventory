@@ -178,7 +178,27 @@ class InventoryStockService
             }
         };
 
-        $addKeys(DB::table('stock_opening_balances')->select('item_id', 'office_id', 'unit_cost')->distinct()->get(), 'office_id');
+        $addKeys(
+            DB::table('stock_opening_balances')
+                ->leftJoin(
+                    'stock_opening_balance_batches',
+                    'stock_opening_balances.batch_id',
+                    '=',
+                    'stock_opening_balance_batches.id',
+                )
+                ->where(function ($query): void {
+                    $query->whereNull('stock_opening_balances.batch_id')
+                        ->orWhereNotNull('stock_opening_balance_batches.confirmed_at');
+                })
+                ->select(
+                    'stock_opening_balances.item_id',
+                    'stock_opening_balances.office_id',
+                    'stock_opening_balances.unit_cost',
+                )
+                ->distinct()
+                ->get(),
+            'office_id',
+        );
         $addKeys(DB::table('acquisitions')->whereNull('deleted_at')->select('item_id', 'office_id', 'unit_cost')->distinct()->get(), 'office_id');
         $addKeys(DB::table('issuances')->whereNull('deleted_at')->select('item_id', 'office_id', 'unit_cost')->distinct()->get(), 'office_id');
         $addKeys(
@@ -571,13 +591,27 @@ class InventoryStockService
     protected function buildOpeningBalanceMap(): array
     {
         return DB::table('stock_opening_balances')
-            ->select(
-                'item_id',
-                'office_id',
-                DB::raw('COALESCE(unit_cost, 0) as unit_cost'),
-                DB::raw('SUM(quantity) as total'),
+            ->leftJoin(
+                'stock_opening_balance_batches',
+                'stock_opening_balances.batch_id',
+                '=',
+                'stock_opening_balance_batches.id',
             )
-            ->groupBy('item_id', 'office_id', DB::raw('COALESCE(unit_cost, 0)'))
+            ->where(function ($query): void {
+                $query->whereNull('stock_opening_balances.batch_id')
+                    ->orWhereNotNull('stock_opening_balance_batches.confirmed_at');
+            })
+            ->select(
+                'stock_opening_balances.item_id',
+                'stock_opening_balances.office_id',
+                DB::raw('COALESCE(stock_opening_balances.unit_cost, 0) as unit_cost'),
+                DB::raw('SUM(stock_opening_balances.quantity) as total'),
+            )
+            ->groupBy(
+                'stock_opening_balances.item_id',
+                'stock_opening_balances.office_id',
+                DB::raw('COALESCE(stock_opening_balances.unit_cost, 0)'),
+            )
             ->get()
             ->mapWithKeys(function ($row): array {
                 $key = UnitCostKey::positionKey(

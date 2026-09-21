@@ -37,17 +37,12 @@ class SupplyOfficeResolver
             return $custodianOffice;
         }
 
-        $regionalOffice = Office::query()
+        $fallbackOffice = Office::query()
             ->active()
-            ->where('is_satellite', false)
             ->orderBy('name')
             ->first();
 
-        if ($regionalOffice !== null) {
-            return $regionalOffice;
-        }
-
-        return null;
+        return $fallbackOffice;
     }
 
     protected function resolveSingleCustodianOffice(): ?Office

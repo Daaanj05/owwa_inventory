@@ -41,8 +41,7 @@ class ConsumptionAnalyticsService
 
         $this->applyScopeFilters($query, $departmentIds, $officeIds, $itemIds);
 
-        $departmentIdsUsed = (clone $query)->distinct()->pluck('department_id')->filter()->values();
-        $departments = Department::whereIn('id', $departmentIdsUsed)->pluck('name', 'id')->all();
+        $departments = $this->resolveChartDepartments($departmentIds, $officeIds);
 
         $series = [];
         foreach (array_keys($departments) as $deptId) {
@@ -100,8 +99,7 @@ class ConsumptionAnalyticsService
 
         $this->applyScopeFilters($query, $departmentIds, $officeIds, $itemIds);
 
-        $officeIdsUsed = (clone $query)->distinct()->pluck('office_id')->filter()->values();
-        $offices = Office::whereIn('id', $officeIdsUsed)->pluck('name', 'id')->all();
+        $offices = $this->resolveChartOffices($officeIds);
 
         $series = [];
         foreach (array_keys($offices) as $officeId) {
@@ -323,6 +321,47 @@ class ConsumptionAnalyticsService
     }
 
     /**
+     * Offices to always plot for office-scoped charts.
+     * Empty $officeIds = all active offices (zeros included when no issuances).
+     *
+     * @param  array<int>  $officeIds
+     * @return array<int, string> id => name
+     */
+    protected function resolveChartOffices(array $officeIds): array
+    {
+        $query = Office::query()->active()->orderBy('name');
+
+        if ($officeIds !== []) {
+            $query->whereIn('id', $officeIds);
+        }
+
+        return $query->pluck('name', 'id')->all();
+    }
+
+    /**
+     * Departments to always plot for department-scoped charts.
+     * Empty $departmentIds = active departments in the office scope (zeros included).
+     *
+     * @param  array<int>  $departmentIds
+     * @param  array<int>  $officeIds
+     * @return array<int, string> id => name
+     */
+    protected function resolveChartDepartments(array $departmentIds, array $officeIds): array
+    {
+        $query = Department::query()->active()->orderBy('name');
+
+        if ($departmentIds !== []) {
+            $query->whereIn('id', $departmentIds);
+        }
+
+        if ($officeIds !== []) {
+            $query->whereIn('office_id', $officeIds);
+        }
+
+        return $query->pluck('name', 'id')->all();
+    }
+
+    /**
      * @param  Builder<\App\Models\Issuance>  $query
      * @param  array<int>  $departmentIds
      * @param  array<int>  $officeIds
@@ -443,11 +482,9 @@ class ConsumptionAnalyticsService
 
         foreach ($data['series'] as $deptName => $periodValues) {
             $sum = array_sum($periodValues);
-            if ($sum > 0) {
-                $labels[] = $deptName;
-                $values[] = $sum;
-                $total += $sum;
-            }
+            $labels[] = $deptName;
+            $values[] = $sum;
+            $total += $sum;
         }
 
         return [
@@ -530,11 +567,9 @@ class ConsumptionAnalyticsService
 
         foreach ($data['series'] as $officeName => $periodValues) {
             $sum = array_sum($periodValues);
-            if ($sum > 0) {
-                $labels[] = $officeName;
-                $values[] = $sum;
-                $total += $sum;
-            }
+            $labels[] = $officeName;
+            $values[] = $sum;
+            $total += $sum;
         }
 
         return [

@@ -1,0 +1,828 @@
+/* OWWA theme partial: _forms.css (original lines 521-1191) — edit then run: npm run build:owwa-theme */
+
+/* ═══════════════════════════════════════════════════════════
+   CARDS / SECTIONS (scoped to forms/resources to avoid affecting dashboard)
+═══════════════════════════════════════════════════════════ */
+.fi-fo-form .fi-section {
+    background-color: #ffffff !important;
+    border: 1px solid #e5e7eb !important;
+    border-radius: 0.5rem !important;
+    padding: 0.5rem 0.75rem !important;
+    box-shadow: none !important;
+}
+
+.fi-fo-form .fi-section-header-heading {
+    font-size: 0.875rem !important;
+    font-weight: 600 !important;
+    color: #111827 !important;
+}
+
+.fi-fo-form .fi-section-header-description {
+    font-size: 0.75rem !important;
+    color: #6b7280 !important;
+    margin-top: 0.125rem !important;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   FORM INPUTS — readable labels & placeholders, no shrinking
+═══════════════════════════════════════════════════════════ */
+.fi-input,
+.fi-fo-text-input,
+input[type="text"].fi-input,
+input[type="email"].fi-input,
+input[type="number"].fi-input,
+input[type="password"].fi-input,
+textarea.fi-input,
+select.fi-input {
+    border-color: #d1d5db !important;
+    border-radius: 0.5rem !important;
+    font-size: 0.9375rem !important;
+    line-height: 1.4 !important;
+    color: #0f172a !important;
+    background-color: #ffffff !important;
+    min-height: 2.25rem !important;
+    padding: 0.4rem 0.75rem !important;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease !important;
+}
+
+textarea.fi-input {
+    min-height: 3.5rem !important;
+    padding: 0.4rem 0.75rem !important;
+}
+
+/* Select trigger (Filament dropdown button) — readable height and text */
+[data-slot="select-trigger"],
+button[role="combobox"],
+.fi-fo-select-trigger {
+    min-height: 2.25rem !important;
+    padding: 0.4rem 0.75rem !important;
+    font-size: 0.9375rem !important;
+}
+
+.fi-input::placeholder,
+.fi-fo-text-input::placeholder {
+    font-size: 0.9375rem !important;
+    color: #9ca3af !important;
+}
+
+.fi-input:focus,
+.fi-fo-text-input:focus {
+    border-color: #003366 !important;
+    box-shadow: 0 0 0 3px rgba(0, 51, 102, 0.1) !important;
+    outline: none !important;
+}
+
+/* Labels: prevent shrinking, allow wrap */
+.fi-fo-field-wrp-label label,
+.fi-fo-field-label,
+.fi-fo-field-wrp .fi-fo-field-label {
+    font-size: 0.875rem !important;
+    font-weight: 500 !important;
+    color: #374151 !important;
+    min-height: 0 !important;
+    white-space: normal !important;
+    line-height: 1.35 !important;
+    display: block !important;
+}
+
+.fi-fo-helper-text {
+    font-size: 0.75rem !important;
+    color: #6b7280 !important;
+    margin-top: 0.2rem !important;
+}
+
+/* Field wrapper: enough space for label + input, no squashing */
+.fi-fo-field-wrp {
+    min-width: 0 !important;
+}
+
+/* Required asterisk: hidden so forms rely on section/helper text instead */
+.fi-fo-field-label-required-mark {
+    display: none !important;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   CREATE/EDIT/VIEW FORM LAYOUT — card sections, two-column grid
+═══════════════════════════════════════════════════════════ */
+/* Form wrapper: full width, sections stack vertically */
+.fi-fo-form {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 0.75rem !important;
+    max-width: none !important;
+}
+
+.fi-schema + .fi-schema,
+.fi-section + .fi-section {
+    margin-top: 0 !important;
+}
+
+/* Each section = card with left accent bar (form pages only — NOT dashboard) */
+.fi-fo-form .fi-section {
+    background-color: #ffffff !important;
+    border: 1px solid #e5e7eb !important;
+    border-radius: 0.5rem !important;
+    padding: 0.75rem 1rem !important;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.04) !important;
+    position: relative !important;
+    overflow: hidden !important;
+}
+
+.fi-fo-form .fi-section::before {
+    content: '' !important;
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    bottom: 0 !important;
+    width: 4px !important;
+    background: #1e40af !important;
+}
+
+.fi-fo-form .fi-section-header {
+    padding-bottom: 0.5rem !important;
+    margin-bottom: 0.75rem !important;
+    border-bottom: 1px solid #e5e7eb !important;
+}
+
+.fi-fo-form .fi-section-content {
+    padding-top: 0 !important;
+}
+
+/* Force two-column grid for section content in FORMS ONLY (desktop); min width so inputs don't shrink */
+.fi-fo-form .fi-section-content > div,
+.fi-fo-form .fi-section-content .grid {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(10rem, 1fr)) !important;
+    gap: 0.75rem 1rem !important;
+}
+
+@media (max-width: 768px) {
+    .fi-fo-form .fi-section-content > div,
+    .fi-fo-form .fi-section-content .grid {
+        grid-template-columns: 1fr !important;
+    }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   MODAL FORMS — compact, borderless layout
+═══════════════════════════════════════════════════════════ */
+
+/* Remove cards / borders / accent bars inside modals */
+.fi-modal .fi-fo-form .fi-section {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    overflow: visible !important;
+}
+.fi-modal .fi-fo-form .fi-section::before {
+    display: none !important;
+}
+
+/* Section titles: small, tight */
+.fi-modal .fi-fo-form .fi-section-header {
+    padding-bottom: 0.25rem !important;
+    margin-bottom: 0.375rem !important;
+    border-bottom: none !important;
+}
+.fi-modal .fi-fo-form .fi-section-header-heading {
+    font-size: 0.8125rem !important;
+    font-weight: 600 !important;
+    color: #374151 !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.04em !important;
+}
+.fi-modal .fi-fo-form .fi-section-header-description {
+    display: none !important;
+}
+
+/* Grid inside sections */
+.fi-modal .fi-fo-form .fi-section-content > div,
+.fi-modal .fi-fo-form .fi-section-content .grid {
+    gap: 0.5rem 0.75rem !important;
+}
+
+/* Spacing between sections — a subtle divider line */
+.fi-modal .fi-fo-form .fi-section + .fi-section {
+    margin-top: 0.625rem !important;
+    padding-top: 0.625rem !important;
+    border-top: 1px solid #e5e7eb !important;
+}
+
+/* Reduce field label/input gap */
+.fi-modal .fi-fo-field-wrp {
+    gap: 0.125rem !important;
+}
+
+/* Make sections flow in single column inside modal (no side-by-side sections) */
+.fi-modal .fi-fo-form > .fi-sc-has-gap,
+.fi-modal .fi-fo-form .fi-schema {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 0 !important;
+}
+
+/* Compact modal body padding — OWWA record modals use wider inset below */
+.fi-modal:not(:has(.owwa-record-modal)) .fi-modal-content {
+    padding: 0.75rem 1rem !important;
+}
+
+/* Full-width fields (e.g. remarks, reference_code) span both columns */
+.fi-section-content [class*="columnSpanFull"],
+.fi-fo-field-wrp[class*="col-span-full"] {
+    grid-column: 1 / -1 !important;
+}
+
+.fi-fo-field-wrp {
+    margin-bottom: 0 !important;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   BUTTONS — simple solid primary
+═══════════════════════════════════════════════════════════ */
+.fi-btn-primary,
+.fi-btn-color-primary,
+button[type="submit"].fi-btn {
+    background: #2563eb !important;
+    border: none !important;
+    color: #fff !important;
+    border-radius: 0.5rem !important;
+    font-weight: 500 !important;
+    font-size: 0.875rem !important;
+    transition: background-color 0.15s ease !important;
+}
+
+.fi-btn-primary:hover,
+.fi-btn-color-primary:hover,
+button[type="submit"].fi-btn:hover {
+    background: #1d4ed8 !important;
+    color: #fff !important;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   INVENTORY LIST PAGES — toolbar + content card layout
+═══════════════════════════════════════════════════════════ */
+/* Wrap header + table in a clear “app panel” structure */
+.fi-resource-list-records-page .fi-main > div {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 0 !important;
+}
+
+/* Resource list pages — transparent section wrapper so table card stands alone */
+.fi-resource-list-records-page .fi-section {
+    padding: 0 !important;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+}
+
+/* Compact heading on list pages */
+.fi-resource-list-records-page .fi-header {
+    padding: 0 0 0.25rem !important;
+    margin-bottom: 0 !important;
+}
+.fi-resource-list-records-page .fi-header-heading {
+    font-size: 1.125rem !important;
+    font-weight: 700 !important;
+    color: #111827 !important;
+}
+
+/* Table outer container + header area: transparent so search toolbar has no white fill */
+.fi-resource-list-records-page .fi-ta-ctn {
+    background: transparent !important;
+    border: none !important;
+    border-radius: 0 !important;
+    overflow: visible !important;
+    box-shadow: none !important;
+}
+
+.fi-resource-list-records-page .fi-ta-header-ctn {
+    background: transparent !important;
+    border-bottom: none !important;
+}
+
+/* .fi-ta-main holds header-ctn (toolbar) + content-ctn (table) + empty-state.
+   Keep main transparent; card styling goes on content + empty individually. */
+.fi-resource-list-records-page .fi-ta-main {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+}
+
+/* Table content area (column headers + data rows): white card with top rounding.
+   Do NOT use overflow:hidden — it clips row actions and blocks horizontal scroll. */
+.fi-resource-list-records-page .fi-ta-content-ctn {
+    background: #ffffff !important;
+    border: 1px solid #e5e7eb !important;
+    border-top: none !important;
+    border-bottom: none !important;
+    border-radius: 0.5rem 0.5rem 0 0 !important;
+    overflow-x: auto !important;
+    overflow-y: visible !important;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.04) !important;
+    -webkit-overflow-scrolling: touch !important;
+}
+
+/* Inner layout wrapper (fi-ta-content) must allow the table to grow wider than the viewport */
+.fi-resource-list-records-page .fi-ta-content {
+    min-width: 0 !important;
+    overflow-x: visible !important;
+}
+
+.fi-resource-list-records-page .fi-ta-table {
+    width: 100% !important;
+    max-width: 100% !important;
+}
+
+.fi-page.owwa-wide-table-page .fi-ta-content-ctn {
+    overflow-x: auto !important;
+}
+
+.fi-page.owwa-wide-table-page .fi-ta-table {
+    width: max-content !important;
+    min-width: 100% !important;
+    max-width: none !important;
+}
+
+.fi-page.owwa-items-list-page .fi-ta-table {
+    width: max-content !important;
+    min-width: 100% !important;
+    max-width: none !important;
+}
+
+.fi-page.owwa-items-list-page .fi-ta-header-cell,
+.fi-page.owwa-items-list-page .fi-ta-cell {
+    white-space: nowrap;
+}
+
+.fi-page.owwa-items-list-page .fi-ta-header-cell,
+.fi-page.owwa-items-list-page .fi-ta-cell {
+    padding-left: 0.9rem !important;
+    padding-right: 0.9rem !important;
+}
+
+.fi-page.owwa-items-list-page .fi-ta-cell .owwa-item-name-column,
+.fi-page.owwa-items-list-page .fi-ta-cell .owwa-item-base-column,
+.fi-page.owwa-items-list-page .fi-ta-cell .owwa-item-sub-column {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap !important;
+}
+
+.fi-page.owwa-items-list-page .fi-ta-cell {
+    padding-top: 0.5rem !important;
+    padding-bottom: 0.5rem !important;
+}
+
+.fi-page.owwa-items-list-page.owwa-icd--property-plant-and-equipment .fi-ta-header-cell:has(.owwa-item-name-column),
+.fi-page.owwa-items-list-page.owwa-icd--property-plant-and-equipment .fi-ta-cell:has(.owwa-item-name-column) {
+    width: 16rem !important;
+    max-width: 16rem !important;
+}
+
+.fi-page.owwa-items-list-page.owwa-icd--property-plant-and-equipment .fi-ta-header-cell:has(.owwa-item-identifier-column),
+.fi-page.owwa-items-list-page.owwa-icd--property-plant-and-equipment .fi-ta-cell:has(.owwa-item-identifier-column) {
+    width: 18rem !important;
+    max-width: 18rem !important;
+    padding-left: 0.5rem !important;
+}
+
+/* Empty state: connects to content-ctn above, bottom rounding */
+.fi-resource-list-records-page .fi-ta-empty-state {
+    background: #ffffff !important;
+    border: 1px solid #e5e7eb !important;
+    border-top: none !important;
+    border-radius: 0 0 0.5rem 0.5rem !important;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.04) !important;
+}
+
+/* When table has records and no empty state, content-ctn gets full rounding */
+.fi-resource-list-records-page .fi-ta-ctn:not(.fi-ta-ctn-with-footer) .fi-ta-content-ctn:last-child {
+    border-radius: 0.5rem !important;
+    border-bottom: 1px solid #e5e7eb !important;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   TABLES – toolbar layout override
+   Goal: search on the left (reasonable width), filters + column manager on the right.
+═══════════════════════════════════════════════════════════ */
+.fi-ta-ctn .fi-ta-header {
+    background: transparent !important;
+}
+
+.fi-resource-list-records-page .fi-ta-header-ctn {
+    margin-bottom: 1rem !important;
+}
+
+.fi-ta-ctn .fi-ta-header-toolbar {
+    justify-content: flex-start !important;
+    gap: 0.75rem !important;
+    padding: 0 !important;
+    border-bottom: none !important;
+}
+
+/* Second child wrapper: contains search + filters + column manager */
+.fi-ta-ctn .fi-ta-header-toolbar > :nth-child(2) {
+    margin-left: 0 !important; /* cancel Filament's ms-auto */
+    display: flex !important;
+    align-items: center !important;
+    gap: 0.75rem !important;
+    width: 100% !important;
+}
+
+/* Search: fixed, reasonable width on the left, pushes the rest to the right */
+.fi-ta-ctn .fi-ta-header-toolbar > :nth-child(2) .fi-ta-search-field {
+    flex: 0 0 auto !important;
+    max-width: 320px !important;
+    width: 260px !important;
+    margin-right: auto !important;
+}
+
+/* Inventory task lists: hide redundant filter and column manager toolbar icons */
+.fi-resource-list-records-page .fi-ta-filters-dropdown,
+.fi-resource-list-records-page .fi-ta-filters-modal,
+.fi-resource-list-records-page .fi-ta-filters-trigger-action-ctn,
+.fi-resource-list-records-page .fi-ta-col-manager-dropdown,
+.fi-resource-list-records-page .fi-ta-col-manager-modal {
+    display: none !important;
+}
+
+/* From/To date filters on the same row as Search (Acquisition / Issuance / Disposal). */
+.owwa-toolbar-date-range .fi-ta-header-ctn {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    align-items: center !important;
+    gap: 0.35rem 0.75rem !important;
+    margin-bottom: 0.35rem !important;
+}
+
+.owwa-toolbar-date-range .fi-ta-header {
+    flex: 1 0 100% !important;
+}
+
+.owwa-toolbar-date-range .fi-ta-header-toolbar {
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: wrap !important;
+    align-items: center !important;
+    order: 1 !important;
+    flex: 1 1 auto !important;
+    width: auto !important;
+    min-width: 0 !important;
+    gap: 0.75rem !important;
+    padding: 0 !important;
+    border: none !important;
+    border-bottom: none !important;
+}
+
+/* Match reference search: compact white pill with thin border + soft shadow. */
+.owwa-toolbar-date-range .fi-ta-header-toolbar > div:has(.fi-ta-search-field) {
+    display: flex !important;
+    align-items: center !important;
+    width: auto !important;
+    flex: 1 1 auto !important;
+    min-width: 0 !important;
+}
+
+.owwa-toolbar-date-range .fi-ta-header-toolbar > :nth-child(2) .fi-ta-search-field,
+.owwa-toolbar-date-range .fi-ta-header-toolbar > div:has(.fi-ta-search-field) .fi-ta-search-field {
+    flex: 0 0 auto !important;
+    width: 260px !important;
+    max-width: 320px !important;
+    margin-right: auto !important;
+}
+
+.owwa-toolbar-date-range .fi-ta-search-field .fi-input-wrp {
+    background: #ffffff !important;
+    border: 1px solid #e5e7eb !important;
+    border-radius: 0.5rem !important;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04) !important;
+    --tw-ring-shadow: 0 0 #0000 !important;
+    --tw-ring-offset-shadow: 0 0 #0000 !important;
+}
+
+.owwa-toolbar-date-range .fi-ta-search-field .fi-input-wrp:focus-within {
+    border-color: #cbd5e1 !important;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04) !important;
+}
+
+.owwa-toolbar-date-range .fi-ta-filters-above-content-ctn {
+    order: 2 !important;
+    flex: 0 0 auto !important;
+    display: block !important;
+    margin: 0 0 0 auto !important;
+    padding: 0 !important;
+    max-width: max-content;
+    border: none !important;
+    border-bottom: none !important;
+    background: transparent !important;
+    box-shadow: none !important;
+}
+
+.owwa-toolbar-date-range .owwa-acquisition-doc-tabs-wrap,
+.owwa-toolbar-date-range .owwa-acquisition-doc-tabs,
+.owwa-toolbar-date-range .owwa-pa-view-tabs.owwa-acquisition-doc-tabs {
+    order: 3 !important;
+    flex: 1 0 100% !important;
+    width: 100% !important;
+    margin-top: 0.15rem !important;
+    margin-bottom: 0.35rem !important;
+    padding: 0 !important;
+    border: none !important;
+    border-bottom: none !important;
+}
+
+/* White fill on date inputs only — From/To labels and gaps stay on page background. */
+.owwa-toolbar-date-range .fi-ta-filters {
+    border: none !important;
+    background: transparent !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    box-shadow: none !important;
+    max-width: max-content;
+}
+
+.owwa-toolbar-date-range .fi-ta-filters-header,
+.owwa-toolbar-date-range .fi-ta-filters-actions-ctn,
+.owwa-toolbar-date-range .fi-ta-filter-indicators {
+    display: none !important;
+}
+
+.owwa-toolbar-date-range .fi-ta-filters .fi-sc-grid,
+.owwa-toolbar-date-range .fi-ta-filters .fi-sc-component {
+    display: flex !important;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 0.85rem !important;
+    background: transparent !important;
+}
+
+.owwa-toolbar-date-range .fi-fo-field-has-inline-label,
+.owwa-toolbar-date-range .fi-fo-field {
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    gap: 0.4rem !important;
+    margin: 0 !important;
+    background: transparent !important;
+}
+
+.owwa-toolbar-date-range .fi-fo-field-label-col {
+    flex: 0 0 auto !important;
+    width: auto !important;
+    max-width: none !important;
+    background: transparent !important;
+}
+
+.owwa-toolbar-date-range .fi-fo-field-label,
+.owwa-toolbar-date-range .fi-fo-field-label-content {
+    margin: 0 !important;
+    white-space: nowrap;
+    font-size: 0.75rem !important;
+    font-weight: 600 !important;
+    color: #374151 !important;
+    background: transparent !important;
+}
+
+.owwa-toolbar-date-range .fi-fo-field-content-col {
+    flex: 0 0 auto !important;
+    width: auto !important;
+    max-width: none !important;
+    background: transparent !important;
+}
+
+.owwa-toolbar-date-range .fi-ta-filters .fi-input-wrp {
+    min-width: 8.75rem;
+    border: 1px solid #e5e7eb !important;
+    border-radius: 0.5rem !important;
+    background: #fff !important;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04) !important;
+    overflow: hidden;
+    --tw-ring-shadow: 0 0 #0000 !important;
+    --tw-ring-offset-shadow: 0 0 #0000 !important;
+}
+
+.owwa-toolbar-date-range .fi-ta-filters input[type='date'] {
+    min-width: 8.5rem;
+    border: none !important;
+    border-radius: 0.5rem !important;
+    padding: 0.35rem 0.5rem !important;
+    font-size: 0.8125rem !important;
+    color: #111827 !important;
+    background: #fff !important;
+    box-shadow: none !important;
+}
+
+.fi-resource-list-records-page .fi-ta-col-manager-dropdown,
+.fi-resource-list-records-page .fi-ta-col-manager-modal {
+    display: none !important;
+}
+
+.fi-ta-header-cell {
+    font-size: 0.6875rem !important;
+    font-weight: 600 !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.05em !important;
+    color: #475569 !important;
+    background-color: #f1f5f9 !important;
+    padding: 0.3rem 0.75rem !important;
+    border-bottom: 1px solid #e2e8f0 !important;
+}
+
+/* Ensure ALL table header cells (including edge/actions column headers) share the same background */
+.fi-ta-table thead th,
+.fi-ta-thead th {
+    background-color: #f1f5f9 !important;
+}
+
+.fi-ta-cell {
+    font-size: 0.8125rem !important;
+    color: #374151 !important;
+    padding: 0.125rem 0.75rem !important;
+    vertical-align: middle !important;
+}
+
+.fi-ta-row {
+    transition: background-color 0.12s ease !important;
+}
+
+/* Striped rows for data-grid look */
+.fi-ta-tbody .fi-ta-row:nth-child(even) td {
+    background-color: #fafafa !important;
+}
+
+.fi-ta-row:hover td {
+    background-color: #f1f5f9 !important;
+}
+
+.fi-ta-table {
+    border-collapse: collapse !important;
+}
+
+.fi-ta-table thead tr {
+    border-bottom: 0 !important; /* avoid double line with header cell border */
+}
+
+/* Remove any subtle header shadowing between cells */
+.fi-ta-header-cell,
+.fi-ta-table thead th,
+.fi-ta-thead th {
+    box-shadow: none !important;
+}
+
+/* Setup lists: Active / Archive icons on the right of the toolbar row */
+.fi-page.owwa-setup-archive-toggle .fi-ta-header-toolbar > div:has(.fi-ta-search-field) {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    align-items: center !important;
+    gap: 0.5rem !important;
+    width: 100% !important;
+}
+
+.fi-page.owwa-setup-archive-toggle .fi-ta-header-toolbar > div:has(.fi-ta-search-field) .fi-ta-search-field {
+    margin-right: 0 !important;
+    flex: 0 0 auto !important;
+    width: 260px !important;
+    max-width: 320px !important;
+}
+
+.fi-page.owwa-setup-archive-toggle .owwa-setup-archive-view-toggle {
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 0.25rem !important;
+    flex: 0 0 auto !important;
+    margin-left: auto !important;
+    margin-right: 0 !important;
+}
+
+.owwa-setup-archive-view-toggle__btn {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.25rem;
+    height: 2.25rem;
+    border-radius: 0.5rem;
+    border: 1px solid #e5e7eb;
+    background: #ffffff;
+    color: #6b7280;
+    cursor: pointer;
+    transition: background-color 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+}
+
+.owwa-setup-archive-view-toggle__btn:hover {
+    border-color: #cbd5e1;
+    color: #374151;
+    background: #f8fafc;
+}
+
+.owwa-setup-archive-view-toggle__btn.is-active {
+    border-color: #003366;
+    color: #003366;
+    background: #eef4fb;
+}
+
+.owwa-setup-archive-view-toggle__badge {
+    position: absolute;
+    top: -0.25rem;
+    right: -0.25rem;
+    min-width: 1rem;
+    height: 1rem;
+    padding: 0 0.25rem;
+    border-radius: 9999px;
+    background: #003366;
+    color: #ffffff;
+    font-size: 0.625rem;
+    font-weight: 700;
+    line-height: 1rem;
+    text-align: center;
+}
+
+/* Signatories Setup: flash instruction when Role changes */
+.owwa-signatory-role-instruction {
+    margin: 0;
+    padding: 0.5rem 0.75rem;
+    border-radius: 0.5rem;
+    border-left: 3px solid #003366;
+    font-size: 0.875rem;
+    line-height: 1.375rem;
+    color: #4b5563;
+    background-color: #eef4fb;
+    animation: owwa-signatory-role-instruction-flash 0.7s ease-out;
+}
+
+@keyframes owwa-signatory-role-instruction-flash {
+    0% {
+        background-color: #cfe0f5;
+        box-shadow: 0 0 0 2px rgba(0, 51, 102, 0.18);
+    }
+    100% {
+        background-color: #eef4fb;
+        box-shadow: 0 0 0 0 rgba(0, 51, 102, 0);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .owwa-signatory-role-instruction {
+        animation: none;
+    }
+}
+
+/* Acquisitions list: hide Filament page-header actions (Export/New live on the search row) */
+.fi-page.owwa-acquisition-list-page > .fi-header .fi-header-actions-ctn,
+.fi-page.owwa-acquisition-list-page .fi-header-actions-ctn,
+.fi-page.owwa-acquisition-list-page > .fi-header .fi-header-actions,
+.fi-page.owwa-acquisition-list-page .fi-header-actions {
+    display: none !important;
+}
+
+.owwa-acquisition-date-range-header {
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 0.75rem !important;
+    flex-wrap: wrap !important;
+}
+
+.owwa-acquisition-date-range-header__field {
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 0.4rem !important;
+    font-size: 0.875rem !important;
+    color: #374151 !important;
+    margin: 0 !important;
+}
+
+.owwa-acquisition-date-range-header__input {
+    height: 2.25rem !important;
+    padding: 0.35rem 0.55rem !important;
+    border: 1px solid #e5e7eb !important;
+    border-radius: 0.5rem !important;
+    background: #ffffff !important;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04) !important;
+    color: #111827 !important;
+}
+
+.fi-page.owwa-acquisition-list-page .fi-ta-header-toolbar > div:has(.fi-ta-search-field) {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    align-items: center !important;
+    gap: 0.5rem !important;
+    width: 100% !important;
+}
+
+.fi-page.owwa-acquisition-list-page .fi-ta-header-toolbar > div:has(.fi-ta-search-field) .fi-ta-search-field {
+    flex: 0 0 auto !important;
+    width: 260px !important;
+    max-width: 320px !important;
+    margin-right: 0 !important;
+}
+
+.fi-page.owwa-acquisition-list-page .owwa-acquisition-search-row-actions {
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 0.5rem !important;
+    margin-left: auto !important;
+    flex: 0 0 auto !important;
+}
+

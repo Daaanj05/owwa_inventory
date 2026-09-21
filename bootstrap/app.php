@@ -19,6 +19,9 @@ return Application::configure(basePath: dirname(__DIR__))
             \App\Support\OwwaExportDownloadCookie::DONE_COOKIE,
             \App\Support\OwwaExportDownloadCookie::PENDING_COOKIE,
         ]);
+        $middleware->web(replace: [
+            \Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class => \App\Http\Middleware\VerifyCsrfToken::class,
+        ]);
         $middleware->append(\App\Http\Middleware\LogSlowRequests::class);
     })
     ->withSchedule(function (Schedule $schedule): void {

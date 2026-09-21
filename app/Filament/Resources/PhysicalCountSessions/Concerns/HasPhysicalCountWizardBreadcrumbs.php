@@ -7,6 +7,7 @@ use App\Filament\Pages\InventoryCategoryDashboard;
 use App\Filament\Resources\PhysicalCountSessions\PhysicalCountSessionResource;
 use App\Models\ItemCategory;
 use App\Models\PhysicalCountSession;
+use App\Support\CategoryWizardBreadcrumb;
 use Illuminate\Support\HtmlString;
 
 trait HasPhysicalCountWizardBreadcrumbs
@@ -35,12 +36,7 @@ trait HasPhysicalCountWizardBreadcrumbs
 
     protected function activeCategoryIcon(): string
     {
-        return match ($this->activeCategoryTemplateSlug()) {
-            'semi_expendable' => 'semi-expendable',
-            'ppe' => 'ppe',
-            'consumables' => 'consumables',
-            default => 'default',
-        };
+        return CategoryWizardBreadcrumb::iconKeyFromTemplateSlug($this->activeCategoryTemplateSlug());
     }
 
     protected function categoryDashboardUrl(): string
@@ -118,19 +114,7 @@ trait HasPhysicalCountWizardBreadcrumbs
 
     protected function wizardStepIconHtml(?string $icon): string
     {
-        if (blank($icon)) {
-            return '';
-        }
-
-        $class = match ($icon) {
-            'semi-expendable' => 'owwa-wizard-step-icon owwa-wizard-step-icon--semi-expendable',
-            'ppe' => 'owwa-wizard-step-icon owwa-wizard-step-icon--ppe',
-            'consumables' => 'owwa-wizard-step-icon owwa-wizard-step-icon--consumables',
-            'default' => 'owwa-wizard-step-icon owwa-wizard-step-icon--default',
-            default => 'owwa-wizard-step-icon',
-        };
-
-        return sprintf('<span class="%s" aria-hidden="true"></span>', $class);
+        return CategoryWizardBreadcrumb::iconHtml($icon);
     }
 
     /**

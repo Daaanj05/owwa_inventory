@@ -117,6 +117,39 @@ class AcquisitionProcurementUxTest extends TestCase
         $this->assertTrue($iar->fresh()->isReceived());
     }
 
+    public function test_past_receive_date_is_allowed_for_late_encoding(): void
+    {
+        $iar = $this->createApprovedIar();
+        $iar->update([
+            'iar_date' => now()->toDateString(),
+            'invoice_date' => now()->subDays(5)->toDateString(),
+            'date_inspected' => now()->subDays(3)->toDateString(),
+            'date_received' => now()->subDays(2)->toDateString(),
+        ]);
+
+        $missing = $iar->fresh()->missingFields();
+        $this->assertNotContains('receive date must be today or earlier', $missing);
+        $this->assertNotContains('invoice date must be after IAR date', $missing);
+        $this->assertNotContains('inspection date must be after IAR date', $missing);
+        $this->assertNotContains('receive date must be on or after IAR date', $missing);
+        $this->assertTrue($this->actionVisible(
+            InspectionAcceptanceReportActions::recordCustodyReceiptAction(),
+            $iar->fresh(),
+        ));
+    }
+
+    public function test_invoice_after_inspection_is_missing(): void
+    {
+        $iar = $this->createApprovedIar();
+        $iar->update([
+            'invoice_date' => now()->subDay()->toDateString(),
+            'date_inspected' => now()->subDays(3)->toDateString(),
+            'date_received' => now()->toDateString(),
+        ]);
+
+        $this->assertContains('invoice date must be on or before inspection date', $iar->fresh()->missingFields());
+    }
+
     public function test_pr_list_date_range_filter_limits_rows(): void
     {
         Filament::setCurrentPanel(Filament::getPanel('admin'));
@@ -434,8 +467,84 @@ class AcquisitionProcurementUxTest extends TestCase
 
         app(PurchaseOrderWorkflowService::class)->approve($po->fresh());
         $iar = app(InspectionAcceptanceReportWorkflowService::class)->createFromApprovedPo($po->fresh());
+        $this->assertNull($iar->number);
         $this->assertNull($iar->submitted_at);
         $this->assertFalse($this->actionVisible(InspectionAcceptanceReportActions::approveAction(), $iar));
+
+        $iar->update([
+            'invoice_number' => 'INV100',
+            'invoice_date' => now()->subDays(2)->toDateString(),
+            'date_inspected' => now()->subDay()->toDateString(),
+            'date_received' => now()->toDateString(),
+            'inspection_officer_name' => 'Inspector',
+            'custodian_name' => 'Custodian',
+            'iar_date' => now()->subDays(3)->toDateString(),
+        ]);
+        app(InspectionAcceptanceReportWorkflowService::class)->submit($iar->fresh(['lines']));
+        $iar = $iar->fresh();
+        $this->assertNotNull($iar->number);
+        $this->assertTrue($iar->isPendingApproval());
+        $this->assertTrue($this->actionVisible(InspectionAcceptanceReportActions::approveAction(), $iar));
+        $this->assertFalse($this->actionVisible(InspectionAcceptanceReportActions::recordCustodyReceiptAction(), $iar));
+
+        app(InspectionAcceptanceReportWorkflowService::class)->approve($iar->fresh());
+        $iar = $iar->fresh();
+        $this->assertTrue($this->actionVisible(InspectionAcceptanceReportActions::recordCustodyReceiptAction(), $iar));
+    }
+
+    public function test_edit_iar_from_view_opens_edit_modal_when_pending(): void
+    {
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+
+        $po = $this->createDraftPo();
+        $po->update([
+            'supplier_name' => 'Supplier Co.',
+            'supplier_address' => '123 Main St',
+            'mode_of_procurement' => 'Shopping',
+            'place_of_delivery' => 'OWWA RO',
+            'date_of_delivery' => now()->addDays(7)->toDateString(),
+            'payment_term' => '30 days',
+            'technical_specifications' => 'N/A',
+            'po_date' => now()->toDateString(),
+        ]);
+        $po->lines()->update(['is_ordered' => true, 'unit_cost' => 10, 'amount' => 50]);
+
+        $poService = app(PurchaseOrderWorkflowService::class);
+        $poService->submit($po->fresh(['lines']));
+        $poService->approve($po->fresh());
+
+        $iar = app(InspectionAcceptanceReportWorkflowService::class)->createFromApprovedPo($po->fresh());
+        $iar->update([
+            'invoice_number' => 'INV100',
+            'invoice_date' => now()->subDays(2)->toDateString(),
+            'date_inspected' => now()->subDay()->toDateString(),
+            'date_received' => now()->toDateString(),
+            'inspection_officer_name' => 'Inspector',
+            'custodian_name' => 'Custodian',
+            'iar_date' => now()->subDays(3)->toDateString(),
+        ]);
+        app(InspectionAcceptanceReportWorkflowService::class)->submit($iar->fresh(['lines']));
+        $iar = $iar->fresh();
+
+        $this->assertTrue($iar->isPendingApproval());
+        $this->assertTrue($iar->isEditable());
+
+        $categoryId = $iar->purchaseOrder?->purchaseRequest?->item_category_id;
+        $custodian = User::factory()->create([
+            'role' => User::ROLE_SUPPLY_CUSTODIAN,
+            'office_id' => $iar->purchaseOrder?->purchaseRequest?->office_id,
+        ]);
+        session(['active_item_category_id' => $categoryId]);
+
+        $this->actingAs($custodian);
+
+        Livewire::test(
+            \App\Filament\Resources\Acquisitions\InspectionAcceptanceReports\Pages\ListInspectionAcceptanceReports::class,
+            ['category' => $categoryId],
+        )
+            ->mountTableAction('view', $iar)
+            ->callAction(\Filament\Actions\Testing\TestAction::make('editIar')->table($iar))
+            ->assertActionMounted(\Filament\Actions\Testing\TestAction::make('edit')->table($iar));
     }
 
     /**

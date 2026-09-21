@@ -24,7 +24,9 @@ use App\Filament\Widgets\WelcomeWidget;
 use App\Http\Middleware\AdminExecutionTimeLimit;
 use App\Http\Middleware\AuthenticateFilamentPanel;
 use App\Http\Middleware\EnsurePasswordChanged;
+use App\Http\Middleware\PreventLoginPageCaching;
 use App\Http\Middleware\TouchUserSessionActivity;
+use App\Http\Middleware\VerifyCsrfToken;
 use App\Livewire\OwwaNotificationDropdown;
 use App\Models\ItemCategory;
 use App\Support\FilamentSessionAudit;
@@ -43,7 +45,6 @@ use Filament\Support\Icons\Heroicon;
 use Filament\View\PanelsRenderHook;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
 use Illuminate\Cookie\Middleware\EncryptCookies;
-use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
 use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Session\Middleware\StartSession;
 use Illuminate\Support\Facades\Blade;
@@ -102,7 +103,14 @@ class AdminPanelProvider extends PanelProvider
                 return OwwaFilamentTheme::stylesheetLinkTag();
             })
             ->renderHook(PanelsRenderHook::BODY_END, function (): string {
-                return FilamentSessionAudit::idleLogoutMonitorHtml()
+                // Guest auth pages (login, etc.): do not inject 419 handlers or Livewire chips.
+                // A login 419 + auto-reload loop looks like "Sign in just refreshes the page".
+                if (! Filament::auth()->check()) {
+                    return '';
+                }
+
+                return view('filament.partials.livewire-page-expired')->render()
+                    .FilamentSessionAudit::idleLogoutMonitorHtml()
                     .view('filament.partials.busy-process-guard', [
                         'busy' => false,
                         'busyProperty' => null,
@@ -154,6 +162,7 @@ class AdminPanelProvider extends PanelProvider
                 AuthenticateSession::class,
                 ShareErrorsFromSession::class,
                 VerifyCsrfToken::class,
+                PreventLoginPageCaching::class,
                 SubstituteBindings::class,
                 DisableBladeIconComponents::class,
                 DispatchServingFilamentEvent::class,

@@ -15,7 +15,6 @@ class OfficeInfolist
         return [
             TextEntry::make('code')
                 ->label('Code'),
-            AdminRecordInfolist::booleanEntry('is_satellite', 'Satellite office'),
             AdminRecordInfolist::booleanEntry('is_regional_supply', 'Regional supply office'),
             TextEntry::make('address')
                 ->label('Address')

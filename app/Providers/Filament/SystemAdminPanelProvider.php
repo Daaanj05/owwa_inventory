@@ -10,12 +10,15 @@ use App\Filament\Widgets\WelcomeWidget;
 use App\Http\Middleware\AdminExecutionTimeLimit;
 use App\Http\Middleware\AuthenticateFilamentPanel;
 use App\Http\Middleware\EnsurePasswordChanged;
+use App\Http\Middleware\PreventLoginPageCaching;
 use App\Http\Middleware\TouchUserSessionActivity;
+use App\Http\Middleware\VerifyCsrfToken;
 use App\Livewire\OwwaNotificationDropdown;
 use App\Support\FilamentSessionAudit;
 use App\Support\OwwaFilamentTheme;
 use Filament\Actions\Action;
 use Filament\Enums\ThemeMode;
+use Filament\Facades\Filament;
 use Filament\Http\Middleware\AuthenticateSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
 use Filament\Http\Middleware\DispatchServingFilamentEvent;
@@ -26,7 +29,6 @@ use Filament\Support\Icons\Heroicon;
 use Filament\View\PanelsRenderHook;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
 use Illuminate\Cookie\Middleware\EncryptCookies;
-use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
 use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Session\Middleware\StartSession;
 use Illuminate\Support\Facades\Schema;
@@ -68,7 +70,12 @@ class SystemAdminPanelProvider extends PanelProvider
                 return OwwaFilamentTheme::stylesheetLinkTag();
             })
             ->renderHook(PanelsRenderHook::BODY_END, function (): string {
-                return FilamentSessionAudit::idleLogoutMonitorHtml();
+                if (! Filament::auth()->check()) {
+                    return '';
+                }
+
+                return view('filament.partials.livewire-page-expired')->render()
+                    .FilamentSessionAudit::idleLogoutMonitorHtml();
             })
             ->discoverResources(in: app_path('Filament/Resources'), for: 'App\Filament\Resources')
             ->discoverPages(in: app_path('Filament/Pages'), for: 'App\Filament\Pages')
@@ -87,6 +94,7 @@ class SystemAdminPanelProvider extends PanelProvider
                 AuthenticateSession::class,
                 ShareErrorsFromSession::class,
                 VerifyCsrfToken::class,
+                PreventLoginPageCaching::class,
                 SubstituteBindings::class,
                 DisableBladeIconComponents::class,
                 DispatchServingFilamentEvent::class,

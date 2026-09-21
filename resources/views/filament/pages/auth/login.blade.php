@@ -29,6 +29,16 @@
                 <h2 class="owwa-login-form-title">Welcome!</h2>
             </div>
 
+            @if (request()->boolean('logged_out') || request()->boolean('reauth'))
+                <div class="owwa-login-verified-banner" role="status">
+                    @if (request()->boolean('logged_out'))
+                        Signed out due to inactivity. Please sign in again.
+                    @else
+                        Signed out. Please sign in again.
+                    @endif
+                </div>
+            @endif
+
             @if (session('status') === 'email-verified')
                 <div class="owwa-login-verified-banner" role="status">
                     {{ \App\Support\FriendlyMessages::emailVerificationSuccess() }}
@@ -102,3 +112,114 @@
     </div>
 
 </div>
+
+@php
+    $csrfUrl = route('session.csrf');
+    $loginUrl = \Filament\Facades\Filament::getCurrentOrDefaultPanel()?->getLoginUrl() ?? url('/login');
+@endphp
+<script>
+    (function () {
+        const CSRF_URL = @js($csrfUrl);
+        const LOGIN_URL = @js($loginUrl);
+        const REAUTH_FLAG = 'owwa_login_419_reauth';
+
+        function applyCsrfToken(token) {
+            if (! token || typeof token !== 'string') {
+                return;
+            }
+
+            const meta = document.querySelector('meta[name="csrf-token"]');
+            if (meta) {
+                meta.setAttribute('content', token);
+            }
+
+            document.querySelectorAll('[data-csrf]').forEach((el) => {
+                el.setAttribute('data-csrf', token);
+            });
+
+            if (window.livewireScriptConfig) {
+                window.livewireScriptConfig.csrf = token;
+            }
+        }
+
+        async function syncCsrf() {
+            try {
+                const response = await fetch(CSRF_URL, {
+                    method: 'GET',
+                    credentials: 'same-origin',
+                    headers: {
+                        'Accept': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest',
+                    },
+                });
+
+                if (! response.ok) {
+                    return false;
+                }
+
+                const payload = await response.json();
+                applyCsrfToken(payload?.token);
+
+                return true;
+            } catch (e) {
+                return false;
+            }
+        }
+
+        function hardReauth() {
+            try {
+                if (sessionStorage.getItem(REAUTH_FLAG) === '1') {
+                    sessionStorage.removeItem(REAUTH_FLAG);
+
+                    return;
+                }
+
+                sessionStorage.setItem(REAUTH_FLAG, '1');
+            } catch (e) {
+                // sessionStorage may be unavailable
+            }
+
+            const url = new URL(LOGIN_URL, window.location.origin);
+            url.searchParams.set('reauth', '1');
+            url.searchParams.set('_', String(Date.now()));
+            window.location.replace(url.toString());
+        }
+
+        document.addEventListener('livewire:init', () => {
+            syncCsrf();
+
+            if (typeof Livewire === 'undefined' || typeof Livewire.interceptRequest !== 'function') {
+                return;
+            }
+
+            Livewire.interceptRequest(({ onError, onSuccess }) => {
+                onSuccess(() => {
+                    try {
+                        sessionStorage.removeItem(REAUTH_FLAG);
+                    } catch (e) {
+                        // ignore
+                    }
+                });
+
+                onError(({ response, preventDefault }) => {
+                    if (! response || response.status !== 419) {
+                        return;
+                    }
+
+                    preventDefault();
+                    syncCsrf().finally(() => hardReauth());
+                });
+            });
+        });
+
+        window.addEventListener('pageshow', (event) => {
+            if (event.persisted) {
+                syncCsrf();
+            }
+        });
+
+        window.addEventListener('focus', () => {
+            syncCsrf();
+        });
+    })();
+</script>

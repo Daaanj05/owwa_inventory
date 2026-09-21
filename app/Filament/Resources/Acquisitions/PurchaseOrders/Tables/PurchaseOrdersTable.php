@@ -2,7 +2,6 @@
 
 namespace App\Filament\Resources\Acquisitions\PurchaseOrders\Tables;
 
-use App\Filament\Resources\Acquisitions\Concerns\AcquisitionDateRangeFilter;
 use App\Filament\Resources\Acquisitions\PurchaseOrders\Actions\PurchaseOrderActions;
 use App\Filament\Resources\Acquisitions\PurchaseOrders\Schemas\PurchaseOrderInfolist;
 use App\Filament\Support\ConfiguresOwwaViewAction;
@@ -45,9 +44,7 @@ class PurchaseOrdersTable
                     ->counts('lines')
                     ->label('Lines'),
             ])
-            ->filters([
-                AcquisitionDateRangeFilter::make('po_date', 'Date'),
-            ])
+            ->filters([])
             ->defaultSort('created_at', 'desc')
             ->emptyStateHeading('No purchase orders yet')
             ->emptyStateDescription('Create a PO by choosing an approved purchase request.')
@@ -61,6 +58,7 @@ class PurchaseOrdersTable
                 ),
                 PurchaseOrderActions::configureEditAction(),
                 ActionGroup::make([
+                    PurchaseOrderActions::visibleEditAction(),
                     PurchaseOrderActions::archiveAction(),
                     PurchaseOrderActions::restoreAction(),
                 ])
@@ -70,10 +68,8 @@ class PurchaseOrdersTable
             ])
             ->recordActionsAlignment('end')
             ->recordUrl(null)
-            ->recordAction(fn (PurchaseOrder $record): string => $record->isEditable() ? 'edit' : 'view');
+            ->recordAction(fn (PurchaseOrder $record): string => $record->isUnsavedPoDraft() ? 'edit' : 'view');
 
-        return AcquisitionDateRangeFilter::applyBesideSearch(
-            OwwaTableDefaults::hideRedundantToolbarIcons($table),
-        );
+        return OwwaTableDefaults::hideRedundantToolbarIcons($table);
     }
 }

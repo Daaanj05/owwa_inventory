@@ -4,6 +4,7 @@ namespace App\Filament\Resources\Disposals\Pages;
 
 use App\Filament\Concerns\HasSystemAdminWizardHeading;
 use App\Filament\Resources\Disposals\DisposalResource;
+use App\Services\DisposalStockValidator;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\RestoreAction;
@@ -14,6 +15,17 @@ class EditDisposal extends EditRecord
     use HasSystemAdminWizardHeading;
 
     protected static string $resource = DisposalResource::class;
+
+    /**
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    protected function mutateFormDataBeforeSave(array $data): array
+    {
+        app(DisposalStockValidator::class)->validateForUpdate($data, $this->getRecord());
+
+        return $data;
+    }
 
     protected function getHeaderActions(): array
     {

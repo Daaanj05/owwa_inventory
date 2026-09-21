@@ -71,7 +71,7 @@ class ScanAssetPageTest extends TestCase
             ->assertForbidden();
     }
 
-    public function test_resolve_scan_redirects_to_public_asset_page_for_legacy_payload(): void
+    public function test_resolve_scan_keeps_result_on_page_for_legacy_payload(): void
     {
         Filament::setCurrentPanel(Filament::getPanel('admin'));
 
@@ -86,10 +86,11 @@ class ScanAssetPageTest extends TestCase
         Livewire::actingAs($custodian)
             ->test(ScanAsset::class)
             ->call('resolveScan', $legacyPayload)
-            ->assertRedirect(route('inventory.assets.unit.show', ['inventoryUnit' => $unit->id]));
+            ->assertSet('resolvedUnitId', $unit->id)
+            ->assertNoRedirect();
     }
 
-    public function test_resolve_scan_redirects_to_public_asset_page_for_url_payload(): void
+    public function test_resolve_scan_keeps_result_on_page_for_url_payload(): void
     {
         Filament::setCurrentPanel(Filament::getPanel('admin'));
 
@@ -104,10 +105,11 @@ class ScanAssetPageTest extends TestCase
         Livewire::actingAs($custodian)
             ->test(ScanAsset::class)
             ->call('resolveScan', $url)
-            ->assertRedirect(route('inventory.assets.unit.show', ['inventoryUnit' => $unit->id]));
+            ->assertSet('resolvedUnitId', $unit->id)
+            ->assertNoRedirect();
     }
 
-    public function test_resolve_scan_redirects_to_property_page_for_legacy_pn_only_payload(): void
+    public function test_resolve_scan_keeps_result_on_page_for_legacy_pn_only_payload(): void
     {
         Filament::setCurrentPanel(Filament::getPanel('admin'));
 
@@ -122,7 +124,8 @@ class ScanAssetPageTest extends TestCase
         Livewire::actingAs($custodian)
             ->test(ScanAsset::class)
             ->call('resolveScan', $pnOnly)
-            ->assertRedirect(route('inventory.assets.show', ['propertyNumber' => $unit->property_number]));
+            ->assertSet('resolvedUnitId', $unit->id)
+            ->assertNoRedirect();
     }
 
     public function test_resolve_scan_shows_notification_for_unknown_property_number(): void

@@ -35,8 +35,9 @@ class AcquisitionDocumentTabsTest extends TestCase
         Livewire::actingAs($custodian)
             ->test(ListAcquisitions::class)
             ->assertSee('New PR')
-            ->assertSee('Active')
-            ->assertSee('Archived')
+            ->assertSeeHtml('owwa-acquisition-list-view-toggle')
+            ->assertSeeHtml('aria-label="Active"')
+            ->assertSeeHtml('aria-label="Archived"')
             ->assertSeeHtml('owwa-acquisition-doc-tabs')
             ->assertSeeHtml('owwa-acquisition-doc-tab is-active')
             ->assertSee('Received');
@@ -87,7 +88,7 @@ class AcquisitionDocumentTabsTest extends TestCase
         $this->assertSame(6, (int) $po->fresh()->lines->first()->po_quantity);
     }
 
-    public function test_pending_pr_is_view_only_and_can_be_archived(): void
+    public function test_pending_pr_is_editable_and_can_be_archived(): void
     {
         $office = Office::factory()->create();
         $category = ItemCategory::factory()->create();
@@ -100,12 +101,15 @@ class AcquisitionDocumentTabsTest extends TestCase
             'purpose' => 'Office supplies',
             'pr_date' => now(),
             'pr_status' => AcquisitionPaperwork::STATUS_PENDING_APPROVAL,
+            'pr_submitted_at' => now(),
         ]);
 
-        $this->assertFalse($pr->isPrEditable());
+        $this->assertTrue($pr->isPrEditable());
+        $this->assertFalse($pr->isUnsavedPrDraft());
 
         app(AcquisitionPaperworkCompletionService::class)->archive($pr);
         $this->assertTrue($pr->fresh()->isArchived());
+        $this->assertFalse($pr->fresh()->isPrEditable());
     }
 
     public function test_purchase_orders_list_page_loads(): void
@@ -124,7 +128,8 @@ class AcquisitionDocumentTabsTest extends TestCase
         Livewire::actingAs($custodian)
             ->test(ListPurchaseOrders::class)
             ->assertSee('Create PO')
-            ->assertSee('Active');
+            ->assertSeeHtml('aria-label="Active"')
+            ->assertSeeHtml('owwa-acquisition-list-view-toggle');
     }
 
     public function test_document_tab_urls_are_not_nested_under_acquisitions_record(): void

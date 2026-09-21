@@ -4,6 +4,7 @@ namespace App\Filament\Resources\Acquisitions\InspectionAcceptanceReports\Schema
 
 use App\Models\InspectionAcceptanceReport;
 use App\Models\ProcurementSignatoryName;
+use App\Support\SignatorySelect;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Placeholder;
@@ -14,6 +15,7 @@ use Filament\Notifications\Notification;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\HtmlString;
 
 class InspectionAcceptanceReportForm
@@ -32,7 +34,7 @@ class InspectionAcceptanceReportForm
                         ->content(fn (?InspectionAcceptanceReport $record): string => $record?->purchaseOrder?->purchaseRequest?->pr_number ?: '—'),
                 ]),
             Section::make('Inspection & acceptance')
-                ->description('Record inspection details, then save and submit for export.')
+                ->description('Fill dates in order: Invoice → Inspection → Receive. Each must be today or earlier; each next date cannot be before the previous.')
                 ->columns(2)
                 ->schema(self::headerFields()),
             Section::make('Line items')
@@ -68,48 +70,41 @@ class InspectionAcceptanceReportForm
             DatePicker::make('invoice_date')
                 ->label('Invoice date')
                 ->required()
-                ->minDate(fn (Get $get): ?\Illuminate\Support\Carbon => filled($get('iar_date'))
-                    ? \Illuminate\Support\Carbon::parse((string) $get('iar_date'))->addDay()
-                    : now()->addDay())
-                ->rule(fn (Get $get): \Closure => self::afterIarDateRule($get))
+                ->live()
+                ->maxDate(now())
+                ->helperText('Date printed on the supplier invoice. Today or earlier.')
+                ->rule(fn (Get $get): \Closure => self::notFutureRule('Invoice date'))
+                ->rule(fn (Get $get): \Closure => self::onOrBeforeRule($get, 'date_inspected', 'Invoice date', 'inspection date'))
+                ->rule(fn (Get $get): \Closure => self::onOrBeforeRule($get, 'date_received', 'Invoice date', 'receive date'))
                 ->disabled(fn (?InspectionAcceptanceReport $record): bool => ! self::isEditable($record)),
             DatePicker::make('date_inspected')
                 ->label('Inspection Date')
                 ->required()
-                ->minDate(fn (Get $get): ?\Illuminate\Support\Carbon => filled($get('iar_date'))
-                    ? \Illuminate\Support\Carbon::parse((string) $get('iar_date'))->addDay()
-                    : now()->addDay())
-                ->rule(fn (Get $get): \Closure => self::afterIarDateRule($get))
+                ->live()
+                ->minDate(fn (Get $get): ?Carbon => self::parseDate($get('invoice_date')))
+                ->maxDate(now())
+                ->helperText('On or after invoice date, and today or earlier.')
+                ->rule(fn (Get $get): \Closure => self::notFutureRule('Inspection date'))
+                ->rule(fn (Get $get): \Closure => self::onOrAfterRule($get, 'invoice_date', 'Inspection date', 'invoice date'))
+                ->rule(fn (Get $get): \Closure => self::onOrBeforeRule($get, 'date_received', 'Inspection date', 'receive date'))
                 ->disabled(fn (?InspectionAcceptanceReport $record): bool => ! self::isEditable($record)),
             DatePicker::make('date_received')
                 ->label('Receive Date')
                 ->required()
-                ->minDate(fn (Get $get): ?\Illuminate\Support\Carbon => filled($get('iar_date'))
-                    ? \Illuminate\Support\Carbon::parse((string) $get('iar_date'))
-                    : null)
+                ->live()
+                ->minDate(fn (Get $get): ?Carbon => self::parseDate($get('date_inspected')))
                 ->maxDate(now())
-                ->rule(fn (Get $get): \Closure => self::onOrAfterIarDateRule($get))
-                ->rule(function (): \Closure {
-                    return function (string $attribute, mixed $value, \Closure $fail): void {
-                        if (blank($value)) {
-                            return;
-                        }
-
-                        if (\Illuminate\Support\Carbon::parse((string) $value)->startOfDay()->isFuture()) {
-                            $fail('Receive Date must be today or earlier.');
-                        }
-                    };
-                })
+                ->helperText('On or after inspection date, and today or earlier. Use a past date if recording late.')
+                ->rule(fn (Get $get): \Closure => self::notFutureRule('Receive Date'))
+                ->rule(fn (Get $get): \Closure => self::onOrAfterRule($get, 'date_inspected', 'Receive Date', 'inspection date'))
                 ->disabled(fn (?InspectionAcceptanceReport $record): bool => ! self::isEditable($record)),
-            TextInput::make('inspection_officer_name')
+            SignatorySelect::make('inspection_officer_name', ProcurementSignatoryName::ROLE_INSPECTION_OFFICER)
                 ->label('Inspection officer')
                 ->required()
-                ->datalist(fn (): array => ProcurementSignatoryName::suggestionsForRole(ProcurementSignatoryName::ROLE_INSPECTION_OFFICER))
                 ->disabled(fn (?InspectionAcceptanceReport $record): bool => ! self::isEditable($record)),
-            TextInput::make('custodian_name')
+            SignatorySelect::make('custodian_name', ProcurementSignatoryName::ROLE_CUSTODIAN)
                 ->label('Supply and/or Property Custodian')
                 ->required()
-                ->datalist(fn (): array => ProcurementSignatoryName::suggestionsForRole(ProcurementSignatoryName::ROLE_CUSTODIAN))
                 ->disabled(fn (?InspectionAcceptanceReport $record): bool => ! self::isEditable($record)),
         ];
     }
@@ -147,7 +142,7 @@ class InspectionAcceptanceReportForm
                             : null;
 
                         return new HtmlString(
-                            '<span style="display:block;word-break:break-all;font-size:0.8125rem;">'
+                            '<span class="owwa-iar-stock-no">'
                             .e((string) ($identifier ?: '—'))
                             .'</span>'
                         );
@@ -198,6 +193,7 @@ class InspectionAcceptanceReportForm
                         : '₱'.number_format((float) $get('unit_cost'), 2)),
                 Placeholder::make('amount_display')
                     ->hiddenLabel()
+                    ->extraAttributes(['class' => 'owwa-acquisition-line-total'])
                     ->content(function (Get $get): string {
                         $qty = (int) ($get('iar_quantity') ?? 0);
                         $cost = $get('unit_cost');
@@ -219,30 +215,54 @@ class InspectionAcceptanceReportForm
             ]);
     }
 
-    protected static function afterIarDateRule(Get $get): \Closure
+    protected static function parseDate(mixed $value): ?Carbon
     {
-        return function (string $attribute, $value, \Closure $fail) use ($get): void {
-            if (blank($value) || blank($get('iar_date'))) {
+        if (blank($value)) {
+            return null;
+        }
+
+        return Carbon::parse((string) $value)->startOfDay();
+    }
+
+    protected static function notFutureRule(string $label): \Closure
+    {
+        return function (string $attribute, mixed $value, \Closure $fail) use ($label): void {
+            if (blank($value)) {
                 return;
             }
 
-            if (! \Illuminate\Support\Carbon::parse((string) $value)->greaterThan(\Illuminate\Support\Carbon::parse((string) $get('iar_date')))) {
-                $fail('This date must be after the IAR date.');
+            if (Carbon::parse((string) $value)->startOfDay()->isFuture()) {
+                $fail("{$label} must be today or earlier.");
             }
         };
     }
 
-    protected static function onOrAfterIarDateRule(Get $get): \Closure
+    protected static function onOrBeforeRule(Get $get, string $otherField, string $label, string $otherLabel): \Closure
     {
-        return function (string $attribute, $value, \Closure $fail) use ($get): void {
-            if (blank($value) || blank($get('iar_date'))) {
+        return function (string $attribute, mixed $value, \Closure $fail) use ($get, $otherField, $label, $otherLabel): void {
+            $date = self::parseDate($value);
+            $other = self::parseDate($get($otherField));
+            if ($date === null || $other === null) {
                 return;
             }
 
-            if (\Illuminate\Support\Carbon::parse((string) $value)->startOfDay()->lt(
-                \Illuminate\Support\Carbon::parse((string) $get('iar_date'))->startOfDay()
-            )) {
-                $fail('Receive Date must be on or after the IAR date.');
+            if ($date->gt($other)) {
+                $fail("{$label} must be on or before {$otherLabel}.");
+            }
+        };
+    }
+
+    protected static function onOrAfterRule(Get $get, string $otherField, string $label, string $otherLabel): \Closure
+    {
+        return function (string $attribute, mixed $value, \Closure $fail) use ($get, $otherField, $label, $otherLabel): void {
+            $date = self::parseDate($value);
+            $other = self::parseDate($get($otherField));
+            if ($date === null || $other === null) {
+                return;
+            }
+
+            if ($date->lt($other)) {
+                $fail("{$label} must be on or after {$otherLabel}.");
             }
         };
     }

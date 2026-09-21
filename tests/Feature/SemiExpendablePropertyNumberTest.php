@@ -25,7 +25,6 @@ class SemiExpendablePropertyNumberTest extends TestCase
         $office = Office::factory()->create([
             'code' => '01',
             'is_regional_supply' => true,
-            'is_satellite' => false,
         ]);
         $department = Department::query()->create([
             'office_id' => $office->id,

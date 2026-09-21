@@ -6,6 +6,7 @@ use App\Models\InventoryUnit;
 use App\Models\Issuance;
 use App\Models\ItemCategory;
 use App\Services\DisposalInventoryUnitService;
+use App\Services\InventoryStockService;
 use App\Support\CustodianOfficeScope;
 use App\Support\OwwaReferenceLabels;
 use Closure;
@@ -127,8 +128,28 @@ class IncidentReportForm
                             ->dehydrated()
                             ->rules([
                                 fn (Get $get): Closure => function (string $attribute, mixed $value, Closure $fail) use ($get): void {
-                                    if (filled($get('inventory_unit_id')) && (int) $value !== 1) {
-                                        $fail('Quantity must be 1 when a specific inventory unit is selected.');
+                                    $qty = (int) $value;
+                                    $inventoryUnitId = self::intOrNull($get('inventory_unit_id'));
+
+                                    if ($inventoryUnitId !== null) {
+                                        if ($qty !== 1) {
+                                            $fail('Quantity must be 1 when a specific inventory unit is selected.');
+                                        }
+
+                                        return;
+                                    }
+
+                                    $itemId = self::intOrNull($get('item_id'));
+                                    $officeId = self::intOrNull($get('office_id'));
+
+                                    if ($itemId === null || $officeId === null) {
+                                        return;
+                                    }
+
+                                    $available = app(InventoryStockService::class)->getStock($itemId, $officeId);
+
+                                    if ($qty > $available) {
+                                        $fail("Quantity exceeds stock on hand ({$available}).");
                                     }
                                 },
                             ]),

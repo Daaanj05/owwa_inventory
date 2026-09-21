@@ -16,6 +16,7 @@ use App\Services\InventoryStockService;
 use App\Services\OwwaItemReportService;
 use App\Services\StockLedgerViewService;
 use App\Services\StockLevelExportService;
+use App\Support\CategoryWizardBreadcrumb;
 use App\Support\OwwaExportBusyDispatcher;
 use App\Support\OwwaExportDiagnostics;
 use App\Support\UnitCostKey;
@@ -123,7 +124,12 @@ class StockLevels extends Page
         $categoryName = $this->categoryRecord?->name;
 
         return $categoryName
-            ? new HtmlString($this->getWizardHeaderBreadcrumb($categoryName, 'Stock Levels'))
+            ? CategoryWizardBreadcrumb::make(
+                $categoryName,
+                'Stock Levels',
+                (int) $this->category,
+                $this->categoryRecord?->getTemplateSlug(),
+            )
             : 'Stock levels';
     }
 
@@ -452,18 +458,6 @@ class StockLevels extends Page
             'owwa-inv-category-page',
             'owwa-icd--'.Str::slug($this->categoryRecord->name),
         ];
-    }
-
-    protected function getWizardHeaderBreadcrumb(string $categoryName, string $taskLabel): string
-    {
-        $dashboardUrl = InventoryCategoryDashboard::getUrl(['category' => (int) $this->category]);
-
-        return sprintf(
-            '<span class="owwa-wizard-title" role="list"><a class="owwa-wizard-step owwa-wizard-step-link" href="%s" role="listitem">%s</a><span class="owwa-wizard-separator" aria-hidden="true">&gt;</span><span class="owwa-wizard-step owwa-wizard-step-current" role="listitem">%s</span></span>',
-            e($dashboardUrl),
-            e($categoryName),
-            e($taskLabel),
-        );
     }
 
     public function updatedSearch(): void

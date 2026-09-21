@@ -33,7 +33,6 @@ class PropertyActionRequestsTable
         /** @var User|null $viewer */
         $viewer = Auth::user();
         $isEmployeeViewer = $viewer?->isEmployee() ?? false;
-        $isUnitConsolidatorViewer = $viewer?->isUnitConsolidator() ?? false;
 
         return $table
             ->columns([
@@ -45,43 +44,6 @@ class PropertyActionRequestsTable
                     ->label('Action')
                     ->formatStateUsing(fn (PropertyActionRequest $record): string => $record->actionTypeLabel())
                     ->badge(),
-                TextColumn::make('reason_code')
-                    ->label('Reason')
-                    ->formatStateUsing(fn (PropertyActionRequest $record): string => $record->reasonLabel()),
-                TextColumn::make('property_numbers')
-                    ->label(OwwaReferenceLabels::assetIdentifierTableHeader())
-                    ->state(fn (PropertyActionRequest $record): string => $record->propertyNumbersLabel())
-                    ->placeholder('—'),
-                TextColumn::make('lines.issuance.item.category.name')
-                    ->label('Category')
-                    ->state(function (PropertyActionRequest $record): string {
-                        $record->loadMissing('lines.issuance.item.category');
-
-                        $categories = $record->lines
-                            ->map(fn ($line) => $line->issuance?->item?->category?->name)
-                            ->filter()
-                            ->unique()
-                            ->values();
-
-                        if ($categories->isEmpty()) {
-                            return '—';
-                        }
-
-                        if ($categories->count() === 1) {
-                            return (string) $categories->first();
-                        }
-
-                        return $categories->first().' +'.($categories->count() - 1);
-                    })
-                    ->placeholder('—'),
-                TextColumn::make('requestedBy.name')
-                    ->label('Requested by')
-                    ->placeholder('—')
-                    ->visible(fn (): bool => ! $isEmployeeViewer),
-                TextColumn::make('accountableUser.name')
-                    ->label('Accountable UC')
-                    ->placeholder('—')
-                    ->visible(fn (): bool => ! $isUnitConsolidatorViewer),
                 TextColumn::make('status')
                     ->badge()
                     ->formatStateUsing(fn (PropertyActionRequest $record): string => $record->statusLabel())
@@ -91,6 +53,16 @@ class PropertyActionRequestsTable
                         PropertyActionRequest::STATUS_PENDING_UC, PropertyActionRequest::STATUS_PENDING_SC => 'warning',
                         default => 'gray',
                     }),
+                TextColumn::make('property_numbers')
+                    ->label(OwwaReferenceLabels::assetIdentifierTableHeader())
+                    ->state(fn (PropertyActionRequest $record): string => $record->propertyNumbersLabel())
+                    ->limit(24)
+                    ->tooltip(fn (PropertyActionRequest $record): ?string => $record->propertyNumbersLabel() ?: null)
+                    ->placeholder('—'),
+                TextColumn::make('requestedBy.name')
+                    ->label('Requested by')
+                    ->placeholder('—')
+                    ->visible(fn (): bool => ! $isEmployeeViewer),
                 TextColumn::make('created_at')
                     ->label('Filed')
                     ->date('M d, Y')

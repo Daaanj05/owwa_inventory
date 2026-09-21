@@ -29,13 +29,13 @@ class ConsumptionSharePieWidget extends ChartWidget
 
     protected ?string $heading = 'Consumption share';
 
-    protected ?string $description = 'Share of total issued units per office. Includes all offices (regional and satellite) when All offices is selected.';
+    protected ?string $description = 'Share of total issued units per office. Includes all offices when All offices is selected.';
 
     protected bool $hasDeferredFilters = false;
 
     protected ?string $pollingInterval = null;
 
-    protected ?string $maxHeight = '210px';
+    protected ?string $maxHeight = '280px';
 
     public static function canView(): bool
     {
@@ -46,11 +46,15 @@ class ConsumptionSharePieWidget extends ChartWidget
 
     public function getDescription(): ?string
     {
-        if ($this->isConsumptionItemScoped()) {
-            return 'Share of total issued units by office and item for the selected filters.';
+        if ($this->isConsumptionDepartmentMode()) {
+            return 'Share of total issued units per department within the selected office.';
         }
 
-        return 'Share of total issued units per office. Includes all offices (regional and satellite) when All offices is selected.';
+        if ($this->isConsumptionItemScoped()) {
+            return 'Share of total issued units per office, filtered to the selected category or item.';
+        }
+
+        return 'Share of total issued units per office. Includes all offices when All offices is selected.';
     }
 
     public function hasConsumptionShareData(): bool
@@ -58,8 +62,8 @@ class ConsumptionSharePieWidget extends ChartWidget
         $resolved = $this->resolveConsumptionFilters();
         $service = app(ConsumptionAnalyticsService::class);
 
-        $result = $resolved['item_ids'] !== []
-            ? $service->getConsumptionTotalsByOfficeAndItem(
+        $result = $this->isConsumptionDepartmentMode()
+            ? $service->getConsumptionTotalsByDepartment(
                 $resolved['from'],
                 $resolved['to'],
                 $resolved['department_ids'],
@@ -134,16 +138,8 @@ class ConsumptionSharePieWidget extends ChartWidget
         $resolved = $this->resolveConsumptionFilters();
         $service = app(ConsumptionAnalyticsService::class);
 
-        $result = $resolved['item_ids'] !== []
-            ? $service->getConsumptionTotalsByOfficeAndItem(
-                $resolved['from'],
-                $resolved['to'],
-                $resolved['department_ids'],
-                $resolved['office_ids'],
-                $resolved['includeYearInLabels'],
-                $resolved['item_ids'],
-            )
-            : $service->getConsumptionTotalsByOffice(
+        if ($this->isConsumptionDepartmentMode()) {
+            $result = $service->getConsumptionTotalsByDepartment(
                 $resolved['from'],
                 $resolved['to'],
                 $resolved['department_ids'],
@@ -151,6 +147,16 @@ class ConsumptionSharePieWidget extends ChartWidget
                 $resolved['includeYearInLabels'],
                 $resolved['item_ids'],
             );
+        } else {
+            $result = $service->getConsumptionTotalsByOffice(
+                $resolved['from'],
+                $resolved['to'],
+                $resolved['department_ids'],
+                $resolved['office_ids'],
+                $resolved['includeYearInLabels'],
+                $resolved['item_ids'],
+            );
+        }
 
         if (empty($result['labels']) || $result['total'] === 0) {
             return $this->placeholderShareChartData();
@@ -211,30 +217,18 @@ class ConsumptionSharePieWidget extends ChartWidget
             'maintainAspectRatio' => false,
             'animation' => false,
             'resizeDelay' => 200,
-            'cutout' => '55%',
+            'cutout' => '52%',
             'layout' => [
                 'padding' => [
-                    'top' => 4,
-                    'right' => 8,
-                    'bottom' => 4,
-                    'left' => 8,
+                    'top' => 2,
+                    'right' => 4,
+                    'bottom' => 2,
+                    'left' => 4,
                 ],
             ],
             'plugins' => [
                 'legend' => [
-                    'display' => true,
-                    'position' => 'bottom',
-                    'align' => 'center',
-                    'labels' => [
-                        'boxWidth' => 8,
-                        'boxHeight' => 8,
-                        'borderRadius' => 4,
-                        'padding' => 8,
-                        'usePointStyle' => true,
-                        'pointStyle' => 'circle',
-                        'color' => '#475569',
-                        'font' => ['size' => 11, 'weight' => '500'],
-                    ],
+                    'display' => false,
                 ],
                 'tooltip' => [
                     'backgroundColor' => 'rgba(15,23,42,0.88)',
@@ -247,5 +241,31 @@ class ConsumptionSharePieWidget extends ChartWidget
                 ],
             ],
         ];
+    }
+
+    /**
+     * HTML legend outside the canvas so the donut size stays fixed when many offices are listed.
+     *
+     * @return array<int, array{label: string, color: string}>
+     */
+    public function getChartLegendItems(): array
+    {
+        if (! $this->hasConsumptionShareData()) {
+            return [];
+        }
+
+        $data = $this->getCachedData();
+        $labels = $data['labels'] ?? [];
+        $colors = $data['datasets'][0]['backgroundColor'] ?? [];
+        $items = [];
+
+        foreach ($labels as $index => $label) {
+            $items[] = [
+                'label' => (string) $label,
+                'color' => (string) ($colors[$index] ?? '#64748b'),
+            ];
+        }
+
+        return $items;
     }
 }

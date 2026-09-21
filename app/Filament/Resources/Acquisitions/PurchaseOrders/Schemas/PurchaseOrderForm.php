@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Acquisitions\PurchaseOrders\Schemas;
 
+use App\Models\DeliveryTerm;
 use App\Models\PurchaseOrder;
 use App\Models\Supplier;
 use App\Models\SupplierAddress;
@@ -38,35 +39,6 @@ class PurchaseOrderForm
                             ->label('PR No.')
                             ->content(fn (?PurchaseOrder $record): string => $record?->purchaseRequest?->pr_number ?: '—'),
                     ]),
-                Section::make('Line items')
-                    ->description('Set quantities and unit costs for each PR line to include on this PO.')
-                    ->schema([
-                        self::linesRepeater()->columnSpanFull(),
-                        Placeholder::make('grand_total_amount')
-                            ->label('Total Amount')
-                            ->content(function (Get $get): string {
-                                $total = collect($get('lines') ?? [])
-                                    ->sum(function (mixed $line): float {
-                                        if (! is_array($line)) {
-                                            return 0.0;
-                                        }
-
-                                        $qty = (int) ($line['po_quantity'] ?? 0);
-                                        $cost = $line['unit_cost'] ?? null;
-
-                                        if ($qty <= 0 || blank($cost)) {
-                                            return 0.0;
-                                        }
-
-                                        return (float) $cost * $qty;
-                                    });
-
-                                return $total > 0
-                                    ? '₱'.number_format($total, 2)
-                                    : '—';
-                            })
-                            ->extraAttributes(['class' => 'owwa-po-grand-total']),
-                    ]),
                 Section::make('Purpose and purchase order details')
                     ->description('Purpose from the PR, then supplier and delivery details. Save to get a PO No., export for signature, then mark Approved.')
                     ->columns(2)
@@ -77,6 +49,11 @@ class PurchaseOrderForm
                             ->columnSpanFull(),
                         ...self::headerFields(),
                     ]),
+                Section::make('Line items')
+                    ->description('Set quantities and unit costs for each PR line to include on this PO.')
+                    ->schema([
+                        self::linesRepeater()->columnSpanFull(),
+                    ]),
             ]);
     }
 
@@ -86,60 +63,70 @@ class PurchaseOrderForm
     protected static function headerFields(): array
     {
         return [
-            Placeholder::make('po_number_display')
-                ->label('PO No.')
-                ->content(fn (?PurchaseOrder $record): string => filled($record?->number) ? (string) $record->number : '—')
-                ->hintIcon(Heroicon::QuestionMarkCircle, 'Assigned automatically when the purchase order is saved.')
-                ->visible(fn (?PurchaseOrder $record): bool => filled($record?->number)),
             DatePicker::make('po_date')
                 ->label('PO date')
                 ->default(fn (): string => now()->toDateString())
                 ->required()
-                ->disabled()
+                ->hidden()
                 ->dehydrated(),
             TextInput::make('supplier_name')
-                ->label('Supplier')
                 ->required()
-                ->datalist(fn (): array => Supplier::nameSuggestions())
-                ->live(onBlur: true)
-                ->afterStateUpdated(function (?string $state, Set $set, Get $get): void {
+                ->dehydrated()
+                ->dehydrateStateUsing(function (mixed $state, Get $get): ?string {
+                    if (filled($state)) {
+                        return trim((string) $state);
+                    }
+
+                    $supplierId = $get('supplier_id');
+                    if (blank($supplierId)) {
+                        return null;
+                    }
+
+                    return Supplier::query()->whereKey((int) $supplierId)->value('name');
+                })
+                ->hidden(),
+            Select::make('supplier_id')
+                ->label('Supplier')
+                ->options(function (Get $get): array {
+                    $options = Supplier::query()
+                        ->active()
+                        ->orderBy('name')
+                        ->pluck('name', 'id')
+                        ->all();
+
+                    $currentId = $get('supplier_id');
+                    if (filled($currentId) && ! array_key_exists((int) $currentId, $options)) {
+                        $name = Supplier::query()->whereKey((int) $currentId)->value('name');
+                        if (filled($name)) {
+                            $options[(int) $currentId] = $name;
+                        }
+                    }
+
+                    return $options;
+                })
+                ->searchable()
+                ->preload()
+                ->required()
+                ->live()
+                ->afterStateUpdated(function (mixed $state, Set $set): void {
                     if (blank($state)) {
+                        $set('supplier_name', null);
+                        $set('supplier_tin', null);
+                        $set('supplier_address', null);
+
                         return;
                     }
 
-                    $supplier = Supplier::query()->where('name', trim($state))->first();
+                    $supplier = Supplier::query()->with('addresses')->find((int) $state);
                     if ($supplier === null) {
                         return;
                     }
 
-                    $set('supplier_id', $supplier->id);
-                    if (blank($get('supplier_tin')) && filled($supplier->tin)) {
-                        $set('supplier_tin', $supplier->tin);
-                    }
-
-                    $defaultAddress = $supplier->addresses()->orderByDesc('is_default')->value('address');
-                    if (blank($get('supplier_address')) && filled($defaultAddress)) {
-                        $set('supplier_address', $defaultAddress);
-                    }
+                    $set('supplier_name', $supplier->name);
+                    $set('supplier_tin', $supplier->tin);
+                    $defaultAddress = $supplier->addresses->sortByDesc('is_default')->first()?->address;
+                    $set('supplier_address', $defaultAddress);
                 })
-                ->disabled(fn (?PurchaseOrder $record): bool => ! self::isEditable($record)),
-            TextInput::make('supplier_address')
-                ->label('Supplier address')
-                ->required()
-                ->datalist(function (Get $get): array {
-                    $supplierId = $get('supplier_id');
-                    if (blank($supplierId) && filled($get('supplier_name'))) {
-                        $supplierId = Supplier::query()->where('name', trim((string) $get('supplier_name')))->value('id');
-                    }
-
-                    return SupplierAddress::suggestionsForSupplier($supplierId ? (int) $supplierId : null);
-                })
-                ->disabled(fn (?PurchaseOrder $record): bool => ! self::isEditable($record)),
-            TextInput::make('supplier_tin')
-                ->label('TIN')
-                ->rule('regex:/^[0-9]+$/')
-                ->extraInputAttributes(['inputmode' => 'numeric', 'pattern' => '[0-9]*'])
-                ->dehydrateStateUsing(fn (?string $state): ?string => Supplier::normalizeTin($state))
                 ->disabled(fn (?PurchaseOrder $record): bool => ! self::isEditable($record)),
             Select::make('mode_of_procurement')
                 ->label('Mode of procurement')
@@ -147,21 +134,47 @@ class PurchaseOrderForm
                 ->required()
                 ->searchable()
                 ->disabled(fn (?PurchaseOrder $record): bool => ! self::isEditable($record)),
+            TextInput::make('supplier_tin')
+                ->label('TIN')
+                ->rule('regex:/^[0-9]+$/')
+                ->extraInputAttributes(['inputmode' => 'numeric', 'pattern' => '[0-9]*'])
+                ->dehydrateStateUsing(fn (?string $state): ?string => Supplier::normalizeTin($state))
+                ->disabled()
+                ->dehydrated()
+                ->helperText('Filled from the selected supplier.'),
             TextInput::make('place_of_delivery')
                 ->label('Place of delivery')
                 ->default(fn (): ?string => app(SupplyOfficeResolver::class)->resolveOfficeName())
                 ->required()
                 ->disabled(fn (?PurchaseOrder $record): bool => ! self::isEditable($record)),
-            TextInput::make('delivery_term')
+            Select::make('supplier_address')
+                ->label('Supplier address')
+                ->options(function (Get $get): array {
+                    $supplierId = $get('supplier_id');
+                    if (blank($supplierId) && filled($get('supplier_name'))) {
+                        $supplierId = Supplier::query()->where('name', trim((string) $get('supplier_name')))->value('id');
+                    }
+
+                    return collect(SupplierAddress::suggestionsForSupplier($supplierId ? (int) $supplierId : null))
+                        ->mapWithKeys(fn (string $address): array => [$address => $address])
+                        ->all();
+                })
+                ->searchable()
+                ->required()
+                ->columnSpanFull()
+                ->disabled(fn (?PurchaseOrder $record): bool => ! self::isEditable($record)),
+            Select::make('delivery_term')
                 ->label('Delivery term')
-                ->placeholder('FOB Destination or FOB Shipping Point')
-                ->datalist(ModeOfProcurementOptions::deliveryTermSuggestions())
+                ->options(fn (Get $get): array => DeliveryTerm::optionsIncluding($get('delivery_term')))
+                ->searchable()
+                ->preload()
                 ->disabled(fn (?PurchaseOrder $record): bool => ! self::isEditable($record)),
             DatePicker::make('date_of_delivery')
                 ->label('Date of delivery')
                 ->required()
                 ->native(false)
                 ->displayFormat('Y-m-d')
+                ->prefixIcon(Heroicon::Calendar)
                 ->minDate(fn (Get $get): Carbon => self::minDeliveryDate($get('po_date')))
                 ->maxDate(fn (): Carbon => now()->addYears(5)->startOfDay())
                 ->rule(fn (Get $get): \Closure => function (string $attribute, $value, \Closure $fail) use ($get): void {
@@ -202,7 +215,6 @@ class PurchaseOrderForm
                 ->hintIcon(Heroicon::QuestionMarkCircle, 'Exported on a separate PDF page with the Conforme signature block.')
                 ->columnSpanFull()
                 ->disabled(fn (?PurchaseOrder $record): bool => ! self::isEditable($record)),
-            \Filament\Forms\Components\Hidden::make('supplier_id')->dehydrated(),
         ];
     }
 
@@ -227,14 +239,14 @@ class PurchaseOrderForm
             ->deletable(false)
             ->reorderable(false)
             ->table([
-                TableColumn::make('Item')->width('20%'),
-                TableColumn::make('Stock No.')->width('12%'),
-                TableColumn::make('Description')->width('18%'),
+                TableColumn::make('Item')->width('18%'),
+                TableColumn::make('Stock No.')->width('14%'),
+                TableColumn::make('Description')->width('16%'),
                 TableColumn::make('Unit')->width('8%'),
                 TableColumn::make('Requested Qty')->width('8%'),
                 TableColumn::make('Ordered Qty')->markAsRequired()->width('8%'),
                 TableColumn::make('Unit cost')->markAsRequired()->width('14%'),
-                TableColumn::make('Total Amount')->width('12%'),
+                TableColumn::make('Total Amount')->width('14%'),
             ])
             ->compact()
             ->schema([
@@ -252,7 +264,7 @@ class PurchaseOrderForm
                         $identifier = app(\App\Services\CatalogAssetNumberService::class)->catalogIdentifierForItem($item);
 
                         return new HtmlString(
-                            '<span style="display:block;word-break:break-all;font-size:0.8125rem;">'
+                            '<span class="owwa-po-stock-no">'
                             .e((string) ($identifier ?: '—'))
                             .'</span>'
                         );
@@ -301,6 +313,9 @@ class PurchaseOrderForm
                     ->hiddenLabel()
                     ->numeric()
                     ->prefix('₱')
+                    ->placeholder('Add Unit Cost')
+                    ->minValue(0.01)
+                    ->rule('gt:0')
                     ->required()
                     ->disabled(fn (mixed $record): bool => ! self::isEditable($record))
                     ->dehydrated()
@@ -312,7 +327,7 @@ class PurchaseOrderForm
                     ->content(function (Get $get): string {
                         $qty = (int) ($get('po_quantity') ?? 0);
                         $cost = $get('unit_cost');
-                        if ($qty <= 0 || blank($cost)) {
+                        if ($qty <= 0 || blank($cost) || (float) $cost <= 0) {
                             return '—';
                         }
 

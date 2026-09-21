@@ -20,16 +20,19 @@ class OpeningBalanceService
     ) {}
 
     /**
+     * Persist a draft opening-balance line without minting units or affecting on-hand stock maps.
+     *
      * @return array{opening: StockOpeningBalance, units: array<int, InventoryUnit>}
      *
      * @throws ValidationException
      */
-    public function setOpeningStock(
+    public function createDraftLine(
         Item $item,
         int $officeId,
         int $quantity,
         ?float $unitCost,
         ?User $recordedBy = null,
+        ?int $batchId = null,
     ): array {
         $item->loadMissing('category');
 
@@ -62,36 +65,80 @@ class OpeningBalanceService
             ]);
         }
 
-        $units = [];
+        $opening = StockOpeningBalance::query()->create([
+            'batch_id' => $batchId,
+            'item_id' => $item->id,
+            'office_id' => $officeId,
+            'unit_cost' => $normalizedCost,
+            'quantity' => $quantity,
+            'recorded_by' => $recordedBy?->id,
+            'recorded_at' => now(),
+        ]);
 
-        $opening = DB::transaction(function () use ($item, $officeId, $quantity, $normalizedCost, $recordedBy, $slug, &$units): StockOpeningBalance {
-            $opening = StockOpeningBalance::query()->create([
-                'item_id' => $item->id,
-                'office_id' => $officeId,
-                'unit_cost' => $normalizedCost,
-                'quantity' => $quantity,
-                'recorded_by' => $recordedBy?->id,
-                'recorded_at' => now(),
-            ]);
+        return [
+            'opening' => $opening,
+            'units' => [],
+        ];
+    }
 
-            if (in_array($slug, ['ppe', 'semi_expendable'], true)) {
-                $units = $this->unitService->mintUnitsForItem(
-                    item: $item,
-                    officeId: $officeId,
-                    quantity: $quantity,
-                    unitCost: $normalizedCost,
-                    acquisitionId: null,
-                );
-            }
+    /**
+     * @return array<int, InventoryUnit>
+     */
+    public function mintUnitsForConfirmedLine(StockOpeningBalance $opening): array
+    {
+        $opening->loadMissing('item.category');
+        $item = $opening->item;
+        if ($item === null) {
+            return [];
+        }
 
-            return $opening;
+        $slug = $item->category?->getTemplateSlug();
+        if (! in_array($slug, ['ppe', 'semi_expendable'], true)) {
+            return [];
+        }
+
+        return $this->unitService->mintUnitsForItem(
+            item: $item,
+            officeId: (int) $opening->office_id,
+            quantity: (int) $opening->quantity,
+            unitCost: $opening->unit_cost !== null ? (float) $opening->unit_cost : null,
+            acquisitionId: null,
+        );
+    }
+
+    /**
+     * @return array{opening: StockOpeningBalance, units: array<int, InventoryUnit>}
+     *
+     * @throws ValidationException
+     */
+    public function setOpeningStock(
+        Item $item,
+        int $officeId,
+        int $quantity,
+        ?float $unitCost,
+        ?User $recordedBy = null,
+        ?int $batchId = null,
+    ): array {
+        $result = DB::transaction(function () use ($item, $officeId, $quantity, $unitCost, $recordedBy, $batchId): array {
+            $draft = $this->createDraftLine(
+                item: $item,
+                officeId: $officeId,
+                quantity: $quantity,
+                unitCost: $unitCost,
+                recordedBy: $recordedBy,
+                batchId: $batchId,
+            );
+
+            $units = $this->mintUnitsForConfirmedLine($draft['opening']);
+
+            return [
+                'opening' => $draft['opening'],
+                'units' => $units,
+            ];
         });
 
         $this->stockService->forgetMovementTotalsCache();
 
-        return [
-            'opening' => $opening,
-            'units' => $units,
-        ];
+        return $result;
     }
 }

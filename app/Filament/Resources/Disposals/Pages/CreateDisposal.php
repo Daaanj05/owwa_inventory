@@ -5,6 +5,7 @@ namespace App\Filament\Resources\Disposals\Pages;
 use App\Filament\Concerns\HasSystemAdminWizardHeading;
 use App\Filament\Resources\Disposals\DisposalResource;
 use App\Filament\Resources\Disposals\Schemas\DisposalForm;
+use App\Services\DisposalStockValidator;
 use App\Support\OfficeSignatoryDefaults;
 use App\Support\SupplyOfficeResolver;
 use Filament\Resources\Pages\CreateRecord;
@@ -29,6 +30,8 @@ class CreateDisposal extends CreateRecord
                 $data['office_id'] = $regionalOfficeId;
             }
         }
+
+        app(DisposalStockValidator::class)->validateForCreate($data);
 
         return OfficeSignatoryDefaults::mergeNonBlank(
             OfficeSignatoryDefaults::forDisposal(

@@ -19,6 +19,8 @@ class ReferenceSeries extends Model
 
     public const TYPE_ACQUISITION = 'acquisition';
 
+    public const TYPE_OPENING_BALANCE = 'opening_balance';
+
     public const TYPE_ISSUANCE = 'issuance';
 
     public const TYPE_ISSUANCE_CONSUMABLES = 'issuance_consumables';
@@ -98,6 +100,11 @@ class ReferenceSeries extends Model
     public static function typeForAcquisition(): string
     {
         return self::TYPE_ACQUISITION;
+    }
+
+    public static function typeForOpeningBalance(): string
+    {
+        return self::TYPE_OPENING_BALANCE;
     }
 
     public static function typeForTransfer(): string
@@ -187,6 +194,7 @@ class ReferenceSeries extends Model
             self::TYPE_DISPOSAL_CONSUMABLES,
             self::TYPE_DISPOSAL_PROPERTY,
             self::TYPE_ACQUISITION,
+            self::TYPE_OPENING_BALANCE,
             self::TYPE_ACQUISITION_PAPERWORK_PR,
             self::TYPE_ACQUISITION_PAPERWORK_PO,
             self::TYPE_ACQUISITION_PAPERWORK_IAR,

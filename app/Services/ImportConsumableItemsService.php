@@ -2,7 +2,6 @@
 
 namespace App\Services;
 
-use App\Filament\Resources\Items\Support\ItemOpeningStockFields;
 use App\Models\Item;
 use App\Models\ItemCategory;
 use App\Models\UacsObjectCode;
@@ -12,9 +11,7 @@ use App\Support\ConsumableItemSpreadsheetReader;
 use App\Support\ItemMeasurementUnitInput;
 use App\Support\ItemPropertyClass;
 use App\Support\PpePropertyType;
-use App\Support\PpeValueCategory;
 use App\Support\SemiExpendableUsefulLife;
-use App\Support\SemiExpendableValueCategory;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -22,7 +19,6 @@ class ImportConsumableItemsService
 {
     public function __construct(
         protected ConsumableItemSpreadsheetReader $reader,
-        protected OpeningBalanceService $openingBalanceService,
     ) {}
 
     /**
@@ -62,7 +58,6 @@ class ImportConsumableItemsService
         $metadata = $this->reader->readWithMetadata($absolutePath);
         $this->assertHeadersMatchCategory($metadata['headerMap'], $slug);
         $rows = $metadata['rows'];
-        $officeId ??= ItemOpeningStockFields::resolveRegionalOfficeId();
 
         return $this->importRows($category, $rows, $officeId, $recordedBy);
     }
@@ -150,7 +145,6 @@ class ImportConsumableItemsService
         }
 
         $slug = $category->getTemplateSlug();
-        $officeId ??= ItemOpeningStockFields::resolveRegionalOfficeId();
 
         $existingByName = Item::query()
             ->active()
@@ -180,8 +174,6 @@ class ImportConsumableItemsService
             $category,
             $slug,
             $rows,
-            $officeId,
-            $recordedBy,
             &$result,
             &$existingByName,
             &$seenInFile,
@@ -317,99 +309,20 @@ class ImportConsumableItemsService
 
                     $actual = $this->actualSnapshotFromItem($existing);
 
-                    if ($quantity === null || $quantity < 1) {
-                        if ($catalogFilled) {
-                            $this->pushCatalogUpdated($result, $excelRow, $existing->name, $excelSnapshot, $actual);
-
-                            continue;
-                        }
-
-                        $result['skippedExistingNoQty'][] = $existing->name;
-                        $result['rows'][] = [
-                            'status' => 'skipped_existing',
-                            'excel_row' => $excelRow,
-                            'excel' => $excelSnapshot,
-                            'actual' => $actual,
-                            'reason' => 'Already in catalog; no starting quantity in file.',
-                        ];
+                    if ($catalogFilled) {
+                        $this->pushCatalogUpdated($result, $excelRow, $existing->name, $excelSnapshot, $actual);
 
                         continue;
                     }
 
-                    if (! ItemOpeningStockFields::canSetStartingStock($existing, $officeId)) {
-                        if ($catalogFilled) {
-                            $this->pushCatalogUpdated($result, $excelRow, $existing->name, $excelSnapshot, $actual);
-
-                            continue;
-                        }
-
-                        $result['skippedHasStock'][] = $existing->name;
-                        $result['rows'][] = [
-                            'status' => 'skipped_has_stock',
-                            'excel_row' => $excelRow,
-                            'excel' => $excelSnapshot,
-                            'actual' => $actual,
-                            'reason' => 'Already has stock.',
-                        ];
-
-                        continue;
-                    }
-
-                    if ($officeId === null || $officeId < 1) {
-                        $this->pushInvalid(
-                            $result,
-                            $excelRow,
-                            $existing->name,
-                            'Regional supply office is not configured. Starting stock cannot be recorded.',
-                            $excelSnapshot,
-                            $actual,
-                        );
-
-                        continue;
-                    }
-
-                    $stockError = $this->validateStartingStockCost($slug, $quantity, $unitCost);
-                    if ($stockError !== null) {
-                        $this->pushInvalid(
-                            $result,
-                            $excelRow,
-                            $existing->name,
-                            $stockError,
-                            $excelSnapshot,
-                            $actual,
-                        );
-
-                        continue;
-                    }
-
-                    $this->openingBalanceService->setOpeningStock(
-                        item: $existing,
-                        officeId: (int) $officeId,
-                        quantity: (int) $quantity,
-                        unitCost: $unitCost,
-                        recordedBy: $recordedBy,
-                    );
-
-                    $result['stockFilled'][] = $existing->name;
+                    $result['skippedExistingNoQty'][] = $existing->name;
                     $result['rows'][] = [
-                        'status' => 'stock_filled',
+                        'status' => 'skipped_existing',
                         'excel_row' => $excelRow,
                         'excel' => $excelSnapshot,
-                        'actual' => $this->actualSnapshotFromItem($existing, $unitCost ?? 0.0),
-                        'reason' => null,
+                        'actual' => $actual,
+                        'reason' => 'Already in catalog. Starting stock is recorded from Acquisitions → Received (opening balances), not import.',
                     ];
-
-                    continue;
-                }
-
-                if (($quantity ?? 0) >= 1 && ($officeId === null || $officeId < 1)) {
-                    $this->pushInvalid(
-                        $result,
-                        $excelRow,
-                        $name,
-                        'Regional supply office is not configured. Starting stock cannot be recorded.',
-                        $excelSnapshot,
-                    );
 
                     continue;
                 }
@@ -421,19 +334,6 @@ class ImportConsumableItemsService
                         $excelRow,
                         $name,
                         $createError,
-                        $excelSnapshot,
-                    );
-
-                    continue;
-                }
-
-                $stockError = $this->validateStartingStockCost($slug, $quantity, $unitCost);
-                if ($stockError !== null) {
-                    $this->pushInvalid(
-                        $result,
-                        $excelRow,
-                        $name,
-                        $stockError,
                         $excelSnapshot,
                     );
 
@@ -462,18 +362,6 @@ class ImportConsumableItemsService
                 $item->setRelation('category', $category);
                 $item->save();
 
-                $appliedUnitCost = null;
-                if (($quantity ?? 0) >= 1) {
-                    $this->openingBalanceService->setOpeningStock(
-                        item: $item,
-                        officeId: (int) $officeId,
-                        quantity: (int) $quantity,
-                        unitCost: $unitCost,
-                        recordedBy: $recordedBy,
-                    );
-                    $appliedUnitCost = $unitCost ?? 0.0;
-                }
-
                 $existingByName->put($nameKey, $item);
                 $result['created']++;
                 $result['createdNames'][] = $name;
@@ -481,7 +369,7 @@ class ImportConsumableItemsService
                     'status' => 'created',
                     'excel_row' => $excelRow,
                     'excel' => $excelSnapshot,
-                    'actual' => $this->actualSnapshotFromItem($item, $appliedUnitCost),
+                    'actual' => $this->actualSnapshotFromItem($item),
                     'reason' => null,
                 ];
             }
@@ -744,32 +632,6 @@ class ImportConsumableItemsService
             if (blank($catalogFields['uacs_object_code_id'])) {
                 return 'UACS object code is required.';
             }
-        }
-
-        return null;
-    }
-
-    protected function validateStartingStockCost(string $slug, ?int $quantity, ?float $unitCost): ?string
-    {
-        if ($quantity === null || $quantity < 1) {
-            return null;
-        }
-
-        if (in_array($slug, ['ppe', 'semi_expendable'], true) && $unitCost === null) {
-            return 'Unit cost is required when setting starting stock.';
-        }
-
-        try {
-            if ($slug === 'ppe') {
-                PpeValueCategory::assertMinimumForPpe($unitCost);
-            }
-
-            if ($slug === 'semi_expendable') {
-                SemiExpendableValueCategory::assertWithinSemiCap($unitCost);
-            }
-        } catch (ValidationException $exception) {
-            return collect($exception->errors())->flatten()->first()
-                ?: 'Unit cost is not valid for this category.';
         }
 
         return null;

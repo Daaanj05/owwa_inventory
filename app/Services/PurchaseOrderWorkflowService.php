@@ -44,12 +44,10 @@ class PurchaseOrderWorkflowService
 
             $placeOfDelivery = app(SupplyOfficeResolver::class)->resolveOfficeName();
 
-            $poNumber = $this->referenceCodes->forAcquisitionPaperworkPo();
-
             $purchaseOrder = PurchaseOrder::query()->create([
                 'acquisition_paperwork_id' => $paperwork->id,
                 'recorded_by' => auth()->id(),
-                'number' => $poNumber,
+                'number' => null,
                 'status' => PurchaseOrder::STATUS_DRAFT,
                 'po_date' => now()->toDateString(),
                 'place_of_delivery' => $placeOfDelivery,
@@ -77,7 +75,7 @@ class PurchaseOrderWorkflowService
                 'phase' => AcquisitionPaperwork::PHASE_PO,
                 'po_status' => AcquisitionPaperwork::STATUS_DRAFT,
                 'po_date' => $purchaseOrder->po_date,
-                'po_number' => $poNumber,
+                'po_number' => null,
             ]);
 
             return $purchaseOrder->fresh(['lines', 'purchaseRequest']) ?? $purchaseOrder;
@@ -131,11 +129,13 @@ class PurchaseOrderWorkflowService
 
         $purchaseOrder->update([
             'number' => $number,
+            'status' => PurchaseOrder::STATUS_PENDING_APPROVAL,
             'submitted_at' => $purchaseOrder->submitted_at ?? now(),
         ]);
 
         $purchaseOrder->purchaseRequest?->update([
             'po_number' => $number,
+            'po_status' => AcquisitionPaperwork::STATUS_PENDING_APPROVAL,
             'po_submitted_at' => $purchaseOrder->submitted_at ?? now(),
             'supplier' => $purchaseOrder->supplier_name,
             'po_date' => $purchaseOrder->po_date,

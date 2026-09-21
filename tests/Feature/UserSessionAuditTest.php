@@ -197,14 +197,59 @@ class UserSessionAuditTest extends TestCase
 
         $logId = (int) session('audit_user_log_id');
 
+        $loginUrl = url('/login');
+
         $this->actingAs($user)
             ->post(route('audit.idle-logout'), [
-                'redirect' => url('/'),
+                'redirect' => $loginUrl,
             ])
-            ->assertRedirect(url('/'));
+            ->assertRedirect($loginUrl);
 
         $log = UserLog::query()->findOrFail($logId);
         $this->assertSame(UserLog::LOGOUT_IDLE_TIMEOUT, $log->logout_reason);
         $this->assertNotNull($log->logged_out_at);
+    }
+
+    public function test_session_recover_logs_out_and_redirects_to_login(): void
+    {
+        $user = User::factory()->create(['role' => User::ROLE_SYSTEM_ADMIN]);
+
+        $this->withSession([]);
+        Auth::login($user);
+
+        $logId = (int) session('audit_user_log_id');
+
+        $this->actingAs($user)
+            ->get(route('session.recover'))
+            ->assertRedirect(url('/login').'?reauth=1');
+
+        $this->assertGuest();
+
+        $log = UserLog::query()->findOrFail($logId);
+        $this->assertSame(UserLog::LOGOUT_SESSION_EXPIRED, $log->logout_reason);
+        $this->assertNotNull($log->logged_out_at);
+    }
+
+    public function test_session_recover_idle_reason_is_recorded(): void
+    {
+        $user = User::factory()->create(['role' => User::ROLE_SYSTEM_ADMIN]);
+
+        $this->withSession([]);
+        Auth::login($user);
+
+        $logId = (int) session('audit_user_log_id');
+
+        $this->actingAs($user)
+            ->get(route('session.recover', ['reason' => 'idle_timeout']))
+            ->assertRedirect(url('/login').'?logged_out=1');
+
+        $log = UserLog::query()->findOrFail($logId);
+        $this->assertSame(UserLog::LOGOUT_IDLE_TIMEOUT, $log->logout_reason);
+    }
+
+    public function test_session_recover_redirects_guests_to_login(): void
+    {
+        $this->get(route('session.recover'))
+            ->assertRedirect(url('/login').'?reauth=1');
     }
 }

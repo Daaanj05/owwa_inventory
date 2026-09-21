@@ -155,6 +155,15 @@ class ReferenceSeriesSeeder extends Seeder
                 'last_generated_at' => null,
             ],
             [
+                'type' => ReferenceSeries::TYPE_OPENING_BALANCE,
+                'name' => 'Opening balance tracking no. (not official)',
+                'prefix' => 'OB',
+                'pattern' => '{Y}-{m}-{seq:4}',
+                'next_sequence' => 1,
+                'reset_period' => ReferenceSeries::RESET_YEARLY,
+                'last_generated_at' => null,
+            ],
+            [
                 'type' => ReferenceSeries::TYPE_ITEM_CODE_CONSUMABLES,
                 'name' => 'Stock number (consumables)',
                 'prefix' => 'CON',

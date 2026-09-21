@@ -15,7 +15,6 @@ class RoleAndUserSeeder extends Seeder
             ['code' => 'OWWA-IVA'],
             [
                 'name' => 'OWWA Regional Office IV-A',
-                'is_satellite' => false,
                 'is_regional_supply' => true,
                 'address' => 'CALABARZON',
             ],

@@ -56,6 +56,34 @@ class AnalyticsDateRangeServiceTest extends TestCase
         $this->assertTrue($range['from']->gte(Carbon::parse('2020-06-01')->startOfDay()));
     }
 
+    public function test_rolling_months_range_includes_current_month(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-09-17 12:00:00'));
+
+        $service = app(AnalyticsDateRangeService::class);
+        $range = $service->rollingMonthsRange(6);
+
+        $this->assertSame('2026-04-01', $range['from']->toDateString());
+        $this->assertSame('2026-09-30', $range['to']->toDateString());
+        $this->assertSame('Last 6 months', $range['label']);
+
+        Carbon::setTestNow();
+    }
+
+    public function test_resolve_from_widget_filters_defaults_to_rolling_six_months(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-09-17 12:00:00'));
+
+        $service = app(AnalyticsDateRangeService::class);
+        $resolved = $service->resolveFromWidgetFilters([]);
+
+        $this->assertSame('2026-04-01', $resolved['from']->toDateString());
+        $this->assertSame('2026-09-30', $resolved['to']->toDateString());
+        $this->assertFalse($resolved['includeYearInLabels']);
+
+        Carbon::setTestNow();
+    }
+
     public function test_resolve_from_widget_filters_uses_explicit_dates(): void
     {
         $service = app(AnalyticsDateRangeService::class);

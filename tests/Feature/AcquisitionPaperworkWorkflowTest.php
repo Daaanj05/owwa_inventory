@@ -13,7 +13,6 @@ use App\Models\User;
 use App\Services\AcquisitionPaperworkCompletionService;
 use App\Services\OwwaTemplateExportService;
 use App\Support\OwwaCellMapping;
-use Filament\Actions\Testing\TestAction;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
@@ -92,7 +91,6 @@ class AcquisitionPaperworkWorkflowTest extends TestCase
         $officeName = 'OWWA Satellite Office — Laguna';
         $paperwork->office?->update([
             'name' => $officeName,
-            'is_satellite' => false,
             'is_regional_supply' => true,
         ]);
 
@@ -546,11 +544,9 @@ class AcquisitionPaperworkWorkflowTest extends TestCase
     {
         Filament::setCurrentPanel(Filament::getPanel('admin'));
 
-        $office = Office::factory()->create(['name' => 'OWWA RO']);
-        $requestingOffice = Office::factory()->create([
-            'name' => 'OWWA Satellite Office — Batangas',
-            'code' => 'OWWA-BAT',
-            'is_satellite' => true,
+        $office = Office::factory()->create([
+            'name' => 'OWWA RO',
+            'is_regional_supply' => true,
         ]);
         $category = ItemCategory::factory()->create(['name' => 'Consumables']);
         $item = Item::factory()->create(['item_category_id' => $category->id, 'item_code' => 'CON-200']);
@@ -562,15 +558,22 @@ class AcquisitionPaperworkWorkflowTest extends TestCase
         session()->put('active_item_category_id', $category->id);
         $this->actingAs($custodian);
 
+        \App\Models\ProcurementSignatoryName::remember(
+            \App\Models\ProcurementSignatoryName::ROLE_REQUESTED,
+            'Juan Dela Cruz',
+        );
+        \App\Models\ProcurementSignatoryName::remember(
+            \App\Models\ProcurementSignatoryName::ROLE_APPROVED,
+            'Maria Santos',
+        );
+
         $livewire = Livewire::test(ListAcquisitions::class)
-            ->mountAction(TestAction::make('create')->schemaComponent(true, 'content'));
+            ->mountAction('createPr');
 
         $lineKey = array_key_first($livewire->get('mountedActions')[0]['data']['lines'] ?? []);
 
         $livewire
             ->fillForm([
-                'office_id' => $office->id,
-                'item_category_id' => $category->id,
                 'purpose' => 'Printer supplies for RO',
                 'requested_by_name' => 'Juan Dela Cruz',
                 'approved_by_name' => 'Maria Santos',
@@ -584,6 +587,7 @@ class AcquisitionPaperworkWorkflowTest extends TestCase
                 ],
             ])
             ->callMountedAction()
+            ->assertHasNoFormErrors()
             ->assertNotified();
 
         $this->assertDatabaseHas('acquisition_paperwork', [
@@ -628,13 +632,14 @@ class AcquisitionPaperworkWorkflowTest extends TestCase
         $poService = app(\App\Services\PurchaseOrderWorkflowService::class);
         $iarService = app(\App\Services\InspectionAcceptanceReportWorkflowService::class);
 
-        $this->assertNotNull($paperwork->pr_number);
+        $this->assertNull($paperwork->pr_number);
         $this->assertSame(AcquisitionPaperwork::STATUS_DRAFT, $paperwork->pr_status);
 
         $service->submitPr($paperwork->fresh());
         $paperwork = $paperwork->fresh();
-        $this->assertSame(AcquisitionPaperwork::STATUS_DRAFT, $paperwork->pr_status);
+        $this->assertSame(AcquisitionPaperwork::STATUS_PENDING_APPROVAL, $paperwork->pr_status);
         $this->assertNotNull($paperwork->pr_number);
+        $this->assertNotNull($paperwork->pr_submitted_at);
 
         $service->approvePr($paperwork);
         $paperwork = $paperwork->fresh();
@@ -643,7 +648,7 @@ class AcquisitionPaperworkWorkflowTest extends TestCase
         $this->assertSame(AcquisitionPaperwork::PHASE_PR, $paperwork->phase);
 
         $po = $poService->createFromApprovedPr($paperwork->fresh());
-        $this->assertNotNull($po->number);
+        $this->assertNull($po->number);
         $po->update([
             'supplier_name' => 'Supplier Co.',
             'supplier_address' => '123 Main St',
@@ -656,13 +661,17 @@ class AcquisitionPaperworkWorkflowTest extends TestCase
         ]);
         $po->lines()->update(['is_ordered' => true, 'po_quantity' => 5, 'unit_cost' => 25.50, 'amount' => 127.50]);
         $poService->submit($po->fresh(['lines']));
+        $this->assertNotNull($po->fresh()->number);
         $poService->approve($po->fresh());
         $po = $po->fresh();
         $this->assertNotNull($po->number);
         $this->assertTrue($po->isApproved());
 
         $iar = $iarService->createFromApprovedPo($po);
-        $this->assertNotNull($iar->number);
+        $this->assertNull($iar->number);
+        $this->assertTrue($iar->isUnsavedIarDraft());
+        $this->assertSame('IAR draft', $iar->statusLabel());
+        $this->assertNull($paperwork->fresh()->iar_number);
         $iar->update([
             'invoice_number' => 'INV100',
             'invoice_date' => now()->subDays(2)->toDateString(),
@@ -673,12 +682,21 @@ class AcquisitionPaperworkWorkflowTest extends TestCase
             'iar_date' => now()->subDays(3)->toDateString(),
         ]);
         $iarService->submit($iar->fresh(['lines']));
+        $iar = $iar->fresh();
+        $this->assertNotNull($iar->number);
+        $this->assertTrue($iar->isPendingApproval());
+        $this->assertSame('IAR pending approval', $iar->statusLabel());
+        $this->assertSame(AcquisitionPaperwork::STATUS_PENDING_APPROVAL, $paperwork->fresh()->iar_status);
+
         $iarService->approve($iar->fresh());
         $iar = $iar->fresh();
 
         $this->assertNotNull($iar->number);
         $this->assertTrue($iar->isApproved());
         $this->assertTrue($paperwork->fresh()->isIarApproved());
+        $this->assertFalse($iar->isReceived());
+        $this->assertNotNull($iar->date_received);
+        $this->assertFalse($iar->date_received->copy()->startOfDay()->isFuture());
     }
 
     public function test_approve_pr_assigns_pr_number_when_reference_series_exists(): void
@@ -686,7 +704,7 @@ class AcquisitionPaperworkWorkflowTest extends TestCase
         $paperwork = $this->createPaperworkDraft();
         $service = app(AcquisitionPaperworkCompletionService::class);
 
-        $this->assertNotNull($paperwork->pr_number);
+        $this->assertNull($paperwork->pr_number);
 
         $service->approvePr($paperwork->fresh());
 
@@ -729,7 +747,7 @@ class AcquisitionPaperworkWorkflowTest extends TestCase
         $service->submitPr($paperwork->fresh());
 
         $paperwork = $paperwork->fresh();
-        $this->assertSame(AcquisitionPaperwork::STATUS_DRAFT, $paperwork->pr_status);
+        $this->assertSame(AcquisitionPaperwork::STATUS_PENDING_APPROVAL, $paperwork->pr_status);
         $this->assertNotNull($paperwork->pr_number);
         $this->assertTrue($paperwork->lines()->whereNull('unit_cost')->exists());
     }
@@ -801,6 +819,7 @@ class AcquisitionPaperworkWorkflowTest extends TestCase
     {
         $paperwork = $this->createPoPhasePaperwork();
         $po = app(\App\Services\PurchaseOrderWorkflowService::class)->createFromApprovedPr($paperwork);
+        $this->assertNull($po->number);
         $po->update([
             'supplier_name' => 'Acme Supplies',
             'supplier_address' => '123 Main St',
@@ -821,7 +840,7 @@ class AcquisitionPaperworkWorkflowTest extends TestCase
         app(\App\Services\PurchaseOrderWorkflowService::class)->submit($po->fresh(['lines']));
 
         $po->refresh();
-        $this->assertSame(\App\Models\PurchaseOrder::STATUS_DRAFT, $po->status);
+        $this->assertSame(\App\Models\PurchaseOrder::STATUS_PENDING_APPROVAL, $po->status);
         $this->assertNotNull($po->number);
         $this->assertSame('Acme Supplies', $po->supplier_name);
         $this->assertNotNull($po->po_date);
@@ -874,7 +893,6 @@ class AcquisitionPaperworkWorkflowTest extends TestCase
         $requestingOffice = Office::factory()->create([
             'name' => 'OWWA Satellite Office — Laguna',
             'code' => 'OWWA-LAG',
-            'is_satellite' => true,
             'fund_cluster' => '01',
         ]);
         $category = ItemCategory::factory()->create(['name' => 'Consumables']);

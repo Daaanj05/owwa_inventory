@@ -8,6 +8,9 @@ use App\Filament\Concerns\SyncsActiveItemCategory;
 use App\Filament\Resources\Acquisitions\AcquisitionResource;
 use App\Filament\Resources\Acquisitions\Concerns\AcquisitionProcurementExportAction;
 use App\Filament\Resources\Acquisitions\Concerns\HasAcquisitionDocumentTabs;
+use App\Filament\Resources\Acquisitions\Concerns\HasAcquisitionListViewToggle;
+use App\Filament\Resources\Acquisitions\Concerns\HasAcquisitionSearchRowActions;
+use App\Filament\Resources\Acquisitions\Tables\AcquisitionsTable;
 use App\Filament\Resources\Pages\ListRecordsWithoutFilterUrl;
 use App\Filament\Support\OwwaFormModalDefaults;
 use App\Models\AcquisitionPaperwork;
@@ -17,12 +20,11 @@ use App\Services\RequisitionPurchaseRequestService;
 use App\Support\CustodianOfficeScope;
 use Filament\Actions\Action;
 use Filament\Actions\CreateAction;
-use Filament\Schemas\Components\Actions;
 use Filament\Schemas\Components\EmbeddedTable;
 use Filament\Schemas\Components\Flex;
 use Filament\Schemas\Components\RenderHook;
-use Filament\Schemas\Components\Tabs\Tab;
 use Filament\Schemas\Schema;
+use Filament\Tables\Table;
 use Filament\View\PanelsRenderHook;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Database\Eloquent\Builder;
@@ -32,6 +34,8 @@ use Livewire\Attributes\Url;
 class ListAcquisitions extends ListRecordsWithoutFilterUrl
 {
     use HasAcquisitionDocumentTabs;
+    use HasAcquisitionListViewToggle;
+    use HasAcquisitionSearchRowActions;
     use HasSystemAdminWizardHeading;
     use StartsOwwaExportBusy;
     use SyncsActiveItemCategory;
@@ -76,8 +80,21 @@ class ListAcquisitions extends ListRecordsWithoutFilterUrl
             $this->replaceMountedAction('create', [
                 'sourceRequisitionId' => $this->createFromRequisitionId,
                 'sourceCategoryId' => $this->activeItemCategoryId(),
-            ], ['schemaComponent' => 'content']);
+            ]);
         }
+    }
+
+    protected function acquisitionListToggleMode(): string
+    {
+        return 'archive';
+    }
+
+    protected function acquisitionListToggleBadgeCount(): int
+    {
+        return AcquisitionPaperwork::query()
+            ->where('item_category_id', $this->activeItemCategoryId())
+            ->whereNotNull('archived_at')
+            ->count();
     }
 
     public function updatedDefaultTableAction(): void
@@ -98,140 +115,139 @@ class ListAcquisitions extends ListRecordsWithoutFilterUrl
 
         $paperwork = AcquisitionPaperwork::query()->find($this->defaultTableActionRecord);
 
-        if ($paperwork && (! $paperwork->isPrEditable() || $paperwork->isPrPendingApproval() || $paperwork->isArchived() || $paperwork->isReceived())) {
+        if ($paperwork && ! $paperwork->isUnsavedPrDraft()) {
             $this->defaultTableAction = 'view';
         }
     }
 
-    public function getDefaultActiveTab(): string|int|null
+    public function table(Table $table): Table
     {
-        return 'active';
-    }
-
-    public function getTabs(): array
-    {
-        return [
-            'active' => Tab::make('Active')
-                ->modifyQueryUsing(fn (Builder $query): Builder => $query->whereNull('archived_at'))
-                ->excludeQueryWhenResolvingRecord(),
-            'archived' => Tab::make('Archived')
-                ->modifyQueryUsing(fn (Builder $query): Builder => $query->whereNotNull('archived_at'))
-                ->excludeQueryWhenResolvingRecord(),
-        ];
+        return AcquisitionsTable::configure($table)
+            ->modifyQueryUsing(function (Builder $query): Builder {
+                return $this->applyAcquisitionDateFilter(
+                    $this->applyAcquisitionArchiveQuery($query),
+                    'pr_date',
+                );
+            });
     }
 
     public function content(Schema $schema): Schema
     {
-        $actionsComponent = Actions::make([
-            AcquisitionProcurementExportAction::make('pr'),
-            OwwaFormModalDefaults::createActionForResource(AcquisitionResource::class, OwwaFormModalDefaults::WIDTH_WIDE)
-                ->label('New PR')
-                ->mountUsing(function (CreateAction $action, ?Schema $schema): void {
-                    $sourceRequisitionId = (int) ($action->getArguments()['sourceRequisitionId'] ?? 0);
-                    $sourceCategoryId = (int) ($action->getArguments()['sourceCategoryId'] ?? 0);
-
-                    if ($sourceRequisitionId <= 0 || $sourceCategoryId <= 0) {
-                        $schema?->fill();
-
-                        return;
-                    }
-
-                    $requisition = Requisition::query()->findOrFail($sourceRequisitionId);
-                    $schema?->fill(app(RequisitionPurchaseRequestService::class)->prefillState(
-                        $requisition,
-                        $sourceCategoryId,
-                    ));
-                })
-                ->before(function (CreateAction $action, Schema $schema): void {
-                    $sourceRequisitionId = (int) ($action->getArguments()['sourceRequisitionId'] ?? 0);
-                    $sourceCategoryId = (int) ($action->getArguments()['sourceCategoryId'] ?? 0);
-
-                    if ($sourceRequisitionId <= 0 || $sourceCategoryId <= 0) {
-                        return;
-                    }
-
-                    $requisition = Requisition::query()->findOrFail($sourceRequisitionId);
-                    app(RequisitionPurchaseRequestService::class)->validateShortcutLines(
-                        $requisition,
-                        $sourceCategoryId,
-                        array_values($schema->getRawState()['lines'] ?? []),
-                    );
-                })
-                ->mutateFormDataUsing(function (array $data): array {
-                    $categoryId = $this->activeItemCategoryId();
-                    if ($categoryId > 0) {
-                        $data['item_category_id'] = $categoryId;
-                    }
-
-                    $data['phase'] = AcquisitionPaperwork::PHASE_PR;
-                    $data['pr_status'] = AcquisitionPaperwork::STATUS_DRAFT;
-                    $data['po_status'] = AcquisitionPaperwork::STATUS_DRAFT;
-                    $data['iar_status'] = AcquisitionPaperwork::STATUS_DRAFT;
-                    $data['pr_date'] ??= now()->toDateString();
-                    $data['recorded_by'] = auth()->id();
-                    $regionalOfficeId = app(\App\Support\SupplyOfficeResolver::class)->resolve();
-                    $data['office_id'] = $regionalOfficeId ?? CustodianOfficeScope::inventoryOfficeId();
-                    $data['requesting_office_id'] = $regionalOfficeId ?? $data['office_id'];
-
-                    return $data;
-                })
-                ->after(function (AcquisitionPaperwork $record, CreateAction $action): void {
-                    $sourceRequisitionId = (int) ($action->getArguments()['sourceRequisitionId'] ?? 0);
-                    $sourceCategoryId = (int) ($action->getArguments()['sourceCategoryId'] ?? 0);
-
-                    try {
-                        $service = app(RequisitionPurchaseRequestService::class);
-
-                        if ($sourceRequisitionId > 0 && $sourceCategoryId > 0) {
-                            $requisition = Requisition::query()->findOrFail($sourceRequisitionId);
-                            $service->linkShortcutSources(
-                                $record,
-                                $requisition,
-                                $sourceCategoryId,
-                            );
-
-                            return;
-                        }
-
-                        $service->linkSelectedSources(
-                            $record,
-                            $record->requisitions()->pluck('requisitions.id')->all(),
-                        );
-                    } catch (ValidationException $exception) {
-                        $record->delete();
-
-                        throw $exception;
-                    }
-                })
-                ->successRedirectUrl(fn (AcquisitionPaperwork $record): string => AcquisitionResource::viewModalUrl($record)),
-            Action::make('archiveSelectedHint')
-                ->label('Archive tip')
-                ->visible(false),
-        ]);
-
-        /** @var mixed $actionsComponent */
-        $actionsComponent = $actionsComponent->alignEnd();
-
-        $flexComponent = Flex::make([
-            $this->getTabsContentComponent(),
-            $actionsComponent,
-        ]);
-
-        /** @var mixed $flexComponent */
-        $flexComponent = $flexComponent->alignBetween()->verticallyAlignCenter();
-
+        $this->registerAcquisitionSearchRowActions(
+            createActionName: 'createPr',
+            createLabel: 'New PR',
+            showCreate: fn ($page): bool => ! $page->showingArchived,
+        );
         $this->registerAcquisitionDocumentTabsBelowSearch('pr');
 
         return $schema->components([
-            $flexComponent,
+            Flex::make([
+                $this->acquisitionDateRangeHeader(),
+            ])->alignBetween()->verticallyAlignCenter(),
             RenderHook::make(PanelsRenderHook::RESOURCE_PAGES_LIST_RECORDS_TABLE_BEFORE),
             EmbeddedTable::make(),
             RenderHook::make(PanelsRenderHook::RESOURCE_PAGES_LIST_RECORDS_TABLE_AFTER),
         ]);
     }
 
+    public function createPrAction(): CreateAction
+    {
+        return OwwaFormModalDefaults::createActionForResource(AcquisitionResource::class, OwwaFormModalDefaults::WIDTH_WIDE)
+            ->label('New PR')
+            ->visible(fn (): bool => ! $this->showingArchived)
+            ->mountUsing(function (CreateAction $action, ?Schema $schema): void {
+                $sourceRequisitionId = (int) ($action->getArguments()['sourceRequisitionId'] ?? 0);
+                $sourceCategoryId = (int) ($action->getArguments()['sourceCategoryId'] ?? 0);
+
+                if ($sourceRequisitionId <= 0 || $sourceCategoryId <= 0) {
+                    $schema?->fill();
+
+                    return;
+                }
+
+                $requisition = Requisition::query()->findOrFail($sourceRequisitionId);
+                $schema?->fill(app(RequisitionPurchaseRequestService::class)->prefillState(
+                    $requisition,
+                    $sourceCategoryId,
+                ));
+            })
+            ->before(function (CreateAction $action, ?Schema $schema): void {
+                $sourceRequisitionId = (int) ($action->getArguments()['sourceRequisitionId'] ?? 0);
+                $sourceCategoryId = (int) ($action->getArguments()['sourceCategoryId'] ?? 0);
+
+                if ($sourceRequisitionId <= 0 || $sourceCategoryId <= 0 || $schema === null) {
+                    return;
+                }
+
+                $requisition = Requisition::query()->findOrFail($sourceRequisitionId);
+                app(RequisitionPurchaseRequestService::class)->validateShortcutLines(
+                    $requisition,
+                    $sourceCategoryId,
+                    array_values($schema->getRawState()['lines'] ?? []),
+                );
+            })
+            ->mutateFormDataUsing(function (array $data): array {
+                $categoryId = $this->activeItemCategoryId();
+                if ($categoryId > 0) {
+                    $data['item_category_id'] = $categoryId;
+                }
+
+                $data['phase'] = AcquisitionPaperwork::PHASE_PR;
+                $data['pr_status'] = AcquisitionPaperwork::STATUS_DRAFT;
+                $data['po_status'] = AcquisitionPaperwork::STATUS_DRAFT;
+                $data['iar_status'] = AcquisitionPaperwork::STATUS_DRAFT;
+                $data['pr_date'] ??= now()->toDateString();
+                $data['recorded_by'] = auth()->id();
+                $regionalOfficeId = app(\App\Support\SupplyOfficeResolver::class)->resolve();
+                $data['office_id'] = $regionalOfficeId ?? CustodianOfficeScope::inventoryOfficeId();
+                $data['requesting_office_id'] = $regionalOfficeId ?? $data['office_id'];
+
+                return $data;
+            })
+            ->after(function (AcquisitionPaperwork $record, CreateAction $action): void {
+                $sourceRequisitionId = (int) ($action->getArguments()['sourceRequisitionId'] ?? 0);
+                $sourceCategoryId = (int) ($action->getArguments()['sourceCategoryId'] ?? 0);
+
+                try {
+                    $service = app(RequisitionPurchaseRequestService::class);
+
+                    if ($sourceRequisitionId > 0 && $sourceCategoryId > 0) {
+                        $requisition = Requisition::query()->findOrFail($sourceRequisitionId);
+                        $service->linkShortcutSources(
+                            $record,
+                            $requisition,
+                            $sourceCategoryId,
+                        );
+
+                        return;
+                    }
+
+                    $service->linkSelectedSources(
+                        $record,
+                        $record->requisitions()->pluck('requisitions.id')->all(),
+                    );
+                } catch (ValidationException $exception) {
+                    $record->delete();
+
+                    throw $exception;
+                }
+            })
+            ->successRedirectUrl(fn (AcquisitionPaperwork $record): string => AcquisitionResource::viewModalUrl($record));
+    }
+
+    public function exportProcurementReportAction(): Action
+    {
+        return AcquisitionProcurementExportAction::make('pr');
+    }
+
+    /**
+     * @return array<int, Action>
+     */
     protected function getHeaderActions(): array
     {
-        return [];
+        return [
+            $this->exportProcurementReportAction(),
+            $this->createPrAction(),
+        ];
     }
 }

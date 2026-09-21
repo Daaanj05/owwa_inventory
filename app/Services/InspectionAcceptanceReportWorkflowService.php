@@ -43,12 +43,10 @@ class InspectionAcceptanceReportWorkflowService
                 throw ValidationException::withMessages(['purchase_order' => 'The selected PO has no ordered line items.']);
             }
 
-            $iarNumber = $this->referenceCodes->forAcquisitionPaperworkIar();
-
             $iar = InspectionAcceptanceReport::query()->create([
                 'purchase_order_id' => $purchaseOrder->id,
                 'recorded_by' => auth()->id(),
-                'number' => $iarNumber,
+                'number' => null,
                 'status' => InspectionAcceptanceReport::STATUS_DRAFT,
                 'iar_date' => now()->toDateString(),
             ]);
@@ -75,7 +73,7 @@ class InspectionAcceptanceReportWorkflowService
                 'phase' => AcquisitionPaperwork::PHASE_IAR,
                 'iar_status' => AcquisitionPaperwork::STATUS_DRAFT,
                 'iar_date' => $iar->iar_date,
-                'iar_number' => $iarNumber,
+                'iar_number' => null,
             ]);
 
             return $iar->fresh(['lines', 'purchaseOrder.purchaseRequest']) ?? $iar;
@@ -107,11 +105,13 @@ class InspectionAcceptanceReportWorkflowService
 
         $iar->update([
             'number' => $number,
+            'status' => InspectionAcceptanceReport::STATUS_PENDING_APPROVAL,
             'submitted_at' => $iar->submitted_at ?? now(),
         ]);
 
         $iar->purchaseOrder?->purchaseRequest?->update([
             'iar_number' => $number,
+            'iar_status' => AcquisitionPaperwork::STATUS_PENDING_APPROVAL,
             'iar_submitted_at' => $iar->submitted_at ?? now(),
             'iar_date' => $iar->iar_date,
             'inspection_officer_name' => $iar->inspection_officer_name,

@@ -13,6 +13,7 @@ use App\Support\CustodianOfficeScope;
 use App\Support\InventoryCategoryOptions;
 use App\Support\OwwaReferenceLabels;
 use App\Support\RequisitionNotificationRecipients;
+use App\Support\SignatorySelect;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Placeholder;
@@ -54,7 +55,7 @@ class TransferForm
                             ->searchable()
                             ->preload()
                             ->default(fn (): ?int => CustodianOfficeScope::inventoryOfficeId())
-                            ->helperText('Select where stock is leaving. You manage all regional and satellite offices; stock is checked at the office you choose.')
+                            ->helperText('Select where stock is leaving. You manage all offices; stock is checked at the office you choose.')
                             ->live()
                             ->afterStateUpdated(function ($state, Set $set, Get $get): void {
                                 $set('item_id', null);
@@ -282,22 +283,16 @@ class TransferForm
                     ->description('PTR header rows 8–9 (From / To Accountable Officer). Required for PPE and semi-expendable transfers.')
                     ->columnSpanFull()
                     ->schema([
-                        TextInput::make('from_accountable_officer')
-                            ->label('From accountable officer')
-                            ->maxLength(255)
-                            ->datalist(fn (Get $get): array => self::accountableOfficerSuggestions(
-                                filled($get('from_office_id')) ? (int) $get('from_office_id') : null,
-                                ProcurementSignatoryName::ROLE_TRANSFER_FROM_ACCOUNTABLE,
-                            ))
-                            ->helperText('PTR cell A8 — Unit Consolidators of the From office (and previously saved names).'),
-                        TextInput::make('to_accountable_officer')
-                            ->label('To accountable officer')
-                            ->maxLength(255)
-                            ->datalist(fn (Get $get): array => self::accountableOfficerSuggestions(
-                                filled($get('to_office_id')) ? (int) $get('to_office_id') : null,
-                                ProcurementSignatoryName::ROLE_TRANSFER_TO_ACCOUNTABLE,
-                            ))
-                            ->helperText('PTR cell A9 — Unit Consolidators of the To office (and previously saved names).'),
+                        SignatorySelect::makeFromSuggestions('from_accountable_officer', ProcurementSignatoryName::ROLE_TRANSFER_FROM_ACCOUNTABLE, fn (Get $get): array => self::accountableOfficerSuggestions(
+                            filled($get('from_office_id')) ? (int) $get('from_office_id') : null,
+                            ProcurementSignatoryName::ROLE_TRANSFER_FROM_ACCOUNTABLE,
+                        ))
+                            ->label('From accountable officer'),
+                        SignatorySelect::makeFromSuggestions('to_accountable_officer', ProcurementSignatoryName::ROLE_TRANSFER_TO_ACCOUNTABLE, fn (Get $get): array => self::accountableOfficerSuggestions(
+                            filled($get('to_office_id')) ? (int) $get('to_office_id') : null,
+                            ProcurementSignatoryName::ROLE_TRANSFER_TO_ACCOUNTABLE,
+                        ))
+                            ->label('To accountable officer'),
                         Textarea::make('reason_for_transfer')
                             ->label('Reason for transfer')
                             ->rows(2)
@@ -362,51 +357,21 @@ class TransferForm
                     ->description('PTR rows 53–55 — Approved by, Released by, Received by (with designations on row 54).')
                     ->columnSpanFull()
                     ->schema([
-                        TextInput::make('approved_by_printed_name')
+                        SignatorySelect::make('approved_by_printed_name', ProcurementSignatoryName::ROLE_TRANSFER_APPROVED)
                             ->label('Approved by')
-                            ->maxLength(255)
-                            ->placeholder('Full name')
-                            ->datalist(fn (): array => ProcurementSignatoryName::suggestionsForRole(
-                                ProcurementSignatoryName::ROLE_TRANSFER_APPROVED,
-                            ))
-                            ->helperText('PTR B53'),
-                        TextInput::make('approved_by_designation')
-                            ->label('Approved by designation')
-                            ->maxLength(255)
-                            ->datalist(fn (): array => ProcurementSignatoryName::suggestionsForRole(
-                                ProcurementSignatoryName::ROLE_TRANSFER_APPROVED_DESIGNATION,
-                            ))
-                            ->helperText('PTR B54'),
-                        TextInput::make('released_by_printed_name')
+                            ->placeholder('Full name'),
+                        SignatorySelect::make('approved_by_designation', ProcurementSignatoryName::ROLE_TRANSFER_APPROVED_DESIGNATION)
+                            ->label('Approved by designation'),
+                        SignatorySelect::make('released_by_printed_name', ProcurementSignatoryName::ROLE_TRANSFER_RELEASED)
                             ->label('Released by')
-                            ->maxLength(255)
-                            ->placeholder('Full name')
-                            ->datalist(fn (): array => ProcurementSignatoryName::suggestionsForRole(
-                                ProcurementSignatoryName::ROLE_TRANSFER_RELEASED,
-                            ))
-                            ->helperText('PTR F53'),
-                        TextInput::make('released_by_designation')
-                            ->label('Released by designation')
-                            ->maxLength(255)
-                            ->datalist(fn (): array => ProcurementSignatoryName::suggestionsForRole(
-                                ProcurementSignatoryName::ROLE_TRANSFER_RELEASED_DESIGNATION,
-                            ))
-                            ->helperText('PTR F54'),
-                        TextInput::make('received_by_printed_name')
+                            ->placeholder('Full name'),
+                        SignatorySelect::make('released_by_designation', ProcurementSignatoryName::ROLE_TRANSFER_RELEASED_DESIGNATION)
+                            ->label('Released by designation'),
+                        SignatorySelect::make('received_by_printed_name', ProcurementSignatoryName::ROLE_TRANSFER_RECEIVED)
                             ->label('Received by')
-                            ->maxLength(255)
-                            ->placeholder('Full name')
-                            ->datalist(fn (): array => ProcurementSignatoryName::suggestionsForRole(
-                                ProcurementSignatoryName::ROLE_TRANSFER_RECEIVED,
-                            ))
-                            ->helperText('PTR H53'),
-                        TextInput::make('received_by_designation')
-                            ->label('Received by designation')
-                            ->maxLength(255)
-                            ->datalist(fn (): array => ProcurementSignatoryName::suggestionsForRole(
-                                ProcurementSignatoryName::ROLE_TRANSFER_RECEIVED_DESIGNATION,
-                            ))
-                            ->helperText('PTR H54'),
+                            ->placeholder('Full name'),
+                        SignatorySelect::make('received_by_designation', ProcurementSignatoryName::ROLE_TRANSFER_RECEIVED_DESIGNATION)
+                            ->label('Received by designation'),
                     ])
                     ->columns(2)
                     ->visible(fn (Get $get): bool => self::usesPtrForm($get('item_category_filter'))),

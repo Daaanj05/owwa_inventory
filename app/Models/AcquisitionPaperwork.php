@@ -97,10 +97,6 @@ class AcquisitionPaperwork extends Model
                 $paperwork->reference_code = app(ReferenceCodeService::class)->forAcquisitionPaperwork();
             }
 
-            if (blank($paperwork->pr_number)) {
-                $paperwork->pr_number = app(ReferenceCodeService::class)->forAcquisitionPaperworkPr();
-            }
-
             if (blank($paperwork->recorded_by) && auth()->id()) {
                 $paperwork->recorded_by = auth()->id();
             }
@@ -108,9 +104,7 @@ class AcquisitionPaperwork extends Model
 
         static::saved(function (AcquisitionPaperwork $paperwork): void {
             ProcurementSignatoryName::remember(ProcurementSignatoryName::ROLE_REQUESTED, $paperwork->requested_by_name);
-            ProcurementSignatoryName::remember(ProcurementSignatoryName::ROLE_REQUESTED_DESIGNATION, $paperwork->requested_by_designation);
             ProcurementSignatoryName::remember(ProcurementSignatoryName::ROLE_APPROVED, $paperwork->approved_by_name);
-            ProcurementSignatoryName::remember(ProcurementSignatoryName::ROLE_APPROVED_DESIGNATION, $paperwork->approved_by_designation);
         });
     }
 
@@ -167,7 +161,23 @@ class AcquisitionPaperwork extends Model
 
     public function isPrEditable(): bool
     {
-        return $this->pr_status === self::STATUS_DRAFT && ! $this->isArchived() && ! $this->isReceived();
+        return in_array($this->pr_status, [
+            self::STATUS_DRAFT,
+            self::STATUS_PENDING_APPROVAL,
+        ], true)
+            && ! $this->isArchived()
+            && ! $this->isReceived();
+    }
+
+    /**
+     * True until the first successful Save PR (still draft, no submission timestamp).
+     */
+    public function isUnsavedPrDraft(): bool
+    {
+        return $this->pr_status === self::STATUS_DRAFT
+            && blank($this->pr_submitted_at)
+            && ! $this->isArchived()
+            && ! $this->isReceived();
     }
 
     public function isPrPendingApproval(): bool
@@ -225,7 +235,7 @@ class AcquisitionPaperwork extends Model
         }
 
         if ($iar?->isDraft()) {
-            return 'IAR in progress';
+            return 'IAR draft';
         }
 
         $po = $this->purchaseOrder;
@@ -238,7 +248,7 @@ class AcquisitionPaperwork extends Model
         }
 
         if ($po?->isDraft()) {
-            return 'PO in progress';
+            return 'PO draft';
         }
 
         if ($this->pr_status === self::STATUS_PENDING_APPROVAL) {

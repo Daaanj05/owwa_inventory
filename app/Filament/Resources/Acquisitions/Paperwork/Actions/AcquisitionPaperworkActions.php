@@ -53,11 +53,42 @@ class AcquisitionPaperworkActions
                     fn (AcquisitionPaperwork $paperwork) => app(AcquisitionPaperworkCompletionService::class)->submitPr($paperwork),
                     $action,
                     'PR saved',
-                    'Export the purchase request for signature, then mark Approved when signed.',
+                    'Export from this view for signature, then mark Approved when signed.',
                     AcquisitionPaperwork::PHASE_PR,
                 );
+
+                $submitted = $record->fresh() ?? $record;
+
+                if ($submitted->pr_status === AcquisitionPaperwork::STATUS_PENDING_APPROVAL) {
+                    $action->redirect(AcquisitionResource::viewModalUrl($submitted));
+                }
             })
             ->extraModalFooterActions(fn (EditAction $editAction): array => self::editModalFooterActions($editAction));
+    }
+
+    /**
+     * Visible Edit control for the view modal footer and the row actions menu.
+     */
+    public static function visibleEditAction(): Action
+    {
+        return Action::make('editPr')
+            ->label('Edit')
+            ->icon('heroicon-o-pencil-square')
+            ->color('gray')
+            ->visible(fn (AcquisitionPaperwork $record): bool => $record->isPrEditable())
+            ->action(function (AcquisitionPaperwork $record, Action $action): void {
+                $livewire = $action->getLivewire();
+
+                if (! is_object($livewire) || ! method_exists($livewire, 'replaceMountedAction')) {
+                    return;
+                }
+
+                // Replace the view stack; mountTableAction expects a string record key.
+                $livewire->replaceMountedAction('edit', [], [
+                    'table' => true,
+                    'recordKey' => (string) $record->getKey(),
+                ]);
+            });
     }
 
     public static function submitPrAction(bool $fromEditModal = false): Action
@@ -70,7 +101,7 @@ class AcquisitionPaperworkActions
                 && $record->pr_status === AcquisitionPaperwork::STATUS_DRAFT,
             handler: fn (AcquisitionPaperwork $record) => app(AcquisitionPaperworkCompletionService::class)->submitPr($record),
             successTitle: 'PR saved',
-            successBody: 'Export the purchase request for signature, then mark Approved when signed.',
+            successBody: 'Export from this view for signature, then mark Approved when signed.',
             phase: AcquisitionPaperwork::PHASE_PR,
             fromEditModal: $fromEditModal,
         );
@@ -171,7 +202,7 @@ class AcquisitionPaperworkActions
                 && $record->iar_status === AcquisitionPaperwork::STATUS_DRAFT,
             handler: fn (AcquisitionPaperwork $record) => app(AcquisitionPaperworkCompletionService::class)->submitIar($record),
             successTitle: 'IAR saved',
-            successBody: 'Export the inspection report for signature, then mark Approved when signed.',
+            successBody: 'Export from this view for signature, then mark Approved when signed.',
             phase: AcquisitionPaperwork::PHASE_IAR,
             fromEditModal: $fromEditModal,
         );
@@ -346,19 +377,12 @@ class AcquisitionPaperworkActions
                 'submitPrWorkflow',
                 'submitPr',
                 'Save PR',
-                fn (AcquisitionPaperwork $record): bool => $record->isPrEditable(),
+                fn (AcquisitionPaperwork $record): bool => $record->pr_status === AcquisitionPaperwork::STATUS_DRAFT
+                    && ! $record->isArchived(),
             ),
             self::approvePrAction(),
             self::archiveAction(),
             self::restoreAction(),
-            ActionGroup::make([
-                self::exportPrAction(),
-                self::exportPrPdfAction(),
-            ])
-                ->label('Export PR')
-                ->icon('heroicon-m-document-arrow-down')
-                ->color('gray')
-                ->button(),
         ];
     }
 
@@ -368,6 +392,7 @@ class AcquisitionPaperworkActions
     public static function viewModalFooterActions(): array
     {
         return [
+            self::visibleEditAction(),
             self::approvePrAction(),
             self::archiveAction(),
             self::restoreAction(),

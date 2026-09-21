@@ -5,6 +5,7 @@ namespace App\Filament\Resources\IncidentReports\Actions;
 use App\Filament\Resources\IncidentReports\IncidentReportResource;
 use App\Filament\Support\OwwaFormModalDefaults;
 use App\Models\Disposal;
+use App\Services\DisposalStockValidator;
 use App\Support\OwwaExportBusyDispatcher;
 use Filament\Actions\Action;
 use Filament\Actions\EditAction;
@@ -14,7 +15,14 @@ class IncidentReportViewActions
 {
     public static function editAction(): EditAction
     {
-        return OwwaFormModalDefaults::editActionForResource(IncidentReportResource::class, OwwaFormModalDefaults::WIDTH_STANDARD);
+        return OwwaFormModalDefaults::editActionForResource(IncidentReportResource::class, OwwaFormModalDefaults::WIDTH_STANDARD)
+            ->visible(fn (Disposal $record): bool => $record->isEditable())
+            ->mutateFormDataUsing(function (array $data, Disposal $record): array {
+                $data['disposal_type'] = 'lost_stolen_damaged';
+                app(DisposalStockValidator::class)->validateForUpdate($data, $record);
+
+                return $data;
+            });
     }
 
     public static function exportOwwaAction(): Action

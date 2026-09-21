@@ -311,19 +311,20 @@ class ItemImportAction
         $required = [
             'Base item',
             'Unit',
-            'Quantity — optional; use 0 or leave blank if not recording starting stock',
         ];
 
         $recommended = [
             'Sub-item',
             'Reorder point',
             'Description',
+            'Quantity / Unit cost — ignored on import; record opening stock from Acquisitions → Received',
         ];
 
         $tips = [
             'Re-import fills blank catalog fields only — it never overwrites values already set or reorder point.',
             'Put sizes like 500ml in Sub-item, not Unit.',
             'Download the sample file for the full column layout and example values.',
+            'Starting stock is not imported — use Acquisitions → Received → Opening balances.',
         ];
 
         $createRequired = match ($slug) {
@@ -331,17 +332,14 @@ class ItemImportAction
                 'Property class — official COA label (see sample file)',
                 'UACS object code — e.g. 106-03',
                 'Estimated useful life — months; must be greater than 12',
-                'Unit cost — required when Quantity ≥ 1; must be below ₱50,000',
             ],
             'ppe' => [
                 'Type of PPE — official COA label (see sample file)',
                 'UACS object code — e.g. 106-03',
-                'Unit cost — required when Quantity ≥ 1; must be at least ₱50,000',
             ],
             default => [
                 'Inventory type — official label or a new type you type',
                 'Days to consume',
-                'Unit cost — optional for starting stock (blank = ₱0)',
             ],
         };
 
@@ -396,7 +394,6 @@ class ItemImportAction
     {
         $created = (int) ($result['created'] ?? 0);
         $updated = count($result['updatedNames'] ?? []);
-        $stockFilled = count($result['stockFilled'] ?? []);
         $skippedCount = count($result['skippedHasStock'] ?? [])
             + count($result['skippedExistingNoQty'] ?? [])
             + count($result['skippedInFile'] ?? []);
@@ -409,12 +406,6 @@ class ItemImportAction
         if ($updated > 0) {
             $parts[] = $updated === 1 ? '1 item updated' : "{$updated} items updated";
         }
-        if ($stockFilled > 0) {
-            $parts[] = $stockFilled === 1
-                ? 'starting stock added for 1 existing item'
-                : "starting stock added for {$stockFilled} existing items";
-        }
-
         $title = $parts !== []
             ? Str::ucfirst(implode('; ', $parts))
             : 'Import finished';
@@ -433,7 +424,7 @@ class ItemImportAction
             $notification
                 ->warning()
                 ->body($detailBits !== [] ? implode(', ', $detailBits).'.' : null);
-        } elseif ($created > 0 || $updated > 0 || $stockFilled > 0) {
+        } elseif ($created > 0 || $updated > 0) {
             $notification->success();
         } else {
             $notification

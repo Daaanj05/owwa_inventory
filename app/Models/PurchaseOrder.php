@@ -103,7 +103,18 @@ class PurchaseOrder extends Model
 
     public function isEditable(): bool
     {
-        return $this->isDraft() && ! $this->isArchived();
+        return ($this->isDraft() || $this->isPendingApproval())
+            && ! $this->isArchived();
+    }
+
+    /**
+     * True until the first successful Save PO (still draft, no submission timestamp).
+     */
+    public function isUnsavedPoDraft(): bool
+    {
+        return $this->isDraft()
+            && blank($this->submitted_at)
+            && ! $this->isArchived();
     }
 
     public function totalAmount(): float
@@ -199,7 +210,7 @@ HTML;
         return match ($this->status) {
             self::STATUS_PENDING_APPROVAL => 'PO pending approval',
             self::STATUS_APPROVED => $this->inspectionAcceptanceReport ? 'PO approved' : 'PO approved — ready for IAR',
-            default => 'PO in progress',
+            default => $this->isUnsavedPoDraft() ? 'PO draft' : 'PO in progress',
         };
     }
 

@@ -27,6 +27,24 @@ class AnalyticsDateRangeService
     }
 
     /**
+     * Rolling window ending this month (includes the current month).
+     *
+     * @return array{from: Carbon, to: Carbon, label: string}
+     */
+    public function rollingMonthsRange(int $months = 6): array
+    {
+        $months = max(1, $months);
+        $to = now()->endOfMonth();
+        $from = $to->copy()->subMonths($months - 1)->startOfMonth();
+
+        return [
+            'from' => $from,
+            'to' => $to,
+            'label' => $months === 1 ? 'This month' : "Last {$months} months",
+        ];
+    }
+
+    /**
      * @return array{from: Carbon, to: Carbon, label: string}
      */
     public function longViewRange(int $maxMonths = 60): array
@@ -82,7 +100,7 @@ class AnalyticsDateRangeService
             ];
         }
 
-        $range = $this->currentYearRange();
+        $range = $this->rollingMonthsRange(6);
 
         return [
             'from' => $range['from'],

@@ -1,0 +1,202 @@
+/* OWWA theme partial: _base.css (original lines 24-224) — edit then run: npm run build:owwa-theme */
+
+/* ═══════════════════════════════════════════════════════════
+   BASE
+═══════════════════════════════════════════════════════════ */
+.fi-body,
+.fi-main-ctn {
+    background-color: #eef2f6 !important;
+}
+
+/* Main content area — full width so dashboard stats/charts use available space */
+.fi-main {
+    width: 100% !important;
+    min-width: 0 !important;
+    padding-left: var(--owwa-space-content) !important;
+    padding-right: var(--owwa-space-content) !important;
+    padding-bottom: 0.75rem !important;
+    padding-top: 0.25rem !important;
+    max-width: 1600px !important;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   TOPBAR
+═══════════════════════════════════════════════════════════ */
+.fi-topbar {
+    background: linear-gradient(90deg, #003366 0%, #004d99 45%, #8b1538 80%, #c41e3a 100%) !important;
+    border-bottom: none !important;
+    box-shadow: 0 1px 4px 0 rgb(0 0 0 / 0.18) !important;
+}
+
+.fi-topbar nav,
+.fi-topbar .fi-topbar-logo-ctn,
+.fi-topbar a,
+.fi-topbar button {
+    color: rgba(255,255,255,0.95) !important;
+}
+
+.fi-topbar .fi-logo {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 1rem;
+    padding-left: 3.4rem;
+    color: #fff !important;
+    font-weight: 700 !important;
+}
+
+.fi-topbar .fi-logo::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    width: 2.9rem;
+    height: 2.9rem;
+    border-radius: 9999px;
+    background-image: url('/images/owwa-4a_logo_transparent.png');
+    background-size: cover;
+    background-position: center;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   SIDEBAR
+═══════════════════════════════════════════════════════════ */
+.fi-sidebar {
+    background-color: #ffffff !important;
+    border-right: 1px solid #e2e8f0 !important;
+}
+
+.fi-sidebar .fi-sidebar-header,
+.fi-sidebar .fi-sidebar-header-ctn {
+    display: none !important;
+}
+
+.fi-sidebar .fi-sidebar-nav {
+    padding: 0.75rem 0.5rem !important;
+}
+
+.fi-sidebar a {
+    color: #374151 !important;
+    border-radius: 0.5rem !important;
+    font-size: 0.9375rem !important;
+    font-weight: 400 !important;
+}
+
+.fi-sidebar a:hover {
+    background-color: #f1f5f9 !important;
+    color: #003366 !important;
+}
+
+.fi-sidebar .fi-sidebar-item-button.fi-active,
+.fi-sidebar [aria-current="page"] {
+    background-color: #eff6ff !important;
+    color: #1d4ed8 !important;
+    font-weight: 600 !important;
+}
+
+.fi-sidebar .fi-sidebar-group-button {
+    color: #9ca3af !important;
+    font-size: 0.6875rem !important;
+    font-weight: 700 !important;
+    letter-spacing: 0.08em !important;
+    text-transform: uppercase !important;
+    padding: 0.5rem 0.75rem 0.25rem !important;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   PAGE HEADER
+═══════════════════════════════════════════════════════════ */
+.fi-header {
+    padding-top: 0.25rem !important;
+    padding-bottom: 0.5rem !important;
+}
+
+.fi-header-heading {
+    font-size: 1.25rem !important;
+    font-weight: 600 !important;
+    letter-spacing: -0.02em !important;
+    color: #111827 !important;
+}
+
+.fi-header-description,
+[class*="subheading"] {
+    font-size: 0.8125rem !important;
+    color: #6b7280 !important;
+    margin-top: 0.125rem !important;
+    font-weight: 400 !important;
+}
+
+/* Procurement analytics & COA reports: title sits higher; keep bottom spacing for scroll/actions */
+.fi-main:has(.owwa-pa-page),
+.fi-main:has(.owwa-coa-reports-page) {
+    padding-top: 0.05rem !important;
+    padding-bottom: 0.75rem !important;
+}
+
+/*
+ * Filament default: .fi-page-header-main-ctn { flex flex-col gap-y-8 py-8 } — large gap between
+ * the page header (title/subheading) and .fi-page-main (where the FY bar lives). Override here
+ * to tighten that space; row-gap is what separates subtitle from the context bar.
+ */
+.fi-page.owwa-pa-page .fi-page-header-main-ctn {
+    row-gap: 0.5rem !important;
+    padding-top: 0.75rem !important;
+    padding-bottom: 0.5rem !important;
+}
+
+.fi-page.owwa-pa-page .fi-header {
+    padding-left: 0.75rem !important;
+    padding-right: 0.75rem !important;
+    padding-top: 0.05rem !important;
+    padding-bottom: 0.05rem !important;
+}
+
+.fi-page.owwa-pa-page .fi-header-subheading {
+    margin-top: 0.375rem !important;
+    padding-bottom: 0.05rem;
+}
+
+/*
+ * Filament default: .fi-page-content { grid gap-y-8 } — this was the main source of the huge gap
+ * between the FY/category row and the KPI stats row (both are direct grid children).
+ */
+.fi-page.owwa-pa-page .fi-page-content {
+    gap: 0.5rem !important;
+    row-gap: 0.5rem !important;
+    column-gap: 0.5rem !important;
+    padding-top: 0.125rem;
+    padding-bottom: 1rem;
+}
+
+.fi-page.owwa-pa-page .fi-header-heading {
+    display: flex !important;
+    align-items: center !important;
+}
+
+/* KPI stack + lazy stats: remove extra vertical margin above the first widget */
+.fi-page.owwa-pa-page .fi-wi-widget,
+.fi-page.owwa-pa-page .fi-wi-stats-overview {
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+}
+
+/* COA reports — same header / content density as Procurement analytics; icon matches sidebar (document-text) */
+.fi-page.owwa-coa-reports-page .fi-page-header-main-ctn {
+    row-gap: 0.5rem !important;
+    padding-top: 0.75rem !important;
+    padding-bottom: 0.5rem !important;
+}
+
+.fi-page.owwa-coa-reports-page .fi-header {
+    padding-left: 0.75rem !important;
+    padding-right: 0.75rem !important;
+    padding-top: 0.05rem !important;
+    padding-bottom: 0.05rem !important;
+}
+
+.fi-page.owwa-coa-reports-page .fi-page-content {
+    gap: 0.5rem !important;
+    row-gap: 0.5rem !important;
+    column-gap: 0.5rem !important;
+    padding-top: 0.125rem;
+    padding-bottom: 1rem;
+}

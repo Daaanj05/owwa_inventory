@@ -5,10 +5,10 @@ namespace App\Filament\Resources\Transfers\Pages;
 use App\Filament\Concerns\CoaListPageExports;
 use App\Filament\Concerns\HasSystemAdminWizardHeading;
 use App\Filament\Concerns\SyncsActiveItemCategory;
-use App\Filament\Pages\InventoryCategoryDashboard;
 use App\Filament\Resources\Transfers\TransferResource;
 use App\Filament\Support\OwwaFormModalDefaults;
 use App\Models\ItemCategory;
+use App\Support\CategoryWizardBreadcrumb;
 use App\Support\CustodianOfficeScope;
 use Filament\Resources\Pages\ListRecords;
 use Filament\Schemas\Components\Actions;
@@ -19,7 +19,6 @@ use Filament\Schemas\Components\Tabs\Tab;
 use Filament\Schemas\Schema;
 use Filament\View\PanelsRenderHook;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Support\HtmlString;
 use Livewire\Attributes\Url;
 
 class ListTransfers extends ListRecords
@@ -42,6 +41,14 @@ class ListTransfers extends ListRecords
     #[Url]
     public ?int $from_office = null;
 
+    #[Url]
+    public ?string $property_number = null;
+
+    /**
+     * @var array<string, mixed>|null
+     */
+    public ?array $pendingCreateFormData = null;
+
     public function getTitle(): string|\Illuminate\Contracts\Support\Htmlable
     {
         return 'Transfers';
@@ -55,7 +62,7 @@ class ListTransfers extends ListRecords
             return 'Transfers';
         }
 
-        return new HtmlString($this->getWizardHeaderBreadcrumb($categoryName, 'Transfers'));
+        return CategoryWizardBreadcrumb::make($categoryName, 'Transfers', $this->activeItemCategoryId());
     }
 
     /**
@@ -70,19 +77,6 @@ class ListTransfers extends ListRecords
     public function getSubheading(): string|\Illuminate\Contracts\Support\Htmlable|null
     {
         return null;
-    }
-
-    protected function getWizardHeaderBreadcrumb(string $categoryName, string $taskLabel): string
-    {
-        $categoryId = $this->activeItemCategoryId();
-        $dashboardUrl = InventoryCategoryDashboard::getUrl(['category' => $categoryId]);
-
-        return sprintf(
-            '<span class="owwa-wizard-title" role="list"><a class="owwa-wizard-step owwa-wizard-step-link" href="%s" role="listitem">%s</a><span class="owwa-wizard-separator" aria-hidden="true">&gt;</span><span class="owwa-wizard-step owwa-wizard-step-current" role="listitem">%s</span></span>',
-            e($dashboardUrl),
-            e($categoryName),
-            e($taskLabel),
-        );
     }
 
     public function mount(): void
@@ -106,16 +100,23 @@ class ListTransfers extends ListRecords
 
         $itemId = (int) ($this->item_id ?? 0);
         $fromOfficeId = (int) ($this->from_office ?? 0);
+        $propertyNumber = filled($this->property_number) ? (string) $this->property_number : null;
 
         $this->create = null;
         $this->item_id = null;
         $this->from_office = null;
+        $this->property_number = null;
 
-        $this->mountAction('create', array_filter([
+        $this->pendingCreateFormData = array_filter([
             'item_id' => $itemId > 0 ? $itemId : null,
             'from_office_id' => $fromOfficeId > 0 ? $fromOfficeId : CustodianOfficeScope::inventoryOfficeId(),
             'item_category_filter' => $this->activeItemCategoryId() ?: null,
-        ]), ['schemaComponent' => 'content']);
+            'property_number' => $propertyNumber,
+            'quantity' => filled($propertyNumber) ? 1 : null,
+            'transfer_date' => now()->toDateString(),
+        ]);
+
+        $this->mountAction('create', [], ['schemaComponent' => 'content']);
     }
 
     public function getTabs(): array
@@ -135,11 +136,20 @@ class ListTransfers extends ListRecords
         $actionsComponent = Actions::make([
             $this->coaExportReportAction('coaTransfer', 'owwa.export.bulk.transfers'),
             OwwaFormModalDefaults::createActionForResource(TransferResource::class, OwwaFormModalDefaults::WIDTH_STANDARD)
-                ->fillForm(fn (): array => [
-                    'item_category_filter' => $this->activeItemCategoryId() ?: null,
-                    'from_office_id' => CustodianOfficeScope::inventoryOfficeId(),
-                    'transfer_date' => now()->toDateString(),
-                ]),
+                ->fillForm(function (): array {
+                    $defaults = [
+                        'item_category_filter' => $this->activeItemCategoryId() ?: null,
+                        'from_office_id' => CustodianOfficeScope::inventoryOfficeId(),
+                        'transfer_date' => now()->toDateString(),
+                    ];
+
+                    if ($this->pendingCreateFormData !== null) {
+                        $defaults = array_merge($defaults, $this->pendingCreateFormData);
+                        $this->pendingCreateFormData = null;
+                    }
+
+                    return $defaults;
+                }),
         ]);
 
         /** @var mixed $actionsComponent */

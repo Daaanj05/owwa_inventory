@@ -1,3 +1,6 @@
 <div class="owwa-acquisition-doc-tabs-wrap">
-    {!! $tabsHtml !!}
+    <div class="owwa-acquisition-doc-tabs-row">
+        {!! $tabsHtml !!}
+        {!! $toggleHtml !!}
+    </div>
 </div>

@@ -20,7 +20,6 @@ class CatalogAssetNumberServiceTest extends TestCase
         Office::factory()->create([
             'code' => 'RWO4A',
             'is_regional_supply' => true,
-            'is_satellite' => false,
         ]);
         $uacs = UacsObjectCode::query()->create([
             'code' => '106',
@@ -46,7 +45,6 @@ class CatalogAssetNumberServiceTest extends TestCase
         Office::factory()->create([
             'code' => 'RWO4A',
             'is_regional_supply' => true,
-            'is_satellite' => false,
         ]);
         $uacs = UacsObjectCode::query()->create([
             'code' => '106',
@@ -78,7 +76,6 @@ class CatalogAssetNumberServiceTest extends TestCase
         Office::factory()->create([
             'code' => 'RWO4A',
             'is_regional_supply' => true,
-            'is_satellite' => false,
         ]);
         $uacs = UacsObjectCode::query()->create([
             'code' => '106-03',

@@ -19,6 +19,7 @@ use App\Support\OwwaReferenceLabels;
 use App\Support\PhysicalCountPropertyClassResolver;
 use App\Support\PhysicalCountSessionViewPresenter;
 use App\Support\PpePropertyType;
+use App\Support\SignatorySelect;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Hidden;
@@ -121,19 +122,15 @@ class PhysicalCountSessionForm
                                 $set('inventory_type_label', PpePropertyType::propertyTypeLabel($state));
                             })
                             ->columnSpanFull(),
-                        TextInput::make('accountable_officer_name')
-                            ->label('Accountable officer')
-                            ->maxLength(255)
-                            ->datalist(fn (Get $get): array => self::officerNameSuggestions(
-                                filled($get('office_id')) ? (int) $get('office_id') : null,
-                                ProcurementSignatoryName::ROLE_PHYSICAL_COUNT_ACCOUNTABLE,
-                            )),
-                        TextInput::make('accountable_officer_designation')
-                            ->label('Designation')
-                            ->maxLength(255)
-                            ->datalist(fn (Get $get): array => self::designationSuggestions(
-                                filled($get('office_id')) ? (int) $get('office_id') : null,
-                            )),
+                        SignatorySelect::makeFromSuggestions('accountable_officer_name', ProcurementSignatoryName::ROLE_PHYSICAL_COUNT_ACCOUNTABLE, fn (Get $get): array => self::officerNameSuggestions(
+                            filled($get('office_id')) ? (int) $get('office_id') : null,
+                            ProcurementSignatoryName::ROLE_PHYSICAL_COUNT_ACCOUNTABLE,
+                        ))
+                            ->label('Accountable officer'),
+                        SignatorySelect::makeFromSuggestions('accountable_officer_designation', ProcurementSignatoryName::ROLE_PHYSICAL_COUNT_ACCOUNTABLE_DESIGNATION, fn (Get $get): array => self::designationSuggestions(
+                            filled($get('office_id')) ? (int) $get('office_id') : null,
+                        ))
+                            ->label('Designation'),
                         DatePicker::make('date_of_assumption')
                             ->label('Date of assumption'),
                     ]),
@@ -146,27 +143,21 @@ class PhysicalCountSessionForm
                     ->columnSpanFull()
                     ->columns(2)
                     ->schema([
-                        TextInput::make('certified_by_printed_name')
-                            ->label('Certified by')
-                            ->maxLength(255)
-                            ->datalist(fn (Get $get): array => self::officerNameSuggestions(
-                                filled($get('office_id')) ? (int) $get('office_id') : null,
-                                ProcurementSignatoryName::ROLE_PHYSICAL_COUNT_CERTIFIED,
-                            )),
-                        TextInput::make('approved_by_printed_name')
-                            ->label('Approved by')
-                            ->maxLength(255)
-                            ->datalist(fn (Get $get): array => self::officerNameSuggestions(
-                                filled($get('office_id')) ? (int) $get('office_id') : null,
-                                ProcurementSignatoryName::ROLE_PHYSICAL_COUNT_APPROVED,
-                            )),
-                        TextInput::make('verified_by_printed_name')
-                            ->label('Verified by')
-                            ->maxLength(255)
-                            ->datalist(fn (Get $get): array => self::officerNameSuggestions(
-                                filled($get('office_id')) ? (int) $get('office_id') : null,
-                                ProcurementSignatoryName::ROLE_PHYSICAL_COUNT_VERIFIED,
-                            )),
+                        SignatorySelect::makeFromSuggestions('certified_by_printed_name', ProcurementSignatoryName::ROLE_PHYSICAL_COUNT_CERTIFIED, fn (Get $get): array => self::officerNameSuggestions(
+                            filled($get('office_id')) ? (int) $get('office_id') : null,
+                            ProcurementSignatoryName::ROLE_PHYSICAL_COUNT_CERTIFIED,
+                        ))
+                            ->label('Certified by'),
+                        SignatorySelect::makeFromSuggestions('approved_by_printed_name', ProcurementSignatoryName::ROLE_PHYSICAL_COUNT_APPROVED, fn (Get $get): array => self::officerNameSuggestions(
+                            filled($get('office_id')) ? (int) $get('office_id') : null,
+                            ProcurementSignatoryName::ROLE_PHYSICAL_COUNT_APPROVED,
+                        ))
+                            ->label('Approved by'),
+                        SignatorySelect::makeFromSuggestions('verified_by_printed_name', ProcurementSignatoryName::ROLE_PHYSICAL_COUNT_VERIFIED, fn (Get $get): array => self::officerNameSuggestions(
+                            filled($get('office_id')) ? (int) $get('office_id') : null,
+                            ProcurementSignatoryName::ROLE_PHYSICAL_COUNT_VERIFIED,
+                        ))
+                            ->label('Verified by'),
                     ]),
                 Section::make('QR counting workflow')
                     ->description('Property-tag scanning (PPE and semi-expendable)')

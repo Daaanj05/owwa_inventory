@@ -35,14 +35,16 @@ return new class extends Migration
         }
 
         if ($candidate === null) {
-            $nonSatelliteOffices = Office::query()
-                ->active()
-                ->where('is_satellite', false)
-                ->orderBy('name')
-                ->get();
+            $fallbackQuery = Office::query()->active()->orderBy('name');
 
-            if ($nonSatelliteOffices->count() === 1) {
-                $candidate = $nonSatelliteOffices->first();
+            if (Schema::hasColumn('offices', 'is_satellite')) {
+                $fallbackQuery->where('is_satellite', false);
+            }
+
+            $fallbackOffices = $fallbackQuery->get();
+
+            if ($fallbackOffices->count() === 1) {
+                $candidate = $fallbackOffices->first();
             }
         }
 

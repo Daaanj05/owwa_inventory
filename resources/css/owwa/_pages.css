@@ -1,0 +1,3991 @@
+/* OWWA theme partial: _pages.css (original lines 3068-7053) — edit then run: npm run build:owwa-theme */
+
+/* ═══════════════════════════════════════════════════════════
+   STOCK LEVELS PAGE — dashboard layout (KPI cards + data panel)
+═══════════════════════════════════════════════════════════ */
+.owwa-inventory-layout {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.owwa-wizard-title {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    width: fit-content;
+    max-width: 100%;
+    color: #111827;
+    font-size: 1.25rem;
+    line-height: 1.2;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+}
+
+.owwa-wizard-step {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    color: inherit;
+    font-size: inherit;
+    line-height: inherit;
+    font-weight: inherit;
+    white-space: nowrap;
+}
+
+.owwa-wizard-step-label {
+    display: inline-block;
+    font-size: inherit;
+    font-weight: inherit;
+    line-height: inherit;
+}
+
+.owwa-wizard-step-icon {
+    display: inline-block;
+    width: 1.75rem;
+    height: 1.75rem;
+    flex-shrink: 0;
+    background: center / contain no-repeat;
+}
+
+.owwa-wizard-step-icon--semi-expendable {
+    background-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22none%22%20viewBox%3D%220%200%2024%2024%22%20stroke-width%3D%221.5%22%20stroke%3D%22%232563eb%22%3E%3Cpath%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20d%3D%22M11.42%2015.17%2017.25%2021A2.652%202.652%200%200021%2017.25l-5.877-5.877M11.42%2015.17%202.81%206.58a2.652%202.652%200%20013.12-4.24l2.87%202.87m-5.18%2010.06%205.18-5.18m5.18%205.18%202.87%202.87a2.652%202.652%200%20004.24-3.12l-2.87-2.87m-5.18-10.06-5.18%205.18%22%2F%3E%3C%2Fsvg%3E");
+}
+
+.owwa-wizard-step-icon--ppe {
+    background-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22none%22%20viewBox%3D%220%200%2024%2024%22%20stroke-width%3D%221.5%22%20stroke%3D%22%232563eb%22%3E%3Cpath%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20d%3D%22M9%2012.75%2011.25%2015%2015%209.75m-3-7.036A11.959%2011.959%200%20013.598%206%2011.99%2011.99%200%20003%209.749c0%205.592%203.824%2010.29%209%2011.623%205.176-1.332%209-6.03%209-11.622%200-1.31-.21-2.571-.598-3.751h-.152c-3.196%200-6.1-1.248-8.25-3.285z%22%2F%3E%3C%2Fsvg%3E");
+}
+
+.owwa-wizard-step-icon--consumables {
+    background-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22none%22%20viewBox%3D%220%200%2024%2024%22%20stroke-width%3D%221.5%22%20stroke%3D%22%232563eb%22%3E%3Cpath%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20d%3D%22M20.25%207.5l-.625%2010.632a2.25%202.25%200%2001-2.247%202.118H6.622a2.25%202.25%200%2001-2.247-2.118L3.75%207.5M10%2011.25h4M3.375%207.5h17.25c.621%200%201.125-.504%201.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621%200-1.125.504-1.125%201.125v1.5c0%20.621.504%201.125%201.125%201.125z%22%2F%3E%3C%2Fsvg%3E");
+}
+
+.owwa-wizard-step-icon--default {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke-width='1.5' stroke='%232563eb'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M3.75 6A2.25 2.25 0 0 1 6 3.75h2.25A2.25 2.25 0 0 1 10.5 6v2.25a2.25 2.25 0 0 1-2.25 2.25H6a2.25 2.25 0 0 1-2.25-2.25V6ZM13.5 15.75a2.25 2.25 0 0 1 2.25-2.25H18a2.25 2.25 0 0 1 2.25 2.25V18A2.25 2.25 0 0 1 18 20.25h-2.25a2.25 2.25 0 0 1-2.25-2.25v-2.25ZM13.5 6.75a2.25 2.25 0 0 1 2.25-2.25H18A2.25 2.25 0 0 1 20.25 6v2.25A2.25 2.25 0 0 1 18 10.5h-2.25A2.25 2.25 0 0 1 13.5 8.25V6.75ZM3.75 15.75a2.25 2.25 0 0 1 2.25-2.25h2.25a2.25 2.25 0 0 1 2.25 2.25V18a2.25 2.25 0 0 1-2.25 2.25H6a2.25 2.25 0 0 1-2.25-2.25v-2.25Z' /%3E%3C/svg%3E");
+}
+
+/* Hide page-level title ::before when wizard breadcrumb supplies the category icon */
+.fi-page .fi-header-heading:has(.owwa-wizard-title)::before {
+    display: none;
+}
+
+.owwa-wizard-step-link,
+.owwa-wizard-step-link:hover,
+.owwa-wizard-step-link:focus-visible,
+.owwa-wizard-step-link:active {
+    color: inherit;
+    background: transparent;
+    border: 0;
+    text-decoration: none;
+    outline: none;
+}
+
+.owwa-wizard-step-current {
+    color: inherit;
+}
+
+.owwa-wizard-separator {
+    color: #64748b;
+    font-size: 0.9em;
+    font-weight: 700;
+    line-height: 1;
+    margin-inline: 0.08rem;
+}
+
+/* JOE: My inventory — clipboard-document-list icon (matches sidebar) */
+.fi-page.owwa-employee-my-inventory .fi-header-heading::before {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke-width='1.5' stroke='%232563eb'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 0 0 2.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 0 0-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 0 0 .75-.75 2.25 2.25 0 0 0-.1-.664m-5.8 0A2.251 2.251 0 0 1 13.5 2.25H15a2.25 2.25 0 0 1 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25ZM6.75 12h.008v.008H6.75V12Zm0 3h.008v.008H6.75V15Zm0 3h.008v.008H6.75V18Z' /%3E%3C/svg%3E");
+}
+
+/* JOE: Stock levels — squares-2x2 icon (matches sidebar) */
+.fi-page.owwa-employee-stock-levels .fi-header-heading::before {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke-width='1.5' stroke='%232563eb'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M3.75 6A2.25 2.25 0 0 1 6 3.75h2.25A2.25 2.25 0 0 1 10.5 6v2.25a2.25 2.25 0 0 1-2.25 2.25H6a2.25 2.25 0 0 1-2.25-2.25V6ZM3.75 15.75A2.25 2.25 0 0 1 6 13.5h2.25a2.25 2.25 0 0 1 2.25 2.25V18a2.25 2.25 0 0 1-2.25 2.25H6A2.25 2.25 0 0 1 3.75 18v-2.25ZM13.5 6a2.25 2.25 0 0 1 2.25-2.25H18A2.25 2.25 0 0 1 20.25 6v2.25A2.25 2.25 0 0 1 18 10.5h-2.25a2.25 2.25 0 0 1-2.25-2.25V6ZM13.5 15.75a2.25 2.25 0 0 1 2.25-2.25H18a2.25 2.25 0 0 1 2.25 2.25V18A2.25 2.25 0 0 1 18 20.25h-2.25a2.25 2.25 0 0 1-2.25-2.25v-2.25Z' /%3E%3C/svg%3E");
+}
+
+.owwa-search-bar {
+    width: 260px;
+    max-width: 100%;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid #d1d5db;
+    border-radius: 0.5rem;
+    font-size: 0.8125rem;
+    background: #fff;
+    color: #111827;
+    outline: none;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+    transition: border-color 0.15s, box-shadow 0.15s;
+}
+select.owwa-search-bar {
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    padding-right: 2.25rem;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath d='M6 8l4 4 4-4' stroke='%236b7280' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-size: 1rem 1rem;
+    background-position: right 0.75rem center;
+}
+.owwa-search-bar:focus {
+    border-color: #2563eb;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+.owwa-search-bar::placeholder {
+    color: #9ca3af;
+}
+
+.owwa-kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.4rem;
+}
+
+@media (max-width: 640px) {
+    .owwa-kpi-grid { grid-template-columns: 1fr; }
+}
+
+.owwa-kpi-grid--4 {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.75rem;
+    width: 100%;
+}
+
+@media (max-width: 1024px) {
+    .owwa-kpi-grid--4 {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 640px) {
+    .owwa-kpi-grid--4 {
+        grid-template-columns: 1fr;
+    }
+}
+
+.owwa-kpi-card {
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 0.5rem;
+    padding: 0.6rem 0.9rem;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+    position: relative;
+    overflow: visible;
+}
+
+.owwa-kpi-card::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 4px;
+}
+
+.owwa-kpi-card-total::before { background: #1e40af; }
+.owwa-kpi-card-ok::before   { background: #059669; }
+.owwa-kpi-card-low::before  { background: #dc2626; }
+
+.owwa-kpi-card-inner {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.owwa-kpi-card-value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    letter-spacing: -0.03em;
+    line-height: 1.2;
+    color: #111827;
+}
+
+.owwa-kpi-card-ok .owwa-kpi-card-value   { color: #059669; }
+.owwa-kpi-card-low .owwa-kpi-card-value  { color: #dc2626; }
+
+.owwa-kpi-card-label {
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: #6b7280;
+}
+
+.owwa-kpi-tooltip {
+    position: absolute;
+    left: 0.75rem;
+    right: 0.75rem;
+    top: -0.55rem;
+    transform: translateY(-100%);
+    z-index: 20;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.14s ease;
+    padding: 0.45rem 0.55rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.375rem;
+    background: #ffffff;
+    color: #334155;
+    font-size: 0.75rem;
+    font-weight: 500;
+    line-height: 1.4;
+    box-shadow: 0 4px 14px rgba(15, 23, 42, 0.12);
+}
+
+.owwa-kpi-card:hover .owwa-kpi-tooltip {
+    opacity: 1;
+}
+
+.owwa-stock-ledger-modal .owwa-th-has-tooltip {
+    position: relative;
+    white-space: nowrap;
+}
+
+.owwa-stock-ledger-modal .owwa-th-tooltip-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 0.95rem;
+    height: 0.95rem;
+    margin-left: 0.25rem;
+    padding: 0;
+    border-radius: 9999px;
+    border: 1px solid #cbd5e1;
+    background: transparent;
+    color: #64748b;
+    font-size: 0.625rem;
+    font-weight: 700;
+    line-height: 1;
+    vertical-align: middle;
+    cursor: help;
+}
+
+.owwa-th-tooltip--portal {
+    position: fixed;
+    transform: translate(-50%, -100%);
+    z-index: 99999;
+    min-width: 12rem;
+    max-width: 16rem;
+    padding: 0.45rem 0.55rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.375rem;
+    background: #ffffff;
+    color: #334155;
+    font-size: 0.75rem;
+    font-weight: 500;
+    line-height: 1.4;
+    white-space: normal;
+    text-align: left;
+    text-transform: none;
+    letter-spacing: normal;
+    box-shadow: 0 4px 14px rgba(15, 23, 42, 0.12);
+    pointer-events: none;
+}
+
+/* Data panel: card with header + body */
+.owwa-data-panel {
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 0.75rem;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 0 0 1px rgba(0,0,0,0.03);
+    overflow: hidden;
+}
+
+.owwa-search-wrap {
+    padding: 0 0 0.5rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+/* Toolbar: search left, filters right — grid keeps one row (no wrap under search) */
+.owwa-toolbar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0 0 0.5rem;
+}
+.owwa-toolbar-left {
+    min-width: 0;
+    justify-self: start;
+    width: 100%;
+    max-width: min(28rem, 100%);
+}
+.owwa-toolbar-right {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 0.5rem;
+    justify-content: flex-end;
+    min-width: 0;
+}
+
+@media (max-width: 520px) {
+    .owwa-stock-levels-toolbar .owwa-toolbar-right {
+        flex-wrap: wrap;
+        justify-content: flex-end;
+    }
+}
+
+.owwa-stock-levels-toolbar .owwa-toolbar-right .fi-btn {
+    white-space: nowrap;
+}
+
+.owwa-stock-levels-toolbar-left {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem;
+    min-width: 0;
+}
+
+.owwa-stock-restock-tabs {
+    margin-top: 0;
+    flex-shrink: 0;
+}
+
+.owwa-inv-category-page .owwa-data-panel-body {
+    overflow-x: auto;
+    overflow-y: visible;
+}
+
+.owwa-stock-levels-table-wrap {
+    max-width: 100%;
+    overflow-x: auto;
+}
+
+.owwa-stock-levels-table {
+    width: max-content;
+    min-width: 100%;
+    max-width: none;
+    table-layout: auto;
+}
+
+.owwa-stock-levels-table th,
+.owwa-stock-levels-table td {
+    white-space: nowrap;
+}
+
+.owwa-stock-levels-table th,
+.owwa-stock-levels-table td {
+    padding-left: 0.9rem;
+    padding-right: 0.9rem;
+}
+
+/* Checkbox column (first) — do not inherit Item widths */
+.owwa-stock-levels-table th.owwa-stock-select,
+.owwa-stock-levels-table td.owwa-stock-select {
+    width: 2.5rem;
+    min-width: 2.5rem;
+    max-width: 2.5rem;
+    padding-left: 0.75rem;
+    padding-right: 0.35rem;
+    text-align: center;
+    vertical-align: middle;
+}
+
+.owwa-stock-levels-table .owwa-stock-select input[type='checkbox'] {
+    width: 1rem;
+    height: 1rem;
+    cursor: pointer;
+}
+
+.owwa-selection-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.25rem 0.6rem;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #1e3a5f;
+    background: #e8eef5;
+    border: 1px solid #c5d4e8;
+    white-space: nowrap;
+}
+
+.owwa-selection-clear {
+    appearance: none;
+    border: none;
+    background: transparent;
+    color: #4b6485;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-decoration: underline;
+    cursor: pointer;
+    padding: 0.15rem 0.25rem;
+}
+
+.owwa-selection-clear:hover {
+    color: #1e3a5f;
+}
+
+.owwa-stock-levels-toolbar-right {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    justify-content: flex-end;
+}
+
+.owwa-stock-selection-controls {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.owwa-stock-levels-toolbar-right .fi-dropdown-panel {
+    min-width: 16rem;
+    max-width: 22rem;
+}
+
+.owwa-stock-levels-toolbar-right .fi-dropdown-list-item-label,
+.owwa-stock-levels-toolbar-right .fi-btn-label {
+    white-space: nowrap;
+    overflow: visible;
+    text-overflow: clip;
+    max-width: none;
+}
+
+/* Issuances list: one-row toolbar (search + optional pills + bulk) */
+.fi-page.owwa-issuances-list--consumables .fi-ta-header-toolbar,
+.fi-page.owwa-issuances-list--property .fi-ta-header-toolbar {
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: wrap !important;
+    align-items: center !important;
+    gap: 0.75rem !important;
+    min-height: unset !important;
+    height: auto !important;
+    overflow: visible !important;
+    padding: 0.25rem 0 0.5rem !important;
+    margin: 0 !important;
+}
+
+.fi-page.owwa-issuances-list--consumables .fi-ta-header-toolbar > div:has(.fi-ta-search-field),
+.fi-page.owwa-issuances-list--property .fi-ta-header-toolbar > div:has(.fi-ta-search-field) {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    align-items: center !important;
+    gap: 0.75rem !important;
+    order: 1 !important;
+    width: auto !important;
+    flex: 1 1 auto !important;
+    min-width: 0 !important;
+}
+
+.fi-page.owwa-issuances-list--consumables .fi-ta-search-field,
+.fi-page.owwa-issuances-list--property .fi-ta-search-field {
+    display: block !important;
+    width: 18rem !important;
+    max-width: 100% !important;
+    margin-right: 0 !important;
+}
+
+/* Beat global `.fi-ta-search-field { margin-right: auto }` so view pills sit beside search */
+.fi-page.owwa-issuances-list--consumables .fi-ta-ctn .fi-ta-header-toolbar > div:has(.fi-ta-search-field) .fi-ta-search-field,
+.fi-page.owwa-issuances-list--consumables .fi-ta-ctn .fi-ta-header-toolbar > :nth-child(2) .fi-ta-search-field {
+    flex: 0 0 auto !important;
+    width: 18rem !important;
+    max-width: 100% !important;
+    margin-right: 0 !important;
+}
+
+.fi-page.owwa-issuances-list--consumables .fi-ta-ctn .fi-ta-header-toolbar > div:has(.fi-ta-search-field) .owwa-issuances-view-tabs {
+    flex: 0 0 auto !important;
+    margin-left: 0 !important;
+    margin-right: auto !important;
+}
+
+.fi-page.owwa-issuances-list--consumables .owwa-issuances-view-tabs {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    flex-shrink: 0;
+}
+
+.fi-page.owwa-issuances-list--consumables .owwa-issuances-view-tabs.is-disabled {
+    opacity: 0.45;
+    pointer-events: none;
+}
+
+.fi-page.owwa-issuances-list--consumables .owwa-issuances-view-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 1.25rem;
+    margin-left: 0.35rem;
+    padding: 0.05rem 0.35rem;
+    border-radius: 999px;
+    background: #dbeafe;
+    color: #1e3a5f;
+    font-size: 0.7rem;
+    font-weight: 700;
+    line-height: 1.1;
+}
+
+.fi-page.owwa-issuances-list--consumables .fi-ta-actions,
+.fi-page.owwa-issuances-list--property .fi-ta-actions,
+.fi-page.owwa-issuances-list--consumables .fi-ta-header-toolbar .fi-ta-actions,
+.fi-page.owwa-issuances-list--property .fi-ta-header-toolbar .fi-ta-actions {
+    order: 2 !important;
+    margin-left: auto !important;
+    justify-content: flex-end !important;
+    width: auto !important;
+    flex: 0 0 auto !important;
+}
+
+.fi-page.owwa-issuances-list--consumables .fi-ta-selection-indicator,
+.fi-page.owwa-issuances-list--property .fi-ta-selection-indicator {
+    width: 100%;
+}
+
+.fi-page.owwa-issuances-list--consumables .fi-ta-selection-indicator .fi-ac,
+.fi-page.owwa-issuances-list--property .fi-ta-selection-indicator .fi-ac,
+.fi-page.owwa-issuances-list--consumables .fi-ta-selection-indicator .fi-btn-group,
+.fi-page.owwa-issuances-list--property .fi-ta-selection-indicator .fi-btn-group,
+.fi-page.owwa-issuances-list--consumables .fi-ta-selection-indicator > div:last-child,
+.fi-page.owwa-issuances-list--property .fi-ta-selection-indicator > div:last-child {
+    margin-left: auto;
+}
+
+.fi-page.owwa-issuances-list--consumables .fi-sc-component,
+.fi-page.owwa-issuances-list--consumables .fi-sc > .fi-grid,
+.fi-page.owwa-issuances-list--consumables .fi-page-content > .fi-sc,
+.fi-page.owwa-issuances-list--property .fi-sc-component,
+.fi-page.owwa-issuances-list--property .fi-sc > .fi-grid,
+.fi-page.owwa-issuances-list--property .fi-page-content > .fi-sc {
+    row-gap: 0.5rem !important;
+    gap: 0.5rem !important;
+}
+
+/* Item is 2nd column after checkbox */
+.owwa-stock-levels-table td.owwa-cell-primary,
+.owwa-stock-levels-table th:nth-child(2) {
+    min-width: 16rem;
+    max-width: 16rem;
+}
+
+.owwa-stock-levels-table--simple {
+    width: max-content;
+    min-width: 0;
+    table-layout: fixed;
+}
+
+.owwa-stock-levels-table--simple td.owwa-cell-primary,
+.owwa-stock-levels-table--simple th:nth-child(2) {
+    min-width: 14rem;
+    max-width: 22rem;
+    width: 22rem;
+}
+
+.owwa-stock-levels-table--simple th:nth-child(3),
+.owwa-stock-levels-table--simple td:nth-child(3) {
+    min-width: 7rem;
+    width: 7rem;
+}
+
+.owwa-stock-levels-table--simple th:nth-child(4),
+.owwa-stock-levels-table--simple td:nth-child(4),
+.owwa-stock-levels-table--simple th:nth-child(5),
+.owwa-stock-levels-table--simple td:nth-child(5) {
+    min-width: 5.5rem;
+    width: 5.5rem;
+}
+
+.owwa-stock-levels-table--simple th:nth-child(6),
+.owwa-stock-levels-table--simple td:nth-child(6) {
+    min-width: 5rem;
+    width: 5rem;
+}
+
+.owwa-stock-levels-table--tagged td.owwa-cell-primary,
+.owwa-stock-levels-table--tagged th:nth-child(2) {
+    min-width: 18rem;
+    max-width: 18rem;
+}
+
+.owwa-stock-levels-table--tagged th:nth-child(3),
+.owwa-stock-levels-table--tagged td:nth-child(3) {
+    min-width: 7rem;
+    width: 7rem;
+}
+
+.owwa-stock-levels-table--tagged th:nth-child(4),
+.owwa-stock-levels-table--tagged td:nth-child(4) {
+    min-width: 11.5rem;
+    width: 11.5rem;
+}
+
+.owwa-stock-levels-table--tagged th:nth-child(5),
+.owwa-stock-levels-table--tagged td:nth-child(5) {
+    min-width: 10rem;
+    width: 10rem;
+}
+
+.owwa-stock-levels-table--tagged th:nth-child(6),
+.owwa-stock-levels-table--tagged td:nth-child(6),
+.owwa-stock-levels-table--tagged th:nth-child(7),
+.owwa-stock-levels-table--tagged td:nth-child(7),
+.owwa-stock-levels-table--tagged th:nth-child(8),
+.owwa-stock-levels-table--tagged td:nth-child(8) {
+    min-width: 5.5rem;
+    width: 5.5rem;
+}
+
+.owwa-stock-levels-table--tagged th:nth-child(7),
+.owwa-stock-levels-table--tagged td:nth-child(7) {
+    min-width: 7rem;
+    width: 7rem;
+}
+
+.owwa-stock-levels-table td.owwa-cell-primary button {
+    display: block;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.owwa-stock-levels-table--simple td.owwa-cell-primary button {
+    max-width: 20rem;
+}
+
+/* Stock levels: scoped selects — solid fill + border (Filament can reset native selects) */
+.owwa-stock-scope-select {
+    box-sizing: border-box;
+    height: 2.375rem;
+    min-width: 10.5rem;
+    max-width: 100%;
+    padding: 0.5rem 2rem 0.5rem 0.75rem;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    line-height: 1.25;
+    color: #111827;
+    background-color: #ffffff;
+    border: 1px solid #cbd5e1;
+    border-radius: 0.5rem;
+    outline: none;
+    cursor: pointer;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath d='M6 8l4 4 4-4' stroke='%23475569' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-size: 1rem 1rem;
+    background-position: right 0.5rem center;
+    transition: border-color 0.15s, box-shadow 0.15s;
+}
+.owwa-stock-scope-select:hover {
+    border-color: #94a3b8;
+    background-color: #f8fafc;
+}
+.owwa-stock-scope-select:focus {
+    border-color: #2563eb;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+    background-color: #fff;
+}
+/* Stock levels page also embeds matching rules in stock-levels.blade.php (!important) so Filament cannot override. */
+
+.owwa-per-page-select {
+    height: 2.25rem;
+    padding: 0.5rem 2.25rem 0.5rem 0.75rem;
+    font-size: 0.8125rem;
+    border: 1px solid #d1d5db;
+    border-radius: 0.5rem;
+    background: #fff;
+    color: #111827;
+    outline: none;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath d='M6 8l4 4 4-4' stroke='%236b7280' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-size: 1rem 1rem;
+    /* This controls the space to the RIGHT of the arrow */
+    background-position: right 0.75rem center;
+}
+
+.owwa-per-page-select:focus {
+    border-color: #2563eb;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+/* When per-page is inside the joined pill, focus ring goes on the container */
+.owwa-pagination-center:focus-within {
+    border-color: #2563eb;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+.owwa-data-panel-header {
+    padding: 0.15rem 0;
+    background: transparent;
+    border-bottom: none;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+}
+
+.owwa-data-panel-title {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #111827;
+    margin: 0;
+    letter-spacing: -0.01em;
+}
+
+.owwa-data-panel-alert {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.35rem 0.6rem;
+    background: #fffbeb;
+    border: 1px solid #fcd34d;
+    border-radius: 0.375rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: #92400e;
+}
+
+.owwa-data-panel-alert-full {
+    width: 100%;
+    display: flex;
+}
+
+.owwa-alert-icon {
+    width: 1rem;
+    height: 1rem;
+    flex-shrink: 0;
+    color: #d97706;
+}
+
+.owwa-data-panel-body {
+    overflow: hidden;
+}
+
+.owwa-acquisition-items-table-wrap {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+}
+
+.owwa-acquisition-items-table th:nth-child(1),
+.owwa-acquisition-items-table td:nth-child(1) {
+    white-space: nowrap;
+    width: 7.5rem;
+}
+
+.owwa-acquisition-items-table th:nth-child(2),
+.owwa-acquisition-items-table td:nth-child(2) {
+    min-width: 12rem;
+}
+
+.owwa-table-wrap {
+    overflow-x: auto;
+}
+
+.owwa-data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.8125rem;
+}
+
+.owwa-data-table thead {
+    background-color: #f1f5f9;
+}
+
+.owwa-data-table th {
+    padding: 0.75rem 0.75rem;
+    text-align: left;
+    font-weight: 600;
+    font-size: 0.6875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #475569;
+    border-bottom: 1px solid #e2e8f0;
+    white-space: nowrap;
+}
+
+
+.owwa-data-table tbody tr {
+    border-bottom: 1px solid #e5e7eb;
+    transition: background-color 0.12s ease;
+}
+
+.owwa-data-table tbody tr:nth-child(even) {
+    background-color: #fafafa;
+}
+
+.owwa-data-table tbody tr:hover {
+    background-color: #f1f5f9;
+}
+
+.owwa-data-table tbody tr.owwa-row-low {
+    background-color: #fef2f2;
+}
+
+.owwa-data-table tbody tr.owwa-row-low:hover {
+    background-color: #fde8e8;
+}
+
+.owwa-data-table td {
+    padding: 0.875rem 0.75rem;
+    vertical-align: middle;
+    color: #374151;
+}
+
+.owwa-data-table td.owwa-cell-primary { color: #111827; font-weight: 500; }
+.owwa-data-table td.owwa-cell-muted  { color: #6b7280; }
+.owwa-data-table td.owwa-cell-danger { color: #dc2626; font-weight: 600; }
+.owwa-data-table td.owwa-num        { text-align: right; font-variant-numeric: tabular-nums; }
+.owwa-data-table td.owwa-status     { text-align: right; }
+.owwa-data-table th.owwa-num        { text-align: right; }
+.owwa-data-table th.owwa-status     { text-align: right; }
+
+.owwa-stock-ledger-modal .owwa-data-table tbody td.owwa-ledger-data-cell {
+    text-align: center;
+    vertical-align: middle;
+}
+
+.owwa-stock-ledger-modal .owwa-data-table tbody td.owwa-ledger-data-cell.owwa-num {
+    text-align: center;
+}
+
+.owwa-data-table--zebra tbody tr:nth-child(even):not(.owwa-row-low) {
+    background-color: #fafafa;
+}
+
+.owwa-pa-table-shell {
+    border-radius: 0.5rem;
+    border: 1px solid #e2e8f0;
+    overflow: hidden;
+}
+
+.owwa-pa-table-shell .owwa-data-table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: #f8fafc;
+    box-shadow: 0 1px 0 #e2e8f0;
+}
+
+.dark .owwa-pa-table-shell .owwa-data-table thead th {
+    background: #0f172a;
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.owwa-pa-table-scroll {
+    max-height: 28rem;
+    overflow: auto;
+}
+
+.owwa-pa-presets {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+}
+
+.owwa-pa-preset-btn {
+    border: 1px solid #d1d5db;
+    border-radius: 9999px;
+    padding: 0.2rem 0.65rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: #374151;
+    background: #fff;
+    cursor: pointer;
+}
+
+.owwa-pa-preset-btn:hover {
+    border-color: #1e6fbe;
+    color: #1e6fbe;
+}
+
+.owwa-pa-preset-btn.is-active {
+    background: #eff6ff;
+    border-color: #93c5fd;
+    color: #1e6fbe;
+    font-weight: 600;
+}
+
+.owwa-pa-chip--inline {
+    margin-bottom: 0.75rem;
+}
+
+.owwa-pa-tab-helper {
+    margin: 0.5rem 0 0;
+    font-size: 0.75rem;
+    line-height: 1.5;
+    color: #64748b;
+}
+
+.owwa-pa-eul-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.15rem 0.5rem;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    line-height: 1.2;
+}
+
+.owwa-pa-eul-badge--expired {
+    background: #fef2f2;
+    color: #b91c1c;
+}
+
+.owwa-pa-eul-badge--nearing {
+    background: #fffbeb;
+    color: #b45309;
+}
+
+.owwa-pa-summary-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.owwa-pa-action-panel {
+    border-radius: 0.75rem;
+    border: 1px solid #e2e8f0;
+    background: #f8fafc;
+    padding: 1rem 1.1rem;
+}
+
+.owwa-pa-action-headline {
+    margin: 0 0 0.75rem;
+    font-size: 0.9375rem;
+    font-weight: 700;
+    color: #0f172a;
+}
+
+.owwa-pa-action-group {
+    margin-top: 0.65rem;
+}
+
+.owwa-pa-action-group-title {
+    margin: 0 0 0.35rem;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #64748b;
+}
+
+.owwa-pa-action-list {
+    margin: 0;
+    padding-left: 1.1rem;
+    font-size: 0.8125rem;
+    line-height: 1.55;
+    color: #334155;
+}
+
+.owwa-pa-action-empty {
+    margin: 0;
+    font-size: 0.8125rem;
+    color: #64748b;
+}
+
+.owwa-pa-generate-btn--secondary {
+    background: #fff;
+    color: #1e6fbe;
+}
+
+.owwa-pa-generate-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0.35rem;
+    flex-shrink: 0;
+}
+
+.owwa-pa-generate-hint {
+    margin: 0;
+    font-size: 0.6875rem;
+    color: #64748b;
+}
+
+.owwa-pa-summary-footer {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.35rem;
+}
+
+.owwa-pa-generate-btn--footer {
+    min-width: 12rem;
+}
+
+.owwa-pa-ai-recommendation-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.85rem 1rem 0;
+}
+
+.owwa-pa-ai-recommendation .owwa-pa-ai-unavailable,
+.owwa-pa-ai-recommendation .owwa-pa-callout {
+    margin: 0.85rem 1rem 0;
+}
+
+.owwa-pa-summary-table-wrap {
+    margin-top: 0.75rem;
+    border-top: 1px solid #e2e8f0;
+    overscroll-behavior: contain;
+}
+
+.owwa-pa-summary-table {
+    width: 100%;
+    table-layout: fixed;
+    border-collapse: collapse;
+    font-size: 0.8125rem;
+}
+
+.owwa-pa-summary-table th,
+.owwa-pa-summary-table td {
+    width: calc(100% / 6);
+    padding: 0.55rem 0.65rem;
+    border-bottom: 1px solid #f1f5f9;
+    text-align: center;
+    vertical-align: middle;
+    line-height: 1.4;
+    color: #334155;
+}
+
+.owwa-pa-summary-table th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    font-size: 0.6875rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #64748b;
+    background: #f8fafc;
+    box-shadow: 0 1px 0 #e2e8f0;
+}
+
+.dark .owwa-pa-summary-table th {
+    background: #0f172a;
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.1);
+    color: #94a3b8;
+}
+
+.owwa-pa-summary-table td:nth-child(2),
+.owwa-pa-summary-table td:nth-child(3) {
+    text-align: left;
+    word-break: break-word;
+}
+
+.owwa-pa-summary-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.owwa-status-medium {
+    background: #fff7ed;
+    color: #9a3412;
+    border: 1px solid #fed7aa;
+}
+
+.owwa-pa-summary-intro {
+    min-width: 0;
+    flex: 1;
+}
+
+.owwa-pa-summary-status {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.35rem 0.5rem;
+    margin-top: 0.55rem;
+    font-size: 0.75rem;
+    line-height: 1.45;
+    color: #64748b;
+}
+
+.owwa-pa-summary-status-sep {
+    color: #cbd5e1;
+}
+
+.owwa-pa-summary-status-pill {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.15rem 0.5rem;
+    border-radius: 999px;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    line-height: 1.2;
+}
+
+.owwa-pa-summary-status-pill--offline {
+    background: #fffbeb;
+    color: #b45309;
+    border: 1px solid #fde68a;
+}
+
+.owwa-pa-system-summary-label {
+    margin: 0 0 0.35rem;
+    font-size: 0.6875rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #64748b;
+}
+
+.owwa-pa-ai-narrative-details {
+    margin-top: 0.75rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.75rem;
+    background: #fff;
+    overflow: hidden;
+}
+
+.owwa-pa-ai-narrative-summary {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.35rem 0.75rem;
+    padding: 0.75rem 1rem;
+    cursor: pointer;
+    list-style: none;
+    background: #f8fafc;
+    border-bottom: 1px solid transparent;
+}
+
+.owwa-pa-ai-narrative-details[open] .owwa-pa-ai-narrative-summary {
+    border-bottom-color: #e2e8f0;
+}
+
+.owwa-pa-ai-narrative-summary::-webkit-details-marker {
+    display: none;
+}
+
+.owwa-pa-ai-narrative-summary-title {
+    font-size: 0.8125rem;
+    font-weight: 700;
+    color: #334155;
+}
+
+.owwa-pa-ai-narrative-summary-hint {
+    font-size: 0.75rem;
+    color: #64748b;
+}
+
+.owwa-pa-ai-narrative-details .owwa-pa-ai-recommendation {
+    margin-top: 0;
+    border: none;
+    border-radius: 0;
+}
+
+.owwa-pa-ai-recommendation-head-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.5rem 0.75rem;
+    width: 100%;
+}
+
+.owwa-pa-ai-recommendation .owwa-pr-ai-result-head {
+    justify-content: flex-end;
+}
+
+.owwa-pa-ai-narrative-body {
+    font-size: 0.9375rem;
+    line-height: 1.65;
+}
+
+.owwa-pa-ai-narrative-body > p:first-child::before {
+    content: '\201C';
+    color: #93c5fd;
+    font-size: 1.125rem;
+    font-weight: 700;
+    margin-right: 0.15rem;
+}
+
+.owwa-pa-ai-narrative-body > p:last-child::after {
+    content: '\201D';
+    color: #93c5fd;
+    font-size: 1.125rem;
+    font-weight: 700;
+    margin-left: 0.15rem;
+}
+
+.owwa-pa-ai-insight {
+    border-radius: 0.75rem;
+    border: 1px solid #e2e8f0;
+    background: #fff;
+    padding: 0.85rem 1rem;
+}
+
+.owwa-pa-ai-insight-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin-bottom: 0.5rem;
+}
+
+.owwa-pa-ai-insight-title {
+    margin: 0;
+    font-size: 0.8125rem;
+    font-weight: 700;
+    color: #475569;
+}
+
+.owwa-pa-ai-recommendation {
+    margin-top: 0;
+    border-radius: 0.75rem;
+    border: 1px solid #e2e8f0;
+    border-left: 3px solid #2563eb;
+    background: linear-gradient(135deg, #f8fbff 0%, #ffffff 60%);
+    overflow: hidden;
+}
+
+.owwa-pa-ai-recommendation .owwa-pa-summary-table-wrap {
+    padding: 0 1rem 0.85rem;
+    border-top: 1px solid #e2e8f0;
+    margin-top: 0;
+}
+
+.owwa-pa-ai-recommendation .owwa-pa-ai-narrative-body {
+    padding-top: 0.5rem;
+}
+
+.owwa-pa-ai-recommendation-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.85rem 1rem 0;
+}
+
+.owwa-pa-ai-recommendation-title {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 600;
+    color: #0f172a;
+    line-height: 1.3;
+}
+
+.owwa-pa-ai-recommendation-icon {
+    font-size: 0.875rem;
+    color: #2563eb;
+    line-height: 1;
+}
+
+.owwa-pa-ai-recommendation-meta-link {
+    flex-shrink: 0;
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: #64748b;
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+.owwa-pa-ai-recommendation-meta-link:hover {
+    color: #334155;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+.owwa-pa-ai-recommendation-body {
+    padding: 0.5rem 1rem 0.85rem;
+    font-size: 0.875rem;
+    line-height: 1.6;
+    color: #334155;
+}
+
+.owwa-pa-ai-recommendation-body p {
+    margin: 0 0 0.5rem;
+}
+
+.owwa-pa-ai-recommendation-body p:last-child {
+    margin-bottom: 0;
+}
+
+.owwa-pa-ai-recommendation .owwa-pr-ai-foot {
+    margin: 0;
+}
+
+.owwa-pa-ai-unavailable {
+    margin: 0;
+    font-size: 0.8125rem;
+    color: #64748b;
+}
+
+.owwa-pr-ai-loading--inset {
+    margin-top: 0.25rem;
+}
+
+.owwa-pr-ai-loading--accent {
+    border-left: 3px solid #2563eb;
+    background: linear-gradient(135deg, #f8fbff 0%, #f8fafc 100%);
+}
+
+.owwa-pa-filter-chips {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 0.75rem;
+    margin-bottom: 0.75rem;
+}
+
+.owwa-pa-chip {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.25rem 0.65rem;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: #1e3a5f;
+    background: #eff6ff;
+    border: 1px solid #bfdbfe;
+}
+
+.owwa-pa-how-it-works summary {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #2563eb;
+    cursor: pointer;
+    list-style: none;
+}
+
+.owwa-pa-how-it-works summary::-webkit-details-marker {
+    display: none;
+}
+
+.owwa-pa-how-it-works p {
+    margin: 0.5rem 0 0;
+    max-width: 52rem;
+    font-size: 0.8125rem;
+    line-height: 1.55;
+    color: #64748b;
+}
+
+.owwa-pa-table-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.75rem;
+}
+
+.owwa-pa-table-actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.owwa-pa-export-btn,
+.owwa-pa-generate-btn {
+    border-radius: 0.5rem;
+    border: 1px solid #1e6fbe;
+    background: #1e6fbe;
+    color: #fff;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    padding: 0.45rem 0.85rem;
+    cursor: pointer;
+}
+
+.owwa-pa-export-btn {
+    background: #fff;
+    color: #1e6fbe;
+}
+
+.owwa-pa-export-btn:hover,
+.owwa-pa-generate-btn:hover {
+    filter: brightness(0.95);
+}
+
+.owwa-pa-generate-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.owwa-pa-ai-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.75rem;
+    width: 100%;
+}
+
+.owwa-pa-view-tabs {
+    display: flex;
+    gap: 0.35rem;
+    margin-top: 0.75rem;
+}
+
+.owwa-pa-view-tab {
+    border: 1px solid #e2e8f0;
+    border-radius: 9999px;
+    padding: 0.3rem 0.75rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #64748b;
+    background: #f8fafc;
+    cursor: pointer;
+}
+
+.owwa-pa-view-tab.is-active {
+    color: #1e6fbe;
+    border-color: #93c5fd;
+    background: #eff6ff;
+}
+
+.owwa-pa-sort-btn {
+    border: none;
+    background: transparent;
+    font: inherit;
+    font-weight: 600;
+    color: inherit;
+    cursor: pointer;
+    padding: 0;
+}
+
+.owwa-pa-usage-badge {
+    display: inline-block;
+    margin-left: 0.35rem;
+    padding: 0.1rem 0.4rem;
+    border-radius: 9999px;
+    font-size: 0.65rem;
+    font-weight: 600;
+    color: #92400e;
+    background: #fffbeb;
+    border: 1px solid #fcd34d;
+    vertical-align: middle;
+}
+
+.owwa-pa-row-actions {
+    display: flex;
+    gap: 0.35rem;
+}
+
+.owwa-pa-row-link {
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: #2563eb;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+.owwa-pa-callout {
+    border-radius: 0.75rem;
+    padding: 0.85rem 1rem;
+    border: 1px solid #bfdbfe;
+    background: #eff6ff;
+}
+
+.owwa-pa-callout-title {
+    margin: 0 0 0.35rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #1e3a5f;
+}
+
+.owwa-pa-callout-body {
+    margin: 0;
+    font-size: 0.8125rem;
+    line-height: 1.55;
+    color: #334155;
+}
+
+.owwa-pa-cover-cell {
+    min-width: 7.5rem;
+}
+
+.owwa-pa-cover-bar-wrap {
+    display: block;
+    height: 4px;
+    border-radius: 9999px;
+    background: #e2e8f0;
+    margin-bottom: 0.25rem;
+    overflow: hidden;
+}
+
+.owwa-pa-cover-bar {
+    display: block;
+    height: 100%;
+    border-radius: 9999px;
+    background: linear-gradient(90deg, #f59e0b 0%, #22c55e 100%);
+    max-width: 100%;
+}
+
+.owwa-row-low .owwa-pa-cover-bar {
+    background: linear-gradient(90deg, #dc2626 0%, #f97316 100%);
+}
+
+.owwa-pa-cover-val {
+    font-size: 0.75rem;
+}
+
+.owwa-status-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.25rem 0.5rem;
+    border-radius: 9999px;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+}
+
+.owwa-status-ok  { background: #dcfce7; color: #15803d; }
+.owwa-status-low { background: #fee2e2; color: #dc2626; }
+
+.owwa-inline-action {
+    display: inline-flex;
+    align-items: center;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--owwa-primary, #1d4ed8);
+    text-decoration: none;
+}
+
+.owwa-inline-action:hover {
+    text-decoration: underline;
+}
+
+.owwa-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem 1rem;
+    text-align: center;
+}
+
+.owwa-empty-icon {
+    width: 2.5rem;
+    height: 2.5rem;
+    color: #94a3b8;
+    margin-bottom: 0.75rem;
+}
+
+.owwa-empty-title {
+    font-size: 0.9375rem;
+    font-weight: 600;
+    color: #475569;
+    margin: 0 0 0.25rem;
+}
+
+.owwa-empty-desc {
+    font-size: 0.8125rem;
+    color: #94a3b8;
+    margin: 0;
+}
+
+.owwa-data-panel-footer {
+    background: transparent;
+}
+
+/* Category dashboard: no outer white shell — only task cards stay white */
+.fi-page.owwa-inv-category-page .owwa-data-panel {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    overflow: visible !important;
+}
+
+.fi-page.owwa-inv-category-page .owwa-category-task-body {
+    padding: 0;
+}
+
+/* Category dashboard task cards */
+.owwa-category-task-body {
+    padding: 0.75rem;
+}
+
+.owwa-category-task-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.6rem;
+}
+
+@media (max-width: 768px) {
+    .owwa-category-task-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.owwa-category-task-card {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.6rem;
+    padding: 0.75rem;
+    border: 1px solid #e5e7eb;
+    border-radius: 0.5rem;
+    background: #ffffff;
+    text-decoration: none !important;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+}
+
+.owwa-category-task-card:hover {
+    border-color: #bfdbfe;
+    background: #f8fbff;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.owwa-category-task-icon {
+    width: 2rem;
+    height: 2rem;
+    border-radius: 0.5rem;
+    background: #eff6ff;
+    color: #1d4ed8;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.owwa-category-task-title {
+    margin: 0;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #111827;
+    line-height: 1.3;
+}
+
+.owwa-category-task-desc {
+    margin: 0.2rem 0 0;
+    font-size: 0.8125rem;
+    color: #64748b;
+    line-height: 1.45;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   FILAMENT TABLE PAGINATION — isang row lang:
+   Showing… | (spacer) | Previous | page #’s | Next
+═══════════════════════════════════════════════════════════ */
+.fi-pagination {
+    display: grid !important;
+    grid-template-columns: auto minmax(0, 1fr) auto auto auto !important;
+    grid-template-rows: auto !important;
+    align-items: center !important;
+    column-gap: 0.75rem !important;
+    row-gap: 0 !important;
+    padding: 0.75rem 1rem !important;
+    border-top: 1px solid #e5e7eb !important;
+    position: static !important;
+}
+
+.fi-pagination .fi-pagination-overview {
+    display: inline !important;
+    grid-column: 1 !important;
+    grid-row: 1 !important;
+    font-size: 0.8125rem !important;
+    font-weight: 400 !important;
+    color: #6b7280 !important;
+    min-width: 0 !important;
+    justify-self: start !important;
+}
+
+.fi-pagination .fi-pagination-records-per-page-select-ctn {
+    display: inline-flex !important;
+    align-items: center !important;
+    grid-column: 2 !important;
+    grid-row: 1 !important;
+    justify-self: start !important;
+    gap: 0.5rem !important;
+    position: static !important;
+    left: auto !important;
+    transform: none !important;
+}
+
+.fi-pagination .fi-pagination-previous-btn {
+    display: inline-flex !important;
+    grid-column: 3 !important;
+    grid-row: 1 !important;
+    font-size: 0.8125rem !important;
+    justify-self: end !important;
+    margin-left: 0 !important;
+}
+
+.fi-pagination .fi-pagination-items {
+    display: flex !important;
+    grid-column: 4 !important;
+    grid-row: 1 !important;
+    justify-self: end !important;
+    align-self: center !important;
+    width: max-content !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    align-items: center !important;
+    gap: 0.25rem !important;
+    flex-wrap: nowrap !important;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+    justify-content: flex-end !important;
+    -webkit-overflow-scrolling: touch !important;
+    scrollbar-width: thin !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    border: none !important;
+    padding: 0 !important;
+    list-style: none !important;
+}
+
+.fi-pagination .fi-pagination-next-btn {
+    display: inline-flex !important;
+    grid-column: 5 !important;
+    grid-row: 1 !important;
+    font-size: 0.8125rem !important;
+    justify-self: end !important;
+}
+
+@media (max-width: 640px) {
+    .fi-pagination {
+        display: flex !important;
+        flex-direction: row !important;
+        flex-wrap: nowrap !important;
+        align-items: center !important;
+        gap: 0.5rem !important;
+        overflow-x: auto !important;
+        overflow-y: hidden !important;
+        -webkit-overflow-scrolling: touch !important;
+    }
+
+    .fi-pagination .fi-pagination-overview,
+    .fi-pagination .fi-pagination-records-per-page-select-ctn,
+    .fi-pagination .fi-pagination-previous-btn,
+    .fi-pagination .fi-pagination-items,
+    .fi-pagination .fi-pagination-next-btn {
+        grid-column: unset !important;
+        grid-row: unset !important;
+        flex: 0 0 auto !important;
+        justify-self: unset !important;
+    }
+
+    .fi-pagination .fi-pagination-overview {
+        min-width: 0 !important;
+    }
+
+    .fi-pagination .fi-pagination-previous-btn {
+        margin-left: auto !important;
+    }
+
+    .fi-pagination .fi-pagination-items {
+        max-width: 40vw !important;
+        min-width: 0 !important;
+    }
+}
+
+/* Resource list pages: search row above bulk toolbar; wide tables scroll horizontally */
+.fi-resource-list-records-page .fi-ta-header-toolbar {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.625rem;
+}
+
+.fi-resource-list-records-page .fi-ta-header-toolbar > div:has(.fi-ta-search-field) {
+    order: 1;
+    width: 100%;
+}
+
+/* UC Distributions: category left of search (Office Property Register pattern) */
+.fi-page.owwa-distributions-uc-toolbar .fi-ta-ctn .fi-ta-header-toolbar > div:has(.fi-ta-search-field) {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    align-items: center !important;
+    gap: 0.75rem !important;
+}
+
+.fi-page.owwa-distributions-uc-toolbar .fi-ta-ctn .fi-ta-header-toolbar > div:has(.fi-ta-search-field) .owwa-distributions-category-select {
+    flex: 0 0 auto !important;
+    width: 16rem !important;
+    max-width: 100% !important;
+}
+
+.fi-page.owwa-distributions-uc-toolbar .fi-ta-ctn .fi-ta-header-toolbar > div:has(.fi-ta-search-field) .fi-ta-search-field {
+    flex: 0 0 auto !important;
+    width: 18rem !important;
+    max-width: 100% !important;
+    margin-right: auto !important;
+}
+
+.owwa-consolidated-totals-summary {
+    margin-top: 0.75rem;
+    border: 1px solid #e5e7eb;
+    border-radius: 0.5rem;
+    background: #fff;
+    overflow: hidden;
+}
+
+.owwa-consolidated-totals-summary__header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.5rem 0.75rem;
+    padding: 0.625rem 0.875rem;
+    background: #f8fafc;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.owwa-consolidated-totals-summary__title {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #111827;
+}
+
+.owwa-consolidated-totals-summary__hint {
+    font-size: 0.75rem;
+    color: #6b7280;
+}
+
+.owwa-consolidated-totals-summary__table-wrap {
+    overflow-x: auto;
+}
+
+.owwa-consolidated-totals-summary table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.8125rem;
+}
+
+.owwa-consolidated-totals-summary table th,
+.owwa-consolidated-totals-summary table td {
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid #f3f4f6;
+    vertical-align: top;
+}
+
+.owwa-consolidated-totals-summary table thead th {
+    font-weight: 600;
+    color: #374151;
+    background: #fff;
+}
+
+.owwa-consolidated-totals-summary table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.owwa-consolidated-totals-summary table td.text-right,
+.owwa-consolidated-totals-summary table th.text-right {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+/* UC compile modal: endorse table + purpose share the same content width */
+.fi-modal-window.owwa-record-modal.owwa-requisition-uc-modal .owwa-uc-endorse-section .fi-section-content {
+    width: 100%;
+    max-width: 100%;
+}
+
+/* Select employee requisitions: single-column list with vertical scroll only */
+.fi-fo-checkbox-list-options.owwa-uc-employee-requisition-picker-list {
+    display: flex !important;
+    flex-direction: column !important;
+    flex-wrap: nowrap !important;
+    gap: 0.5rem;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    max-height: min(50vh, 22rem);
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    overscroll-behavior: contain;
+    padding-inline-end: 0.35rem;
+    scrollbar-width: thin;
+    columns: unset !important;
+    column-count: 1 !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    grid-auto-flow: row !important;
+}
+
+.fi-fo-checkbox-list-options.owwa-uc-employee-requisition-picker-list > .fi-fo-checkbox-list-option-ctn {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    break-inside: avoid;
+}
+
+.fi-fo-checkbox-list-options.owwa-uc-employee-requisition-picker-list .fi-fo-checkbox-list-option,
+.fi-fo-checkbox-list-options.owwa-uc-employee-requisition-picker-list .fi-fo-checkbox-list-option-text {
+    max-width: 100%;
+    min-width: 0;
+}
+
+.fi-fo-checkbox-list-options.owwa-uc-employee-requisition-picker-list .fi-fo-checkbox-list-option-label {
+    white-space: normal;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
+.fi-modal-window.owwa-record-modal.owwa-requisition-uc-modal .owwa-uc-endorsement-repeater.fi-fo-table-repeater,
+.fi-modal-window.owwa-record-modal.owwa-requisition-uc-modal .owwa-uc-endorsement-repeater.fi-fo-table-repeater > table,
+.fi-modal-window.owwa-record-modal.owwa-requisition-uc-modal .owwa-consolidated-totals-summary {
+    width: 100% !important;
+    max-width: 100% !important;
+}
+
+.fi-modal-window.owwa-record-modal.owwa-requisition-uc-modal .owwa-uc-endorsement-repeater.fi-fo-table-repeater > table {
+    table-layout: fixed;
+}
+
+.fi-modal-window.owwa-record-modal.owwa-requisition-uc-modal .owwa-uc-endorsement-repeater.fi-fo-table-repeater > table > thead > tr > th,
+.fi-modal-window.owwa-record-modal.owwa-requisition-uc-modal .owwa-uc-endorsement-repeater.fi-fo-table-repeater > table > tbody > tr > td {
+    vertical-align: top;
+    padding-block: 0.4rem;
+}
+
+.fi-modal-window.owwa-record-modal.owwa-requisition-uc-modal .owwa-uc-endorsement-repeater .owwa-uc-endorsed-qty,
+.fi-modal-window.owwa-record-modal.owwa-requisition-uc-modal .owwa-uc-endorsement-repeater .owwa-uc-endorsed-qty .fi-input-wrp {
+    max-width: 5rem;
+    margin-left: auto;
+}
+
+.fi-modal-window.owwa-record-modal.owwa-requisition-uc-modal .owwa-uc-endorsement-repeater textarea.fi-input {
+    min-height: 2.25rem !important;
+    resize: vertical;
+}
+
+.fi-modal-window.owwa-record-modal.owwa-requisition-uc-modal .owwa-uc-compile-purpose-wrp {
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    margin-top: 0;
+}
+
+.fi-modal-window.owwa-record-modal.owwa-requisition-uc-modal .owwa-uc-purpose-section.fi-section {
+    box-shadow: none;
+    border: none;
+    background: transparent;
+}
+
+.fi-modal-window.owwa-record-modal.owwa-requisition-uc-modal .owwa-uc-purpose-section .fi-section-header {
+    display: none;
+}
+
+.fi-modal-window.owwa-record-modal.owwa-requisition-uc-modal .owwa-uc-purpose-section .fi-section-content-ctn,
+.fi-modal-window.owwa-record-modal.owwa-requisition-uc-modal .owwa-uc-purpose-section .fi-section-content {
+    padding-top: 0;
+}
+
+.fi-modal-window.owwa-record-modal.owwa-requisition-uc-modal .owwa-uc-endorse-section + .owwa-uc-purpose-section {
+    margin-top: -0.25rem;
+}
+
+.fi-modal-window.owwa-record-modal.owwa-requisition-uc-modal .owwa-uc-compile-purpose-field textarea.fi-input,
+.fi-modal-window.owwa-record-modal.owwa-requisition-uc-modal .owwa-uc-compile-purpose-wrp .fi-input-wrp {
+    width: 100%;
+    max-width: 100%;
+}
+
+.fi-modal-window.owwa-record-modal.owwa-requisition-uc-modal .owwa-uc-endorse-section .fi-section-content,
+.fi-modal-window.owwa-record-modal.owwa-requisition-uc-modal .owwa-uc-purpose-section .fi-section-content {
+    width: 100%;
+}
+
+.fi-resource-list-records-page .fi-ta-header-toolbar > .fi-ta-actions {
+    order: 2;
+    width: 100%;
+}
+
+.fi-pagination .fi-pagination-item--ellipsis {
+    pointer-events: none !important;
+}
+
+.fi-pagination .fi-pagination-item--ellipsis .fi-pagination-item-label {
+    padding: 0 0.125rem !important;
+    color: #9ca3af !important;
+    font-weight: 500 !important;
+}
+
+.fi-pagination .fi-pagination-item {
+    border: none !important;
+}
+
+.fi-pagination .fi-pagination-item-btn {
+    background: #fff !important;
+    border: 1px solid #e5e7eb !important;
+    border-radius: 0.375rem !important;
+    padding: 0.375rem 0.625rem !important;
+}
+
+.fi-pagination .fi-pagination-item.fi-active .fi-pagination-item-btn {
+    background: #eef2ff !important;
+    border-color: #c7d2fe !important;
+}
+
+.fi-pagination .fi-pagination-item.fi-active .fi-pagination-item-label {
+    color: #2563eb !important;
+}
+
+/* Hide chevron icons inside page list (redundant with Previous/Next) */
+.fi-pagination .fi-pagination-item-icon {
+    display: none !important;
+}
+
+/* Pagination (shared — matches Filament table pagination; no per-page row) */
+.owwa-pagination-nav {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.5rem 0;
+}
+.owwa-import-results .owwa-import-results-pagination.owwa-pagination-nav {
+    justify-content: center;
+    margin-top: 0.5rem;
+}
+.owwa-import-results .owwa-import-results-pagination .owwa-pagination-controls {
+    margin-left: 0;
+}
+
+.owwa-import-results-table-wrap {
+    overflow-x: auto;
+    max-width: 100%;
+}
+
+.owwa-import-results-table {
+    width: 100%;
+    table-layout: fixed;
+    border-collapse: collapse;
+    font-size: 0.8125rem;
+    line-height: 1.35;
+}
+
+.owwa-import-results-th {
+    padding: 0.5rem;
+    text-align: left;
+    font-weight: 600;
+    color: #4b5563;
+    border-bottom: 1px solid #e5e7eb;
+    border-right: 1px solid #e5e7eb;
+    white-space: nowrap;
+}
+
+.owwa-import-results-th:last-child {
+    border-right: none;
+}
+
+.owwa-import-results-th-num {
+    width: 2.25rem;
+    text-align: center;
+}
+
+.owwa-import-results-tr-last .owwa-import-results-td {
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.owwa-import-results-td {
+    padding: 0.2rem 0.5rem;
+    vertical-align: top;
+    border-right: 1px solid #e5e7eb;
+    overflow: hidden;
+    max-width: 0;
+}
+
+.owwa-import-results-td:last-child {
+    border-right: none;
+}
+
+.owwa-import-results-td-num {
+    width: 2.25rem;
+    max-width: 2.25rem;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+    color: #6b7280;
+    vertical-align: top;
+    padding-top: 0.35rem;
+}
+
+.owwa-import-results-cell-line {
+    display: flex;
+    align-items: baseline;
+    gap: 0.25rem;
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+}
+
+.owwa-import-results-cell-label {
+    flex: 0 0 auto;
+    color: #9ca3af;
+    white-space: nowrap;
+}
+
+.owwa-import-results-cell-value {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: #1f2937;
+}
+
+.owwa-import-results-cell-value--diff {
+    font-weight: 600;
+    color: #92400e;
+}
+
+.owwa-import-results-cell-empty {
+    color: #9ca3af;
+}
+
+.owwa-import-results-reason {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.6875rem;
+    color: #b45309;
+}
+
+.owwa-import-results-reason-muted {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.6875rem;
+    color: #9ca3af;
+}
+
+.owwa-import-results-section {
+    margin-bottom: 1rem;
+}
+
+.owwa-import-results-section:last-child {
+    margin-bottom: 0;
+}
+
+.owwa-import-results-section-heading {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+}
+
+.owwa-import-results-section-title {
+    margin: 0;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #1f2937;
+}
+
+.owwa-import-results-section-count {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.125rem 0.5rem;
+    border-radius: 0.375rem;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    line-height: 1.25;
+    white-space: nowrap;
+}
+
+.owwa-import-results-section-count-num {
+    font-variant-numeric: tabular-nums;
+}
+
+.owwa-import-results-section-count-label {
+    font-weight: 500;
+    opacity: 0.85;
+}
+
+.owwa-import-results-section-count--success {
+    background: #ecfdf5;
+    color: #047857;
+}
+
+.owwa-import-results-section-count--info {
+    background: #eff6ff;
+    color: #1d4ed8;
+}
+
+.owwa-import-results-section-count--warning {
+    background: #fffbeb;
+    color: #b45309;
+}
+
+.owwa-import-results-section-count--danger {
+    background: #fef2f2;
+    color: #b91c1c;
+}
+
+.owwa-import-results-section-count--neutral {
+    background: #f3f4f6;
+    color: #4b5563;
+}
+
+.owwa-pagination-info {
+    font-size: 0.8125rem;
+    color: #6b7280;
+    flex: 0 1 auto;
+    min-width: 0;
+    max-width: min(100%, 22rem);
+}
+.owwa-pagination-center {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+    flex: 0 0 auto;
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 0.5rem;
+    overflow: hidden;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06), 0 2px 6px rgba(0, 0, 0, 0.06);
+}
+.owwa-pagination-center-label {
+    font-size: 0.8125rem;
+    color: #6b7280;
+    white-space: nowrap;
+    padding: 0.5rem 0.75rem;
+}
+
+.owwa-pagination-center .owwa-per-page-select {
+    border: none;
+    border-left: 1px solid #e5e7eb;
+    border-radius: 0;
+    box-shadow: none;
+}
+.owwa-pagination-controls {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+    flex: 0 1 auto;
+    min-width: 0;
+    margin-left: auto;
+    justify-content: flex-end;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+.owwa-pagination-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.375rem 0.75rem;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: #374151;
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 0.375rem;
+    cursor: pointer;
+    text-decoration: none;
+    transition: background 0.15s;
+    user-select: none;
+    line-height: 1.25;
+}
+a.owwa-pagination-btn:hover {
+    background: #f3f4f6;
+}
+button.owwa-pagination-btn {
+    font: inherit;
+}
+button.owwa-pagination-btn:hover {
+    background: #f3f4f6;
+}
+.owwa-pagination-btn.owwa-pagination-disabled {
+    color: #9ca3af;
+    background: #f9fafb;
+    border-color: #e5e7eb;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+.owwa-pagination-page {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 2rem;
+    height: 2rem;
+    padding: 0 0.375rem;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: #374151;
+    text-decoration: none;
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 0.375rem;
+    transition: background 0.15s;
+}
+a.owwa-pagination-page:hover {
+    background: #f3f4f6;
+    border-color: #d1d5db;
+}
+button.owwa-pagination-page {
+    font: inherit;
+    cursor: pointer;
+}
+button.owwa-pagination-page:hover {
+    background: #f3f4f6;
+    border-color: #d1d5db;
+}
+.owwa-pagination-page-active {
+    background: #eef2ff;
+    color: #2563eb;
+    border-color: #c7d2fe;
+}
+
+.owwa-pagination-ellipsis {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.375rem 0.25rem;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: #9ca3af;
+    user-select: none;
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   COA REPORTS PAGE
+═══════════════════════════════════════════════════════════ */
+.owwa-report-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1.25rem;
+    margin-bottom: 0.5rem;
+}
+
+@media (max-width: 768px) {
+    .owwa-report-grid { grid-template-columns: 1fr; }
+}
+
+.owwa-report-card {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 1rem;
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.04);
+    transition: box-shadow 0.15s ease, border-color 0.15s ease;
+}
+
+.owwa-report-card:hover {
+    box-shadow: 0 4px 12px 0 rgb(0 0 0 / 0.08);
+    border-color: #cbd5e1;
+}
+
+.owwa-report-card-icon {
+    width: 2.75rem;
+    height: 2.75rem;
+    border-radius: 0.75rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.owwa-report-card-icon svg {
+    width: 1.375rem;
+    height: 1.375rem;
+}
+
+.owwa-report-icon-blue   { background: #eff6ff; color: #1d4ed8; }
+.owwa-report-icon-indigo { background: #eef2ff; color: #4338ca; }
+
+.owwa-report-card-body { flex: 1; }
+
+.owwa-report-card-title {
+    font-size: 1rem;
+    font-weight: 600;
+    color: #0f172a;
+    margin: 0 0 0.375rem;
+}
+
+.owwa-report-card-desc {
+    font-size: 0.875rem;
+    color: #64748b;
+    line-height: 1.55;
+    margin: 0;
+}
+
+.owwa-report-card-meta {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: 0.75rem;
+}
+
+.owwa-report-meta-text {
+    font-size: 0.75rem;
+    color: #94a3b8;
+    font-weight: 500;
+}
+
+.owwa-report-card-action { margin-top: auto; }
+
+.owwa-report-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.5rem 1rem;
+    background: linear-gradient(135deg, #004d99 0%, #0066cc 60%, #993344 100%);
+    color: #ffffff !important;
+    border-radius: 0.5rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    text-decoration: none !important;
+    transition: opacity 0.15s ease;
+}
+
+.owwa-report-btn:hover { opacity: 0.9; }
+
+.owwa-report-btn svg {
+    width: 1rem;
+    height: 1rem;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   PROCUREMENT / AI PAGE
+═══════════════════════════════════════════════════════════ */
+.owwa-code {
+    background: #f1f5f9;
+    color: #334155;
+    padding: 0.125rem 0.375rem;
+    border-radius: 0.25rem;
+    font-size: 0.8125rem;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   PROCUREMENT RECOMMENDATIONS PAGE
+═══════════════════════════════════════════════════════════ */
+
+/* Intro banner */
+.owwa-pr-intro {
+    display: flex;
+    align-items: center;
+    gap: 1.25rem;
+    background: linear-gradient(135deg, #002a5c 0%, #003f8a 50%, #6b1230 100%);
+    border-radius: 1.25rem;
+    padding: 1.5rem 2rem;
+    margin-bottom: 1.5rem;
+    flex-wrap: wrap;
+}
+
+.owwa-pr-intro-icon {
+    width: 3rem;
+    height: 3rem;
+    background: rgba(255,255,255,0.12);
+    border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 0.75rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    flex-shrink: 0;
+}
+.owwa-pr-intro-icon svg { width: 1.5rem; height: 1.5rem; }
+
+.owwa-pr-intro-text { flex: 1; min-width: 200px; }
+
+.owwa-pr-intro-title {
+    font-size: 1rem;
+    font-weight: 700;
+    color: #fff;
+    margin: 0 0 0.25rem;
+    letter-spacing: -0.01em;
+}
+
+.owwa-pr-intro-desc {
+    font-size: 0.8125rem;
+    color: rgba(255,255,255,0.65);
+    margin: 0;
+    line-height: 1.5;
+}
+
+.owwa-pr-intro-badges {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.owwa-pr-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.25rem 0.75rem;
+    border-radius: 9999px;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+}
+
+.owwa-pr-badge-blue {
+    background: rgba(59,130,246,0.2);
+    border: 1px solid rgba(59,130,246,0.35);
+    color: #93c5fd;
+}
+
+.owwa-pr-badge-slate {
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.15);
+    color: rgba(255,255,255,0.7);
+}
+
+.owwa-pr-badge-dot {
+    width: 5px; height: 5px;
+    background: #34d399;
+    border-radius: 50%;
+    box-shadow: 0 0 4px rgba(52,211,153,0.7);
+}
+
+/* Loading state */
+.owwa-pr-loading {
+    background: #ffffff;
+    border: 1px solid #e8edf3;
+    border-radius: 1.25rem;
+    padding: 2rem;
+}
+
+.owwa-pr-loading-inner {
+    display: flex;
+    align-items: center;
+    gap: 1.25rem;
+    margin-bottom: 1.25rem;
+}
+
+.owwa-pr-spinner {
+    width: 2.5rem;
+    height: 2.5rem;
+    flex-shrink: 0;
+    color: #1e6fbe;
+    animation: owwa-spin 1s linear infinite;
+}
+.owwa-pr-spinner svg { width: 100%; height: 100%; }
+
+@keyframes owwa-spin { to { transform: rotate(360deg); } }
+
+.owwa-pr-loading-title {
+    font-size: 1rem;
+    font-weight: 700;
+    color: #0f172a;
+    margin: 0 0 0.25rem;
+}
+
+.owwa-pr-loading-sub {
+    font-size: 0.8125rem;
+    color: #64748b;
+    margin: 0;
+    line-height: 1.5;
+}
+
+.owwa-pr-loading-steps {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    padding-top: 1rem;
+    border-top: 1px solid #f1f5f9;
+}
+
+.owwa-pr-step {
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: #94a3b8;
+    padding: 0.2rem 0.6rem;
+    border-radius: 9999px;
+    background: #f8fafc;
+    border: 1px solid #e8edf3;
+}
+
+.owwa-pr-step-active {
+    color: #1e6fbe;
+    background: #eff6ff;
+    border-color: #bfdbfe;
+}
+
+.owwa-pr-step-sep {
+    font-size: 0.75rem;
+    color: #cbd5e1;
+    font-weight: 600;
+}
+
+/* Result state */
+.owwa-pr-result {
+    background: radial-gradient(circle at top left, #f1f5f9 0%, #ffffff 40%, #f9fafb 100%);
+    border: 1px solid #e2e8f0;
+    border-radius: 1.125rem;
+    overflow: hidden;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+}
+
+.owwa-pr-result-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 1.25rem 1.75rem;
+    background: linear-gradient(135deg, #002a5c 0%, #003f8a 55%, #6b1230 100%);
+    flex-wrap: wrap;
+}
+
+.owwa-pr-result-header-left {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.owwa-pr-result-icon {
+    width: 2.5rem;
+    height: 2.5rem;
+    background: rgba(255,255,255,0.12);
+    border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 0.625rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    flex-shrink: 0;
+}
+.owwa-pr-result-icon svg { width: 1.25rem; height: 1.25rem; }
+
+.owwa-pr-result-title {
+    font-size: 0.9375rem;
+    font-weight: 700;
+    color: #ffffff;
+    margin: 0;
+    letter-spacing: -0.01em;
+}
+
+.owwa-pr-result-meta {
+    font-size: 0.75rem;
+    color: rgba(255,255,255,0.55);
+    margin: 0.2rem 0 0;
+}
+
+.owwa-pr-status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.3rem 0.75rem;
+    background: rgba(52,211,153,0.15);
+    border: 1px solid rgba(52,211,153,0.3);
+    border-radius: 9999px;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    color: #34d399;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+}
+
+.owwa-pr-result-body-wrap {
+    position: relative;
+}
+
+.owwa-pr-result-body {
+    padding: 0;
+    font-size: 0.9375rem;
+    color: #1e293b;
+    line-height: 1.75;
+    display: flex;
+    flex-direction: column;
+    transition: max-height 0.3s ease;
+}
+
+/* Collapsed: cap height and clip overflow */
+.owwa-pr-result-body--collapsed {
+    max-height: 420px;
+    overflow: hidden;
+}
+
+/* Gradient fade at the bottom of collapsed state */
+.owwa-pr-expand-bar {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 7rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-end;
+    padding-bottom: 1rem;
+    cursor: pointer;
+}
+
+.owwa-pr-expand-fade {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(to bottom, rgba(255,255,255,0) 0%, rgba(255,255,255,0.97) 70%);
+    pointer-events: none;
+}
+
+.owwa-pr-expand-btn {
+    position: relative;
+    z-index: 1;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.45rem 1.125rem;
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+    border-radius: 9999px;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: #475569;
+    cursor: pointer;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+    transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.owwa-pr-expand-btn:hover {
+    background: #f1f5f9;
+    border-color: #94a3b8;
+    color: #1e293b;
+}
+
+.owwa-pr-collapse-bar {
+    display: flex;
+    justify-content: flex-end;
+    padding: 0.625rem 1.75rem 0.5rem;
+    border-top: 1px solid #f1f5f9;
+}
+
+.owwa-pr-expand-btn--collapse {
+    color: #64748b;
+    font-weight: 500;
+}
+
+/* Content block between two section labels */
+.owwa-pr-section-body {
+    padding: 1.125rem 1.75rem 1.25rem;
+    background: linear-gradient(180deg, #ffffff 0%, #f9fafb 100%);
+}
+.owwa-pr-section-body:empty { display: none; }
+
+/* Each section label starts a new visual block */
+.owwa-pr-section-label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.6875rem;
+    font-weight: 700;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    padding: 0.75rem 1.75rem 0.5rem;
+    margin: 0 !important;
+    background: #f8fafc;
+    border-top: 1px solid #e8edf3;
+    border-bottom: 1px solid #e8edf3;
+}
+
+/* First section label has no top border */
+.owwa-pr-section-label:first-child {
+    border-top: none;
+}
+
+.owwa-pr-section-body p {
+    margin: 0 0 0.625rem;
+    color: #334155;
+}
+.owwa-pr-section-body p:last-child { margin-bottom: 0; }
+
+.owwa-pr-section-body ul,
+.owwa-pr-section-body ol {
+    margin: 0;
+    padding-left: 1.4rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.owwa-pr-section-body li {
+    color: #334155;
+    line-height: 1.65;
+}
+
+.owwa-pr-section-body strong {
+    color: #0f172a;
+    font-weight: 600;
+}
+
+/* Table container */
+.owwa-pr-table-ctn {
+    margin: 0.75rem 1.75rem 1.25rem;
+    border-radius: 0.75rem;
+    border: 1px solid #e2e8f0;
+    overflow: hidden;
+    background: #ffffff;
+}
+
+.owwa-pr-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.8125rem;
+}
+
+.owwa-pr-table th {
+    padding: 0.7rem 1rem;
+    text-align: left;
+    background: #f1f5f9;
+    font-weight: 700;
+    font-size: 0.75rem;
+    color: #475569;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    border-bottom: 2px solid #e2e8f0;
+    white-space: nowrap;
+}
+
+.owwa-pr-table td {
+    padding: 0.75rem 1rem;
+    text-align: left;
+    color: #334155;
+    border-bottom: 1px solid #f1f5f9;
+    vertical-align: top;
+}
+
+.owwa-pr-table tr:last-child td {
+    border-bottom: none;
+}
+
+.owwa-pr-table tr:hover td {
+    background: #f8fafc;
+}
+
+/* Priority cell coloring */
+.owwa-pr-table td:first-child {
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.owwa-pr-result-footer {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.625rem;
+    padding: 0.875rem 1.75rem;
+    background: #fffbeb;
+    border-top: 1px solid #fde68a;
+    font-size: 0.75rem;
+    color: #92400e;
+    font-weight: 500;
+    line-height: 1.5;
+}
+.owwa-pr-result-footer svg { flex-shrink: 0; color: #f59e0b; margin-top: 0.1rem; }
+
+/* ═══════════════════════════════════════════════════════════
+   AI PROCUREMENT RUN — VIEW PAGE
+═══════════════════════════════════════════════════════════ */
+
+/* Strip the outer infolist entry wrapper so the banner fills cleanly */
+.fi-in-view-entry {
+    padding: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+    background: transparent !important;
+}
+
+.owwa-run-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    background: linear-gradient(135deg, #002a5c 0%, #003f8a 55%, #6b1230 100%);
+    border-radius: 1.125rem;
+    padding: 1.25rem 1.75rem;
+    flex-wrap: wrap;
+}
+
+.owwa-run-banner-left {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.owwa-run-banner-icon {
+    width: 2.5rem;
+    height: 2.5rem;
+    background: rgba(255,255,255,0.12);
+    border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 0.625rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    flex-shrink: 0;
+}
+.owwa-run-banner-icon svg { width: 1.25rem; height: 1.25rem; }
+
+.owwa-run-banner-title {
+    font-size: 0.9375rem;
+    font-weight: 700;
+    color: #ffffff;
+    letter-spacing: -0.01em;
+}
+
+.owwa-run-banner-meta {
+    font-size: 0.75rem;
+    color: rgba(255,255,255,0.55);
+    margin-top: 0.15rem;
+}
+
+.owwa-run-status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.35rem 0.875rem;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+}
+
+.owwa-run-status-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.owwa-run-summary {
+    background: #ffffff;
+    border: 1px solid #e8edf3;
+    border-radius: 1rem;
+    padding: 1.125rem 1.5rem;
+}
+
+.owwa-run-summary-label {
+    font-size: 0.6875rem;
+    font-weight: 700;
+    color: #94a3b8;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    margin: 0 0 0.5rem;
+}
+
+.owwa-run-summary-text {
+    font-size: 0.9375rem;
+    color: #334155;
+    line-height: 1.65;
+    margin: 0;
+}
+
+/* Category filter bar */
+.owwa-pr-filter {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem 1.25rem;
+    margin-top: 1rem;
+    padding: 1rem 1.25rem;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.75rem;
+}
+.owwa-pr-filter-label {
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: #475569;
+}
+.owwa-pr-filter-select {
+    min-width: 12rem;
+    padding: 0.5rem 2rem 0.5rem 0.75rem;
+    font-size: 0.875rem;
+    color: #1e293b;
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+    border-radius: 0.5rem;
+    cursor: pointer;
+}
+.owwa-pr-filter-select:hover,
+.owwa-pr-filter-select:focus {
+    border-color: #64748b;
+    outline: none;
+}
+.owwa-pr-filter-hint {
+    font-size: 0.75rem;
+    color: #64748b;
+}
+
+/* Fiscal year overlay & banner */
+.owwa-fy-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 60;
+    background: rgba(15, 23, 42, 0.35);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.owwa-fy-modal {
+    background: #ffffff;
+    border-radius: 1rem;
+    padding: 1.75rem 2rem 1.5rem;
+    width: 100%;
+    max-width: 460px;
+    box-shadow: 0 20px 45px rgba(15,23,42,0.25);
+}
+
+.owwa-fy-title {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: #0f172a;
+    margin: 0 0 0.5rem;
+}
+
+.owwa-fy-sub {
+    font-size: 0.875rem;
+    color: #475569;
+    margin: 0 0 1.25rem;
+}
+
+.owwa-fy-field {
+    margin-bottom: 1.25rem;
+}
+
+.owwa-fy-label {
+    display: block;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: #475569;
+    margin-bottom: 0.35rem;
+}
+
+.owwa-fy-select {
+    width: 100%;
+    padding: 0.55rem 0.8rem;
+    font-size: 0.875rem;
+    border-radius: 0.5rem;
+    border: 1px solid #cbd5e1;
+    color: #0f172a;
+}
+
+.owwa-fy-select:focus {
+    outline: none;
+    border-color: #2563eb;
+    box-shadow: 0 0 0 1px rgba(37,99,235,0.25);
+}
+
+.owwa-fy-actions {
+    display: flex;
+    justify-content: flex-end;
+}
+
+.owwa-fy-btn {
+    padding: 0.5rem 1.3rem;
+    font-size: 0.875rem;
+    border-radius: 9999px;
+    border: none;
+    background: linear-gradient(135deg, #002a5c 0%, #003f8a 55%, #6b1230 100%);
+    color: #ffffff;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.owwa-fy-note {
+    margin-top: 0.75rem;
+    font-size: 0.75rem;
+    color: #6b7280;
+}
+
+.owwa-fy-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+}
+
+.owwa-fy-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.25rem 0.7rem;
+    border-radius: 9999px;
+    background: #eff6ff;
+    border: 1px solid #bfdbfe;
+    font-size: 0.75rem;
+    color: #1d4ed8;
+}
+
+.owwa-fy-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 9999px;
+    background: #22c55e;
+}
+
+.owwa-fy-change {
+    border: none;
+    background: transparent;
+    font-size: 0.75rem;
+    color: #64748b;
+    text-decoration: underline;
+    cursor: pointer;
+}
+
+/* Idle / ready state */
+.owwa-pr-idle {
+    background: #ffffff;
+    border: 1px solid #e8edf3;
+    border-radius: 1.25rem;
+    padding: 3.5rem 2rem 3rem;
+    text-align: center;
+}
+
+.owwa-pr-idle-graphic { margin-bottom: 1.25rem; }
+
+.owwa-pr-idle-circle {
+    width: 4rem;
+    height: 4rem;
+    background: linear-gradient(135deg, #eff6ff 0%, #eef2ff 100%);
+    border: 1px solid #dbeafe;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: #3b82f6;
+}
+.owwa-pr-idle-circle svg { width: 2rem; height: 2rem; }
+
+.owwa-pr-idle-title {
+    font-size: 1.125rem;
+    font-weight: 700;
+    color: #0f172a;
+    margin: 0 0 0.5rem;
+    letter-spacing: -0.02em;
+}
+
+.owwa-pr-idle-sub {
+    font-size: 0.9375rem;
+    color: #64748b;
+    margin: 0 auto 2rem;
+    max-width: 36rem;
+    line-height: 1.6;
+}
+
+.owwa-pr-prereqs {
+    display: inline-block;
+    background: #f8fafc;
+    border: 1px solid #e8edf3;
+    border-radius: 1rem;
+    padding: 1.25rem 1.75rem;
+    text-align: left;
+    max-width: 480px;
+    width: 100%;
+}
+
+.owwa-pr-prereqs-heading {
+    font-size: 0.6875rem;
+    font-weight: 700;
+    color: #94a3b8;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    margin: 0 0 0.875rem;
+}
+
+.owwa-pr-prereqs-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.owwa-pr-prereq-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+}
+
+.owwa-pr-prereq-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    margin-top: 5px;
+}
+.owwa-pr-prereq-dot-green  { background: #10b981; }
+.owwa-pr-prereq-dot-blue   { background: #3b82f6; }
+.owwa-pr-prereq-dot-purple { background: #8b5cf6; }
+
+.owwa-pr-prereq-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #475569;
+    margin: 0 0 0.1rem;
+}
+
+.owwa-pr-prereq-val {
+    font-size: 0.8125rem;
+    color: #64748b;
+    margin: 0;
+}
+
+.owwa-pr-prereq-val code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.8125rem;
+    color: #334155;
+    background: #e2e8f0;
+    padding: 0.1rem 0.35rem;
+    border-radius: 0.25rem;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   INVENTORY PAGES — table and view polish
+═══════════════════════════════════════════════════════════ */
+
+/* Consistent spacing between infolist sections on view pages */
+.fi-resource-view-record-page .fi-sc-has-gap {
+    gap: 1.25rem !important;
+}
+
+/* Infolist sections — clean card look on view pages */
+.fi-resource-view-record-page .fi-section {
+    background-color: #ffffff !important;
+    border: 1px solid #e5e7eb !important;
+    border-radius: 0.5rem !important;
+    box-shadow: none !important;
+}
+
+/* Badge text in table disposal-type column — ensure readable sizing */
+.fi-ta-text-item-badge {
+    font-size: 0.75rem !important;
+    white-space: nowrap !important;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   PROCUREMENT ANALYTICS PAGE
+═══════════════════════════════════════════════════════════ */
+
+/* --- Context bar (FY badge + category filter) --- */
+.owwa-pa-context-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 1rem;
+    margin-bottom: 0.25rem;
+    padding: 0.25rem 0.5rem;
+}
+
+.owwa-pa-filters-left {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 0.5rem 1rem;
+}
+
+.owwa-pa-filter--fy {
+    margin-left: 0 !important;
+}
+
+.owwa-pa-fy-badge--warn {
+    background: #fffbeb;
+    border-color: #fcd34d;
+    color: #92400e;
+}
+
+.owwa-pa-explainer {
+    margin-bottom: 1rem;
+    padding: 0.75rem 1rem;
+    border-radius: 0.75rem;
+    background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+    border: 1px solid #e2e8f0;
+}
+
+.dark .owwa-pa-explainer {
+    background: rgba(15, 23, 42, 0.6);
+    border-color: rgba(255, 255, 255, 0.1);
+}
+
+.owwa-pa-explainer-title {
+    margin: 0 0 0.35rem;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: #334155;
+}
+
+.dark .owwa-pa-explainer-title {
+    color: #e2e8f0;
+}
+
+.owwa-pa-explainer-body {
+    margin: 0;
+    font-size: 0.8125rem;
+    line-height: 1.55;
+    color: #64748b;
+}
+
+.dark .owwa-pa-explainer-body {
+    color: #94a3b8;
+}
+
+.owwa-pa-fy-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.25rem 0.65rem;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: #334155;
+    background: #f1f5f9;
+    border: 1px solid #e2e8f0;
+}
+
+.owwa-pa-fy-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 9999px;
+    background: #34d399;
+    flex-shrink: 0;
+}
+
+.owwa-pa-fy-sep {
+    margin: 0 0.15rem;
+    opacity: 0.5;
+}
+
+.owwa-pa-filter {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.owwa-pa-filter--right {
+    margin-left: auto;
+}
+
+.owwa-pa-filter-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #374151;
+}
+
+.owwa-pa-filter-select {
+    min-width: 10rem;
+    border-radius: 0.375rem;
+    border: 1px solid #d1d5db;
+    padding: 0.3rem 0.5rem;
+    font-size: 0.8125rem;
+    color: #111827;
+    background: #fff;
+}
+
+/* --- Links --- */
+.owwa-pa-inline-link {
+    color: #2563eb;
+    font-weight: 600;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+.owwa-pa-inline-link:hover {
+    color: #1d4ed8;
+}
+
+/* Description line link — gray like Filament section description (not primary blue) */
+.owwa-pa-card .fi-section-header-description .owwa-pa-section-desc-link {
+    color: #6b7280 !important;
+    font-weight: 500;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+.owwa-pa-card .fi-section-header-description .owwa-pa-section-desc-link:hover {
+    color: #4b5563 !important;
+}
+
+/* --- Widgets wrapper --- */
+.owwa-pa-widgets {
+    margin-bottom: 0.75rem;
+}
+
+.owwa-pa-widgets--stack {
+    border-radius: 0.75rem;
+    padding: 0.4rem 0.55rem;
+}
+
+/* --- Section cards with left accent bar ---
+   Reserve 4px via padding-left so the gradient strip is not covered by the white section (was only showing a corner). */
+.owwa-pa-card {
+    margin-top: 0;
+    margin-bottom: 0.75rem;
+    position: relative;
+    overflow: hidden;
+    padding-left: 4px;
+    box-sizing: border-box;
+}
+
+.owwa-pa-card::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 4px;
+    background: linear-gradient(180deg, #1e6fbe 0%, #c41e3a 100%);
+    border-radius: 0.75rem 0 0 0.75rem;
+    z-index: 1;
+    pointer-events: none;
+}
+
+.owwa-pa-card--summary::before {
+    background: #1e6fbe;
+}
+
+.owwa-pa-card > * {
+    position: relative;
+    z-index: 2;
+}
+
+/* Match Filament section header padding (accent sits in parent padding, not under content) */
+.owwa-pa-card .fi-section-header-ctn,
+.owwa-pa-card header.fi-section-header,
+.owwa-pa-card .fi-section-content-ctn,
+.owwa-pa-card.fi-section > .px-5 {
+    padding-left: 1.25rem !important;
+    padding-right: 1.25rem !important;
+    padding-top: 1rem !important;
+    padding-bottom: 1rem !important;
+}
+
+.owwa-pa-card header.fi-section-header {
+    padding-top: 0.875rem !important;
+    padding-bottom: 0.875rem !important;
+}
+
+.owwa-pa-card .fi-section-content-ctn {
+    padding-top: 0.875rem !important;
+    padding-bottom: 0.875rem !important;
+}
+
+.owwa-pa-card .fi-section-header-ctn {
+    background: transparent;
+}
+
+.owwa-table-wrap--scroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   PROCUREMENT RECOMMENDATIONS (AI) — compact
+═══════════════════════════════════════════════════════════ */
+
+.owwa-pr-ai-top {
+    margin-bottom: 1rem;
+    padding: 0.85rem 1rem;
+    border-radius: 0.75rem;
+    background: #fafafa;
+    border: 1px solid #e5e7eb;
+}
+
+.owwa-pr-ai-lede {
+    font-size: 0.875rem;
+    line-height: 1.55;
+    color: #475569;
+    margin: 0 0 0.75rem;
+    max-width: 48rem;
+}
+
+.owwa-pr-ai-controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 0.75rem;
+}
+
+.owwa-pr-ai-label {
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: #374151;
+}
+
+.owwa-pr-ai-select {
+    min-width: 12rem;
+    border-radius: 0.375rem;
+    border: 1px solid #d1d5db;
+    padding: 0.35rem 0.6rem;
+    font-size: 0.875rem;
+}
+
+.owwa-pr-ai-loading {
+    display: flex;
+    align-items: flex-start;
+    gap: 1rem;
+    padding: 1.25rem;
+    border-radius: 0.75rem;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+}
+
+.owwa-pr-ai-spinner {
+    width: 2rem;
+    height: 2rem;
+    border: 3px solid #e2e8f0;
+    border-top-color: #2563eb;
+    border-radius: 50%;
+    animation: owwa-pr-spin 0.85s linear infinite;
+}
+
+@keyframes owwa-pr-spin {
+    to { transform: rotate(360deg); }
+}
+
+/* Busy export / AI generation overlay — above Filament modals */
+.owwa-busy-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 200;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1.25rem;
+    background: rgba(15, 23, 42, 0.45);
+    backdrop-filter: blur(2px);
+}
+
+.owwa-busy-dialog {
+    width: min(100%, 26rem);
+    border-radius: 1rem;
+    background: #fff !important;
+    color: #0f172a;
+    border: 1px solid #e2e8f0;
+    box-shadow: 0 20px 40px rgba(15, 23, 42, 0.18);
+    padding: 1.5rem 1.35rem;
+    text-align: center;
+}
+
+.owwa-busy-spinner {
+    width: 2.25rem;
+    height: 2.25rem;
+    margin: 0 auto 0.85rem;
+    border: 3px solid #e2e8f0;
+    border-top-color: #1e3a5f;
+    border-radius: 50%;
+    animation: owwa-pr-spin 0.85s linear infinite;
+}
+
+.owwa-busy-title {
+    margin: 0 0 0.35rem;
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: #0f172a;
+}
+
+.owwa-busy-message {
+    margin: 0;
+    font-size: 0.875rem;
+    color: #475569;
+    line-height: 1.45;
+}
+
+.owwa-busy-dismiss {
+    margin-top: 1rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 2.25rem;
+    padding: 0.4rem 0.9rem;
+    border-radius: 0.55rem;
+    border: 1px solid #cbd5e1;
+    background: #f8fafc;
+    color: #0f172a;
+    font-size: 0.875rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.owwa-busy-dismiss:hover {
+    background: #f1f5f9;
+}
+
+.owwa-busy-hint {
+    margin: 0.75rem 0 0;
+    font-size: 0.75rem;
+    color: #64748b;
+}
+
+.owwa-busy-chip {
+    position: fixed;
+    right: 1.25rem;
+    bottom: 1.25rem;
+    z-index: 200;
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    max-width: min(100% - 2rem, 20rem);
+    padding: 0.7rem 0.75rem 0.7rem 0.85rem;
+    border-radius: 0.85rem;
+    background: #fff;
+    color: #0f172a;
+    border: 1px solid #e2e8f0;
+    box-shadow: 0 12px 28px rgba(15, 23, 42, 0.16);
+}
+
+.owwa-busy-chip-spinner {
+    width: 1.15rem;
+    height: 1.15rem;
+    flex-shrink: 0;
+    border: 2px solid #e2e8f0;
+    border-top-color: #1e3a5f;
+    border-radius: 50%;
+    animation: owwa-pr-spin 0.85s linear infinite;
+}
+
+.owwa-busy-chip-title {
+    margin: 0;
+    flex: 1;
+    min-width: 0;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    line-height: 1.3;
+    color: #0f172a;
+}
+
+.owwa-busy-chip-expand {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 1.85rem;
+    padding: 0.25rem 0.65rem;
+    border-radius: 0.45rem;
+    border: 1px solid #cbd5e1;
+    background: #f8fafc;
+    color: #0f172a;
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.owwa-busy-chip-expand:hover {
+    background: #f1f5f9;
+}
+
+/* AI done: hide result briefly so the chip can clear first, then reveal */
+#procurement-summary.owwa-pa-summary-awaiting-reveal .owwa-pa-summary-body > .owwa-pa-ai-recommendation,
+#procurement-summary.owwa-pa-summary-awaiting-reveal .owwa-pa-summary-body > .owwa-pr-ai-loading,
+#procurement-summary.owwa-pa-summary-awaiting-reveal .owwa-pa-summary-body > .owwa-pr-ai-idle {
+    opacity: 0;
+    pointer-events: none;
+}
+
+#procurement-summary .owwa-pa-summary-body > .owwa-pa-ai-recommendation,
+#procurement-summary .owwa-pa-summary-body > .owwa-pr-ai-loading,
+#procurement-summary .owwa-pa-summary-body > .owwa-pr-ai-idle {
+    transition: opacity 0.2s ease;
+}
+
+body.owwa-busy-active {
+    cursor: progress;
+}
+
+body.owwa-busy-active #procurement-summary .owwa-pr-ai-loading--inset {
+    display: none !important;
+}
+
+body.owwa-busy-active .fi-sidebar-nav-item,
+body.owwa-busy-active .fi-topbar a {
+    pointer-events: auto;
+}
+
+[x-cloak] {
+    display: none !important;
+}
+
+.owwa-pr-ai-loading-title {
+    font-weight: 600;
+    color: #0f172a;
+    margin: 0 0 0.25rem;
+    font-size: 0.9375rem;
+}
+
+.owwa-pr-ai-loading-sub {
+    margin: 0;
+    font-size: 0.8125rem;
+    color: #64748b;
+}
+
+.owwa-pr-ai-result {
+    border-radius: 0.75rem;
+    border: 1px solid #e2e8f0;
+    background: #ffffff;
+    overflow: hidden;
+}
+
+.owwa-pr-ai-result-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.85rem 1rem;
+    background: #f8fafc;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.owwa-pr-ai-result-title {
+    font-size: 1rem;
+    font-weight: 700;
+    color: #0f172a;
+    margin: 0 0 0.15rem;
+}
+
+.owwa-pr-ai-result-meta {
+    font-size: 0.75rem;
+    color: #64748b;
+    margin: 0;
+}
+
+.owwa-pr-ai-pill {
+    flex-shrink: 0;
+    font-size: 0.6875rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    padding: 0.35rem 0.65rem;
+    border-radius: 9999px;
+    background: #eff6ff;
+    color: #1d4ed8;
+    border: 1px solid #bfdbfe;
+}
+
+.owwa-pr-ai-hint {
+    margin: 0;
+    padding: 0.6rem 1rem;
+    font-size: 0.8125rem;
+    line-height: 1.5;
+    color: #64748b;
+    background: #fffbeb;
+    border-bottom: 1px solid #fde68a;
+}
+
+.owwa-pr-ai-narrative {
+    padding: 0.9rem 1rem 1rem;
+}
+
+.owwa-pr-ai-details {
+    margin: 0 1rem 1rem;
+    border: 1px solid #e5e7eb;
+    border-radius: 0.5rem;
+    background: #fafafa;
+}
+
+.owwa-pr-ai-details-summary {
+    padding: 0.65rem 1rem;
+    cursor: pointer;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: #374151;
+    list-style: none;
+}
+
+.owwa-pr-ai-details-summary::-webkit-details-marker {
+    display: none;
+}
+
+.owwa-pr-ai-table-wrap {
+    padding: 0 0.75rem 0.75rem;
+    overflow-x: auto;
+}
+
+.owwa-pr-ai-foot {
+    margin: 0;
+    padding: 0.6rem 1rem;
+    font-size: 0.75rem;
+    color: #64748b;
+    border-top: 1px solid #f1f5f9;
+    background: #f8fafc;
+}
+
+.owwa-pr-ai-idle {
+    padding: 1rem;
+    border-radius: 0.5rem;
+    border: 1px dashed #cbd5e1;
+    background: #fafafa;
+}
+
+.owwa-pr-ai-idle-text {
+    margin: 0;
+    font-size: 0.875rem;
+    color: #64748b;
+    line-height: 1.55;
+    max-width: 40rem;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   GLOBAL FISCAL YEAR MODAL
+═══════════════════════════════════════════════════════════ */
+
+[x-cloak] {
+    display: none !important;
+}
+
+.owwa-fy-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1.25rem;
+    background: rgba(15, 23, 42, 0.55);
+    backdrop-filter: blur(2px);
+}
+
+.owwa-fy-modal {
+    width: min(520px, 92vw);
+    background: #ffffff;
+    border-radius: 1rem;
+    box-shadow: 0 28px 80px rgba(2, 6, 23, 0.32);
+    border: 1px solid rgba(148, 163, 184, 0.35);
+    padding: 1rem 1.1rem 1.2rem;
+}
+
+.owwa-fy-head {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 0.75rem;
+    padding-bottom: 1rem;
+}
+
+.owwa-fy-title {
+    margin: 0;
+    font-size: 1.35rem;
+    line-height: 1.1;
+    font-weight: 700;
+    color: #0f172a;
+    letter-spacing: -0.02em;
+}
+
+.owwa-fy-close {
+    appearance: none;
+    border: 0;
+    background: transparent;
+    font-size: 1.5rem;
+    line-height: 1;
+    color: #475569;
+    cursor: pointer;
+    padding: 0.35rem 0.55rem;
+    border-radius: 0.5rem;
+}
+
+.owwa-fy-close:hover {
+    background: rgba(148, 163, 184, 0.25);
+    color: #0f172a;
+}
+
+.owwa-fy-subtitle {
+    margin: 0.25rem 0 0.8rem;
+    font-size: 0.88rem;
+    color: #475569;
+    line-height: 1.55;
+    max-width: 48rem;
+}
+
+.owwa-fy-field {
+    display: grid;
+    gap: 0.3rem;
+}
+
+.owwa-fy-label {
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: #334155;
+}
+
+.owwa-fy-label--sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+.owwa-fy-select {
+    width: 100%;
+    border-radius: 0.75rem;
+    border: 1px solid #cbd5e1;
+    padding: 0.6rem 2.8rem 0.6rem 0.75rem;
+    font-size: 0.95rem;
+    color: #0f172a;
+    background: #ffffff;
+    outline: none;
+}
+
+.owwa-fy-select:focus {
+    border-color: #2563eb;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.18);
+}
+
+.owwa-fy-foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin-top: .2rem;
+    padding-top: 0.2rem;
+}
+
+.owwa-fy-hint {
+    font-size: 0.8rem;
+    color: #64748b;
+}
+
+.owwa-fy-actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.owwa-fy-btn {
+    appearance: none;
+    border: 1px solid #cbd5e1;
+    background: #ffffff;
+    color: #0f172a;
+    border-radius: 0.75rem;
+    padding: 0.45rem 0.85rem;
+    font-size: 0.85rem;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.owwa-fy-btn:hover {
+    background: #f8fafc;
+}
+
+.owwa-fy-btn--ghost {
+    background: #ffffff;
+    border-color: #cbd5e1;
+    color: #0f172a;
+}
+
+.owwa-fy-btn--primary {
+    background: #1d4ed8;
+    border-color: #1d4ed8;
+    color: #ffffff;
+}
+
+.owwa-fy-btn--primary:hover {
+    background: #1e40af;
+    border-color: #1e40af;
+}
+
+@media (max-width: 520px) {
+    .owwa-fy-modal {
+        padding: 0.9rem 0.9rem 0.8rem;
+    }
+
+    .owwa-fy-title {
+        font-size: 1.25rem;
+    }
+
+    .owwa-fy-select {
+        font-size: 0.9rem;
+    }
+}

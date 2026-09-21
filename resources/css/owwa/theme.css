@@ -1,0 +1,4 @@
+/* OWWA theme entry — documentation only.
+ * The build script concatenates partials in a fixed order (see scripts/build-owwa-theme.mjs).
+ * Edit the _*.css files in this folder, then run: npm run build:owwa-theme
+ */

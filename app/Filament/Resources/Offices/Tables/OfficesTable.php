@@ -12,7 +12,6 @@ use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\BulkAction;
 use Filament\Actions\BulkActionGroup;
-use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 
@@ -31,13 +30,6 @@ class OfficesTable
                     ->searchable()
                     ->badge()
                     ->color('gray'),
-                IconColumn::make('is_satellite')
-                    ->label('Satellite')
-                    ->boolean()
-                    ->trueIcon('heroicon-o-check-circle')
-                    ->falseIcon('heroicon-o-minus-circle')
-                    ->trueColor('success')
-                    ->falseColor('gray'),
                 TextColumn::make('is_regional_supply')
                     ->label('Regional supply')
                     ->badge()
@@ -52,7 +44,7 @@ class OfficesTable
             ])
             ->defaultSort('name')
             ->emptyStateHeading('No offices yet')
-            ->emptyStateDescription('Add OWWA regional or satellite offices to get started.')
+            ->emptyStateDescription('Add OWWA offices to get started.')
             ->emptyStateIcon('heroicon-o-building-office-2')
             ->recordActions([
                 ConfiguresOwwaViewAction::make(

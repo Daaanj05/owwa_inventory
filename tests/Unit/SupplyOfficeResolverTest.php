@@ -18,13 +18,11 @@ class SupplyOfficeResolverTest extends TestCase
     public function test_resolve_prefers_designated_regional_supply_office(): void
     {
         $earlierByName = Office::factory()->create([
-            'name' => 'AAA Other Regional',
-            'is_satellite' => false,
+            'name' => 'AAA Other Office',
             'is_regional_supply' => false,
         ]);
         $designated = Office::factory()->create([
             'name' => 'ZZZ Designated Supply',
-            'is_satellite' => false,
             'is_regional_supply' => true,
         ]);
 
@@ -36,12 +34,10 @@ class SupplyOfficeResolverTest extends TestCase
     {
         $first = Office::factory()->create([
             'name' => 'First',
-            'is_satellite' => false,
             'is_regional_supply' => true,
         ]);
         $second = Office::factory()->create([
             'name' => 'Second',
-            'is_satellite' => false,
             'is_regional_supply' => false,
         ]);
 
@@ -52,37 +48,22 @@ class SupplyOfficeResolverTest extends TestCase
         $this->assertSame($second->id, app(SupplyOfficeResolver::class)->resolve());
     }
 
-    public function test_regional_supply_cannot_remain_satellite(): void
+    public function test_resolve_returns_alphabetically_first_office_when_no_designated_supply(): void
     {
-        $office = Office::factory()->create([
-            'is_satellite' => true,
-            'is_regional_supply' => false,
-        ]);
+        Office::factory()->create(['name' => 'Beta Office']);
+        $alpha = Office::factory()->create(['name' => 'Alpha Office']);
 
-        $office->update(['is_regional_supply' => true]);
-
-        $this->assertFalse($office->fresh()->is_satellite);
-        $this->assertTrue($office->fresh()->is_regional_supply);
+        $this->assertSame($alpha->id, app(SupplyOfficeResolver::class)->resolve());
     }
 
-    public function test_resolve_returns_regional_office_when_not_satellite(): void
+    public function test_resolve_prefers_custodian_office_over_alphabetical_fallback(): void
     {
-        Office::factory()->create(['name' => 'Satellite', 'is_satellite' => true]);
-        $regional = Office::factory()->create(['name' => 'Regional Office', 'is_satellite' => false]);
-
-        $this->assertSame($regional->id, app(SupplyOfficeResolver::class)->resolve());
-    }
-
-    public function test_resolve_prefers_custodian_office_over_alphabetical_non_satellite(): void
-    {
-        $emptyRegional = Office::factory()->create([
-            'name' => 'AAA Empty Regional',
-            'is_satellite' => false,
+        $emptyOffice = Office::factory()->create([
+            'name' => 'AAA Empty Office',
             'is_regional_supply' => false,
         ]);
         $custodianOffice = Office::factory()->create([
             'name' => 'ZZZ Stock Office',
-            'is_satellite' => false,
             'is_regional_supply' => false,
         ]);
         User::factory()->create([
@@ -91,7 +72,7 @@ class SupplyOfficeResolverTest extends TestCase
         ]);
 
         $this->assertSame($custodianOffice->id, app(SupplyOfficeResolver::class)->resolve());
-        $this->assertNotSame($emptyRegional->id, app(SupplyOfficeResolver::class)->resolve());
+        $this->assertNotSame($emptyOffice->id, app(SupplyOfficeResolver::class)->resolve());
     }
 
     public function test_backfill_migration_sets_regional_supply_on_owwa_iva_when_unset(): void
@@ -99,7 +80,6 @@ class SupplyOfficeResolverTest extends TestCase
         $office = Office::factory()->create([
             'code' => 'OWWA-IVA',
             'name' => 'OWWA Regional Office IV-A',
-            'is_satellite' => false,
             'is_regional_supply' => false,
         ]);
 
@@ -111,8 +91,8 @@ class SupplyOfficeResolverTest extends TestCase
 
     public function test_resolve_falls_back_to_single_custodian_office(): void
     {
-        Office::factory()->create(['is_satellite' => true]);
-        $custodianOffice = Office::factory()->create(['is_satellite' => true]);
+        Office::factory()->create(['name' => 'Other Office']);
+        $custodianOffice = Office::factory()->create(['name' => 'Custodian Office']);
         User::factory()->create([
             'role' => User::ROLE_SUPPLY_CUSTODIAN,
             'office_id' => $custodianOffice->id,
@@ -121,20 +101,17 @@ class SupplyOfficeResolverTest extends TestCase
         $this->assertSame($custodianOffice->id, app(SupplyOfficeResolver::class)->resolve());
     }
 
-    public function test_resolve_returns_null_when_no_regional_or_unique_custodian(): void
+    public function test_resolve_returns_null_when_no_offices_exist(): void
     {
-        Office::factory()->create(['is_satellite' => true]);
-
         $this->assertNull(app(SupplyOfficeResolver::class)->resolve());
     }
 
     public function test_regional_stock_available_for_item_at_supply_office(): void
     {
         $regional = Office::factory()->create([
-            'is_satellite' => false,
             'is_regional_supply' => true,
         ]);
-        $satellite = Office::factory()->create(['is_satellite' => true]);
+        $otherOffice = Office::factory()->create();
         $category = ItemCategory::factory()->create(['name' => 'Consumables']);
         $item = Item::factory()->create(['item_category_id' => $category->id]);
         $user = User::factory()->create([
@@ -153,7 +130,7 @@ class SupplyOfficeResolverTest extends TestCase
 
         Acquisition::query()->create([
             'item_id' => $item->id,
-            'office_id' => $satellite->id,
+            'office_id' => $otherOffice->id,
             'quantity' => 3,
             'unit_cost' => 10,
             'acquisition_date' => now(),

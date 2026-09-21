@@ -3,7 +3,8 @@
     "private": true,
     "type": "module",
     "scripts": {
-        "build": "vite build",
+        "build": "vite build && npm run build:owwa-theme",
+        "build:owwa-theme": "node scripts/build-owwa-theme.mjs",
         "dev": "vite"
     },
     "devDependencies": {

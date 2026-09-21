@@ -140,7 +140,6 @@ class AcquisitionReceivedModalTest extends TestCase
         $requestingOffice = Office::factory()->create([
             'name' => 'OWWA Satellite Office — Laguna',
             'code' => 'OWWA-LAG',
-            'is_satellite' => true,
         ]);
         $category = ItemCategory::factory()->create(['name' => 'Semi-Expendable']);
         $item = Item::factory()->create(['item_category_id' => $category->id]);

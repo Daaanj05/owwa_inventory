@@ -58,10 +58,10 @@ class ItemImportSemiPpeTest extends TestCase
             'uacs_object_code_id' => $uacs->id,
             'estimated_useful_life' => '36',
         ]);
-        $this->assertSame(2, InventoryUnit::query()->count());
+        $this->assertSame(0, InventoryUnit::query()->count());
     }
 
-    public function test_ppe_import_creates_item_with_type_uacs_and_starting_stock(): void
+    public function test_ppe_import_creates_item_with_type_and_uacs_without_starting_stock(): void
     {
         [$office, $category, $user, $uacs] = $this->ppeFixture();
 
@@ -84,7 +84,7 @@ class ItemImportSemiPpeTest extends TestCase
             'ppe_type' => PpePropertyType::OfficeEquipment,
             'uacs_object_code_id' => $uacs->id,
         ]);
-        $this->assertSame(1, InventoryUnit::query()->count());
+        $this->assertSame(0, InventoryUnit::query()->count());
     }
 
     public function test_sample_spreadsheets_include_category_specific_headers(): void
@@ -229,7 +229,7 @@ class ItemImportSemiPpeTest extends TestCase
         $this->assertStringContainsString('UACS object code', $missingUacsResult['invalid'][0]['reason']);
     }
 
-    public function test_semi_and_ppe_starting_stock_cost_thresholds_are_enforced(): void
+    public function test_semi_and_ppe_import_ignores_unit_cost_thresholds_without_starting_stock(): void
     {
         [$office, $category, $user] = $this->semiFixture();
 
@@ -244,7 +244,9 @@ class ItemImportSemiPpeTest extends TestCase
             $office->id,
             $user,
         );
-        $this->assertStringContainsString('less than', $semiResult['invalid'][0]['reason']);
+        $this->assertSame(1, $semiResult['created']);
+        $this->assertSame([], $semiResult['invalid']);
+        $this->assertSame(0, InventoryUnit::query()->count());
 
         [$office, $ppeCategory, $user] = $this->ppeFixture();
 
@@ -259,7 +261,9 @@ class ItemImportSemiPpeTest extends TestCase
             $office->id,
             $user,
         );
-        $this->assertStringContainsString('at least', $ppeResult['invalid'][0]['reason']);
+        $this->assertSame(1, $ppeResult['created']);
+        $this->assertSame([], $ppeResult['invalid']);
+        $this->assertSame(0, InventoryUnit::query()->count());
     }
 
     public function test_reimport_fills_blank_semi_and_ppe_fields_only(): void

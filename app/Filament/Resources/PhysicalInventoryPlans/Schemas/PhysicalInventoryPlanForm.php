@@ -94,7 +94,7 @@ class PhysicalInventoryPlanForm
                                     ->preload()
                                     ->placeholder('Select office')
                                     ->helperText('Active office that will perform the count.')
-                                    ->hintIcon(Heroicon::QuestionMarkCircle, 'Regional or satellite office included in this schedule.'),
+                                    ->hintIcon(Heroicon::QuestionMarkCircle, 'Office included in this schedule.'),
                                 Select::make('item_category_id')
                                     ->label('Category')
                                     ->options(fn (): array => ItemCategory::query()

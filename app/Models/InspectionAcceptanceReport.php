@@ -107,7 +107,20 @@ class InspectionAcceptanceReport extends Model
 
     public function isEditable(): bool
     {
-        return $this->isDraft() && ! $this->isArchived() && ! $this->isReceived();
+        return ($this->isDraft() || $this->isPendingApproval())
+            && ! $this->isArchived()
+            && ! $this->isReceived();
+    }
+
+    /**
+     * True until the first successful Save IAR (still draft, no submission timestamp).
+     */
+    public function isUnsavedIarDraft(): bool
+    {
+        return $this->isDraft()
+            && blank($this->submitted_at)
+            && ! $this->isArchived()
+            && ! $this->isReceived();
     }
 
     /**
@@ -135,22 +148,29 @@ class InspectionAcceptanceReport extends Model
             $missing[] = 'invoice no. (alphanumeric only)';
         }
 
-        foreach (['invoice_date', 'date_inspected'] as $dateField) {
-            if ($this->iar_date && $this->{$dateField} && ! $this->{$dateField}->greaterThan($this->iar_date)) {
-                $label = match ($dateField) {
-                    'date_inspected' => 'inspection date',
-                    default => str_replace('_', ' ', $dateField),
-                };
-                $missing[] = $label.' must be after IAR date';
+        foreach ([
+            'invoice_date' => 'invoice date',
+            'date_inspected' => 'inspection date',
+            'date_received' => 'receive date',
+        ] as $field => $label) {
+            if ($this->{$field} !== null && $this->{$field}->copy()->startOfDay()->isFuture()) {
+                $missing[] = $label.' must be today or earlier';
             }
         }
 
-        if ($this->iar_date && $this->date_received && $this->date_received->copy()->startOfDay()->lt($this->iar_date->copy()->startOfDay())) {
-            $missing[] = 'receive date must be on or after IAR date';
+        if ($this->invoice_date && $this->date_inspected
+            && $this->invoice_date->copy()->startOfDay()->gt($this->date_inspected->copy()->startOfDay())) {
+            $missing[] = 'invoice date must be on or before inspection date';
         }
 
-        if ($this->date_received !== null && $this->date_received->copy()->startOfDay()->isFuture()) {
-            $missing[] = 'receive date must be today or earlier';
+        if ($this->invoice_date && $this->date_received
+            && $this->invoice_date->copy()->startOfDay()->gt($this->date_received->copy()->startOfDay())) {
+            $missing[] = 'invoice date must be on or before receive date';
+        }
+
+        if ($this->date_inspected && $this->date_received
+            && $this->date_inspected->copy()->startOfDay()->gt($this->date_received->copy()->startOfDay())) {
+            $missing[] = 'inspection date must be on or before receive date';
         }
 
         if ($this->lines()->where('iar_quantity', '>', 0)->count() === 0) {
@@ -182,7 +202,7 @@ class InspectionAcceptanceReport extends Model
         return match ($this->status) {
             self::STATUS_PENDING_APPROVAL => 'IAR pending approval',
             self::STATUS_APPROVED => 'Ready for custodian receipt',
-            default => 'IAR in progress',
+            default => $this->isUnsavedIarDraft() ? 'IAR draft' : 'IAR in progress',
         };
     }
 

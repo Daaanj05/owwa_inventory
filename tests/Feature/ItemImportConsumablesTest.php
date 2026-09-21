@@ -72,12 +72,10 @@ class ItemImportConsumablesTest extends TestCase
 
         $alcohol = Item::query()->where('name', 'Alcohol 500ml')->first();
         $this->assertNotNull($alcohol);
-        $this->assertDatabaseHas(StockOpeningBalance::class, [
+        $this->assertDatabaseMissing(StockOpeningBalance::class, [
             'item_id' => $alcohol->id,
-            'office_id' => $office->id,
-            'quantity' => 147,
         ]);
-        $this->assertSame(147, app(InventoryStockService::class)->getStock($alcohol->id, $office->id));
+        $this->assertSame(0, app(InventoryStockService::class)->getStock($alcohol->id, $office->id));
         $this->assertSame(1, Item::query()->where('name', 'Alcohol 500ml')->count());
 
         $createdRows = array_values(array_filter(
@@ -184,7 +182,7 @@ class ItemImportConsumablesTest extends TestCase
         $this->assertSame(1, Item::query()->where('item_category_id', $category->id)->count());
     }
 
-    public function test_existing_item_without_stock_gets_starting_quantity_only(): void
+    public function test_existing_item_is_skipped_without_applying_quantity(): void
     {
         [$office, $category, $user] = $this->consumableFixture();
 
@@ -210,14 +208,13 @@ class ItemImportConsumablesTest extends TestCase
         );
 
         $this->assertSame(1, $result['created']);
-        $this->assertSame(['Bond Paper A4'], $result['stockFilled']);
+        $this->assertSame([], $result['stockFilled']);
+        $this->assertSame(['Bond Paper A4'], $result['skippedExistingNoQty']);
         $this->assertSame(1, Item::query()->where('name', 'Bond Paper A4')->count());
-        $this->assertDatabaseHas(StockOpeningBalance::class, [
+        $this->assertDatabaseMissing(StockOpeningBalance::class, [
             'item_id' => $item->id,
-            'office_id' => $office->id,
-            'quantity' => 40,
         ]);
-        $this->assertSame(40, app(InventoryStockService::class)->getStock($item->id, $office->id));
+        $this->assertSame(0, app(InventoryStockService::class)->getStock($item->id, $office->id));
     }
 
     public function test_existing_item_with_acquisition_is_skipped(): void
@@ -255,7 +252,7 @@ class ItemImportConsumablesTest extends TestCase
         );
 
         $this->assertSame(0, $result['created']);
-        $this->assertSame(['Bond Paper A4'], $result['skippedHasStock']);
+        $this->assertSame(['Bond Paper A4'], $result['skippedExistingNoQty']);
         $this->assertDatabaseMissing(StockOpeningBalance::class, [
             'item_id' => $item->id,
         ]);
@@ -283,7 +280,7 @@ class ItemImportConsumablesTest extends TestCase
         $this->assertSame(['Marker Blue'], $result['skippedInFile']);
         $this->assertSame(1, Item::query()->where('name', 'Marker Blue')->count());
         $marker = Item::query()->where('name', 'Marker Blue')->first();
-        $this->assertSame(5, app(InventoryStockService::class)->getStock($marker->id, $office->id));
+        $this->assertSame(0, app(InventoryStockService::class)->getStock($marker->id, $office->id));
     }
 
     public function test_invalid_unit_is_listed_and_not_created(): void
@@ -388,7 +385,7 @@ class ItemImportConsumablesTest extends TestCase
         ]);
     }
 
-    public function test_import_applies_optional_unit_cost_to_starting_stock(): void
+    public function test_import_ignores_quantity_and_unit_cost_for_starting_stock(): void
     {
         [$office, $category, $user] = $this->consumableFixture();
 
@@ -430,20 +427,14 @@ class ItemImportConsumablesTest extends TestCase
 
         $bondpaper = Item::query()->where('name', 'Bondpaper A4')->first();
         $this->assertNotNull($bondpaper);
-        $this->assertDatabaseHas(StockOpeningBalance::class, [
+        $this->assertDatabaseMissing(StockOpeningBalance::class, [
             'item_id' => $bondpaper->id,
-            'office_id' => $office->id,
-            'quantity' => 25,
-            'unit_cost' => 250.50,
         ]);
 
         $marker = Item::query()->where('name', 'Marker Blue')->first();
         $this->assertNotNull($marker);
-        $this->assertDatabaseHas(StockOpeningBalance::class, [
+        $this->assertDatabaseMissing(StockOpeningBalance::class, [
             'item_id' => $marker->id,
-            'office_id' => $office->id,
-            'quantity' => 10,
-            'unit_cost' => 0,
         ]);
     }
 

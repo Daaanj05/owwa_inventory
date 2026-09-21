@@ -13,6 +13,11 @@ class ReferenceCodeService
         return $this->nextCode(ReferenceSeries::typeForAcquisition());
     }
 
+    public function forOpeningBalance(): string
+    {
+        return $this->nextCode(ReferenceSeries::typeForOpeningBalance());
+    }
+
     public function forIssuance(): string
     {
         return $this->nextCode(ReferenceSeries::typeForIssuance());
@@ -249,6 +254,7 @@ class ReferenceCodeService
             ReferenceSeries::TYPE_DISPOSAL_CONSUMABLES,
             ReferenceSeries::TYPE_DISPOSAL_PROPERTY,
             ReferenceSeries::TYPE_ACQUISITION,
+            ReferenceSeries::TYPE_OPENING_BALANCE,
         ];
 
         if (! in_array($type, $typesRequiringControlFormat, true)) {

@@ -27,7 +27,6 @@ class DemoDataSeeder extends Seeder
             [
                 'name' => 'OWWA Regional Office IV-A',
                 'fund_cluster' => '01',
-                'is_satellite' => false,
                 'is_regional_supply' => true,
                 'address' => 'CALABARZON',
             ],
@@ -38,7 +37,6 @@ class DemoDataSeeder extends Seeder
             [
                 'name' => 'OWWA Satellite Office — Laguna',
                 'fund_cluster' => '01',
-                'is_satellite' => true,
                 'is_regional_supply' => false,
                 'address' => 'Sta. Cruz, Laguna',
             ],

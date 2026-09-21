@@ -2,15 +2,15 @@
 
 namespace App\Filament\Widgets;
 
+use App\Filament\Concerns\SyncsActiveItemCategory;
 use App\Filament\Pages\StockLevels;
-use App\Filament\Resources\Items\ItemResource;
+use App\Filament\Resources\Acquisitions\PurchaseOrders\PurchaseOrderResource;
 use App\Filament\Resources\Requisitions\RequisitionResource;
 use App\Models\Issuance;
-use App\Models\Item;
 use App\Models\ItemCategory;
+use App\Models\PurchaseOrder;
 use App\Models\Requisition;
 use App\Models\User;
-use App\Services\CatalogAssetNumberService;
 use App\Services\InventoryStockService;
 use App\Support\InventoryCategoryOptions;
 use Filament\Actions\Action;
@@ -38,13 +38,11 @@ class LowStockWidget extends StatsOverviewWidget implements HasActions
 
     protected string $view = 'filament.widgets.low-stock-widget';
 
-    public int $kpiItemsPage = 1;
-
     public int $kpiLowStockPage = 1;
 
     public int $kpiPendingPage = 1;
 
-    public ?int $kpiItemsCategoryId = null;
+    public int $kpiIncomingPage = 1;
 
     public ?int $kpiLowStockCategoryId = null;
 
@@ -83,9 +81,9 @@ class LowStockWidget extends StatsOverviewWidget implements HasActions
         $page = max(1, $page);
 
         match ($key) {
-            'items' => $this->kpiItemsPage = $page,
             'low_stock' => $this->kpiLowStockPage = $page,
             'pending' => $this->kpiPendingPage = $page,
+            'incoming' => $this->kpiIncomingPage = $page,
             default => null,
         };
     }
@@ -95,7 +93,6 @@ class LowStockWidget extends StatsOverviewWidget implements HasActions
         $resolved = filled($categoryId) ? (int) $categoryId : null;
 
         match ($key) {
-            'items' => [$this->kpiItemsCategoryId = $resolved, $this->kpiItemsPage = 1],
             'low_stock' => [$this->kpiLowStockCategoryId = $resolved, $this->kpiLowStockPage = 1],
             default => null,
         };
@@ -149,22 +146,12 @@ class LowStockWidget extends StatsOverviewWidget implements HasActions
      */
     protected function buildSupplyCustodianStats(int $lowStockCount, string $scopeLabel): array
     {
-        $itemsInTotal = Item::query()->active()->count();
         $pendingCount = $this->pendingActionRows()->count();
+        $ordersToInspectCount = $this->ordersToInspectQuery()->count();
 
         return [
-            Stat::make('Items in total', number_format($itemsInTotal))
-                ->description('Registered items in catalog')
-                ->descriptionIcon('heroicon-o-cube')
-                ->color('primary')
-                ->extraAttributes([
-                    'class' => 'cursor-pointer owwa-stat-clickable owwa-kpi-square',
-                    'wire:click' => "mountAction('viewItemsInTotal')",
-                    'title' => 'Click to view details',
-                ], merge: true),
-
-            Stat::make('Low stock', $lowStockCount)
-                ->description(($lowStockCount > 0 ? 'Below reorder point' : 'All stocks healthy').$scopeLabel)
+            Stat::make('Items running low', $lowStockCount)
+                ->description(($lowStockCount > 0 ? 'Need restocking' : 'All stocks healthy').$scopeLabel)
                 ->descriptionIcon($lowStockCount > 0 ? 'heroicon-o-exclamation-triangle' : 'heroicon-o-check-circle')
                 ->color($lowStockCount > 0 ? 'warning' : 'success')
                 ->extraAttributes([
@@ -173,10 +160,10 @@ class LowStockWidget extends StatsOverviewWidget implements HasActions
                     'title' => 'Click to view details',
                 ], merge: true),
 
-            Stat::make('Pending', $pendingCount)
+            Stat::make('Pending requests & returns', $pendingCount)
                 ->description($pendingCount > 0
-                    ? $pendingCount.' '.str('item')->plural($pendingCount).' awaiting your action'
-                    : 'No pending items')
+                    ? 'Requests & returns awaiting your action'
+                    : 'Nothing awaiting action')
                 ->descriptionIcon($pendingCount > 0 ? 'heroicon-o-bell-alert' : 'heroicon-o-check-circle')
                 ->color($pendingCount > 0 ? 'warning' : 'success')
                 ->extraAttributes([
@@ -184,25 +171,24 @@ class LowStockWidget extends StatsOverviewWidget implements HasActions
                     'wire:click' => "mountAction('viewPendingRequisitions')",
                     'title' => 'Click to view details',
                 ], merge: true),
-        ];
-    }
 
-    public function viewItemsInTotalAction(): Action
-    {
-        return $this->detailModalAction(
-            'viewItemsInTotal',
-            'Items in total',
-            fn (): array => $this->itemsInTotalDetail(),
-            ItemResource::getUrl('index'),
-            'Open Items',
-        );
+            Stat::make('Orders to inspect & receive', number_format($ordersToInspectCount))
+                ->description('Approved POs still waiting to be received')
+                ->descriptionIcon('heroicon-o-truck')
+                ->color('info')
+                ->extraAttributes([
+                    'class' => 'cursor-pointer owwa-stat-clickable owwa-kpi-square',
+                    'wire:click' => "mountAction('viewOrdersToInspect')",
+                    'title' => 'Items already ordered from the supplier, not yet received into stock. Click to view details',
+                ], merge: true),
+        ];
     }
 
     public function viewLowStockAction(): Action
     {
         return $this->detailModalAction(
             'viewLowStock',
-            'Low stock',
+            'Items running low',
             fn (): array => $this->lowStockDetail(),
             StockLevels::getUrl(),
             'Open Stock Levels',
@@ -213,10 +199,21 @@ class LowStockWidget extends StatsOverviewWidget implements HasActions
     {
         return $this->detailModalAction(
             'viewPendingRequisitions',
-            'Pending',
+            'Pending requests & returns',
             fn (): array => $this->pendingActionsDetail(),
             RequisitionResource::getUrl('index'),
             'Open Requisitions',
+        );
+    }
+
+    public function viewOrdersToInspectAction(): Action
+    {
+        return $this->detailModalAction(
+            'viewOrdersToInspect',
+            'Orders to inspect & receive',
+            fn (): array => $this->ordersToInspectDetail(),
+            $this->purchaseOrdersIndexUrl(),
+            'Open Purchase Orders',
         );
     }
 
@@ -247,83 +244,6 @@ class LowStockWidget extends StatsOverviewWidget implements HasActions
                     ->color('primary')
                     ->icon('heroicon-m-arrow-top-right-on-square'),
             ]);
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    protected function itemsInTotalDetail(): array
-    {
-        $query = Item::query()
-            ->active()
-            ->with('category')
-            ->when(
-                $this->kpiItemsCategoryId,
-                fn (Builder $q): Builder => $q->where('item_category_id', $this->kpiItemsCategoryId),
-            )
-            ->orderBy(
-                ItemCategory::query()
-                    ->select('name')
-                    ->whereColumn('item_categories.id', 'items.item_category_id')
-                    ->limit(1)
-            )
-            ->orderBy('name');
-
-        $paginator = $query->paginate(self::KPI_PER_PAGE, ['*'], 'page', $this->kpiItemsPage);
-
-        $sections = [];
-        foreach ($paginator->getCollection()->groupBy(fn (Item $item): string => $item->category?->name ?? 'Uncategorized') as $categoryName => $items) {
-            $first = $items->first();
-            $identifierLabel = app(CatalogAssetNumberService::class)
-                ->catalogIdentifierLabel($first?->category?->getTemplateSlug());
-
-            $sections[] = [
-                'heading' => $categoryName,
-                'columns' => [
-                    'identifier' => $identifierLabel,
-                    'name' => 'Item',
-                    'unit' => 'Unit',
-                    'reorder_level' => 'Reorder point',
-                ],
-                'rows' => $items->map(fn (Item $item): array => [
-                    'identifier' => $item->catalogAssetIdentifier(),
-                    'name' => $item->name,
-                    'unit' => $item->unit,
-                    'reorder_level' => $item->reorder_level,
-                ])->values()->all(),
-            ];
-        }
-
-        $selectedLabel = $this->selectedCategoryLabel($this->kpiItemsCategoryId);
-
-        return [
-            'summary' => number_format($paginator->total()).' registered item'.($paginator->total() === 1 ? '' : 's')
-                .($selectedLabel ? " in {$selectedLabel}" : ' across categories').'.',
-            'empty_title' => 'No items',
-            'empty_desc' => $selectedLabel
-                ? "There are no active items in {$selectedLabel}."
-                : 'There are no active items in the catalog yet.',
-            'columns' => [
-                'identifier' => 'Identifier',
-                'name' => 'Item',
-                'unit' => 'Unit',
-                'reorder_level' => 'Reorder point',
-            ],
-            'numeric_keys' => ['reorder_level'],
-            'sections' => $sections,
-            'rows' => [],
-            'category_filter' => [
-                'key' => 'items',
-                'value' => $this->kpiItemsCategoryId,
-                'options' => InventoryCategoryOptions::allActiveCategoryOptions(),
-            ],
-            'pagination' => [
-                'key' => 'items',
-                'current' => $paginator->currentPage(),
-                'last' => max(1, $paginator->lastPage()),
-                'total' => $paginator->total(),
-            ],
-        ];
     }
 
     /**
@@ -440,8 +360,8 @@ class LowStockWidget extends StatsOverviewWidget implements HasActions
         $slice = $rows->forPage($page, self::KPI_PER_PAGE)->values();
 
         return [
-            'summary' => number_format($total).' pending item'.($total === 1 ? '' : 's').' awaiting your action.',
-            'empty_title' => 'No pending items',
+            'summary' => number_format($total).' pending request'.($total === 1 ? '' : 's').' & return'.($total === 1 ? '' : 's').' awaiting your action.',
+            'empty_title' => 'No pending requests or returns',
             'empty_desc' => 'There are no transactions awaiting Supply Custodian action.',
             'columns' => [
                 'reference' => 'Reference',
@@ -543,6 +463,94 @@ class LowStockWidget extends StatsOverviewWidget implements HasActions
             ->whereHas('requestedBy', function (Builder $q): void {
                 $q->where('role', User::ROLE_UNIT_CONSOLIDATOR);
             });
+    }
+
+    /**
+     * Approved POs not yet received into stock (IAR may be missing or in progress).
+     *
+     * @return Builder<PurchaseOrder>
+     */
+    protected function ordersToInspectQuery(): Builder
+    {
+        return PurchaseOrder::query()
+            ->whereNull('archived_at')
+            ->where('status', PurchaseOrder::STATUS_APPROVED)
+            ->whereHas('purchaseRequest', fn (Builder $q): Builder => $q
+                ->whereNull('archived_at')
+                ->whereNull('received_at'))
+            ->where(fn (Builder $q): Builder => $q
+                ->whereDoesntHave('inspectionAcceptanceReport')
+                ->orWhereHas(
+                    'inspectionAcceptanceReport',
+                    fn (Builder $iar): Builder => $iar->whereNull('stock_received_at'),
+                ));
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function ordersToInspectDetail(): array
+    {
+        $orders = $this->ordersToInspectQuery()
+            ->with(['purchaseRequest.office', 'inspectionAcceptanceReport', 'supplier'])
+            ->latest('approved_at')
+            ->latest('po_date')
+            ->get();
+
+        $total = $orders->count();
+        $lastPage = max(1, (int) ceil($total / self::KPI_PER_PAGE));
+        $page = min(max(1, $this->kpiIncomingPage), $lastPage);
+        $slice = $orders->forPage($page, self::KPI_PER_PAGE)->values();
+
+        return [
+            'summary' => number_format($total).' approved purchase order'
+                .($total === 1 ? '' : 's')
+                .' still waiting to be received.',
+            'empty_title' => 'Approved POs still waiting to be received',
+            'empty_desc' => 'There are no approved purchase orders waiting to be inspected or received into stock.',
+            'columns' => [
+                'po_number' => 'PO number',
+                'supplier' => 'Supplier',
+                'status' => 'Status',
+                'office' => 'Office',
+                'date' => 'PO date',
+            ],
+            'numeric_keys' => [],
+            'rows' => $slice->map(function (PurchaseOrder $order): array {
+                $categoryId = (int) ($order->purchaseRequest?->item_category_id ?? 0);
+
+                return [
+                    'po_number' => $order->number ?? '#'.$order->id,
+                    'supplier' => $order->supplier_name ?: ($order->supplier?->name ?? '—'),
+                    'status' => $order->statusLabel(),
+                    'office' => $order->purchaseRequest?->office?->name,
+                    'date' => optional($order->po_date ?? $order->approved_at)?->format('M j, Y'),
+                    'record_url' => PurchaseOrderResource::getUrl('index', array_filter([
+                        'category' => $categoryId > 0 ? $categoryId : null,
+                        'tableSearch' => $order->number,
+                    ])),
+                ];
+            })->all(),
+            'pagination' => [
+                'key' => 'incoming',
+                'current' => $page,
+                'last' => $lastPage,
+                'total' => $total,
+            ],
+        ];
+    }
+
+    protected function purchaseOrdersIndexUrl(): string
+    {
+        $categoryId = SyncsActiveItemCategory::resolveCategoryIdFromContext();
+
+        if ($categoryId <= 0) {
+            $categoryId = (int) ItemCategory::query()->orderBy('name')->value('id');
+        }
+
+        return PurchaseOrderResource::getUrl('index', array_filter([
+            'category' => $categoryId > 0 ? $categoryId : null,
+        ]));
     }
 
     protected function buildIssuedThisMonthStat(string $scopeLabel, ?array $officeIds): Stat

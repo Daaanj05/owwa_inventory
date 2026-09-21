@@ -180,7 +180,7 @@ class PhysicalCountStockReconciliationTest extends TestCase
     public function test_preload_excludes_units_at_satellite_office(): void
     {
         [$office, $category, $item, $user] = $this->createSemiFixtures();
-        $satellite = Office::factory()->create(['is_satellite' => true, 'name' => 'Satellite A']);
+        $satellite = Office::factory()->create(['name' => 'Satellite A']);
 
         $acquisition = Acquisition::query()->create([
             'reference_code' => 'ACQ-REC-5',

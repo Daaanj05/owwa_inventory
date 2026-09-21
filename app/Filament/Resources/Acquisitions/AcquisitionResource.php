@@ -105,7 +105,7 @@ class AcquisitionResource extends Resource
             && $model->isReceived()
             && ! $model->isArchived();
 
-        $tableAction = $model instanceof AcquisitionPaperwork && $model->isPrEditable()
+        $tableAction = $model instanceof AcquisitionPaperwork && $model->isUnsavedPrDraft()
             ? 'edit'
             : 'view';
 

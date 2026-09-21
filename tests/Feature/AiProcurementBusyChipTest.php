@@ -39,7 +39,25 @@ class AiProcurementBusyChipTest extends TestCase
         Livewire::actingAs($user)
             ->test(AiProcurementBusyChip::class)
             ->assertSet('processingRunId', $run->id)
-            ->assertSee('Generating recommendation');
+            ->assertSee('Generating recommendation')
+            ->assertSeeHtml('wire:poll.4s');
+    }
+
+    public function test_idle_chip_does_not_poll_when_no_processing_run(): void
+    {
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+
+        $office = Office::factory()->create();
+        $user = User::factory()->create([
+            'role' => User::ROLE_SUPPLY_CUSTODIAN,
+            'office_id' => $office->id,
+            'email_verified_at' => now(),
+        ]);
+
+        Livewire::actingAs($user)
+            ->test(AiProcurementBusyChip::class)
+            ->assertSet('processingRunId', null)
+            ->assertDontSeeHtml('wire:poll');
     }
 
     public function test_chip_notifies_when_processing_run_completes(): void

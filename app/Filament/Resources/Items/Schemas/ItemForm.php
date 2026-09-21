@@ -3,9 +3,8 @@
 namespace App\Filament\Resources\Items\Schemas;
 
 use App\Filament\Concerns\SyncsActiveItemCategory;
-use App\Filament\Forms\Components\StyledDatalistInput;
-use App\Filament\Resources\Items\Support\ItemOpeningStockFields;
 use App\Models\Item;
+use App\Models\ItemAttributeOption;
 use App\Models\ItemCategory;
 use App\Support\ConsumableInventoryType;
 use App\Support\ItemMeasurementUnitInput;
@@ -23,7 +22,7 @@ use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
-use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 
 class ItemForm
 {
@@ -56,13 +55,30 @@ class ItemForm
                             ->visible(fn (string $operation): bool => $operation === 'create' && ! self::isCategoryScoped())
                             ->columnSpanFull(),
 
-                        StyledDatalistInput::make('base_name')
+                        Select::make('base_name')
                             ->label('Base item')
                             ->required()
-                            ->maxLength(255)
-                            ->suggestions(fn (Get $get): array => array_values(self::baseItemOptions($get('item_category_id'))))
+                            ->searchable()
+                            ->options(function (Get $get): array {
+                                $options = collect(self::baseItemOptions($get('item_category_id')))
+                                    ->mapWithKeys(fn ($label, $value): array => [(string) $value => (string) $label])
+                                    ->all();
+                                $current = $get('base_name');
+                                if (filled($current) && ! array_key_exists((string) $current, $options)) {
+                                    $options[(string) $current] = (string) $current;
+                                }
+
+                                return $options;
+                            })
+                            ->createOptionForm([
+                                TextInput::make('base_name')
+                                    ->label('Base item')
+                                    ->required()
+                                    ->maxLength(255),
+                            ])
+                            ->createOptionUsing(fn (array $data): string => trim((string) ($data['base_name'] ?? '')))
                             ->live(onBlur: true)
-                            ->helperText('Type to filter existing base items, or enter a new one.'),
+                            ->helperText('Pick an existing base item or add a new one.'),
                         TextInput::make('sub_item')
                             ->label('Sub-item')
                             ->maxLength(255)
@@ -118,26 +134,44 @@ class ItemForm
                                 : 'Set automatically from acquisition unit cost ('.SemiExpendableValueCategory::tierRuleSummary().')')
                             ->helperText('Low-valued (SPLV) or high-valued (SPHV) per COA Circular 2022-004. Not entered manually.'),
 
-                        ItemMeasurementUnitInput::configure(
-                            TextInput::make('unit')
-                                ->label('Measurement unit')
-                                ->required()
-                                ->default('piece')
-                                ->maxLength(50)
-                                ->datalist(fn (): array => Item::query()
-                                    ->whereNotNull('unit')
-                                    ->where('unit', '!=', '')
-                                    ->distinct()
-                                    ->orderBy('unit')
-                                    ->limit(50)
-                                    ->pluck('unit')
-                                    ->merge(['piece', 'ream', 'box'])
-                                    ->unique()
-                                    ->filter(fn (string $unit): bool => ItemMeasurementUnitInput::isValid($unit))
-                                    ->values()
-                                    ->all())
-                                ->helperText('Letters only — how quantity is counted (e.g. piece, ream, box).'),
-                        ),
+                        Select::make('unit')
+                            ->label('Measurement unit')
+                            ->required()
+                            ->default('piece')
+                            ->searchable()
+                            ->options(fn (Get $get): array => ItemAttributeOption::optionsForKindIncluding(
+                                ItemAttributeOption::KIND_UNIT,
+                                $get('unit'),
+                            ))
+                            ->createOptionForm([
+                                TextInput::make('unit')
+                                    ->label('Measurement unit')
+                                    ->required()
+                                    ->maxLength(50),
+                            ])
+                            ->createOptionUsing(function (array $data): string {
+                                $unit = trim((string) ($data['unit'] ?? ''));
+
+                                if (! ItemMeasurementUnitInput::isValid($unit)) {
+                                    throw ValidationException::withMessages([
+                                        'unit' => 'Measurement unit must be letters only (e.g. piece, ream, box).',
+                                    ]);
+                                }
+
+                                ItemAttributeOption::query()->updateOrCreate(
+                                    [
+                                        'kind' => ItemAttributeOption::KIND_UNIT,
+                                        'value' => $unit,
+                                    ],
+                                    [
+                                        'label' => $unit,
+                                        'is_active' => true,
+                                    ],
+                                );
+
+                                return $unit;
+                            })
+                            ->helperText('Letters only — how quantity is counted (e.g. piece, ream, box).'),
                         TextInput::make('reorder_level')
                             ->label('Reorder point')
                             ->required()
@@ -145,28 +179,24 @@ class ItemForm
                             ->default(0)
                             ->minValue(0),
 
-                        TextInput::make('inventory_type')
+                        Select::make('inventory_type')
                             ->label('Inventory type')
-                            ->datalist(fn (): array => ConsumableInventoryType::suggestionLabels())
+                            ->options(fn (Get $get): array => ItemAttributeOption::optionsForKindIncluding(
+                                ItemAttributeOption::KIND_INVENTORY_TYPE,
+                                ConsumableInventoryType::resolve((string) ($get('inventory_type') ?? '')),
+                            ))
+                            ->searchable()
                             ->required(fn (Get $get): bool => self::isConsumablesCategory($get('item_category_id')))
                             ->visible(fn (Get $get): bool => self::isConsumablesCategory($get('item_category_id')))
                             ->dehydrated(fn (Get $get): bool => self::isConsumablesCategory($get('item_category_id')))
                             ->live(onBlur: true)
-                            ->formatStateUsing(function (mixed $state): ?string {
-                                if (blank($state)) {
-                                    return null;
-                                }
-
-                                $label = ConsumableInventoryType::label((string) $state);
-
-                                return $label !== '' ? $label : (string) $state;
-                            })
+                            ->formatStateUsing(fn (mixed $state): ?string => ConsumableInventoryType::resolve((string) $state))
                             ->dehydrateStateUsing(function (mixed $state): ?string {
                                 if (blank($state)) {
                                     return null;
                                 }
 
-                                return ConsumableInventoryType::resolve((string) $state) ?? trim((string) $state);
+                                return ConsumableInventoryType::resolve((string) $state);
                             })
                             ->afterStateUpdated(function (Set $set, mixed $state): void {
                                 if (blank($state)) {
@@ -177,12 +207,8 @@ class ItemForm
 
                                 $resolved = ConsumableInventoryType::resolve((string) $state);
                                 if ($resolved !== null) {
-                                    $set('inventory_type', ConsumableInventoryType::label($resolved));
-
-                                    return;
+                                    $set('inventory_type', $resolved);
                                 }
-
-                                $set('inventory_type', Str::title(trim((string) $state)));
                             })
                             ->rule(function (Get $get) {
                                 return function (string $attribute, mixed $value, \Closure $fail) use ($get): void {
@@ -195,25 +221,23 @@ class ItemForm
                                     }
                                 };
                             })
-                            ->helperText('Type or pick a suggestion. New types are saved and offered on later imports.'),
+                            ->helperText('Pick an inventory type.'),
                         TextInput::make('days_to_consume')
                             ->label('Days to consume')
                             ->numeric()
                             ->minValue(0)
                             ->visible(fn (Get $get): bool => self::isConsumablesCategory($get('item_category_id'))),
 
-                        TextInput::make('property_class')
+                        Select::make('property_class')
                             ->label('Property class')
-                            ->datalist(fn (): array => array_values(ItemPropertyClass::options()))
+                            ->options(fn (Get $get): array => ItemAttributeOption::optionsForKindIncluding(
+                                ItemAttributeOption::KIND_PROPERTY_CLASS,
+                                ItemPropertyClass::resolve((string) ($get('property_class') ?? '')),
+                            ))
+                            ->searchable()
                             ->required(fn (Get $get): bool => self::isSemiExpendableCategory($get('item_category_id')))
                             ->live(onBlur: true)
-                            ->formatStateUsing(function (mixed $state): ?string {
-                                if (blank($state)) {
-                                    return null;
-                                }
-
-                                return ItemPropertyClass::label((string) $state) ?? (string) $state;
-                            })
+                            ->formatStateUsing(fn (mixed $state): ?string => ItemPropertyClass::resolve((string) $state))
                             ->dehydrateStateUsing(function (mixed $state): ?string {
                                 if (blank($state)) {
                                     return null;
@@ -228,7 +252,7 @@ class ItemForm
 
                                 $resolved = ItemPropertyClass::resolve((string) $state);
                                 if ($resolved !== null) {
-                                    $set('property_class', ItemPropertyClass::label($resolved));
+                                    $set('property_class', $resolved);
 
                                     if (blank($get('estimated_useful_life'))) {
                                         $default = SemiExpendableUsefulLife::defaultForPropertyClass($resolved);
@@ -239,8 +263,6 @@ class ItemForm
 
                                     return;
                                 }
-
-                                $set('property_class', trim((string) $state));
                             })
                             ->rule(function (Get $get) {
                                 return function (string $attribute, mixed $value, \Closure $fail) use ($get): void {
@@ -253,21 +275,19 @@ class ItemForm
                                     }
                                 };
                             })
-                            ->helperText('Type or pick an official COA label. Category code in Inventory item no. (IT, FF, OE, …).')
+                            ->helperText('Pick an official COA label. Category code in Inventory item no. (IT, FF, OE, …).')
                             ->visible(fn (Get $get): bool => self::isSemiExpendableCategory($get('item_category_id')))
                             ->dehydrated(fn (Get $get): bool => self::isSemiExpendableCategory($get('item_category_id'))),
-                        TextInput::make('ppe_type')
+                        Select::make('ppe_type')
                             ->label('Type of PPE')
-                            ->datalist(fn (): array => array_values(PpePropertyType::options()))
+                            ->options(fn (Get $get): array => ItemAttributeOption::optionsForKindIncluding(
+                                ItemAttributeOption::KIND_PPE_TYPE,
+                                PpePropertyType::resolve((string) ($get('ppe_type') ?? '')),
+                            ))
+                            ->searchable()
                             ->required(fn (Get $get): bool => self::isPpeCategory($get('item_category_id')))
                             ->live(onBlur: true)
-                            ->formatStateUsing(function (mixed $state): ?string {
-                                if (blank($state)) {
-                                    return null;
-                                }
-
-                                return PpePropertyType::label((string) $state) ?? (string) $state;
-                            })
+                            ->formatStateUsing(fn (mixed $state): ?string => PpePropertyType::resolve((string) $state))
                             ->dehydrateStateUsing(function (mixed $state): ?string {
                                 if (blank($state)) {
                                     return null;
@@ -284,12 +304,8 @@ class ItemForm
 
                                 $resolved = PpePropertyType::resolve((string) $state);
                                 if ($resolved !== null) {
-                                    $set('ppe_type', PpePropertyType::label($resolved));
-
-                                    return;
+                                    $set('ppe_type', $resolved);
                                 }
-
-                                $set('ppe_type', trim((string) $state));
                             })
                             ->rule(function (Get $get) {
                                 return function (string $attribute, mixed $value, \Closure $fail) use ($get): void {
@@ -302,7 +318,7 @@ class ItemForm
                                     }
                                 };
                             })
-                            ->helperText('Type or pick an official COA label. Printed on Appendix 73 RPCPPE as Type of Property, Plant and Equipment.')
+                            ->helperText('Pick an official COA label. Printed on Appendix 73 RPCPPE as Type of Property, Plant and Equipment.')
                             ->visible(fn (Get $get): bool => self::isPpeCategory($get('item_category_id')))
                             ->dehydrated(fn (Get $get): bool => self::isPpeCategory($get('item_category_id'))),
                         Select::make('uacs_object_code_id')
@@ -350,8 +366,6 @@ class ItemForm
                                     }
                                 };
                             }),
-
-                        ...ItemOpeningStockFields::createFields(),
 
                         Textarea::make('description')
                             ->columnSpanFull()

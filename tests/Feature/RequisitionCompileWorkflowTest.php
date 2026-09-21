@@ -1048,12 +1048,10 @@ class RequisitionCompileWorkflowTest extends TestCase
 
         Office::factory()->create([
             'name' => 'AAA Empty Regional',
-            'is_satellite' => false,
             'is_regional_supply' => false,
         ]);
         $supplyOffice = Office::factory()->create([
             'name' => 'ZZZ Supply Office',
-            'is_satellite' => false,
             'is_regional_supply' => false,
         ]);
         $custodian = User::factory()->create([

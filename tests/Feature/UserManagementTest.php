@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Filament\Resources\Users\Pages\ListUsers;
+use App\Models\Department;
 use App\Models\Office;
 use App\Models\User;
 use Filament\Actions\Testing\TestAction;
@@ -86,5 +87,120 @@ class UserManagementTest extends TestCase
             ->assertFormFieldExists('first_name')
             ->assertFormFieldExists('email')
             ->assertFormFieldExists('office_id');
+    }
+
+    public function test_creating_employee_without_department_fails_validation(): void
+    {
+        Filament::setCurrentPanel(Filament::getPanel('system-admin'));
+
+        $office = Office::factory()->create(['name' => 'Field Office']);
+        $admin = User::factory()->create([
+            'role' => User::ROLE_SYSTEM_ADMIN,
+            'email_verified_at' => now(),
+        ]);
+
+        $this->actingAs($admin);
+
+        Livewire::test(ListUsers::class)
+            ->mountAction(TestAction::make('create')->schemaComponent(true, 'content'))
+            ->fillForm([
+                'first_name' => 'No',
+                'last_name' => 'Department',
+                'email' => 'employee.no.dept@example.com',
+                'role' => User::ROLE_EMPLOYEE,
+                'office_id' => $office->id,
+                'department_id' => null,
+            ])
+            ->callMountedAction()
+            ->assertHasFormErrors(['department_id' => 'required']);
+
+        $this->assertDatabaseMissing(User::class, [
+            'email' => 'employee.no.dept@example.com',
+        ]);
+    }
+
+    public function test_creating_supply_custodian_rejects_non_regional_supply_office(): void
+    {
+        Filament::setCurrentPanel(Filament::getPanel('system-admin'));
+
+        $regional = Office::factory()->create([
+            'name' => 'Regional Supply',
+            'is_regional_supply' => true,
+        ]);
+        $otherOffice = Office::factory()->create([
+            'name' => 'Field Office',
+            'is_regional_supply' => false,
+        ]);
+        $department = Department::query()->create([
+            'office_id' => $otherOffice->id,
+            'name' => 'Admin',
+            'code' => 'ADM',
+        ]);
+        $admin = User::factory()->create([
+            'role' => User::ROLE_SYSTEM_ADMIN,
+            'email_verified_at' => now(),
+        ]);
+
+        $this->actingAs($admin);
+
+        Livewire::test(ListUsers::class)
+            ->mountAction(TestAction::make('create')->schemaComponent(true, 'content'))
+            ->fillForm([
+                'first_name' => 'Supply',
+                'last_name' => 'Custodian',
+                'email' => 'custodian.nonregional@example.com',
+                'role' => User::ROLE_SUPPLY_CUSTODIAN,
+                'office_id' => $otherOffice->id,
+                'department_id' => $department->id,
+            ])
+            ->callMountedAction()
+            ->assertHasFormErrors(['office_id']);
+
+        $this->assertDatabaseMissing(User::class, [
+            'email' => 'custodian.nonregional@example.com',
+        ]);
+        $this->assertNotNull($regional->fresh());
+    }
+
+    public function test_creating_supply_custodian_with_regional_office_and_department_succeeds(): void
+    {
+        Filament::setCurrentPanel(Filament::getPanel('system-admin'));
+
+        $regional = Office::factory()->create([
+            'name' => 'Regional Supply',
+            'is_regional_supply' => true,
+        ]);
+        $department = Department::query()->create([
+            'office_id' => $regional->id,
+            'name' => 'Supply Unit',
+            'code' => 'SUP',
+        ]);
+        $admin = User::factory()->create([
+            'role' => User::ROLE_SYSTEM_ADMIN,
+            'email_verified_at' => now(),
+        ]);
+
+        $this->actingAs($admin);
+
+        Livewire::test(ListUsers::class)
+            ->mountAction(TestAction::make('create')->schemaComponent(true, 'content'))
+            ->fillForm([
+                'first_name' => 'Supply',
+                'last_name' => 'Custodian',
+                'email' => 'custodian.regional@example.com',
+                'role' => User::ROLE_SUPPLY_CUSTODIAN,
+                'office_id' => $regional->id,
+                'department_id' => $department->id,
+            ])
+            ->callMountedAction()
+            ->assertHasNoActionErrors()
+            ->assertNotified();
+
+        $user = User::query()->where('email', 'custodian.regional@example.com')->first();
+
+        $this->assertNotNull($user);
+        $this->assertSame(User::ROLE_SUPPLY_CUSTODIAN, $user->role);
+        $this->assertSame($regional->id, $user->office_id);
+        $this->assertSame($department->id, $user->department_id);
     }
 }

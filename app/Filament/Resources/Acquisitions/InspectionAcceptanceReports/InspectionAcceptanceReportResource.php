@@ -89,7 +89,9 @@ class InspectionAcceptanceReportResource extends Resource
             : static::getModel()::query()->find($record);
 
         $id = $model instanceof Model ? $model->getKey() : $record;
-        $tableAction = $model instanceof InspectionAcceptanceReport && $model->isEditable() ? 'edit' : 'view';
+        $tableAction = $model instanceof InspectionAcceptanceReport && $model->isUnsavedIarDraft()
+            ? 'edit'
+            : 'view';
 
         $params = array_merge([
             'tableAction' => $tableAction,

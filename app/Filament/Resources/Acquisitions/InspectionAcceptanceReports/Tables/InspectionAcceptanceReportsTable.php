@@ -2,7 +2,6 @@
 
 namespace App\Filament\Resources\Acquisitions\InspectionAcceptanceReports\Tables;
 
-use App\Filament\Resources\Acquisitions\Concerns\AcquisitionDateRangeFilter;
 use App\Filament\Resources\Acquisitions\InspectionAcceptanceReports\Actions\InspectionAcceptanceReportActions;
 use App\Filament\Resources\Acquisitions\InspectionAcceptanceReports\Schemas\InspectionAcceptanceReportInfolist;
 use App\Filament\Support\ConfiguresOwwaViewAction;
@@ -44,9 +43,7 @@ class InspectionAcceptanceReportsTable
                     ->counts('lines')
                     ->label('Lines'),
             ])
-            ->filters([
-                AcquisitionDateRangeFilter::make('iar_date', 'Date'),
-            ])
+            ->filters([])
             ->defaultSort('created_at', 'desc')
             ->emptyStateHeading('No inspection reports yet')
             ->emptyStateDescription('Create an IAR by choosing an approved purchase order.')
@@ -60,6 +57,7 @@ class InspectionAcceptanceReportsTable
                 ),
                 InspectionAcceptanceReportActions::configureEditAction(),
                 ActionGroup::make([
+                    InspectionAcceptanceReportActions::visibleEditAction(),
                     InspectionAcceptanceReportActions::archiveAction(),
                     InspectionAcceptanceReportActions::restoreAction(),
                 ])
@@ -69,10 +67,8 @@ class InspectionAcceptanceReportsTable
             ])
             ->recordActionsAlignment('end')
             ->recordUrl(null)
-            ->recordAction(fn (InspectionAcceptanceReport $record): string => $record->isEditable() ? 'edit' : 'view');
+            ->recordAction(fn (InspectionAcceptanceReport $record): string => $record->isUnsavedIarDraft() ? 'edit' : 'view');
 
-        return AcquisitionDateRangeFilter::applyBesideSearch(
-            OwwaTableDefaults::hideRedundantToolbarIcons($table),
-        );
+        return OwwaTableDefaults::hideRedundantToolbarIcons($table);
     }
 }

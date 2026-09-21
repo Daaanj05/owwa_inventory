@@ -2,7 +2,6 @@
 
 namespace App\Filament\Resources\Acquisitions\Tables;
 
-use App\Filament\Resources\Acquisitions\Concerns\AcquisitionDateRangeFilter;
 use App\Filament\Resources\Acquisitions\Paperwork\Actions\AcquisitionPaperworkActions;
 use App\Filament\Resources\Acquisitions\Paperwork\Schemas\AcquisitionPaperworkModalSchema;
 use App\Filament\Support\ConfiguresOwwaViewAction;
@@ -52,7 +51,6 @@ class AcquisitionsTable
                     ->label('Lines'),
             ])
             ->filters([
-                AcquisitionDateRangeFilter::make('pr_date', 'Date'),
             ])
             ->defaultSort('created_at', 'desc')
             ->emptyStateHeading('No purchase requests yet')
@@ -68,6 +66,7 @@ class AcquisitionsTable
                 ),
                 AcquisitionPaperworkActions::configureEditAction(),
                 ActionGroup::make([
+                    AcquisitionPaperworkActions::visibleEditAction(),
                     AcquisitionPaperworkActions::archiveAction(),
                     AcquisitionPaperworkActions::restoreAction(),
                 ])
@@ -77,10 +76,8 @@ class AcquisitionsTable
             ])
             ->recordActionsAlignment('end')
             ->recordUrl(null)
-            ->recordAction(fn (AcquisitionPaperwork $record): string => $record->isPrEditable() ? 'edit' : 'view');
+            ->recordAction(fn (AcquisitionPaperwork $record): string => $record->isUnsavedPrDraft() ? 'edit' : 'view');
 
-        return AcquisitionDateRangeFilter::applyBesideSearch(
-            OwwaTableDefaults::hideRedundantToolbarIcons($table),
-        );
+        return OwwaTableDefaults::hideRedundantToolbarIcons($table);
     }
 }

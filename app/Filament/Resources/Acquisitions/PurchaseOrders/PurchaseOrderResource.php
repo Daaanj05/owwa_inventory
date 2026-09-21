@@ -91,7 +91,9 @@ class PurchaseOrderResource extends Resource
             : static::getModel()::query()->find($record);
 
         $id = $model instanceof Model ? $model->getKey() : $record;
-        $tableAction = $model instanceof PurchaseOrder && $model->isEditable() ? 'edit' : 'view';
+        $tableAction = $model instanceof PurchaseOrder && $model->isUnsavedPoDraft()
+            ? 'edit'
+            : 'view';
 
         $params = array_merge([
             'tableAction' => $tableAction,

@@ -4,15 +4,12 @@ namespace App\Filament\Resources\Items\Pages;
 
 use App\Filament\Concerns\HasSystemAdminWizardHeading;
 use App\Filament\Concerns\SyncsActiveItemCategory;
-use App\Filament\Pages\InventoryCategoryDashboard;
 use App\Filament\Resources\Items\Actions\ItemBulkCreateAction;
 use App\Filament\Resources\Items\Actions\ItemImportAction;
 use App\Filament\Resources\Items\ItemResource;
-use App\Filament\Resources\Items\Support\ItemOpeningStockFields;
 use App\Filament\Support\OwwaFormModalDefaults;
-use App\Models\Item;
 use App\Models\ItemCategory;
-use App\Models\User;
+use App\Support\CategoryWizardBreadcrumb;
 use Filament\Actions\Action;
 use Filament\Resources\Pages\ListRecords;
 use Filament\Schemas\Components\Actions;
@@ -23,7 +20,6 @@ use Filament\Schemas\Components\Tabs\Tab;
 use Filament\Schemas\Schema;
 use Filament\View\PanelsRenderHook;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Support\HtmlString;
 use Livewire\Attributes\On;
 use Livewire\Attributes\Url;
 
@@ -80,25 +76,12 @@ class ListItems extends ListRecords
             return 'Items';
         }
 
-        return new HtmlString($this->getWizardHeaderBreadcrumb($categoryName, 'Items'));
+        return CategoryWizardBreadcrumb::make($categoryName, 'Items', $this->activeItemCategoryId());
     }
 
     public function getSubheading(): string|\Illuminate\Contracts\Support\Htmlable|null
     {
         return null;
-    }
-
-    protected function getWizardHeaderBreadcrumb(string $categoryName, string $taskLabel): string
-    {
-        $categoryId = $this->activeItemCategoryId();
-        $dashboardUrl = InventoryCategoryDashboard::getUrl(['category' => $categoryId]);
-
-        return sprintf(
-            '<span class="owwa-wizard-title" role="list"><a class="owwa-wizard-step owwa-wizard-step-link" href="%s" role="listitem">%s</a><span class="owwa-wizard-separator" aria-hidden="true">&gt;</span><span class="owwa-wizard-step owwa-wizard-step-current" role="listitem">%s</span></span>',
-            e($dashboardUrl),
-            e($categoryName),
-            e($taskLabel),
-        );
     }
 
     public function getTabs(): array
@@ -115,49 +98,18 @@ class ListItems extends ListRecords
 
     public function content(Schema $schema): Schema
     {
-        $openingStock = [
-            'office_id' => null,
-            'quantity' => null,
-            'unit_cost' => null,
-        ];
-
         $createAction = OwwaFormModalDefaults::createActionForResource(ItemResource::class, OwwaFormModalDefaults::WIDTH_COMPACT)
             ->fillForm(fn (): array => [
                 'item_category_id' => $this->activeItemCategoryId() ?: null,
             ])
             ->modalHeading('Item')
-            ->modalSubmitAction(false)
-            ->extraModalFooterActions(function (Action $action): array {
-                $footer = [
-                    ItemOpeningStockFields::confirmingSubmitAction($action, 'Create'),
-                ];
-
-                if ($action instanceof \Filament\Actions\CreateAction && $action->canCreateAnother()) {
-                    $footer[] = ItemOpeningStockFields::applyCreateConfirmation(
-                        $action->getCreateAnotherAction(),
-                        'Create this item and add another?',
-                    );
-                }
-
-                return $footer;
-            })
-            ->mutateDataUsing(function (array $data) use (&$openingStock): array {
+            ->mutateDataUsing(function (array $data): array {
                 $categoryId = $this->activeItemCategoryId();
                 if ($categoryId > 0) {
                     $data['item_category_id'] = $categoryId;
                 }
 
-                $openingStock = ItemOpeningStockFields::extract($data);
-
                 return $data;
-            })
-            ->after(function (Item $record) use (&$openingStock): void {
-                $user = auth()->user();
-                ItemOpeningStockFields::applyIfPresent(
-                    $record,
-                    $openingStock,
-                    $user instanceof User ? $user : null,
-                );
             });
 
         return $schema

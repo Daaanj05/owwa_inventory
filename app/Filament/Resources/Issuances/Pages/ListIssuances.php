@@ -5,11 +5,11 @@ namespace App\Filament\Resources\Issuances\Pages;
 use App\Filament\Concerns\HasSystemAdminWizardHeading;
 use App\Filament\Concerns\StartsOwwaExportBusy;
 use App\Filament\Concerns\SyncsActiveItemCategory;
-use App\Filament\Pages\InventoryCategoryDashboard;
 use App\Filament\Resources\Issuances\Concerns\IssuanceRsmiExportAction;
 use App\Filament\Resources\Issuances\IssuanceResource;
 use App\Filament\Resources\Pages\ListRecordsWithoutFilterUrl;
 use App\Models\ItemCategory;
+use App\Support\CategoryWizardBreadcrumb;
 use Filament\Schemas\Components\Actions;
 use Filament\Schemas\Components\EmbeddedTable;
 use Filament\Schemas\Components\Flex;
@@ -18,7 +18,6 @@ use Filament\Schemas\Components\Tabs\Tab;
 use Filament\Schemas\Schema;
 use Filament\View\PanelsRenderHook;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Support\HtmlString;
 use Livewire\Attributes\Url;
 
 class ListIssuances extends ListRecordsWithoutFilterUrl
@@ -45,7 +44,7 @@ class ListIssuances extends ListRecordsWithoutFilterUrl
             return 'Issuances';
         }
 
-        return new HtmlString($this->getWizardHeaderBreadcrumb($categoryName, 'Issuances'));
+        return CategoryWizardBreadcrumb::make($categoryName, 'Issuances', $this->activeItemCategoryId());
     }
 
     /**
@@ -60,19 +59,6 @@ class ListIssuances extends ListRecordsWithoutFilterUrl
     public function getSubheading(): string|\Illuminate\Contracts\Support\Htmlable|null
     {
         return null;
-    }
-
-    protected function getWizardHeaderBreadcrumb(string $categoryName, string $taskLabel): string
-    {
-        $categoryId = $this->activeItemCategoryId();
-        $dashboardUrl = InventoryCategoryDashboard::getUrl(['category' => $categoryId]);
-
-        return sprintf(
-            '<span class="owwa-wizard-title" role="list"><a class="owwa-wizard-step owwa-wizard-step-link" href="%s" role="listitem">%s</a><span class="owwa-wizard-separator" aria-hidden="true">&gt;</span><span class="owwa-wizard-step owwa-wizard-step-current" role="listitem">%s</span></span>',
-            e($dashboardUrl),
-            e($categoryName),
-            e($taskLabel),
-        );
     }
 
     public function mount(): void

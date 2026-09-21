@@ -4,9 +4,12 @@ namespace Tests\Feature;
 
 use App\Filament\Widgets\LowStockWidget;
 use App\Models\Acquisition;
+use App\Models\AcquisitionPaperwork;
+use App\Models\InspectionAcceptanceReport;
 use App\Models\Item;
 use App\Models\ItemCategory;
 use App\Models\Office;
+use App\Models\PurchaseOrder;
 use App\Models\User;
 use App\Services\AcquisitionUnitService;
 use Filament\Facades\Filament;
@@ -61,54 +64,152 @@ class LowStockWidgetTest extends TestCase
 
         Livewire::test(LowStockWidget::class)
             ->assertOk()
-            ->assertSee('Items in total')
+            ->assertDontSee('Items in total')
             ->assertDontSee('Stocks in hand')
-            ->assertSee('Low stock')
-            ->assertSee('Pending')
+            ->assertSee('Items running low')
+            ->assertSee('Pending requests & returns')
+            ->assertSee('Orders to inspect & receive')
+            ->assertSee('Approved POs still waiting to be received')
             ->assertDontSee('Pending requisitions')
-            ->assertSee('2');
+            ->assertDontSee('Low stock');
     }
 
-    public function test_supply_custodian_can_open_items_kpi_modal(): void
+    public function test_supply_custodian_orders_to_inspect_modal_shows_approved_po_only(): void
     {
-        $office = Office::factory()->create();
-        $consumables = ItemCategory::factory()->create(['name' => 'Consumable Supplies']);
-        $semi = ItemCategory::factory()->create(['name' => 'Semi-Expendable']);
+        $office = Office::factory()->create(['is_regional_supply' => true]);
+        $category = ItemCategory::factory()->create(['name' => 'Consumables']);
         $user = User::factory()->create([
             'role' => User::ROLE_SUPPLY_CUSTODIAN,
             'office_id' => $office->id,
             'email_verified_at' => now(),
         ]);
 
-        Item::factory()->create([
-            'item_category_id' => $consumables->id,
-            'name' => 'Bond Paper A4',
-            'item_code' => 'CON-KPI-OPEN',
+        $approvedPr = AcquisitionPaperwork::query()->create([
+            'office_id' => $office->id,
+            'item_category_id' => $category->id,
+            'requesting_office_id' => $office->id,
+            'recorded_by' => $user->id,
+            'purpose' => 'Approved order',
+            'pr_date' => now(),
+            'pr_status' => AcquisitionPaperwork::STATUS_APPROVED,
+            'pr_number' => 'PR-KPI-APPROVED',
         ]);
-        Item::factory()->create([
-            'item_category_id' => $semi->id,
-            'name' => 'Office Chair Semi',
-            'item_code' => 'SE-KPI-OPEN',
-            'semi_expendable_property_number' => 'TEMP-2026-FF-106-0001-IVA',
+        PurchaseOrder::query()->create([
+            'acquisition_paperwork_id' => $approvedPr->id,
+            'status' => PurchaseOrder::STATUS_APPROVED,
+            'number' => 'PO-KPI-APPROVED',
+            'po_date' => now(),
+            'supplier_name' => 'Acme Supplies',
+            'approved_at' => now(),
+        ]);
+
+        $draftPr = AcquisitionPaperwork::query()->create([
+            'office_id' => $office->id,
+            'item_category_id' => $category->id,
+            'requesting_office_id' => $office->id,
+            'recorded_by' => $user->id,
+            'purpose' => 'Draft order',
+            'pr_date' => now(),
+            'pr_status' => AcquisitionPaperwork::STATUS_APPROVED,
+            'pr_number' => 'PR-KPI-DRAFT',
+        ]);
+        PurchaseOrder::query()->create([
+            'acquisition_paperwork_id' => $draftPr->id,
+            'status' => PurchaseOrder::STATUS_DRAFT,
+            'number' => 'PO-KPI-DRAFT',
+            'po_date' => now(),
+            'supplier_name' => 'Draft Supplier',
         ]);
 
         $this->actingAs($user);
 
         $component = Livewire::test(LowStockWidget::class)
             ->assertOk()
-            ->assertActionExists('viewItemsInTotal')
-            ->mountAction('viewItemsInTotal')
-            ->assertActionMounted('viewItemsInTotal');
+            ->assertSee('Orders to inspect & receive')
+            ->assertSee('Approved POs still waiting to be received')
+            ->assertActionExists('viewOrdersToInspect')
+            ->mountAction('viewOrdersToInspect')
+            ->assertActionMounted('viewOrdersToInspect');
 
         $html = (string) $component->instance()->getMountedAction()?->getModalContent();
-        $this->assertStringContainsString('Bond Paper A4', $html);
-        $this->assertStringContainsString('All categories', $html);
-        $this->assertStringContainsString('Office Chair Semi', $html);
+        $this->assertStringContainsString('PO-KPI-APPROVED', $html);
+        $this->assertStringContainsString('Acme Supplies', $html);
+        $this->assertStringNotContainsString('PO-KPI-DRAFT', $html);
+    }
 
-        $component->call('setKpiCategory', 'items', (string) $semi->id);
-        $filteredHtml = (string) $component->instance()->getMountedAction()?->getModalContent();
-        $this->assertStringContainsString('Office Chair Semi', $filteredHtml);
-        $this->assertStringNotContainsString('Bond Paper A4', $filteredHtml);
+    public function test_supply_custodian_orders_to_inspect_includes_iar_until_received(): void
+    {
+        $office = Office::factory()->create(['is_regional_supply' => true]);
+        $category = ItemCategory::factory()->create(['name' => 'Consumables']);
+        $user = User::factory()->create([
+            'role' => User::ROLE_SUPPLY_CUSTODIAN,
+            'office_id' => $office->id,
+            'email_verified_at' => now(),
+        ]);
+
+        $withIarPr = AcquisitionPaperwork::query()->create([
+            'office_id' => $office->id,
+            'item_category_id' => $category->id,
+            'requesting_office_id' => $office->id,
+            'recorded_by' => $user->id,
+            'purpose' => 'With IAR',
+            'pr_date' => now(),
+            'pr_status' => AcquisitionPaperwork::STATUS_APPROVED,
+            'pr_number' => 'PR-KPI-IAR',
+        ]);
+        $withIarPo = PurchaseOrder::query()->create([
+            'acquisition_paperwork_id' => $withIarPr->id,
+            'status' => PurchaseOrder::STATUS_APPROVED,
+            'number' => 'PO-KPI-WITH-IAR',
+            'po_date' => now(),
+            'supplier_name' => 'IAR Supplier',
+            'approved_at' => now(),
+        ]);
+        InspectionAcceptanceReport::query()->create([
+            'purchase_order_id' => $withIarPo->id,
+            'status' => InspectionAcceptanceReport::STATUS_APPROVED,
+            'iar_date' => now(),
+            'approved_at' => now(),
+        ]);
+
+        $receivedPr = AcquisitionPaperwork::query()->create([
+            'office_id' => $office->id,
+            'item_category_id' => $category->id,
+            'requesting_office_id' => $office->id,
+            'recorded_by' => $user->id,
+            'purpose' => 'Already received',
+            'pr_date' => now(),
+            'pr_status' => AcquisitionPaperwork::STATUS_APPROVED,
+            'pr_number' => 'PR-KPI-RECEIVED',
+            'received_at' => now(),
+        ]);
+        $receivedPo = PurchaseOrder::query()->create([
+            'acquisition_paperwork_id' => $receivedPr->id,
+            'status' => PurchaseOrder::STATUS_APPROVED,
+            'number' => 'PO-KPI-RECEIVED',
+            'po_date' => now(),
+            'supplier_name' => 'Received Supplier',
+            'approved_at' => now(),
+        ]);
+        InspectionAcceptanceReport::query()->create([
+            'purchase_order_id' => $receivedPo->id,
+            'status' => InspectionAcceptanceReport::STATUS_APPROVED,
+            'iar_date' => now(),
+            'approved_at' => now(),
+            'stock_received_at' => now(),
+        ]);
+
+        $this->actingAs($user);
+
+        $component = Livewire::test(LowStockWidget::class)
+            ->assertOk()
+            ->assertSee('Approved POs still waiting to be received')
+            ->mountAction('viewOrdersToInspect')
+            ->assertActionMounted('viewOrdersToInspect');
+
+        $html = (string) $component->instance()->getMountedAction()?->getModalContent();
+        $this->assertStringContainsString('PO-KPI-WITH-IAR', $html);
+        $this->assertStringNotContainsString('PO-KPI-RECEIVED', $html);
     }
 
     public function test_supply_custodian_low_stock_kpi_matches_modal_for_regional_office_only(): void
@@ -155,6 +256,7 @@ class LowStockWidgetTest extends TestCase
 
         $component = Livewire::test(LowStockWidget::class)
             ->assertOk()
+            ->assertSee('Items running low')
             ->assertSee('1')
             ->mountAction('viewLowStock')
             ->assertActionMounted('viewLowStock');

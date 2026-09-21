@@ -4,7 +4,6 @@ namespace App\Filament\Resources\Acquisitions\Concerns;
 
 use DateTimeInterface;
 use Filament\Forms\Components\DatePicker;
-use Filament\Tables\Enums\FiltersLayout;
 use Filament\Tables\Filters\Filter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
@@ -67,16 +66,14 @@ final class AcquisitionDateRangeFilter
     }
 
     /**
-     * Show From/To on the same toolbar row as Search (right-aligned).
+     * Keep filters registered but do not place From/To beside search
+     * (dates live in the acquisition list header Flex).
      */
     public static function applyBesideSearch(Table $table): Table
     {
         return $table
-            ->filtersLayout(FiltersLayout::AboveContent)
             ->deferFilters(false)
-            ->filtersFormColumns(1)
-            ->hiddenFilterIndicators()
-            ->extraAttributes(['class' => 'owwa-toolbar-date-range'], merge: true);
+            ->hiddenFilterIndicators();
     }
 
     public static function normalizeDate(mixed $value): ?string

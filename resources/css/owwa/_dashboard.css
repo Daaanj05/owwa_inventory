@@ -1,0 +1,297 @@
+/* OWWA theme partial: _dashboard.css (original lines 225-520) — edit then run: npm run build:owwa-theme */
+
+/* ═══════════════════════════════════════════════════════════
+   REQUISITIONS — UNIT CONSOLIDATOR SECONDARY TABS (CSS)
+═══════════════════════════════════════════════════════════ */
+/*
+ * We render "Received / Sent" under the table search bar via a tiny DOM script.
+ * This CSS only styles the secondary container so it matches Filament tabs.
+ */
+.owwa-uc-secondary-tabs {
+    display: flex;
+    gap: 0.4rem;
+    flex-wrap: wrap;
+    padding-top: 0.5rem;
+}
+
+.owwa-uc-secondary-tabs .fi-tabs-item {
+    display: inline-flex !important;
+    align-items: center !important;
+    text-decoration: none !important;
+    min-height: 1.75rem !important;
+    padding: 0.25rem 0.6rem !important;
+    border-radius: 9999px !important;
+    font-size: 0.75rem !important;
+    font-weight: 600 !important;
+    background: #ffffff !important;
+    border: 1px solid #e2e8f0 !important;
+    color: #475569 !important;
+}
+
+.owwa-uc-secondary-tabs .fi-tabs-item.fi-active,
+.owwa-uc-secondary-tabs .fi-tabs-item[aria-selected="true"] {
+    background: #eff6ff !important;
+    border-color: #bfdbfe !important;
+    color: #2563eb !important;
+}
+
+.owwa-uc-toolbar-secondary {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem 0.75rem;
+    width: 100%;
+    min-width: 0;
+}
+
+.owwa-uc-toolbar-secondary .owwa-uc-secondary-tabs {
+    flex: 0 1 auto;
+    flex-wrap: nowrap;
+    padding-top: 0;
+    width: auto;
+    min-width: 0;
+}
+
+.owwa-uc-scope-filters {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 0.5rem;
+    flex: 0 0 auto;
+    margin-left: auto;
+    padding-top: 0;
+    width: auto;
+    max-width: none;
+    pointer-events: auto;
+    z-index: 2;
+    position: relative;
+}
+
+.owwa-uc-scope-filters .owwa-uc-scope-select {
+    max-width: 16rem;
+    min-width: 10rem;
+    width: 12.5rem;
+    pointer-events: auto;
+    cursor: pointer;
+}
+
+.owwa-uc-scope-filters .owwa-uc-scope-select:disabled {
+    cursor: not-allowed;
+    opacity: 0.7;
+}
+
+.owwa-uc-scope-hint {
+    display: block;
+    width: 100%;
+    padding-top: 0.15rem;
+}
+
+/* UC lists: Received/Sent + office/dept under search, same row */
+.fi-page.owwa-uc-requisitions-tabs .fi-ta-ctn .fi-ta-header-toolbar > div:has(.fi-ta-search-field) {
+    flex-wrap: wrap !important;
+    row-gap: 0.4rem !important;
+    align-items: center !important;
+    overflow: visible !important;
+}
+
+.fi-page.owwa-uc-requisitions-tabs .fi-ta-ctn .fi-ta-header-toolbar > div:has(.fi-ta-search-field) .fi-ta-search-field {
+    flex: 0 0 auto !important;
+    width: 260px !important;
+    max-width: 320px !important;
+    margin-right: auto !important;
+}
+
+.fi-page.owwa-uc-requisitions-tabs .fi-ta-ctn .fi-ta-header-toolbar > div:has(.fi-ta-search-field) .owwa-uc-toolbar-secondary {
+    flex: 0 0 100% !important;
+    order: 99 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    overflow: visible !important;
+}
+
+.fi-page.owwa-uc-requisitions-tabs .fi-ta-ctn .fi-ta-header-toolbar > div:has(.fi-ta-search-field) .owwa-uc-scope-hint {
+    flex: 0 0 100% !important;
+    order: 100 !important;
+}
+
+
+.fi-page.owwa-coa-reports-page .fi-header-heading {
+    display: flex !important;
+    align-items: center !important;
+    gap: 0.625rem;
+}
+
+.fi-page.owwa-coa-reports-page .fi-header-heading::before {
+    content: '';
+    width: 1.75rem;
+    height: 1.75rem;
+    flex-shrink: 0;
+    background: center / contain no-repeat url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22none%22%20viewBox%3D%220%200%2024%2024%22%20stroke-width%3D%221.5%22%20stroke%3D%22%232563eb%22%3E%3Cpath%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20d%3D%22M19.5%2014.25v-2.625a3.375%203.375%200%200%200-3.375-3.375h-1.5a1.125%201.125%200%200%201-1.125-1.125v-1.5a3.375%203.375%200%200%200-3.375-3.375H8.25m2.25%200H5.625c-.621%200-1.125.504-1.125%201.125v17.25c0%20.621.504%201.125%201.125%201.125h12.75c.621%200%201.125-.504%201.125-1.125V11.25a9%209%200%200%200-9-9Z%22%2F%3E%3C%2Fsvg%3E");
+}
+
+/*
+ * Inventory category hubs (Consumables, Semi-Expendable, PPE / Safety, etc.) + Stock levels:
+ * same header / content rhythm as Procurement analytics. Page root classes come from
+ * getPageClasses() on existing page classes — styling is CSS-only here.
+ */
+.fi-main:has(.owwa-inv-category-page) {
+    padding-top: 0.05rem !important;
+    padding-bottom: 0.75rem !important;
+}
+
+.fi-page.owwa-inv-category-page .fi-page-header-main-ctn {
+    row-gap: 0.5rem !important;
+    padding-top: 0.75rem !important;
+    padding-bottom: 0.5rem !important;
+}
+
+.fi-page.owwa-inv-category-page .fi-header {
+    padding-left: 0.75rem !important;
+    padding-right: 0.75rem !important;
+    padding-top: 0.05rem !important;
+    padding-bottom: 0.05rem !important;
+}
+
+.fi-page.owwa-inv-category-page .fi-page-content {
+    gap: 0.5rem !important;
+    row-gap: 0.5rem !important;
+    column-gap: 0.5rem !important;
+    padding-top: 0.125rem;
+    padding-bottom: 1rem;
+}
+
+.fi-page.owwa-inv-category-page .fi-header-heading {
+    display: flex !important;
+    align-items: center !important;
+    gap: 0.625rem;
+}
+
+/* Default icon when category slug has no specific rule below */
+.fi-page.owwa-inv-category-page .fi-header-heading::before {
+    content: '';
+    width: 1.75rem;
+    height: 1.75rem;
+    flex-shrink: 0;
+    background: center / contain no-repeat url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke-width='1.5' stroke='%232563eb'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M3.75 6A2.25 2.25 0 0 1 6 3.75h2.25A2.25 2.25 0 0 1 10.5 6v2.25a2.25 2.25 0 0 1-2.25 2.25H6a2.25 2.25 0 0 1-2.25-2.25V6ZM13.5 15.75a2.25 2.25 0 0 1 2.25-2.25H18a2.25 2.25 0 0 1 2.25 2.25V18A2.25 2.25 0 0 1 18 20.25h-2.25a2.25 2.25 0 0 1-2.25-2.25v-2.25ZM13.5 6.75a2.25 2.25 0 0 1 2.25-2.25H18A2.25 2.25 0 0 1 20.25 6v2.25A2.25 2.25 0 0 1 18 10.5h-2.25A2.25 2.25 0 0 1 13.5 8.25V6.75ZM3.75 15.75a2.25 2.25 0 0 1 2.25-2.25h2.25a2.25 2.25 0 0 1 2.25 2.25V18a2.25 2.25 0 0 1-2.25 2.25H6a2.25 2.25 0 0 1-2.25-2.25v-2.25Z' /%3E%3C/svg%3E");
+}
+
+/* Consumables — archive box */
+.fi-page.owwa-icd--consumables .fi-header-heading::before {
+    background-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22none%22%20viewBox%3D%220%200%2024%2024%22%20stroke-width%3D%221.5%22%20stroke%3D%22%232563eb%22%3E%3Cpath%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20d%3D%22M20.25%207.5l-.625%2010.632a2.25%202.25%200%2001-2.247%202.118H6.622a2.25%202.25%200%2001-2.247-2.118L3.75%207.5M10%2011.25h4M3.375%207.5h17.25c.621%200%201.125-.504%201.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621%200-1.125.504-1.125%201.125v1.5c0%20.621.504%201.125%201.125%201.125z%22%2F%3E%3C%2Fsvg%3E");
+}
+
+/* Semi-expendable — wrench & screwdriver */
+.fi-page.owwa-icd--semi-expendable .fi-header-heading::before {
+    background-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22none%22%20viewBox%3D%220%200%2024%2024%22%20stroke-width%3D%221.5%22%20stroke%3D%22%232563eb%22%3E%3Cpath%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20d%3D%22M11.42%2015.17%2017.25%2021A2.652%202.652%200%200021%2017.25l-5.877-5.877M11.42%2015.17%202.81%206.58a2.652%202.652%200%20013.12-4.24l2.87%202.87m-5.18%2010.06%205.18-5.18m5.18%205.18%202.87%202.87a2.652%202.652%200%20004.24-3.12l-2.87-2.87m-5.18-10.06-5.18%205.18%22%2F%3E%3C%2Fsvg%3E");
+}
+
+/* PPE / Safety — shield check */
+.fi-page.owwa-icd--ppe-safety .fi-header-heading::before,
+.fi-page.owwa-icd--ppe .fi-header-heading::before,
+.fi-page.owwa-icd--property-plant-and-equipment .fi-header-heading::before {
+    background-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22none%22%20viewBox%3D%220%200%2024%2024%22%20stroke-width%3D%221.5%22%20stroke%3D%22%232563eb%22%3E%3Cpath%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20d%3D%22M9%2012.75%2011.25%2015%2015%209.75m-3-7.036A11.959%2011.959%200%20013.598%206%2011.99%2011.99%200%20003%209.749c0%205.592%203.824%2010.29%209%2011.623%205.176-1.332%209-6.03%209-11.622%200-1.31-.21-2.571-.598-3.751h-.152c-3.196%200-6.1-1.248-8.25-3.285z%22%2F%3E%3C%2Fsvg%3E");
+}
+
+/* Power plant equipment (or similar category label in DB) */
+.fi-page.owwa-icd--power-plant-equipment .fi-header-heading::before {
+    background-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22none%22%20viewBox%3D%220%200%2024%2024%22%20stroke-width%3D%221.5%22%20stroke%3D%22%232563eb%22%3E%3Cpath%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20d%3D%22M2.25%2021h19.5m-18-18v18m10.5-18v18m-10.5%200h15m-15-18h15m0%200h3.375c.621%200%201.125.504%201.125%201.125V20.25m-4.5-18v18M4.875%203.75H3.375c-.621%200-1.125.504-1.125%201.125v15.75c0%20.621.504%201.125%201.125%201.125h1.5m14.25-18V6.375c0-.621-.504-1.125-1.125-1.125H4.875c-.621%200-1.125.504-1.125%201.125V18.75%22%2F%3E%3C%2Fsvg%3E");
+}
+
+/* ═══════════════════════════════════════════════════════════
+   RESOURCE PAGES — tighter header + title row icon (CSS only; no shared PHP)
+   Matches Procurement analytics header density; icon is a generic module glyph.
+═══════════════════════════════════════════════════════════ */
+.fi-page[class*="fi-resource-"] .fi-page-header-main-ctn {
+    row-gap: 0.75rem !important;
+    padding-top: 1rem !important;
+    padding-bottom: 1rem !important;
+}
+
+.fi-page[class*="fi-resource-"] .fi-header {
+    padding-left: 0.75rem !important;
+    padding-right: 0.75rem !important;
+    padding-top: 0.05rem !important;
+    padding-bottom: 0.05rem !important;
+}
+
+.fi-page[class*="fi-resource-"] .fi-page-content {
+    gap: 1rem !important;
+    row-gap: 1rem !important;
+}
+
+.fi-page[class*="fi-resource-"] .fi-header-heading {
+    display: flex !important;
+    align-items: center !important;
+    gap: 0.625rem;
+}
+
+/* Heroicons "squares-2x2" outline — default for resources; overridden per-resource below to match sidebar */
+.fi-page[class*="fi-resource-"] .fi-header-heading::before {
+    content: '';
+    width: 1.75rem;
+    height: 1.75rem;
+    flex-shrink: 0;
+    background: center / contain no-repeat url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke-width='1.5' stroke='%232563eb'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M3.75 6A2.25 2.25 0 0 1 6 3.75h2.25A2.25 2.25 0 0 1 10.5 6v2.25a2.25 2.25 0 0 1-2.25 2.25H6a2.25 2.25 0 0 1-2.25-2.25V6ZM13.5 15.75a2.25 2.25 0 0 1 2.25-2.25H18a2.25 2.25 0 0 1 2.25 2.25V18A2.25 2.25 0 0 1 18 20.25h-2.25a2.25 2.25 0 0 1-2.25-2.25v-2.25ZM13.5 6.75a2.25 2.25 0 0 1 2.25-2.25H18A2.25 2.25 0 0 1 20.25 6v2.25A2.25 2.25 0 0 1 18 10.5h-2.25A2.25 2.25 0 0 1 13.5 8.25V6.75ZM3.75 15.75a2.25 2.25 0 0 1 2.25-2.25h2.25a2.25 2.25 0 0 1 2.25 2.25V18a2.25 2.25 0 0 1-2.25 2.25H6a2.25 2.25 0 0 1-2.25-2.25v-2.25Z' /%3E%3C/svg%3E");
+}
+
+/* Items — sidebar uses Heroicon::OutlinedCube */
+.fi-page.fi-resource-items .fi-header-heading::before {
+    background-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22none%22%20viewBox%3D%220%200%2024%2024%22%20stroke-width%3D%221.5%22%20stroke%3D%22%232563eb%22%3E%3Cpath%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20d%3D%22M21%207.5l-9-5.25L3%207.5m18%200l-9%205.25m9-5.25v10.5l-9%205.25M3%207.5m0%2010.5l9%205.25m-9-5.25v-10.5l9-5.25m0%2010.5l9%205.25m9-5.25v-10.5l-9-5.25%22%2F%3E%3C%2Fsvg%3E");
+}
+
+/* Requisitions — sidebar uses Heroicon::OutlinedDocumentText */
+.fi-page.fi-resource-requisitions .fi-header-heading::before {
+    background-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22none%22%20viewBox%3D%220%200%2024%2024%22%20stroke-width%3D%221.5%22%20stroke%3D%22%232563eb%22%3E%3Cpath%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20d%3D%22M19.5%2014.25v-2.625a3.375%203.375%200%200%200-3.375-3.375h-1.5a1.125%201.125%200%200%201-1.125-1.125v-1.5a3.375%203.375%200%200%200-3.375-3.375H8.25m2.25%200H5.625c-.621%200-1.125.504-1.125%201.125v17.25c0%20.621.504%201.125%201.125%201.125h12.75c.621%200%201.125-.504%201.125-1.125V11.25a9%209%200%200%200-9-9Z%22%2F%3E%3C%2Fsvg%3E");
+}
+
+/* Setup / System Admin resources — title row icon matches sidebar navigation */
+.fi-page.fi-resource-fiscal-years .fi-header-heading::before {
+    background-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22none%22%20viewBox%3D%220%200%2024%2024%22%20stroke-width%3D%221.5%22%20stroke%3D%22%232563eb%22%3E%3Cpath%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20d%3D%22M6.75%203v2.25M17.25%203v2.25M3%2018.75V7.5a2.25%202.25%200%20012.25-2.25h13.5A2.25%202.25%200%200121%207.5v11.25m-18%200A2.25%202.25%200%20005.25%2021h13.5A2.25%202.25%200%200021%2018.75m-18%200v-7.5A2.25%202.25%200%20015.25%209h13.5A2.25%202.25%200%200121%2011.25v7.5%22%2F%3E%3C%2Fsvg%3E");
+}
+
+.fi-page.fi-resource-users .fi-header-heading::before {
+    background-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22none%22%20viewBox%3D%220%200%2024%2024%22%20stroke-width%3D%221.5%22%20stroke%3D%22%232563eb%22%3E%3Cpath%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20d%3D%22M15.75%206a3.75%203.75%200%201%201-7.5%200%203.75%203.75%200%200%201%207.5%200zM4.501%2020.118a7.5%207.5%200%200%201%2014.998%200A17.933%2017.933%200%200%201%2012%2021.75c-2.676%200-5.216-.584-7.499-1.632z%22%2F%3E%3C%2Fsvg%3E");
+}
+
+.fi-page.fi-resource-offices .fi-header-heading::before {
+    background-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22none%22%20viewBox%3D%220%200%2024%2024%22%20stroke-width%3D%221.5%22%20stroke%3D%22%232563eb%22%3E%3Cpath%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20d%3D%22M2.25%2021h19.5m-18-18v18m10.5-18v18m-10.5%200h15m-15-18h15m0%200h3.375c.621%200%201.125.504%201.125%201.125V20.25m-4.5-18v18M4.875%203.75H3.375c-.621%200-1.125.504-1.125%201.125v15.75c0%20.621.504%201.125%201.125%201.125h1.5m14.25-18V6.375c0-.621-.504-1.125-1.125-1.125H4.875c-.621%200-1.125.504-1.125%201.125V18.75%22%2F%3E%3C%2Fsvg%3E");
+}
+
+.fi-page.fi-resource-departments .fi-header-heading::before {
+    background-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22none%22%20viewBox%3D%220%200%2024%2024%22%20stroke-width%3D%221.5%22%20stroke%3D%22%232563eb%22%3E%3Cpath%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20d%3D%22M18%2018.72a9.094%209.094%200%20003.741-.479%203%203%200%2000-4.682-2.72m.94%203.198.001.031c0%20.225-.012.447-.037.666A11.944%2011.944%200%200112%2021c-2.17%200-4.207-.576-5.963-1.584A6.062%206.062%200%20016%2018.719m12%200a5.971%205.971%200%2000-.941-3.197m0%200A5.995%205.995%200%200012%2012.75a5.995%205.995%200%2000-5.059%202.772m0%200a3%203%200%2000-4.681%202.72%208.986%208.986%200%20003.74.477m.94-3.197l.001-.031a3%203%200%2000-4.24-2.732M9%209a3%203%200%20116%200%203%203%200%2001-6%200zm6%200a2.25%202.25%200%2011-4.5%200%202.25%202.25%200%20014.5%200z%22%2F%3E%3C%2Fsvg%3E");
+}
+
+.fi-page.fi-resource-item-categories .fi-header-heading::before {
+    background-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22none%22%20viewBox%3D%220%200%2024%2024%22%20stroke-width%3D%221.5%22%20stroke%3D%22%232563eb%22%3E%3Cpath%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20d%3D%22M9.568%203H5.25A2.25%202.25%200%20003%205.25v4.318c0%20.597.237%201.17.659%201.591l9.581%209.581c.699.699%201.78.872%202.607.33a18.095%2018.095%200%20005.223-5.223c.542-.827.369-1.908-.33-2.607L11.16%203.66A2.25%202.25%200%20009.568%203z%22%2F%3E%3Cpath%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20d%3D%22M6%206h.008v.008H6V6z%22%2F%3E%3C%2Fsvg%3E");
+}
+
+.fi-page.fi-resource-user-logs .fi-header-heading::before {
+    background-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22none%22%20viewBox%3D%220%200%2024%2024%22%20stroke-width%3D%221.5%22%20stroke%3D%22%232563eb%22%3E%3Cpath%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20d%3D%22M9%2012.75%2011.25%2015%2015%209.75m-3-7.036A11.959%2011.959%200%20013.598%206%2011.99%2011.99%200%20003%209.749c0%205.592%203.824%2010.29%209%2011.623%205.176-1.332%209-6.03%209-11.622%200-1.31-.21-2.571-.598-3.751h-.152c-3.196%200-6.1-1.248-8.25-3.285z%22%2F%3E%3C%2Fsvg%3E");
+}
+
+.fi-page.fi-resource-reference-series .fi-header-heading::before {
+    background-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22none%22%20viewBox%3D%220%200%2024%2024%22%20stroke-width%3D%221.5%22%20stroke%3D%22%232563eb%22%3E%3Cpath%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20d%3D%22M5.25%208.25h15m-16.5%207.5h15m-1.8-13.5-3.9%2019.5m-2.1-19.5-3.9%2019.5%22%2F%3E%3C%2Fsvg%3E");
+}
+
+.owwa-pa-page-title {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.625rem;
+}
+
+.owwa-pa-page-title .owwa-pa-page-title-icon,
+.owwa-pa-page-title-icon {
+    width: 1.75rem;
+    height: 1.75rem;
+    color: #2563eb;
+    flex-shrink: 0;
+}
+
+.owwa-pa-page-title-text {
+    font-size: inherit;
+    font-weight: inherit;
+    letter-spacing: inherit;
+    line-height: 1.2;
+}

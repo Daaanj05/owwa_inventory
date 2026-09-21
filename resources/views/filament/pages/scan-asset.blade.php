@@ -40,5 +40,75 @@
                 </button>
             </form>
         </div>
+
+        @if ($resolvedUnitId)
+            <div class="owwa-pc-scan-card owwa-scan-asset-result" wire:key="scan-asset-result-{{ $resolvedUnitId }}">
+                <div class="owwa-scan-asset-result-header">
+                    <h2 class="owwa-scan-asset-result-title">Scanned asset</h2>
+                    <button
+                        type="button"
+                        wire:click="clearResolvedAsset"
+                        class="fi-btn fi-btn-size-sm fi-color fi-color-gray owwa-scan-asset-clear-btn"
+                    >
+                        Clear
+                    </button>
+                </div>
+
+                <dl class="owwa-scan-asset-result-grid">
+                    <div>
+                        <dt>Property no.</dt>
+                        <dd>{{ $resolvedPropertyNumber }}</dd>
+                    </div>
+                    <div>
+                        <dt>Item</dt>
+                        <dd>{{ $resolvedItemName }}</dd>
+                    </div>
+                    <div>
+                        <dt>Office</dt>
+                        <dd>{{ $resolvedOfficeName }}</dd>
+                    </div>
+                    <div>
+                        <dt>Status</dt>
+                        <dd class="owwa-scan-asset-status">{{ $resolvedStatus }}</dd>
+                    </div>
+                </dl>
+
+                <p class="owwa-scan-asset-result-hint">
+                    Choose an action. Finish the remaining details on desktop, then confirm when ready.
+                </p>
+
+                <div class="owwa-scan-asset-actions">
+                    <button
+                        type="button"
+                        wire:click="startDisposal"
+                        class="fi-btn fi-btn-size-md fi-color fi-color-danger"
+                    >
+                        Disposal
+                    </button>
+                    <button
+                        type="button"
+                        wire:click="startIncident"
+                        class="fi-btn fi-btn-size-md fi-color fi-color-warning"
+                    >
+                        Incident report
+                    </button>
+                    <button
+                        type="button"
+                        wire:click="startTransfer"
+                        class="fi-btn fi-btn-size-md fi-color fi-color-primary"
+                    >
+                        Transfer
+                    </button>
+                </div>
+
+                @if ($resolvedPublicUrl)
+                    <p class="owwa-scan-asset-public-link">
+                        <a href="{{ $resolvedPublicUrl }}" target="_blank" rel="noopener noreferrer">
+                            View public asset card
+                        </a>
+                    </p>
+                @endif
+            </div>
+        @endif
     </div>
 </x-filament-panels::page>

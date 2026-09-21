@@ -42,10 +42,8 @@ class AcquisitionPaperworkInfolist
                     TextEntry::make('office.name')->label('Office')->placeholder('—'),
                     TextEntry::make('requestingOffice.name')->label('Requesting office')->placeholder('—'),
                     TextEntry::make('purpose')->label('Purpose')->columnSpanFull()->placeholder('—'),
-                    TextEntry::make('requested_by_name')->label('Requested by')->placeholder('—'),
-                    TextEntry::make('requested_by_designation')->label('Requested by designation')->placeholder('—'),
-                    TextEntry::make('approved_by_name')->label('Approved by')->placeholder('—'),
-                    TextEntry::make('approved_by_designation')->label('Approved by designation')->placeholder('—'),
+                    TextEntry::make('requested_by_name')->label('Requested By')->placeholder('—'),
+                    TextEntry::make('approved_by_name')->label('Approve By')->placeholder('—'),
                 ]),
             self::linkedRequisitionsSection(),
             Section::make('Line items')
@@ -175,10 +173,8 @@ class AcquisitionPaperworkInfolist
                 TextEntry::make('pr_status')->label('Status')->formatStateUsing(fn (AcquisitionPaperwork $record): string => $record->phaseStatusLabel(AcquisitionPaperwork::PHASE_PR)),
                 TextEntry::make('pr_date')->label('PR date')->date('M d, Y'),
                 TextEntry::make('purpose')->label('Purpose')->columnSpanFull(),
-                TextEntry::make('requested_by_name')->label('Requested by')->placeholder('—'),
-                TextEntry::make('requested_by_designation')->label('Requested by designation')->placeholder('—'),
-                TextEntry::make('approved_by_name')->label('Approved by')->placeholder('—'),
-                TextEntry::make('approved_by_designation')->label('Approved by designation')->placeholder('—'),
+                TextEntry::make('requested_by_name')->label('Requested By')->placeholder('—'),
+                TextEntry::make('approved_by_name')->label('Approve By')->placeholder('—'),
                 RepeatableEntry::make('lines')
                     ->label('Line items')
                     ->schema([

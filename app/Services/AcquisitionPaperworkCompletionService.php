@@ -93,6 +93,7 @@ class AcquisitionPaperworkCompletionService
         }
 
         $payload = [
+            'pr_status' => AcquisitionPaperwork::STATUS_PENDING_APPROVAL,
             'pr_submitted_at' => $paperwork->pr_submitted_at ?? now(),
         ];
 

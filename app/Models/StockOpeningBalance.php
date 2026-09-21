@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class StockOpeningBalance extends Model
 {
     protected $fillable = [
+        'batch_id',
         'item_id',
         'office_id',
         'unit_cost',
@@ -24,6 +25,11 @@ class StockOpeningBalance extends Model
             'quantity' => 'integer',
             'recorded_at' => 'datetime',
         ];
+    }
+
+    public function batch(): BelongsTo
+    {
+        return $this->belongsTo(StockOpeningBalanceBatch::class, 'batch_id');
     }
 
     public function item(): BelongsTo
@@ -52,6 +58,16 @@ class StockOpeningBalance extends Model
 
     public static function quantityForPosition(int $itemId, int $officeId, ?float $unitCost): int
     {
-        return (int) (self::findForPosition($itemId, $officeId, $unitCost)?->quantity ?? 0);
+        $opening = self::query()
+            ->where('item_id', $itemId)
+            ->where('office_id', $officeId)
+            ->where('unit_cost', UnitCostKey::normalize($unitCost))
+            ->where(function ($query): void {
+                $query->whereNull('batch_id')
+                    ->orWhereHas('batch', fn ($batchQuery) => $batchQuery->whereNotNull('confirmed_at'));
+            })
+            ->first();
+
+        return (int) ($opening?->quantity ?? 0);
     }
 }

@@ -6,11 +6,13 @@ use App\Filament\Concerns\SyncsActiveItemCategory;
 use App\Models\AcquisitionPaperwork;
 use App\Models\Item;
 use App\Models\ItemCategory;
+use App\Models\ProcurementSignatoryName;
 use App\Models\ReferenceSeries;
 use App\Models\Requisition;
 use App\Services\ReferenceCodeService;
 use App\Services\RequisitionPurchaseRequestService;
 use App\Support\AcquisitionPaperworkViewPresenter;
+use App\Support\SignatorySelect;
 use Filament\Actions\Action;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\DatePicker;
@@ -195,8 +197,7 @@ class AcquisitionPaperworkForm
             Placeholder::make('pr_number_preview')
                 ->label('PR No.')
                 ->content(fn (?AcquisitionPaperwork $record): string => (string) ($record?->pr_number ?: '—'))
-                ->hintIcon(Heroicon::QuestionMarkCircle, 'Assigned automatically when the purchase request is saved.')
-                ->visible(fn (?AcquisitionPaperwork $record): bool => filled($record?->pr_number))
+                ->hintIcon(Heroicon::QuestionMarkCircle, 'Assigned automatically when you click Save PR.')
                 ->columnSpanFull(),
             Placeholder::make('pr_date_display')
                 ->label('PR date')
@@ -388,25 +389,11 @@ class AcquisitionPaperworkForm
                 ->helperText('Enter at least 8 characters.')
                 ->disabled(fn (?AcquisitionPaperwork $record): bool => ! self::isPrEditable($record))
                 ->columnSpanFull(),
-            TextInput::make('requested_by_name')
-                ->label('Requested by (printed name)')
-                ->datalist(fn (): array => \App\Models\ProcurementSignatoryName::suggestionsForRole(\App\Models\ProcurementSignatoryName::ROLE_REQUESTED))
-                ->maxLength(255)
+            SignatorySelect::make('requested_by_name', ProcurementSignatoryName::ROLE_REQUESTED)
+                ->label('Requested By')
                 ->disabled(fn (?AcquisitionPaperwork $record): bool => ! self::isPrEditable($record)),
-            TextInput::make('requested_by_designation')
-                ->label('Requested by designation')
-                ->datalist(fn (): array => \App\Models\ProcurementSignatoryName::suggestionsForRole(\App\Models\ProcurementSignatoryName::ROLE_REQUESTED_DESIGNATION))
-                ->maxLength(255)
-                ->disabled(fn (?AcquisitionPaperwork $record): bool => ! self::isPrEditable($record)),
-            TextInput::make('approved_by_name')
-                ->label('Approved by (printed name)')
-                ->datalist(fn (): array => \App\Models\ProcurementSignatoryName::suggestionsForRole(\App\Models\ProcurementSignatoryName::ROLE_APPROVED))
-                ->maxLength(255)
-                ->disabled(fn (?AcquisitionPaperwork $record): bool => ! self::isPrEditable($record)),
-            TextInput::make('approved_by_designation')
-                ->label('Approved by designation')
-                ->datalist(fn (): array => \App\Models\ProcurementSignatoryName::suggestionsForRole(\App\Models\ProcurementSignatoryName::ROLE_APPROVED_DESIGNATION))
-                ->maxLength(255)
+            SignatorySelect::make('approved_by_name', ProcurementSignatoryName::ROLE_APPROVED)
+                ->label('Approve By')
                 ->disabled(fn (?AcquisitionPaperwork $record): bool => ! self::isPrEditable($record)),
         ];
     }

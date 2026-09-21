@@ -2,7 +2,6 @@
 
 namespace App\Filament\Resources\Acquisitions\Tables;
 
-use App\Filament\Resources\Acquisitions\Concerns\AcquisitionDateRangeFilter;
 use App\Filament\Resources\Acquisitions\Paperwork\Actions\AcquisitionPaperworkActions;
 use App\Filament\Resources\Acquisitions\Paperwork\Schemas\AcquisitionPaperworkModalSchema;
 use App\Filament\Support\ConfiguresOwwaViewAction;
@@ -48,9 +47,7 @@ class ReceivedAcquisitionsTable
                     ->counts('lines')
                     ->label('Lines'),
             ])
-            ->filters([
-                AcquisitionDateRangeFilter::make('received_at', 'Date'),
-            ])
+            ->filters([])
             ->defaultSort('received_at', 'desc')
             ->emptyStateHeading('No received acquisitions yet')
             ->emptyStateDescription('Completed PR → PO → IAR cases appear here after custodian receipt.')
@@ -70,8 +67,6 @@ class ReceivedAcquisitionsTable
             ->recordUrl(null)
             ->recordAction('view');
 
-        return AcquisitionDateRangeFilter::applyBesideSearch(
-            OwwaTableDefaults::hideRedundantToolbarIcons($table),
-        );
+        return OwwaTableDefaults::hideRedundantToolbarIcons($table);
     }
 }

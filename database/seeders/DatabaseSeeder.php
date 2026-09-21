@@ -26,6 +26,8 @@ class DatabaseSeeder extends Seeder
             RoleAndUserSeeder::class,
             ReferenceSeriesSeeder::class,
             UacsObjectCodeSeeder::class,
+            DeliveryTermSeeder::class,
+            ItemAttributeOptionSeeder::class,
         ]);
     }
 }

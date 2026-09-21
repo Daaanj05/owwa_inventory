@@ -66,13 +66,13 @@
             </div>
             @if($this->getShowOfficeStats())
             <div class="owwa-kpi">
-                <span class="owwa-kpi-label">Top Office</span>
+                <span class="owwa-kpi-label">{{ ($summary['mode'] ?? 'office') === 'department' ? 'Top Department' : 'Top Office' }}</span>
                 <span class="owwa-kpi-value owwa-kpi-value-text">
-                    {{ $hasData ? ($summary['top_office_name'] ?? '—') : '—' }}
+                    {{ $hasData ? ($summary['top_name'] ?? '—') : '—' }}
                 </span>
                 <span class="owwa-kpi-meta">
-                    {{ ($summary['top_office_quantity'] ?? 0) > 0
-                        ? number_format($summary['top_office_quantity']) . ' units consumed'
+                    {{ ($summary['top_quantity'] ?? 0) > 0
+                        ? number_format($summary['top_quantity']) . ' units consumed'
                         : 'No issuances recorded' }}
                 </span>
             </div>
@@ -111,29 +111,57 @@
                 </p>
             </div>
         @else
-            <div @if ($pollingInterval = $this->getPollingInterval()) wire:poll.{{ $pollingInterval }}="updateChartData" @endif>
-                <div
-                    x-load
-                    x-load-src="{{ \Filament\Support\Facades\FilamentAsset::getAlpineComponentSrc('chart', 'filament/widgets') }}"
-                    wire:ignore
-                    data-chart-type="{{ $type }}"
-                    x-data="chart({
-                        cachedData: @js($this->getCachedData()),
-                        maxHeight: @js($maxHeight = $this->getMaxHeight()),
-                        options: @js($this->getOptions()),
-                        type: @js($type),
-                    })"
-                    {{ (new ComponentAttributeBag)->color(ChartWidgetComponent::class, $color)->class([
-                        'fi-wi-chart-canvas-ctn',
-                        'fi-wi-chart-canvas-ctn-no-aspect-ratio' => filled($maxHeight),
-                    ]) }}
-                >
-                    <canvas x-ref="canvas" @if ($maxHeight) style="max-height: {{ $maxHeight }}" @endif></canvas>
-                    <span x-ref="backgroundColorElement" class="fi-wi-chart-bg-color"></span>
-                    <span x-ref="borderColorElement" class="fi-wi-chart-border-color"></span>
-                    <span x-ref="gridColorElement" class="fi-wi-chart-grid-color"></span>
-                    <span x-ref="textColorElement" class="fi-wi-chart-text-color"></span>
+            <div
+                class="owwa-chart-body"
+                @if ($pollingInterval = $this->getPollingInterval()) wire:poll.{{ $pollingInterval }}="updateChartData" @endif
+            >
+                @if ($officeContext = $this->getConsumptionOfficeContextLabel())
+                    <div class="owwa-chart-scope-label" aria-label="Selected office">
+                        <span class="owwa-chart-scope-key">Office</span>
+                        <span class="owwa-chart-scope-value">{{ $officeContext }}</span>
+                    </div>
+                @endif
+                @if ($itemContext = $this->getConsumptionItemContextLabel())
+                    <div class="owwa-chart-scope-label" aria-label="Selected item">
+                        <span class="owwa-chart-scope-key">Item</span>
+                        <span class="owwa-chart-scope-value">{{ $itemContext }}</span>
+                    </div>
+                @endif
+                <div class="owwa-chart-plot owwa-chart-plot--line">
+                    <div
+                        x-load
+                        x-load-src="{{ \Filament\Support\Facades\FilamentAsset::getAlpineComponentSrc('chart', 'filament/widgets') }}"
+                        wire:ignore
+                        data-chart-type="{{ $type }}"
+                        x-data="chart({
+                            cachedData: @js($this->getCachedData()),
+                            maxHeight: @js($maxHeight = $this->getMaxHeight()),
+                            options: @js($this->getOptions()),
+                            type: @js($type),
+                        })"
+                        {{ (new ComponentAttributeBag)->color(ChartWidgetComponent::class, $color)->class([
+                            'fi-wi-chart-canvas-ctn',
+                            'fi-wi-chart-canvas-ctn-no-aspect-ratio' => filled($maxHeight),
+                        ]) }}
+                    >
+                        <canvas x-ref="canvas" @if ($maxHeight) style="max-height: {{ $maxHeight }}" @endif></canvas>
+                        <span x-ref="backgroundColorElement" class="fi-wi-chart-bg-color"></span>
+                        <span x-ref="borderColorElement" class="fi-wi-chart-border-color"></span>
+                        <span x-ref="gridColorElement" class="fi-wi-chart-grid-color"></span>
+                        <span x-ref="textColorElement" class="fi-wi-chart-text-color"></span>
+                    </div>
                 </div>
+                @php($legendItems = $this->getChartLegendItems())
+                @if ($legendItems !== [])
+                    <div class="owwa-chart-legend" aria-label="Chart legend">
+                        @foreach ($legendItems as $item)
+                            <span class="owwa-chart-legend-item">
+                                <span class="owwa-chart-legend-swatch" style="background-color: {{ $item['color'] }}"></span>
+                                <span class="owwa-chart-legend-label">{{ $item['label'] }}</span>
+                            </span>
+                        @endforeach
+                    </div>
+                @endif
             </div>
         @endif
 

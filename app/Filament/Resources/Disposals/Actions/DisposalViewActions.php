@@ -5,6 +5,7 @@ namespace App\Filament\Resources\Disposals\Actions;
 use App\Filament\Resources\Disposals\DisposalResource;
 use App\Filament\Support\OwwaFormModalDefaults;
 use App\Models\Disposal;
+use App\Services\DisposalStockValidator;
 use App\Services\DisposalWorkflowService;
 use App\Services\OwwaTemplateExportService;
 use App\Support\OwwaExportBusyDispatcher;
@@ -19,7 +20,12 @@ class DisposalViewActions
     public static function editAction(): EditAction
     {
         return OwwaFormModalDefaults::editActionForResource(DisposalResource::class, OwwaFormModalDefaults::WIDTH_STANDARD)
-            ->visible(fn (Disposal $record): bool => $record->isEditable());
+            ->visible(fn (Disposal $record): bool => $record->isEditable())
+            ->mutateFormDataUsing(function (array $data, Disposal $record): array {
+                app(DisposalStockValidator::class)->validateForUpdate($data, $record);
+
+                return $data;
+            });
     }
 
     public static function confirmAction(): Action

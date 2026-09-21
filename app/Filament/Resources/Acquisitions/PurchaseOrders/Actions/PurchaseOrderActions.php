@@ -2,8 +2,10 @@
 
 namespace App\Filament\Resources\Acquisitions\PurchaseOrders\Actions;
 
+use App\Filament\Resources\Acquisitions\PurchaseOrders\PurchaseOrderResource;
 use App\Filament\Support\OwwaFormModalDefaults;
 use App\Models\PurchaseOrder;
+use App\Models\Supplier;
 use App\Services\PurchaseOrderWorkflowService;
 use App\Support\OwwaExportBusyDispatcher;
 use Filament\Actions\Action;
@@ -28,39 +30,80 @@ class PurchaseOrderActions
             ->modalHeading(fn (PurchaseOrder $record): string => filled($record->number)
                 ? 'Edit PO '.$record->number
                 : 'Edit purchase order')
-            ->modalSubmitActionLabel('Save draft')
+            ->modalSubmitActionLabel('Save PO')
+            ->mutateFormDataUsing(function (array $data): array {
+                $supplierId = $data['supplier_id'] ?? null;
+                if (blank($supplierId)) {
+                    return $data;
+                }
+
+                $supplier = Supplier::query()->with('addresses')->find((int) $supplierId);
+                if ($supplier === null) {
+                    return $data;
+                }
+
+                if (blank($data['supplier_name'] ?? null)) {
+                    $data['supplier_name'] = $supplier->name;
+                }
+
+                $data['supplier_tin'] = $supplier->tin;
+
+                if (blank($data['supplier_address'] ?? null)) {
+                    $data['supplier_address'] = $supplier->addresses
+                        ->sortByDesc('is_default')
+                        ->first()?->address;
+                }
+
+                return $data;
+            })
             ->after(function (PurchaseOrder $record, EditAction $action): void {
                 app(PurchaseOrderWorkflowService::class)->rememberSupplier($record);
-
-                $workflow = $action->getArguments()['workflow'] ?? null;
-                if ($workflow !== 'submitPo') {
-                    return;
-                }
 
                 self::runWorkflow(
                     $record->fresh() ?? $record,
                     fn (PurchaseOrder $po) => app(PurchaseOrderWorkflowService::class)->submit($po),
                     $action,
                     'PO saved',
-                    'Export the purchase order for signature, then mark Approved when signed.',
+                    'Export from this view for signature, then mark as approved when signed.',
                 );
-            })
-            ->extraModalFooterActions(fn (EditAction $editAction): array => [
-                $editAction->makeModalSubmitAction('submitPoWorkflow', ['workflow' => 'submitPo'])
-                    ->label('Save PO')
-                    ->icon('heroicon-o-check')
-                    ->color('success')
-                    ->visible(fn (?PurchaseOrder $record): bool => $record?->isEditable() ?? false),
-                self::approveAction(),
-                self::exportExcelAction(),
-                self::exportPdfAction(),
-            ]);
+
+                $submitted = $record->fresh() ?? $record;
+
+                if (filled($submitted->submitted_at)) {
+                    $action->redirect(PurchaseOrderResource::viewModalUrl($submitted));
+                }
+            });
+    }
+
+    /**
+     * Visible Edit control for the view modal footer and the row actions menu.
+     */
+    public static function visibleEditAction(): Action
+    {
+        return Action::make('editPo')
+            ->label('Edit')
+            ->icon('heroicon-o-pencil-square')
+            ->color('gray')
+            ->visible(fn (PurchaseOrder $record): bool => $record->isEditable())
+            ->action(function (PurchaseOrder $record, Action $action): void {
+                $livewire = $action->getLivewire();
+
+                if (! is_object($livewire) || ! method_exists($livewire, 'replaceMountedAction')) {
+                    return;
+                }
+
+                // Replace the view stack; mountTableAction expects a string record key.
+                $livewire->replaceMountedAction('edit', [], [
+                    'table' => true,
+                    'recordKey' => (string) $record->getKey(),
+                ]);
+            });
     }
 
     public static function approveAction(): Action
     {
         return Action::make('approvePo')
-            ->label('Approved')
+            ->label('Mark as Approved')
             ->icon('heroicon-o-check')
             ->color('success')
             ->visible(fn (PurchaseOrder $record): bool => filled($record->submitted_at)
@@ -136,6 +179,7 @@ class PurchaseOrderActions
     public static function viewModalFooterActions(): array
     {
         return [
+            self::visibleEditAction(),
             self::approveAction(),
             self::archiveAction(),
             self::restoreAction(),

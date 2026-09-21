@@ -16,6 +16,13 @@ class ItemSubItemNameTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->seed(\Database\Seeders\ItemAttributeOptionSeeder::class);
+    }
+
     public function test_create_merges_base_name_and_sub_item_into_name(): void
     {
         Filament::setCurrentPanel(Filament::getPanel('admin'));

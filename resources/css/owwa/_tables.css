@@ -1,0 +1,38 @@
+/* OWWA theme partial: _tables.css (original lines 1192-1228) — edit then run: npm run build:owwa-theme */
+
+/* ═══════════════════════════════════════════════════════════
+   RESOURCE LIST TABS (Active / Archived / All)
+═══════════════════════════════════════════════════════════ */
+/* Keep the tabs left-aligned (not centered) */
+.fi-resource-list-records-page .fi-tabs,
+.fi-resource-list-records-page .fi-tabs-ctn,
+.fi-resource-list-records-page .fi-tabs-items {
+    justify-content: flex-start !important;
+}
+
+/* Prevent "centered pill group" layout */
+.fi-resource-list-records-page .fi-tabs {
+    margin-left: 0 !important;
+    margin-right: auto !important;
+    justify-self: start !important;
+    align-self: flex-start !important;
+    width: fit-content !important;
+}
+
+/* Make tabs look like small buttons */
+.fi-resource-list-records-page .fi-tabs-item {
+    min-height: 1.75rem !important;
+    padding: 0.25rem 0.6rem !important;
+    border-radius: 9999px !important;
+    font-size: 0.75rem !important;
+    font-weight: 600 !important;
+}
+
+.fi-resource-list-records-page .fi-tabs-item-label {
+    font-size: 0.75rem !important;
+    line-height: 1 !important;
+}
+
+.fi-resource-list-records-page .fi-tabs-items {
+    gap: 0.4rem !important;
+}

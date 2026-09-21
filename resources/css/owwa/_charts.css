@@ -1,0 +1,1840 @@
+/* OWWA theme partial: _charts.css (original lines 1229-3067) — edit then run: npm run build:owwa-theme */
+
+/* ═══════════════════════════════════════════════════════════
+   CHARTS
+═══════════════════════════════════════════════════════════ */
+.fi-wi-chart .fi-wi-chart-bg-color    { background-color: #ffffff !important; color: #ffffff !important; }
+.fi-wi-chart .fi-wi-chart-text-color  { color: #64748b !important; }
+.fi-wi-chart .fi-wi-chart-grid-color  { color: #f1f5f9 !important; }
+.fi-wi-chart .fi-wi-chart-border-color { color: #e2e8f0 !important; }
+
+
+/* ═══════════════════════════════════════════════════════════
+   DASHBOARD — clean layout that works with Filament's native grid
+═══════════════════════════════════════════════════════════ */
+
+/* Dashboard gap between widgets */
+.fi-page-content .fi-sc-has-gap {
+    gap: 1.25rem !important;
+}
+
+/* Main admin dashboard — tighter widget rhythm */
+.fi-page.owwa-dashboard-page .fi-page-content .fi-sc-has-gap {
+    gap: 0.75rem !important;
+}
+
+.fi-page.owwa-dashboard-page .fi-wi-widget {
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+}
+
+/* Dashboard chart pair — equal width columns, matching card height */
+.fi-page.owwa-dashboard-page .fi-page-content .fi-sc-has-gap {
+    align-items: stretch !important;
+}
+
+.fi-page.owwa-dashboard-page .owwa-dashboard-chart {
+    height: 100%;
+    min-width: 0;
+}
+
+.fi-page.owwa-dashboard-page .owwa-dashboard-chart.fi-wi-chart .fi-section {
+    height: 100%;
+    min-height: 19rem;
+    display: flex !important;
+    flex-direction: column !important;
+    box-sizing: border-box;
+}
+
+.fi-page.owwa-dashboard-page .owwa-dashboard-chart .fi-section-content-ctn {
+    flex: 1 1 auto;
+    display: flex !important;
+    flex-direction: column !important;
+}
+
+.fi-page.owwa-dashboard-page .owwa-dashboard-chart .fi-section-content {
+    flex: 1 1 auto;
+    display: flex !important;
+    flex-direction: column !important;
+}
+
+/* Plot + external legend: canvas height stays fixed; legends wrap below */
+.fi-page.owwa-dashboard-page .owwa-chart-body {
+    display: flex !important;
+    flex-direction: column !important;
+    flex: 1 1 auto;
+    min-height: 0;
+    width: 100%;
+    gap: 0.5rem;
+}
+
+.fi-page.owwa-dashboard-page .owwa-chart-plot {
+    flex: 0 0 auto;
+    width: 100%;
+    min-width: 0;
+}
+
+.fi-page.owwa-dashboard-page .owwa-chart-plot--line {
+    height: 210px;
+}
+
+.fi-page.owwa-dashboard-page .owwa-chart-plot--pie {
+    height: 17.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.fi-page.owwa-dashboard-page .owwa-dashboard-chart:not(.owwa-chart-pie) .owwa-chart-plot--line .fi-wi-chart-canvas-ctn {
+    flex: none !important;
+    height: 210px !important;
+    min-height: 210px !important;
+    max-height: 210px !important;
+}
+
+.fi-page.owwa-dashboard-page .owwa-chart-pie.owwa-dashboard-chart .fi-section-content-ctn > div {
+    flex: 1 1 auto;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: flex-start;
+    align-items: stretch;
+    min-height: 0;
+    width: 100%;
+}
+
+.fi-page.owwa-dashboard-page .owwa-chart-pie.owwa-dashboard-chart .owwa-chart-plot--pie .fi-wi-chart-canvas-ctn {
+    flex: none !important;
+    width: 100% !important;
+    max-width: 17.5rem !important;
+    min-height: 17.5rem !important;
+    height: 17.5rem !important;
+    max-height: 17.5rem !important;
+    margin-inline: auto;
+    padding: 0.15rem !important;
+}
+
+.fi-page.owwa-dashboard-page .owwa-chart-pie.owwa-dashboard-chart .owwa-chart-plot--pie canvas {
+    max-height: 17.5rem !important;
+    width: 100% !important;
+    height: 100% !important;
+}
+
+/* Empty placeholder only — keep the soft doughnut compact */
+.fi-page.owwa-dashboard-page .owwa-share-chart-placeholder .fi-wi-chart-canvas-ctn {
+    flex: 0 0 auto !important;
+    max-width: 11.5rem !important;
+    min-height: 8rem !important;
+    height: 8.75rem !important;
+    max-height: 8.75rem !important;
+}
+
+.fi-page.owwa-dashboard-page .owwa-share-chart-placeholder canvas {
+    max-height: 8.75rem !important;
+}
+
+.fi-page.owwa-dashboard-page .owwa-dashboard-chart.owwa-chart-compact .fi-section-header {
+    padding-top: 0.35rem !important;
+    padding-bottom: 0.1rem !important;
+    margin-bottom: 0.15rem !important;
+}
+
+.fi-page.owwa-dashboard-page .owwa-dashboard-chart.owwa-chart-compact .fi-section-header-heading {
+    padding-top: 0.05rem !important;
+}
+
+.fi-page.owwa-dashboard-page .owwa-dashboard-chart.owwa-chart-compact.fi-wi-chart .fi-section {
+    padding-top: 0.55rem !important;
+}
+
+/* Stats Section wrapper — default behavior (don’t break non-dashboard widgets) */
+.fi-wi-stats-overview .fi-section {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+}
+
+/* Collapse the empty header space when heading is blank (dashboard) */
+.fi-main .fi-header-heading:empty {
+    display: none !important;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   LOGIN PAGE — full custom two-panel layout
+═══════════════════════════════════════════════════════════ */
+
+/* Override Filament simple page wrapper to be full-screen */
+.fi-simple-layout,
+.fi-simple-main {
+    min-height: 100vh !important;
+    padding: 0 !important;
+    display: flex !important;
+    align-items: stretch !important;
+    justify-content: stretch !important;
+    background: #f0f4f8 !important;
+    max-width: none !important;
+}
+
+.fi-simple-main > .fi-simple-main-ctn {
+    width: 100% !important;
+    max-width: none !important;
+    padding: 0 !important;
+}
+
+/* Remove any remaining top/bottom whitespace and scrolling on login only */
+.fi-body:has(.owwa-login-wrapper) {
+    padding: 0 !important;
+    margin: 0 !important;
+    overflow: hidden !important;
+}
+
+.fi-body:has(.owwa-login-wrapper) .fi-main,
+.fi-body:has(.owwa-login-wrapper) .fi-simple-layout,
+.fi-body:has(.owwa-login-wrapper) .fi-simple-main,
+.fi-body:has(.owwa-login-wrapper) .fi-simple-main-ctn {
+    padding: 0 !important;
+    margin: 0 !important;
+    height: 100vh !important;
+    max-height: 100vh !important;
+}
+
+/* Wrapper: two columns side by side */
+.owwa-login-wrapper {
+    display: flex;
+    width: 100%;
+    height: 100vh;
+}
+
+/* ── Left brand panel ── */
+.owwa-login-brand {
+    flex: 0 0 46%;
+    background: linear-gradient(145deg, #002855 0%, #003f8a 40%, #6b1230 75%, #c41e3a 100%);
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 3rem 3.5rem;
+}
+
+.owwa-login-brand-inner {
+    position: relative;
+    z-index: 2;
+    max-width: 360px;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+}
+
+.owwa-login-logos-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    margin-bottom: 1.25rem;
+}
+
+
+.owwa-login-logo {
+    width: 5.5rem;
+    height: 5.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.owwa-login-logo-img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    mix-blend-mode: multiply;
+    filter: drop-shadow(0 2px 10px rgba(0,0,0,0.3));
+}
+
+/* Bagong Pilipinas logo has a black background — screen blend reveals it on dark panels */
+.owwa-login-logo-img--dark {
+    mix-blend-mode: screen;
+    filter: drop-shadow(0 2px 8px rgba(0,0,0,0.4));
+}
+
+.owwa-login-brand-name {
+    font-size: 1.875rem;
+    font-weight: 800;
+    color: #ffffff;
+    letter-spacing: -0.03em;
+    line-height: 1.1;
+    margin: 0 0 0.375rem;
+}
+
+.owwa-login-brand-tagline {
+    font-size: 0.8125rem;
+    color: rgba(255,255,255,0.6);
+    margin: 0;
+    font-weight: 400;
+    letter-spacing: 0.01em;
+}
+
+.owwa-login-brand-divider {
+    width: 2.5rem;
+    height: 1px;
+    background: transparent;
+    border-radius: 9999px;
+    margin: .5rem auto;
+}
+
+.owwa-login-brand-desc {
+    font-size: 0.9375rem;
+    color: rgba(255,255,255,0.75);
+    line-height: 1.65;
+    margin: 0 0 2rem;
+}
+
+.owwa-login-brand-features {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.owwa-login-feature {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    font-size: 0.875rem;
+    color: rgba(255,255,255,0.85);
+    font-weight: 500;
+}
+
+.owwa-login-feature-icon {
+    width: 2rem;
+    height: 2rem;
+    background: rgba(255,255,255,0.12);
+    border-radius: 0.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.owwa-login-feature-icon svg {
+    width: 1.125rem;
+    height: 1.125rem;
+    color: rgba(255,255,255,0.9);
+}
+
+/* Decorative circles */
+.owwa-login-deco {
+    position: absolute;
+    border-radius: 50%;
+    pointer-events: none;
+}
+
+.owwa-login-deco-1 {
+    width: 420px;
+    height: 420px;
+    top: -120px;
+    right: -120px;
+    background: radial-gradient(circle, rgba(255,255,255,0.07) 0%, transparent 70%);
+}
+
+.owwa-login-deco-2 {
+    width: 300px;
+    height: 300px;
+    bottom: -80px;
+    left: -80px;
+    background: radial-gradient(circle, rgba(255,255,255,0.05) 0%, transparent 70%);
+}
+
+/* ── Right form panel ── */
+.owwa-login-form-panel {
+    flex: 1;
+    background: #ffffff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 3rem 2rem;
+    position: relative;
+    overflow: hidden;
+}
+
+.owwa-login-watermark {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    z-index: 0;
+}
+
+.owwa-login-watermark img {
+    width: 75%;
+    max-width: 420px;
+    opacity: 0.06;
+    object-fit: contain;
+    user-select: none;
+}
+
+.owwa-login-form-inner {
+    width: 100%;
+    max-width: 400px;
+    position: relative;
+    z-index: 1;
+}
+
+.owwa-login-mobile-brand {
+    display: none;
+    align-items: center;
+    gap: 0.625rem;
+    margin-bottom: 2rem;
+}
+
+.owwa-login-mobile-logo svg {
+    width: 2rem;
+    height: 2rem;
+    display: block;
+}
+
+.owwa-login-mobile-name {
+    font-size: 1.125rem;
+    font-weight: 700;
+    color: #003366;
+}
+
+.owwa-login-form-header {
+    margin-top: -1rem;
+    margin-bottom: .5rem;
+}
+
+.owwa-login-form-title {
+    font-size: 1.625rem;
+    font-weight: 700;
+    color: #0f172a;
+    letter-spacing: -0.025em;
+    margin: 0 0 0.375rem;
+}
+
+.owwa-login-form-subtitle {
+    font-size: 0.9375rem;
+    color: #64748b;
+    margin: 0;
+}
+
+.owwa-login-verified-banner {
+    margin-bottom: 1rem;
+    padding: 0.75rem 1rem;
+    border-radius: 0.5rem;
+    border: 1px solid #86efac;
+    background: #f0fdf4;
+    color: #166534;
+    font-size: 0.875rem;
+    font-weight: 500;
+    line-height: 1.45;
+}
+
+/* Material Design: Outlined text field with floating label (label breaks top border) */
+.owwa-login-form-inner .fi-fo-field:has(.fi-fo-text-input) {
+    position: relative !important;
+    padding-top: 0 !important;
+    overflow: visible !important;
+}
+
+/* Outlined box: one border, no shadow/ring; very rounded (15px) */
+.owwa-login-form-inner .fi-fo-field:has(.fi-fo-text-input) .fi-input-wrp {
+    min-height: 2.5rem !important;
+    border: 1px solid #dddfe2 !important;
+    border-radius: 15px !important;
+    background: #ffffff !important;
+    box-shadow: none !important;
+    outline: none !important;
+    --tw-ring-shadow: 0 0 #0000 !important;
+    --tw-ring-offset-width: 0px !important;
+    transition: border-color 0.15s ease !important;
+}
+
+.owwa-login-form-inner .fi-fo-field:has(.fi-fo-text-input):has(input:not(:placeholder-shown)) .fi-input-wrp {
+    border-color: #dddfe2 !important;
+    box-shadow: none !important;
+    outline: none !important;
+    min-height: 2.5rem !important;
+}
+
+/* Focus highlight: 2px border only, no box-shadow/glow */
+.owwa-login-form-inner .fi-fo-field:has(.fi-fo-text-input):focus-within .fi-input-wrp {
+    border-color: #003f8a !important;
+    border-width: 2px !important;
+    box-shadow: none !important;
+    outline: none !important;
+    min-height: 2.5rem !important;
+    transition: border-color 0.2s ease, border-width 0.2s ease !important;
+}
+
+/* Default: label as placeholder — centered inside the outlined field */
+.owwa-login-form-inner .fi-fo-field:has(.fi-fo-text-input) .fi-fo-field-label-col {
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    height: auto !important;
+    min-height: 2.5rem !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+    padding-left: 0.5rem !important;
+    pointer-events: none !important;
+    z-index: 1 !important;
+    transition: transform 0.2s ease, top 0.2s ease, font-size 0.2s ease !important;
+}
+
+.owwa-login-form-inner .fi-fo-field:has(.fi-fo-text-input) .fi-fo-field-label-ctn {
+    display: flex !important;
+    align-items: center !important;
+}
+
+.owwa-login-form-inner .fi-fo-field:has(.fi-fo-text-input) .fi-fo-field-label,
+.owwa-login-form-inner .fi-fo-field:has(.fi-fo-text-input) .fi-fo-field-label-content {
+    color: #8a8d91 !important;
+    font-size: 0.875rem !important;
+    font-weight: 400 !important;
+    transition: color 0.2s ease, font-size 0.2s ease, background 0.2s ease !important;
+}
+
+/* Focused/filled: label shrinks and moves to top border, "breaking" the outline (Material Design) */
+.owwa-login-form-inner .fi-fo-field:has(.fi-fo-text-input):focus-within .fi-fo-field-label-col,
+.owwa-login-form-inner .fi-fo-field:has(.fi-fo-text-input):has(input:not(:placeholder-shown)) .fi-fo-field-label-col {
+    bottom: auto !important;
+    min-height: auto !important;
+    height: auto !important;
+    top: -0.5rem !important;
+    align-items: center !important;
+    padding-top: 0 !important;
+    padding-left: 0.5rem !important;
+}
+
+.owwa-login-form-inner .fi-fo-field:has(.fi-fo-text-input):focus-within .fi-fo-field-content-col,
+.owwa-login-form-inner .fi-fo-field:has(.fi-fo-text-input):has(input:not(:placeholder-shown)) .fi-fo-field-content-col {
+    padding-top: 0 !important;
+}
+
+/* Floated label: clean "notch" in top border — background matches form so border is masked into a gap */
+.owwa-login-form-inner .fi-fo-field:has(.fi-fo-text-input):focus-within .fi-fo-field-label,
+.owwa-login-form-inner .fi-fo-field:has(.fi-fo-text-input):focus-within .fi-fo-field-label-content,
+.owwa-login-form-inner .fi-fo-field:has(.fi-fo-text-input):has(input:not(:placeholder-shown)) .fi-fo-field-label,
+.owwa-login-form-inner .fi-fo-field:has(.fi-fo-text-input):has(input:not(:placeholder-shown)) .fi-fo-field-label-content {
+    font-size: 0.75rem !important;
+    line-height: 1.25 !important;
+    color: #8a8d91 !important;
+    background: #ffffff !important;
+    padding: 0 0.5rem !important;
+}
+
+/* Input when focused/filled: content below the floated label */
+.owwa-login-form-inner .fi-fo-field:has(.fi-fo-text-input):focus-within input,
+.owwa-login-form-inner .fi-fo-field:has(.fi-fo-text-input):has(input:not(:placeholder-shown)) input {
+    padding-left: 0.5rem !important;
+    padding-top: 0.5rem !important;
+    padding-bottom: 0.5rem !important;
+    border: none !important;
+    background: transparent !important;
+    line-height: 1.4 !important;
+}
+
+/* ═══ Login form: fieldset/legend outlined inputs (floating label with notch) ═══ */
+.owwa-login-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+}
+
+.owwa-login-outlined-fieldset {
+    position: relative;
+    margin: 0;
+    padding: 0.5rem 0.625rem;
+    min-height: 44px;
+    border: 2px solid #dddfe2;
+    border-radius: 12px;
+    background: #ffffff;
+    transition: border-color 0.2s ease;
+    box-sizing: border-box;
+}
+
+.owwa-login-outlined-fieldset:focus-within {
+    border-color: #003f8a;
+    box-shadow: none;
+    outline: none;
+}
+
+.owwa-login-outlined-fieldset--error {
+    border-color: #dc2626;
+}
+
+/* Floating label (legend): default transparent; padding for clean spacing */
+.owwa-login-outlined-legend {
+    position: absolute;
+    left: 0.625rem;
+    margin: 0;
+    line-height: 1.25;
+    color: #8a8d91;
+    font-weight: 400;
+    max-width: calc(100% - 1.25rem);
+    background-color: transparent;
+    padding: 0 4px;
+    pointer-events: none;
+    transition: font-size 0.2s ease-in-out, color 0.2s ease-in-out, top 0.2s ease-in-out, transform 0.2s ease-in-out;
+}
+
+/* Default: label exactly where text would be typed (placeholder position) */
+.owwa-login-outlined-fieldset:not(:focus-within):not(:has(.owwa-login-outlined-input:not(:placeholder-shown))) .owwa-login-outlined-legend {
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 0.875rem;
+}
+
+/* Focused or filled: label on border with solid background to create notch (line masked behind text) */
+.owwa-login-outlined-fieldset:focus-within .owwa-login-outlined-legend,
+.owwa-login-outlined-fieldset:has(.owwa-login-outlined-input:not(:placeholder-shown)) .owwa-login-outlined-legend {
+    top: -2px;
+    transform: translateY(-50%);
+    font-size: 0.6875rem;
+    color: #8a8d91;
+    background-color: #ffffff;
+    padding: 0 4px;
+}
+
+.owwa-login-outlined-input-wrap {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    clear: both;
+    min-width: 0;
+    min-height: 1.25rem;
+}
+
+.owwa-login-outlined-input {
+    flex: 1;
+    min-width: 0;
+    min-height: 1.25rem;
+    padding: 0.25rem 0 0.25rem;
+    margin: 0;
+    border: none;
+    background: transparent;
+    font-size: 0.875rem;
+    color: #1c1e21;
+    line-height: 1.35;
+    outline: none;
+}
+
+.owwa-login-outlined-fieldset--password .owwa-login-outlined-input {
+    padding-right: 38px;
+}
+
+.owwa-login-outlined-input::placeholder {
+    color: transparent;
+}
+
+/* Password reveal: absolutely positioned right, vertically centered; visible only when focused */
+.owwa-login-password-reveal {
+    position: absolute;
+    right: 0.5rem;
+    top: 50%;
+    transform: translateY(-50%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.25rem;
+    margin: 0;
+    border: none;
+    background: transparent;
+    color: #6b7280;
+    cursor: pointer;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.15s ease, color 0.15s ease;
+}
+
+.owwa-login-outlined-fieldset--password:focus-within .owwa-login-password-reveal {
+    opacity: 1;
+    visibility: visible;
+}
+
+.owwa-login-password-reveal:hover {
+    color: #374151;
+}
+
+.owwa-login-password-reveal-icon {
+    display: block;
+    width: 1.25rem;
+    height: 1.25rem;
+}
+
+.owwa-login-password-reveal-icon svg {
+    width: 100%;
+    height: 100%;
+}
+
+.owwa-login-password-reveal-icon [x-cloak] {
+    display: none !important;
+}
+
+.owwa-login-outlined-error {
+    margin: 0.25rem 0 0;
+    font-size: 0.75rem;
+    color: #dc2626;
+}
+
+.owwa-login-forgot {
+    margin: -0.25rem 0 0.25rem;
+    text-align: right;
+}
+
+.owwa-login-forgot-link {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: #003f8a;
+    text-decoration: none;
+}
+
+.owwa-login-forgot-link:hover {
+    color: #002a5c;
+    text-decoration: underline;
+}
+
+.owwa-login-remember {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.875rem;
+    color: #374151;
+    cursor: pointer;
+}
+
+.owwa-login-remember-input {
+    width: 1rem;
+    height: 1rem;
+}
+
+.owwa-login-submit-btn {
+    width: 100%;
+    min-height: 2.875rem;
+    padding: 0.5rem 1rem;
+    background: linear-gradient(135deg, #003f8a 0%, #0059c2 60%, #8b1538 100%);
+    background-color: #003f8a;
+    border: none;
+    border-radius: 0.625rem;
+    color: #ffffff;
+    font-weight: 600;
+    font-size: 0.9375rem;
+    cursor: pointer;
+    transition: opacity 0.15s ease;
+}
+
+.owwa-login-submit-btn:hover {
+    opacity: 0.9;
+}
+
+/* Password reveal (eye) icon: only visible when password field is focused — target by input wrapper */
+.owwa-login-form-inner .fi-input-wrp:has(input.fi-revealable):not(:focus-within) .fi-input-wrp-suffix {
+    visibility: hidden !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+    transition: opacity 0.15s ease !important;
+}
+
+.owwa-login-form-inner .fi-input-wrp:has(input.fi-revealable):focus-within .fi-input-wrp-suffix {
+    visibility: visible !important;
+    opacity: 1 !important;
+}
+
+/* Remove border/ring around the password reveal (eye) icon */
+.owwa-login-form-inner .fi-input-wrp-suffix .fi-btn,
+.owwa-login-form-inner .fi-input-wrp-suffix .fi-input-wrp-actions .fi-btn {
+    border: none !important;
+    box-shadow: none !important;
+    outline: none !important;
+    --tw-ring-shadow: 0 0 #0000 !important;
+    --tw-ring-offset-width: 0px !important;
+}
+
+/* Remove the line/divider between password input and eye icon */
+.owwa-login-form-inner .fi-input-wrp .fi-input-wrp-suffix {
+    border-inline-start: none !important;
+    border-left: none !important;
+    padding-inline-start: 0.5rem !important;
+}
+
+/* Style Filament's form inputs inside login — Facebook-style: border on wrapper, input borderless; left padding matches label for alignment */
+.owwa-login-form-inner .fi-fo-field:has(.fi-fo-text-input) input {
+    border: none !important;
+    border-radius: 0 !important;
+    min-height: 2.5rem !important;
+    height: auto !important;
+    padding-left: 0.5rem !important;
+    padding-right: 0.5rem !important;
+    padding-top: 0.375rem !important;
+    padding-bottom: 0 !important;
+    font-size: 0.9375rem !important;
+    color: #1c1e21 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    outline: none !important;
+}
+
+.owwa-login-form-inner .fi-fo-field:has(.fi-fo-text-input) input::placeholder {
+    color: transparent !important;
+}
+
+.owwa-login-form-inner .fi-fo-field:has(.fi-fo-text-input) input:focus {
+    border-color: transparent !important;
+    box-shadow: none !important;
+    outline: none !important;
+}
+
+/* Sign in button */
+.owwa-login-form-inner .fi-btn {
+    width: 100% !important;
+    background: linear-gradient(135deg, #003f8a 0%, #0059c2 60%, #8b1538 100%) !important;
+    background-color: #003f8a !important;
+    border: none !important;
+    color: #ffffff !important;
+    font-weight: 600 !important;
+    font-size: 0.9375rem !important;
+    border-radius: 0.625rem !important;
+    min-height: 2.875rem !important;
+    transition: opacity 0.15s ease !important;
+    box-shadow: none !important;
+}
+
+.owwa-login-form-inner .fi-btn:hover {
+    opacity: 0.9 !important;
+}
+
+/* Force the label span visible — Alpine's x-show sets display:none inline;
+   this overrides it so "Sign in" is always visible on the login button */
+.owwa-login-form-inner .fi-btn span {
+    display: inline !important;
+    color: #ffffff !important;
+}
+
+.owwa-login-form-inner .fi-btn svg {
+    color: #ffffff !important;
+}
+
+.owwa-login-footer-note {
+    text-align: center;
+    font-size: 0.75rem;
+    color: #94a3b8;
+    margin-top: 2rem;
+    line-height: 1.5;
+}
+
+/* (Replaced by the scoped .fi-body:has(.owwa-login-wrapper) rules above.) */
+
+.owwa-login-error {
+    margin-top: 1.1rem;
+    padding: 0.75rem 0.9rem;
+    border-radius: 0.75rem;
+    border: 1px solid #fecaca;
+    background: #fef2f2;
+}
+
+.owwa-login-error-title {
+    margin: 0 0 0.15rem;
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: #b91c1c;
+}
+
+.owwa-login-error-text {
+    margin: 0;
+    font-size: 0.8rem;
+    color: #7f1d1d;
+}
+
+/* Responsive: stack vertically on tablet/mobile */
+@media (max-width: 900px) {
+    .owwa-login-brand {
+        display: none;
+    }
+    .owwa-login-mobile-brand {
+        display: flex;
+    }
+    .owwa-login-form-panel {
+        background: #f0f4f8;
+    }
+    .owwa-login-form-inner {
+        padding: 2.5rem 2rem;
+    }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   CHANGE PASSWORD PAGE (forced password setup)
+═══════════════════════════════════════════════════════════ */
+
+.fi-body:has(.owwa-change-password-page) .fi-simple-layout-header {
+    display: none !important;
+}
+
+.owwa-change-password-page .fi-simple-page {
+    padding: 0 !important;
+    margin: 0 !important;
+    max-width: none !important;
+}
+
+.owwa-change-password-notice {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.625rem;
+    margin-bottom: 1.25rem;
+    padding: 0.75rem 1rem;
+    border-radius: 0.5rem;
+    border: 1px solid #bfdbfe;
+    background: #eff6ff;
+    color: #1e40af;
+    font-size: 0.875rem;
+    font-weight: 500;
+    line-height: 1.45;
+}
+
+.owwa-change-password-notice-icon {
+    width: 1.25rem;
+    height: 1.25rem;
+    flex-shrink: 0;
+    margin-top: 0.05rem;
+}
+
+.owwa-change-password-form {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.owwa-change-password-form .fi-fo-field-wrp-helper-text {
+    font-size: 0.75rem !important;
+    color: #64748b !important;
+    line-height: 1.45 !important;
+    margin-top: 0.25rem !important;
+}
+
+.owwa-change-password-form .fi-sc-form {
+    gap: 1.25rem !important;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   FORGOT PASSWORD PAGE (request reset)
+═══════════════════════════════════════════════════════════ */
+
+.fi-body:has(.owwa-password-reset-page) .fi-simple-layout-header {
+    display: none !important;
+}
+
+.owwa-password-reset-page .fi-simple-page {
+    padding: 0 !important;
+    margin: 0 !important;
+    max-width: none !important;
+}
+
+.owwa-password-reset-back {
+    margin: 0.25rem 0 0;
+}
+
+.owwa-password-reset-helper {
+    margin: 0 0 1.25rem;
+    font-size: 0.875rem;
+    color: #64748b;
+    line-height: 1.55;
+}
+
+.owwa-password-reset-form {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.owwa-password-reset-form .fi-sc-form {
+    gap: 1.25rem !important;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   WELCOME WIDGET
+═══════════════════════════════════════════════════════════ */
+.owwa-welcome {
+    background: linear-gradient(135deg, #002a5c 0%, #003f8a 35%, #6b1230 75%, #b5192f 100%) !important;
+    border: none !important;
+    border-radius: 1.25rem !important;
+    color: #fff !important;
+    padding: 1.25rem 1.5rem !important;
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 4px 20px -2px rgba(0,51,102,0.35) !important;
+}
+
+.owwa-welcome::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background:
+        radial-gradient(ellipse 60% 80% at 90% -10%, rgba(255,255,255,0.07) 0%, transparent 60%),
+        radial-gradient(ellipse 40% 60% at 10% 120%, rgba(255,255,255,0.04) 0%, transparent 60%);
+    pointer-events: none;
+}
+
+.owwa-welcome::after {
+    content: '';
+    position: absolute;
+    top: -50%;
+    right: -8%;
+    width: 380px;
+    height: 380px;
+    background: radial-gradient(circle, rgba(255,255,255,0.05) 0%, transparent 65%);
+    border-radius: 50%;
+    pointer-events: none;
+}
+
+.owwa-welcome-body {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 1rem;
+    position: relative;
+    z-index: 1;
+}
+
+.owwa-welcome-left {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.owwa-welcome-avatar-placeholder {
+    width: 3rem;
+    height: 3rem;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.15);
+    border: 2px solid rgba(255,255,255,0.3);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: #fff;
+    flex-shrink: 0;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+}
+
+.owwa-welcome-greeting {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: #fff;
+    letter-spacing: -0.02em;
+    line-height: 1.2;
+}
+
+.owwa-welcome-role {
+    font-size: 0.8125rem;
+    color: rgba(255,255,255,0.65);
+    margin-top: 0.25rem;
+    font-weight: 400;
+    letter-spacing: 0.01em;
+}
+
+.owwa-welcome-right {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0.5rem;
+    position: relative;
+    z-index: 1;
+}
+
+.owwa-welcome-date {
+    font-size: 0.8125rem;
+    color: rgba(255,255,255,0.6);
+    font-weight: 500;
+    letter-spacing: 0.01em;
+}
+
+@media (max-width: 767px) {
+    .fi-page.owwa-dashboard-page .fi-wi-widget {
+        grid-column: 1 / -1 !important;
+    }
+
+    .fi-page.owwa-dashboard-page .fi-wi-stats-overview .fi-section-content {
+        grid-template-columns: 1fr !important;
+    }
+
+    .owwa-welcome-body {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .owwa-welcome-right {
+        align-items: flex-start;
+        width: 100%;
+    }
+
+    .owwa-welcome::after {
+        width: 10rem;
+        height: 10rem;
+        top: -25%;
+        right: -15%;
+    }
+
+    .fi-wi-stats-overview-stat.owwa-kpi-square .fi-wi-stats-overview-stat-label {
+        white-space: normal !important;
+    }
+
+    .fi-wi-stats-overview-stat.owwa-kpi-square .fi-wi-stats-overview-stat-description {
+        flex-wrap: wrap;
+    }
+}
+
+.owwa-data-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.3rem 0.8rem;
+    background: rgba(255,255,255,0.1);
+    border: 1px solid rgba(255,255,255,0.18);
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: rgba(255,255,255,0.88);
+    backdrop-filter: blur(6px);
+}
+
+.owwa-data-badge-dot {
+    width: 6px;
+    height: 6px;
+    background: #34d399;
+    border-radius: 50%;
+    flex-shrink: 0;
+    box-shadow: 0 0 4px rgba(52,211,153,0.6);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   STATS OVERVIEW — KPI cards (4-in-a-row)
+═══════════════════════════════════════════════════════════ */
+
+/* Outer container for the KPI group — transparent so only individual stat cards show */
+.fi-wi-stats-overview .fi-section {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    overflow: visible !important;
+    padding: 0 !important;
+}
+
+.fi-wi-stats-overview .fi-section-content-ctn {
+    padding: 0 !important;
+}
+
+.fi-wi-stats-overview .fi-section-content {
+    padding: 0 !important;
+    gap: 0.75rem !important;
+    justify-content: stretch !important;
+}
+
+/* Stat card — default visible cards (baseline) */
+.fi-wi-stats-overview-stat {
+    display: flex !important;
+    flex-direction: column !important;
+    background: #ffffff !important;
+    border: 1px solid #e8edf3 !important;
+    border-radius: 0.875rem !important;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05) !important;
+    overflow: hidden !important;
+    position: relative !important;
+}
+
+.fi-wi-stats-overview-stat.owwa-stat-clickable {
+    cursor: pointer !important;
+    transition: background 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+}
+.fi-wi-stats-overview-stat.owwa-stat-clickable:hover {
+    background: #f8fafc !important;
+    border-color: #93c5fd !important;
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.12) !important;
+    transform: translateY(-1px);
+}
+.fi-wi-stats-overview-stat.owwa-stat-clickable:focus-visible {
+    outline: 2px solid #2563eb;
+    outline-offset: 2px;
+}
+
+/* Colored top accent bar */
+.fi-wi-stats-overview-stat::before {
+    content: '' !important;
+    display: block !important;
+    height: 3px !important;
+    width: 100% !important;
+    background: #e2e8f0 !important;
+    flex-shrink: 0 !important;
+}
+
+.fi-wi-stats-overview-stat:has([class*="warning"])::before { background: linear-gradient(90deg,#f59e0b,#fbbf24) !important; }
+.fi-wi-stats-overview-stat:has([class*="success"])::before { background: linear-gradient(90deg,#10b981,#34d399) !important; }
+.fi-wi-stats-overview-stat:has([class*="primary"])::before { background: linear-gradient(90deg,#1e6fbe,#3b82f6) !important; }
+.fi-wi-stats-overview-stat:has([class*="info"])::before    { background: linear-gradient(90deg,#0284c7,#38bdf8) !important; }
+.fi-wi-stats-overview-stat:has([class*="gray"])::before    { background: linear-gradient(90deg,#64748b,#94a3b8) !important; }
+
+/* Inner content */
+.fi-wi-stats-overview-stat-content {
+    /* tighter vertical, roomier horizontal */
+    padding: 0.1rem .1rem 0.1rem !important;
+}
+
+/* Scoped “KPI chips inside container card” */
+.owwa-kpi-container .fi-section {
+    background: #ffffff !important;
+    border: 1px solid #e2e8f0 !important;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.05) !important;
+    border-radius: 0.875rem !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+}
+
+.owwa-kpi-container .fi-section-content-ctn {
+    padding: 0 !important;
+}
+
+.owwa-kpi-container .fi-section-content {
+    padding: 0 !important;
+    gap: 0 !important;
+}
+
+.owwa-kpi-container .fi-wi-stats-overview-stat {
+    display: flex !important;
+    flex-direction: column !important;
+    background: transparent !important;
+    border: none !important;
+    border-right: 1px solid #e8edf3 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    overflow: visible !important;
+    position: relative !important;
+    transition: background 0.12s !important;
+}
+
+.owwa-kpi-container .fi-wi-stats-overview-stat:last-child {
+    border-right: none !important;
+}
+
+.owwa-kpi-container .fi-wi-stats-overview-stat:hover {
+    background: #f8fafc !important;
+}
+
+.owwa-kpi-container .fi-wi-stats-overview-stat::before {
+    content: '' !important;
+    display: block !important;
+    position: absolute !important;
+    left: 0 !important;
+    top: 0.75rem !important;
+    bottom: 0.75rem !important;
+    width: 3px !important;
+    border-radius: 0 2px 2px 0 !important;
+    background: #e2e8f0 !important;
+    flex-shrink: unset !important;
+    height: auto !important;
+}
+
+.owwa-kpi-container .fi-wi-stats-overview-stat:has([class*="warning"])::before { background: linear-gradient(180deg,#f59e0b,#fbbf24) !important; }
+.owwa-kpi-container .fi-wi-stats-overview-stat:has([class*="success"])::before { background: linear-gradient(180deg,#10b981,#34d399) !important; }
+.owwa-kpi-container .fi-wi-stats-overview-stat:has([class*="primary"])::before { background: linear-gradient(180deg,#1e6fbe,#3b82f6) !important; }
+.owwa-kpi-container .fi-wi-stats-overview-stat:has([class*="info"])::before    { background: linear-gradient(180deg,#0284c7,#38bdf8) !important; }
+.owwa-kpi-container .fi-wi-stats-overview-stat:has([class*="gray"])::before    { background: linear-gradient(180deg,#64748b,#94a3b8) !important; }
+
+.owwa-kpi-container .fi-wi-stats-overview-stat-content {
+    padding: 0.75rem 1.1rem 0.875rem 1.35rem !important;
+}
+
+/* Label */
+.fi-wi-stats-overview-stat-label-ctn {
+    display: flex !important;
+    align-items: center !important;
+    gap: 0.35rem !important;
+    margin-bottom: 0.25rem !important;
+}
+
+.fi-wi-stats-overview-stat-label {
+    font-size: 0.65rem !important;
+    font-weight: 600 !important;
+    color: #94a3b8 !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.05em !important;
+}
+
+/* Big number — smaller to stay compact inside the container */
+.fi-wi-stats-overview-stat-value {
+    font-size: 1.45rem !important;
+    font-weight: 800 !important;
+    letter-spacing: -0.04em !important;
+    color: #0f172a !important;
+    line-height: 1 !important;
+    margin-bottom: 0.25rem !important;
+}
+
+/* Description */
+.fi-wi-stats-overview-stat-description {
+    display: flex !important;
+    align-items: center !important;
+    gap: 0.3rem !important;
+    font-size: 0.65rem !important;
+    font-weight: 500 !important;
+}
+
+/* KPI tiles tagged via Stat::extraAttributes — match Procurement Analytics KPI rhythm.
+   No square aspect ratio: use natural content height like the Procurement cards. */
+.fi-wi-stats-overview-stat.owwa-kpi-square .fi-wi-stats-overview-stat-label {
+    white-space: nowrap !important;
+}
+
+.fi-wi-stats-overview-stat.owwa-kpi-square .fi-wi-stats-overview-stat-description svg {
+    flex-shrink: 0 !important;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   CHART WIDGET CARDS — consistent padding, chart scaling
+═══════════════════════════════════════════════════════════ */
+.fi-wi-chart .fi-section {
+    background: #ffffff !important;
+    border: 1px solid #e2e8f0 !important;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06) !important;
+    border-radius: 1rem !important;
+    padding: 1.25rem 1.25rem 1rem !important;
+}
+
+.fi-wi-chart .fi-section-header {
+    margin-bottom: 0.75rem !important;
+    padding-top: 0.40rem !important;
+    padding-bottom: 0.40rem !important;
+    border-bottom: none !important;
+}
+
+.fi-wi-chart .fi-section-header-ctn {
+    border-bottom: none !important;
+}
+
+.fi-wi-chart .fi-section-content-ctn {
+    border-top: none !important;
+}
+
+.fi-wi-chart .fi-section-header-heading {
+    font-size: 1rem !important;
+    font-weight: 700 !important;
+    color: #0f172a !important;
+    letter-spacing: -0.015em !important;
+    line-height: 1.1 !important;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+}
+
+.fi-wi-chart .fi-section-header-description {
+    font-size: 0.8rem !important;
+    color: #94a3b8 !important;
+    margin-top: 0.1rem !important;
+}
+
+/* Widget heading tooltip */
+.owwa-widget-heading-tip {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    cursor: help;
+    padding: 0;
+    margin: 0;
+    line-height: 1.1;
+}
+
+.owwa-widget-tip-bubble {
+    position: absolute;
+    bottom: calc(100% + 8px);
+    left: 0;
+    z-index: 9999;
+    width: 280px;
+    padding: 0.55rem 0.75rem;
+    border-radius: 0.5rem;
+    background: rgba(15, 23, 42, 0.93);
+    color: #e2e8f0;
+    font-size: 0.75rem;
+    font-weight: 400;
+    line-height: 1.5;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+    pointer-events: none;
+    white-space: normal;
+}
+
+.owwa-widget-tip-bubble::after {
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: 1rem;
+    border: 5px solid transparent;
+    border-top-color: rgba(15, 23, 42, 0.93);
+}
+
+/* Chart canvas: breathing room */
+.fi-wi-chart-canvas-ctn {
+    padding: 0.65rem 0.9rem 0.4rem !important;
+}
+
+/* Pie chart: center the donut */
+.owwa-chart-pie .fi-wi-chart-canvas-ctn {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    padding: 0.15rem !important;
+}
+
+/* Compact dashboard chart widgets */
+.owwa-chart-compact.fi-wi-chart .fi-section {
+    padding: 0.65rem 0.75rem 0.5rem !important;
+}
+
+.owwa-chart-compact.fi-wi-chart .fi-section-header {
+    margin-bottom: 0.1rem !important;
+    padding-top: 0.1rem !important;
+    padding-bottom: 0.1rem !important;
+}
+
+.owwa-chart-compact .owwa-kpi-row {
+    gap: 0.25rem !important;
+    margin-top: 0 !important;
+    margin-bottom: 0.25rem !important;
+}
+
+.owwa-chart-compact .owwa-kpi {
+    padding: 0.3rem 0.5rem !important;
+    cursor: default;
+    pointer-events: none;
+    transition: none;
+    border-color: #e8eef5 !important;
+    background: #f8fafc !important;
+    box-shadow: none !important;
+    border-radius: 0.5rem !important;
+}
+
+.owwa-chart-compact .owwa-kpi::before {
+    display: none !important;
+}
+
+.owwa-chart-compact .owwa-kpi:hover,
+.owwa-chart-compact .owwa-kpi-accent:hover {
+    box-shadow: none !important;
+    border-color: #e8eef5 !important;
+    transform: none !important;
+}
+
+.owwa-chart-compact .owwa-kpi-accent {
+    background: #f8fafc !important;
+    border-color: #e8eef5 !important;
+}
+
+.owwa-chart-compact .owwa-kpi-label {
+    font-size: 0.5625rem !important;
+    margin-bottom: 0.15rem !important;
+    letter-spacing: 0.05em !important;
+}
+
+.owwa-chart-compact .owwa-kpi-value {
+    font-size: 0.9375rem !important;
+    line-height: 1.15 !important;
+}
+
+.owwa-chart-compact .owwa-kpi-value-text {
+    font-size: 0.8125rem !important;
+    font-weight: 700;
+    line-height: 1.2;
+    letter-spacing: -0.01em;
+}
+
+.owwa-chart-compact .owwa-kpi-unit {
+    font-size: 0.6875rem !important;
+}
+
+.owwa-chart-compact .owwa-kpi-meta {
+    font-size: 0.5625rem !important;
+    margin-top: 0.1rem !important;
+}
+
+.owwa-chart-compact .fi-wi-chart-canvas-ctn {
+    padding: 0.15rem 0.35rem 0.1rem !important;
+}
+
+.owwa-chart-compact.owwa-chart-pie .fi-wi-chart-canvas-ctn {
+    padding: 0.15rem !important;
+}
+
+/* External HTML legends — outside canvas so plot size never shrinks */
+.owwa-chart-scope-label {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.35rem;
+    flex: 0 0 auto;
+    padding: 0 0.15rem;
+}
+
+.owwa-chart-scope-key {
+    font-size: 0.625rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: #94a3b8;
+}
+
+.owwa-chart-scope-value {
+    font-size: 0.75rem;
+    font-weight: 600;
+    line-height: 1.25;
+    color: #334155;
+}
+
+.owwa-chart-legend {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 0.35rem 0.75rem;
+    max-height: 4.5rem;
+    overflow-y: auto;
+    padding: 0.15rem 0.25rem 0.35rem;
+    flex: 0 0 auto;
+}
+
+.owwa-chart-legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    max-width: 100%;
+    min-width: 0;
+}
+
+.owwa-chart-legend-swatch {
+    flex: 0 0 auto;
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 9999px;
+}
+
+.owwa-chart-legend-label {
+    font-size: 0.6875rem;
+    font-weight: 500;
+    line-height: 1.2;
+    color: #475569;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 14rem;
+}
+
+/* Dashboard acquisition tables — tighter label-to-table spacing */
+.owwa-dashboard-data-panel .owwa-data-panel-header {
+    padding: 0.55rem 0.85rem 0.3rem;
+}
+
+.owwa-dashboard-data-panel .owwa-data-panel-body {
+    padding: 0 0.85rem 0.55rem;
+}
+
+.owwa-dashboard-data-panel .owwa-data-panel-title {
+    font-size: 0.8125rem;
+    line-height: 1.2;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   KPI STAT CARDS (inside chart widget)
+═══════════════════════════════════════════════════════════ */
+.owwa-kpi-row {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.6rem;
+    margin-bottom: 1rem;
+    width: 100%;
+}
+
+@media (max-width: 640px) {
+    .owwa-kpi-row { grid-template-columns: 1fr; }
+}
+
+.owwa-kpi {
+    background: #f8fafc;
+    border: 1px solid #edf2f7;
+    border-radius: 0.875rem;
+    padding: 0.75rem 1rem;
+    position: relative;
+    overflow: hidden;
+    transition: box-shadow 0.15s ease, border-color 0.15s ease;
+}
+
+.owwa-kpi::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    background: #e2e8f0;
+    border-radius: 0.875rem 0.875rem 0 0;
+}
+
+.owwa-kpi-accent {
+    background: linear-gradient(135deg, #f0f6ff 0%, #fef0f2 100%);
+    border-color: #dce8f7;
+}
+
+.owwa-kpi-accent::before {
+    background: linear-gradient(90deg, #0057b8 0%, #003f8a 40%, #b5192f 100%);
+}
+
+.owwa-kpi:hover {
+    box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+    border-color: #cbd5e1;
+}
+
+.owwa-kpi-label {
+    font-size: 0.6875rem;
+    font-weight: 700;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    display: block;
+    margin-bottom: 0.3rem;
+}
+
+.owwa-kpi-value {
+    display: block;
+    font-size: 1.4rem;
+    font-weight: 800;
+    color: #0f172a;
+    letter-spacing: -0.04em;
+    line-height: 1.1;
+}
+
+.owwa-kpi-value-text {
+    font-size: 1.0625rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+}
+
+.owwa-kpi-unit {
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: #94a3b8;
+    letter-spacing: 0;
+}
+
+.owwa-kpi-meta {
+    display: block;
+    font-size: 0.6875rem;
+    color: #94a3b8;
+    margin-top: 0.2rem;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   EMPTY STATE (custom + Filament table empty)
+═══════════════════════════════════════════════════════════ */
+.owwa-empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 80px;
+    padding: 0.85rem 1rem;
+    background: #f9fafb;
+    border: 1px dashed #e5e7eb;
+    border-radius: 0.5rem;
+    text-align: center;
+}
+
+.owwa-empty-state-icon {
+    width: 1.75rem;
+    height: 1.75rem;
+    color: #9ca3af;
+    margin-bottom: 0.4rem;
+}
+
+.owwa-empty-state-title {
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: #374151;
+    margin: 0 0 0.125rem;
+}
+
+.owwa-empty-state-text {
+    font-size: 0.75rem;
+    color: #6b7280;
+    max-width: 20rem;
+    margin: 0;
+    line-height: 1.4;
+}
+
+.owwa-share-empty {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    min-height: 0;
+}
+
+.owwa-share-empty-text {
+    margin: 0;
+    max-width: 18rem;
+    font-size: 0.75rem;
+    line-height: 1.4;
+    color: #6b7280;
+    text-align: center;
+}
+
+.owwa-share-chart-placeholder {
+    opacity: 0.85;
+    width: 100%;
+    display: flex;
+    justify-content: center;
+}
+
+.owwa-share-chart-placeholder .fi-wi-chart-canvas-ctn {
+    min-height: 8rem;
+    max-height: 8.75rem;
+}
+
+/* Filament table empty state */
+.fi-ta-empty-state {
+    padding: 2.5rem 1.5rem !important;
+}
+.fi-ta-empty-state-heading {
+    font-size: 0.9375rem !important;
+    font-weight: 600 !important;
+    color: #374151 !important;
+}
+.fi-ta-empty-state-description {
+    font-size: 0.8125rem !important;
+    color: #6b7280 !important;
+    margin-top: 0.25rem !important;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   PAGE CARDS (custom pages: stock-levels, reports, etc.)
+═══════════════════════════════════════════════════════════ */
+.owwa-page-card {
+    background: #ffffff;
+    border: 1px solid #e5e7eb;
+    border-radius: 0.5rem;
+    overflow: hidden;
+}
+
+.owwa-page-intro {
+    font-size: 0.8125rem;
+    color: #6b7280;
+    margin-top: 0;
+    margin-bottom: 0.5rem;
+    line-height: 1.45;
+    max-width: 36rem;
+}
+
+.owwa-page-note {
+    font-size: 0.8125rem;
+    color: #94a3b8;
+    margin-top: 1.25rem;
+    line-height: 1.55;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   REUSABLE TABLE CLASSES (custom pages, e.g. stock-levels)
+═══════════════════════════════════════════════════════════ */
+.owwa-table {
+    width: 100%;
+    table-layout: auto;
+    border-collapse: collapse;
+}
+
+.owwa-th {
+    padding: 0.5rem 0.75rem;
+    text-align: left;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #6b7280;
+    background-color: #f9fafb;
+    border-bottom: 1px solid #e5e7eb;
+    white-space: nowrap;
+}
+
+.owwa-th-end   { text-align: right; }
+.owwa-th-center { text-align: center; }
+
+.owwa-tr {
+    border-bottom: 1px solid #f3f4f6;
+    transition: background-color 0.12s ease;
+}
+
+.owwa-tr:hover { background-color: #f9fafb; }
+.owwa-tr:last-child { border-bottom: none; }
+
+.owwa-tr-danger { background-color: #fef2f2 !important; }
+.owwa-tr-danger:hover { background-color: #fee2e2 !important; }
+
+.owwa-td {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.8125rem;
+    vertical-align: middle;
+}
+
+.owwa-td-primary  { color: #111827; font-weight: 500; }
+.owwa-td-muted    { color: #6b7280; }
+.owwa-td-danger   { color: #dc2626; font-weight: 600; }
+.owwa-td-end      { text-align: right; font-variant-numeric: tabular-nums; }
+.owwa-td-center   { text-align: center; }
+
+.owwa-td-empty {
+    padding: 0;
+    text-align: center;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   BADGE SYSTEM
+═══════════════════════════════════════════════════════════ */
+.owwa-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.2rem;
+    padding: 0.2rem 0.5rem;
+    border-radius: 9999px;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    line-height: 1.3;
+    white-space: nowrap;
+}
+
+.owwa-badge-success {
+    background: #dcfce7;
+    color: #15803d;
+}
+
+.owwa-badge-danger {
+    background: #fee2e2;
+    color: #dc2626;
+}
+
+.owwa-badge-warning {
+    background: #fef3c7;
+    color: #b45309;
+}
+
+.owwa-badge-blue {
+    background: #dbeafe;
+    color: #1d4ed8;
+}
+
+.owwa-badge-gray {
+    background: #f3f4f6;
+    color: #4b5563;
+}

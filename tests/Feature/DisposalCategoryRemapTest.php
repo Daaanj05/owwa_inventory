@@ -3,8 +3,10 @@
 namespace Tests\Feature;
 
 use App\Filament\Resources\Disposals\DisposalResource;
+use App\Filament\Resources\Disposals\Pages\ListDisposals;
 use App\Filament\Resources\Disposals\Schemas\DisposalForm;
 use App\Filament\Resources\IncidentReports\IncidentReportResource;
+use App\Filament\Resources\Transfers\Pages\ListTransfers;
 use App\Filament\Resources\Transfers\TransferResource;
 use App\Models\Disposal;
 use App\Models\Item;
@@ -12,8 +14,10 @@ use App\Models\ItemCategory;
 use App\Models\Office;
 use App\Models\User;
 use App\Services\OwwaTemplateExportService;
+use Filament\Actions\Testing\TestAction;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Livewire\Livewire;
 use Tests\TestCase;
 
 class DisposalCategoryRemapTest extends TestCase
@@ -111,6 +115,78 @@ class DisposalCategoryRemapTest extends TestCase
         request()->merge(['category' => $category->id]);
 
         $this->assertSame('unserviceable', DisposalForm::defaultDisposalType());
+    }
+
+    public function test_disposal_create_form_mounts_for_ppe_category(): void
+    {
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+
+        $office = Office::factory()->create();
+        $category = ItemCategory::factory()->create(['name' => 'PPE']);
+        $custodian = User::factory()->create([
+            'role' => User::ROLE_SUPPLY_CUSTODIAN,
+            'office_id' => $office->id,
+        ]);
+
+        $this->actingAs($custodian);
+        session(['active_item_category_id' => $category->id]);
+
+        $create = TestAction::make('create')->schemaComponent(true, 'content');
+
+        Livewire::withQueryParams(['category' => (string) $category->id])
+            ->test(ListDisposals::class)
+            ->mountAction($create)
+            ->assertActionMounted($create)
+            ->assertFormFieldExists('accountable_officer_designation')
+            ->assertFormFieldExists('custodian_printed_name');
+    }
+
+    public function test_disposal_create_form_mounts_for_consumables_category(): void
+    {
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+
+        $office = Office::factory()->create();
+        $category = ItemCategory::factory()->create(['name' => 'Consumables']);
+        $custodian = User::factory()->create([
+            'role' => User::ROLE_SUPPLY_CUSTODIAN,
+            'office_id' => $office->id,
+        ]);
+
+        $this->actingAs($custodian);
+        session(['active_item_category_id' => $category->id]);
+
+        $create = TestAction::make('create')->schemaComponent(true, 'content');
+
+        Livewire::withQueryParams(['category' => (string) $category->id])
+            ->test(ListDisposals::class)
+            ->mountAction($create)
+            ->assertActionMounted($create)
+            ->assertFormFieldExists('disposal_mode')
+            ->assertFormFieldExists('custodian_printed_name');
+    }
+
+    public function test_transfer_create_form_mounts_for_ppe_category(): void
+    {
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+
+        $office = Office::factory()->create();
+        $category = ItemCategory::factory()->create(['name' => 'PPE']);
+        $custodian = User::factory()->create([
+            'role' => User::ROLE_SUPPLY_CUSTODIAN,
+            'office_id' => $office->id,
+        ]);
+
+        $this->actingAs($custodian);
+        session(['active_item_category_id' => $category->id]);
+
+        $create = TestAction::make('create')->schemaComponent(true, 'content');
+
+        Livewire::withQueryParams(['category' => (string) $category->id])
+            ->test(ListTransfers::class)
+            ->mountAction($create)
+            ->assertActionMounted($create)
+            ->assertFormFieldExists('from_accountable_officer')
+            ->assertFormFieldExists('approved_by_printed_name');
     }
 
     public function test_transfer_resource_blocked_for_consumables_category(): void

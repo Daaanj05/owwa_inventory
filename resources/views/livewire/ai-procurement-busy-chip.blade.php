@@ -1,5 +1,7 @@
 <div
-    wire:poll.4s="refreshProcessingRun"
+    @if ($this->processingRunId)
+        wire:poll.4s="refreshProcessingRun"
+    @endif
     @ai-procurement-busy-refresh.window="$wire.refreshProcessingRun()"
     x-data="{
         onAnalytics: false,

@@ -17,7 +17,6 @@ class Office extends Model
         'name',
         'code',
         'fund_cluster',
-        'is_satellite',
         'is_regional_supply',
         'address',
         'supply_custodian_name',
@@ -32,7 +31,6 @@ class Office extends Model
     protected function casts(): array
     {
         return [
-            'is_satellite' => 'boolean',
             'is_regional_supply' => 'boolean',
             'archived_at' => 'datetime',
         ];
@@ -40,12 +38,6 @@ class Office extends Model
 
     protected static function booted(): void
     {
-        static::saving(function (Office $office): void {
-            if ($office->is_regional_supply) {
-                $office->is_satellite = false;
-            }
-        });
-
         static::saved(function (Office $office): void {
             if (! $office->is_regional_supply) {
                 return;

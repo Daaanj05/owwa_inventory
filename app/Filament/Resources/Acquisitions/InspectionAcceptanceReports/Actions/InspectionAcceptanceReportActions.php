@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Acquisitions\InspectionAcceptanceReports\Actions;
 
+use App\Filament\Resources\Acquisitions\InspectionAcceptanceReports\InspectionAcceptanceReportResource;
 use App\Filament\Support\OwwaFormModalDefaults;
 use App\Models\InspectionAcceptanceReport;
 use App\Services\InspectionAcceptanceReportWorkflowService;
@@ -26,38 +27,53 @@ class InspectionAcceptanceReportActions
             ->modalHeading(fn (InspectionAcceptanceReport $record): string => filled($record->number)
                 ? 'Edit IAR '.$record->number
                 : 'Edit inspection & acceptance')
-            ->modalSubmitActionLabel('Save draft')
+            ->modalSubmitActionLabel('Save IAR')
             ->after(function (InspectionAcceptanceReport $record, EditAction $action): void {
-                $workflow = $action->getArguments()['workflow'] ?? null;
-                if ($workflow !== 'submitIar') {
-                    return;
-                }
-
                 self::runWorkflow(
                     $record->fresh() ?? $record,
                     fn (InspectionAcceptanceReport $iar) => app(InspectionAcceptanceReportWorkflowService::class)->submit($iar),
                     $action,
                     'IAR saved',
-                    'Export the inspection report for signature, then mark Approved when signed.',
+                    'Export from this view for signature, then mark as approved when signed.',
                 );
-            })
-            ->extraModalFooterActions(fn (EditAction $editAction): array => [
-                $editAction->makeModalSubmitAction('submitIarWorkflow', ['workflow' => 'submitIar'])
-                    ->label('Save IAR')
-                    ->icon('heroicon-o-check')
-                    ->color('success')
-                    ->visible(fn (?InspectionAcceptanceReport $record): bool => $record?->isEditable() ?? false),
-                self::approveAction(),
-                self::recordCustodyReceiptAction(),
-                self::exportExcelAction(),
-                self::exportPdfAction(),
-            ]);
+
+                $submitted = $record->fresh() ?? $record;
+
+                if (filled($submitted->submitted_at)) {
+                    $action->redirect(InspectionAcceptanceReportResource::viewModalUrl($submitted));
+                }
+            });
+    }
+
+    /**
+     * Visible Edit control for the view modal footer and the row actions menu.
+     */
+    public static function visibleEditAction(): Action
+    {
+        return Action::make('editIar')
+            ->label('Edit')
+            ->icon('heroicon-o-pencil-square')
+            ->color('gray')
+            ->visible(fn (InspectionAcceptanceReport $record): bool => $record->isEditable())
+            ->action(function (InspectionAcceptanceReport $record, Action $action): void {
+                $livewire = $action->getLivewire();
+
+                if (! is_object($livewire) || ! method_exists($livewire, 'replaceMountedAction')) {
+                    return;
+                }
+
+                // Replace the view stack; mountTableAction expects a string record key.
+                $livewire->replaceMountedAction('edit', [], [
+                    'table' => true,
+                    'recordKey' => (string) $record->getKey(),
+                ]);
+            });
     }
 
     public static function approveAction(): Action
     {
         return Action::make('approveIar')
-            ->label('Approved')
+            ->label('Mark as Approved')
             ->icon('heroicon-o-check')
             ->color('success')
             ->visible(fn (InspectionAcceptanceReport $record): bool => filled($record->submitted_at)
@@ -170,6 +186,7 @@ class InspectionAcceptanceReportActions
     public static function viewModalFooterActions(): array
     {
         return [
+            self::visibleEditAction(),
             self::approveAction(),
             self::recordCustodyReceiptAction(),
             self::archiveAction(),

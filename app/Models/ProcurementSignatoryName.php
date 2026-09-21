@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 
 class ProcurementSignatoryName extends Model
@@ -55,7 +56,47 @@ class ProcurementSignatoryName extends Model
     protected $fillable = [
         'name',
         'role',
+        'archived_at',
     ];
+
+    protected function casts(): array
+    {
+        return [
+            'archived_at' => 'datetime',
+        ];
+    }
+
+    /**
+     * @param  Builder<self>  $query
+     * @return Builder<self>
+     */
+    public function scopeActive(Builder $query): Builder
+    {
+        return $query->whereNull('archived_at');
+    }
+
+    public function isArchived(): bool
+    {
+        return $this->archived_at !== null;
+    }
+
+    public function archive(): void
+    {
+        if ($this->isArchived()) {
+            return;
+        }
+
+        $this->update(['archived_at' => now()]);
+    }
+
+    public function restoreFromArchive(): void
+    {
+        if (! $this->isArchived()) {
+            return;
+        }
+
+        $this->update(['archived_at' => null]);
+    }
 
     /**
      * @return list<string>
@@ -63,6 +104,7 @@ class ProcurementSignatoryName extends Model
     public static function suggestionsForRole(string $role): array
     {
         return static::query()
+            ->active()
             ->where('role', $role)
             ->orderBy('name')
             ->pluck('name')
@@ -88,9 +130,20 @@ class ProcurementSignatoryName extends Model
             return;
         }
 
-        static::query()->firstOrCreate([
+        /** @var self $record */
+        $record = static::query()->firstOrNew([
             'name' => $normalized,
             'role' => $role,
         ]);
+
+        if ($record->exists && $record->isArchived()) {
+            $record->restoreFromArchive();
+
+            return;
+        }
+
+        if (! $record->exists) {
+            $record->save();
+        }
     }
 }
