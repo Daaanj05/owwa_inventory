@@ -54,6 +54,7 @@ class CsrfTokenFallbackTest extends TestCase
     public function test_get_idle_logout_redirects_to_login_instead_of_419_page(): void
     {
         $this->get('/audit/idle-logout')
-            ->assertRedirect(url('/login').'?reauth=1');
+            ->assertRedirect(url('/login'))
+            ->assertSessionHas('auth_signed_out', 'expired');
     }
 }

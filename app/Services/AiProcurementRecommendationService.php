@@ -160,7 +160,7 @@ class AiProcurementRecommendationService
         $run->update([
             'summary' => $this->extractSummaryLine($clean),
             'raw_response' => $clean,
-            'status' => 'draft',
+            'status' => 'pending',
             'error_message' => null,
         ]);
 
@@ -227,7 +227,7 @@ class AiProcurementRecommendationService
             return;
         }
 
-        if ($run->status !== 'draft') {
+        if ($run->status !== 'pending') {
             return;
         }
 

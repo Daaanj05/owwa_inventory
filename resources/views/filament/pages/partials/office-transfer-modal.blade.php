@@ -37,6 +37,10 @@
             <dd>{{ $transfer['to_office_name'] ?? '—' }}</dd>
         </div>
         <div class="owwa-stock-ledger-header-item">
+            <dt>Type</dt>
+            <dd>{{ $transfer['transfer_type_label'] ?? '—' }}</dd>
+        </div>
+        <div class="owwa-stock-ledger-header-item">
             <dt>From accountable officer</dt>
             <dd>{{ $transfer['from_accountable_officer'] ?? '—' }}</dd>
         </div>

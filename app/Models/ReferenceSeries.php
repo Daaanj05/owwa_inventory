@@ -68,6 +68,12 @@ class ReferenceSeries extends Model
 
     public const TYPE_ACQUISITION_PAPERWORK_IAR = 'acquisition_paperwork_iar';
 
+    public const TYPE_PHYSICAL_COUNT_RPCI = 'physical_count_rpci';
+
+    public const TYPE_PHYSICAL_COUNT_RPCPPE = 'physical_count_rpcppe';
+
+    public const TYPE_PHYSICAL_COUNT_RPCSP = 'physical_count_rpcsp';
+
     protected $fillable = [
         'type', 'name', 'prefix', 'pattern', 'next_sequence',
         'reset_period', 'last_generated_at', 'archived_at',
@@ -174,6 +180,15 @@ class ReferenceSeries extends Model
         return self::TYPE_ACQUISITION_PAPERWORK_IAR;
     }
 
+    public static function typeForPhysicalCount(string $countType): string
+    {
+        return match ($countType) {
+            PhysicalCountSession::TYPE_RPCPPE => self::TYPE_PHYSICAL_COUNT_RPCPPE,
+            PhysicalCountSession::TYPE_RPCSP => self::TYPE_PHYSICAL_COUNT_RPCSP,
+            default => self::TYPE_PHYSICAL_COUNT_RPCI,
+        };
+    }
+
     /**
      * Series types that output YYYY-MM-#### control numbers (prefix is cosmetic only).
      *
@@ -217,6 +232,9 @@ class ReferenceSeries extends Model
         $p = $this->pattern;
         if (preg_match('/^\{Y\}-\d{2}-\{seq:4\}$/', $p) === 1 || (str_contains($p, '{Y}') && str_contains($p, '{seq:4}') && ! str_contains($p, '{prefix}'))) {
             return 'OWWA control no. YYYY-MM-####';
+        }
+        if (str_contains($p, '{prefix}') && str_contains($p, '{Y}') && str_contains($p, '{m}') && str_contains($p, '{seq:4}')) {
+            return 'Form code – Year – Month – Number (4 digits, resets yearly)';
         }
         if (str_contains($p, '{prefix}') && str_contains($p, '{Y}') && str_contains($p, '{seq:4}')) {
             return 'Code letters – Year – Number (4 digits)';

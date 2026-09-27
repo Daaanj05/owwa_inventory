@@ -59,7 +59,7 @@ class PhysicalCountSessionInfolist
                 TextEntry::make('office.name')->label('Office'),
                 TextEntry::make('count_date')->label('As at')->date(),
                 TextEntry::make('completed_at')->label('Completed at')->dateTime()->placeholder('—'),
-                TextEntry::make('accountable_officer_name')->label('Accountable officer'),
+                TextEntry::make('accountable_officer_name')->label('Accountable Officer'),
                 TextEntry::make('accountable_officer_designation')->label('Designation'),
             ]);
     }
@@ -88,7 +88,7 @@ class PhysicalCountSessionInfolist
             ->description(fn (PhysicalCountSession $record): ?string => match (true) {
                 $record->isConsumablePhysicalCount() => $record->hasBookListLoaded()
                     ? 'Compare manually entered on-hand counts against book balances from stock cards.'
-                    : 'Load stock lines, then enter On hand per count for each item.',
+                    : 'Load Items, then enter On hand per count for each item.',
                 ! $record->supportsQrScanning() => null,
                 ! $record->hasBookListLoaded() => 'Scan-first mode — load expected assets on desktop to reconcile against the book list.',
                 default => 'Compare scanned on-hand totals against book balances from inventory unit tags.',
@@ -110,7 +110,7 @@ class PhysicalCountSessionInfolist
 
                         if ($expected === 0) {
                             return match (true) {
-                                $record->isConsumablePhysicalCount() => 'No lines yet — load stock lines or add item lines',
+                                $record->isConsumablePhysicalCount() => 'No lines yet — Load Items or add item lines',
                                 $record->supportsQrScanning() => 'No lines yet — scan on mobile or load expected assets',
                                 default => 'No count lines',
                             };
@@ -170,9 +170,9 @@ class PhysicalCountSessionInfolist
         return Section::make('Signatories')
             ->columns(2)
             ->schema([
-                TextEntry::make('accountable_officer_name')->label('Accountable officer')->placeholder('—'),
+                TextEntry::make('accountable_officer_name')->label('Accountable Officer')->placeholder('—'),
                 TextEntry::make('accountable_officer_designation')->label('Designation')->placeholder('—'),
-                TextEntry::make('certified_by_printed_name')->label('Certified by')->placeholder('—'),
+                TextEntry::make('certified_by_printed_name')->label('Certified Correct by')->placeholder('—'),
                 TextEntry::make('approved_by_printed_name')->label('Approved by')->placeholder('—'),
                 TextEntry::make('verified_by_printed_name')->label('Verified by')->placeholder('—'),
             ]);

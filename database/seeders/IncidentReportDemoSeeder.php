@@ -68,7 +68,7 @@ class IncidentReportDemoSeeder extends Seeder
                 'accountable_officer_station' => 'OWWA Regional Office IV-A',
                 'immediate_supervisor_printed_name' => 'Roberto Cruz',
                 'witness_printed_name' => 'Juan Dela Cruz',
-                'gov_id_type' => 'PhilID',
+                'gov_id_type' => 'PhilID / ePhilID',
                 'gov_id_no' => '1234-5678-9012',
                 'gov_id_date_issued' => Carbon::parse('2024-01-15'),
                 'recorded_by' => $custodian->id,

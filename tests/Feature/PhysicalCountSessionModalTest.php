@@ -207,7 +207,7 @@ class PhysicalCountSessionModalTest extends TestCase
             ->assertCanNotSeeTableRecords([$consumableSession]);
     }
 
-    public function test_active_tab_hides_archived_sessions_and_archived_tab_shows_them(): void
+    public function test_active_view_hides_archived_sessions_and_archive_view_shows_them(): void
     {
         Filament::setCurrentPanel(Filament::getPanel('admin'));
 
@@ -242,11 +242,14 @@ class PhysicalCountSessionModalTest extends TestCase
 
         Livewire::withQueryParams(['category' => (string) $category->id])
             ->test(ListPhysicalCountSessions::class)
+            ->assertSet('showingArchived', false)
             ->assertCanSeeTableRecords([$activeSession])
             ->assertCanNotSeeTableRecords([$archivedSession])
-            ->set('activeTab', 'archived')
+            ->assertActionVisible('create')
+            ->set('showingArchived', true)
             ->assertCanSeeTableRecords([$archivedSession])
-            ->assertCanNotSeeTableRecords([$activeSession]);
+            ->assertCanNotSeeTableRecords([$activeSession])
+            ->assertActionHidden('create');
     }
 
     public function test_archive_table_action_sets_archived_at(): void
@@ -308,8 +311,44 @@ class PhysicalCountSessionModalTest extends TestCase
 
         Livewire::withQueryParams(['category' => (string) $category->id])
             ->test(ListPhysicalCountSessions::class)
-            ->set('activeTab', 'archived')
+            ->set('showingArchived', true)
             ->callTableAction('restore', $session);
+
+        $session->refresh();
+
+        $this->assertNull($session->archived_at);
+        $this->assertFalse($session->isArchived());
+    }
+
+    public function test_restore_selected_bulk_action_clears_archived_at(): void
+    {
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+
+        $office = Office::factory()->create();
+        $category = ItemCategory::factory()->create(['name' => 'PPE']);
+        $custodian = User::factory()->create([
+            'role' => User::ROLE_SUPPLY_CUSTODIAN,
+            'office_id' => $office->id,
+        ]);
+
+        $session = PhysicalCountSession::query()->create([
+            'count_type' => PhysicalCountSession::TYPE_RPCPPE,
+            'office_id' => $office->id,
+            'item_category_id' => $category->id,
+            'count_date' => now(),
+            'inventory_type_label' => 'ICT',
+            'reference_code' => 'PC-BULK-RESTORE-0001',
+            'archived_at' => now(),
+        ]);
+
+        $this->actingAs($custodian);
+        session()->put('active_item_category_id', $category->id);
+
+        Livewire::withQueryParams(['category' => (string) $category->id])
+            ->test(ListPhysicalCountSessions::class)
+            ->set('showingArchived', true)
+            ->set('selectedTableRecords', [(string) $session->getKey()])
+            ->callAction(TestAction::make('restore')->table($session)->bulk());
 
         $session->refresh();
 
@@ -343,7 +382,7 @@ class PhysicalCountSessionModalTest extends TestCase
 
         Livewire::withQueryParams(['category' => (string) $category->id])
             ->test(ListPhysicalCountSessions::class)
-            ->set('activeTab', 'archived')
+            ->set('showingArchived', true)
             ->mountTableAction('view', $session)
             ->assertActionHidden(TestAction::make('scanWithPhone'))
             ->assertActionHidden(TestAction::make('preloadExpectedAssets'))
@@ -399,6 +438,8 @@ class PhysicalCountSessionModalTest extends TestCase
                 'office_id' => $office->id,
                 'count_date' => now()->toDateString(),
                 'accountable_officer_name' => 'Officer',
+                'accountable_officer_designation' => 'Supply Officer',
+                'date_of_assumption' => now()->toDateString(),
                 'certified_by_printed_name' => 'Certifier',
                 'approved_by_printed_name' => 'Approver',
                 'verified_by_printed_name' => 'Verifier',
@@ -410,5 +451,135 @@ class PhysicalCountSessionModalTest extends TestCase
         $this->assertNotNull($session);
         $this->assertSame(PhysicalCountSession::TYPE_RPCI, $session->count_type);
         $this->assertNull($session->inventory_type);
+        $this->assertMatchesRegularExpression('/^RPCI-\d{4}-\d{2}-\d{4}$/', (string) $session->reference_code);
+    }
+
+    public function test_create_modal_requires_signatories_before_saving(): void
+    {
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+
+        $office = Office::factory()->create();
+        $category = ItemCategory::factory()->create(['name' => 'Consumables']);
+        $custodian = User::factory()->create([
+            'role' => User::ROLE_SUPPLY_CUSTODIAN,
+            'office_id' => $office->id,
+        ]);
+
+        $this->actingAs($custodian);
+        session()->put('active_item_category_id', $category->id);
+
+        Livewire::withQueryParams(['category' => (string) $category->id])
+            ->test(ListPhysicalCountSessions::class)
+            ->mountAction('create')
+            ->fillForm([
+                'office_id' => $office->id,
+                'count_date' => now()->toDateString(),
+                'accountable_officer_name' => null,
+                'accountable_officer_designation' => null,
+                'date_of_assumption' => null,
+                'certified_by_printed_name' => null,
+                'approved_by_printed_name' => null,
+                'verified_by_printed_name' => null,
+            ])
+            ->callMountedAction()
+            ->assertHasFormErrors([
+                'accountable_officer_name' => 'required',
+                'accountable_officer_designation' => 'required',
+                'date_of_assumption' => 'required',
+                'certified_by_printed_name' => 'required',
+                'approved_by_printed_name' => 'required',
+                'verified_by_printed_name' => 'required',
+            ]);
+    }
+
+    public function test_complete_session_hides_load_items_and_archive_actions(): void
+    {
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+
+        $office = Office::factory()->create();
+        $category = ItemCategory::factory()->create(['name' => 'Consumables']);
+        $custodian = User::factory()->create([
+            'role' => User::ROLE_SUPPLY_CUSTODIAN,
+            'office_id' => $office->id,
+        ]);
+
+        $session = PhysicalCountSession::query()->create([
+            'count_type' => PhysicalCountSession::TYPE_RPCI,
+            'office_id' => $office->id,
+            'item_category_id' => $category->id,
+            'count_date' => now(),
+            'status' => PhysicalCountSession::STATUS_COMPLETE,
+            'book_list_loaded' => false,
+            'reference_code' => 'RPCI-2026-09-0099',
+            'completed_at' => now(),
+        ]);
+
+        $this->actingAs($custodian);
+        session()->put('active_item_category_id', $category->id);
+
+        Livewire::withQueryParams(['category' => (string) $category->id])
+            ->test(ListPhysicalCountSessions::class)
+            ->assertActionHidden(TestAction::make('archive')->table($session))
+            ->mountTableAction('view', $session)
+            ->assertActionHidden(TestAction::make('preloadStockLines'))
+            ->assertActionHidden(TestAction::make('edit'));
+    }
+
+    public function test_create_modal_load_items_toggle_loads_office_stock_lines(): void
+    {
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+
+        $office = Office::factory()->create();
+        $category = ItemCategory::factory()->create(['name' => 'Consumables']);
+        $item = \App\Models\Item::factory()->create([
+            'item_category_id' => $category->id,
+            'name' => 'Folder',
+            'item_code' => 'CON-LOAD-1',
+            'unit' => 'pc',
+        ]);
+        \App\Models\Acquisition::query()->create([
+            'item_id' => $item->id,
+            'office_id' => $office->id,
+            'quantity' => 12,
+            'unit_cost' => 5,
+            'acquisition_date' => now()->toDateString(),
+            'recorded_by' => User::factory()->create()->id,
+        ]);
+
+        $custodian = User::factory()->create([
+            'role' => User::ROLE_SUPPLY_CUSTODIAN,
+            'office_id' => $office->id,
+        ]);
+
+        $this->actingAs($custodian);
+        session()->put('active_item_category_id', $category->id);
+
+        Livewire::withQueryParams(['category' => (string) $category->id])
+            ->test(ListPhysicalCountSessions::class)
+            ->mountAction('create')
+            ->assertFormFieldExists('load_items_on_create')
+            ->fillForm([
+                'office_id' => $office->id,
+                'count_date' => now()->toDateString(),
+                'accountable_officer_name' => 'Officer',
+                'accountable_officer_designation' => 'Supply Officer',
+                'date_of_assumption' => now()->toDateString(),
+                'certified_by_printed_name' => 'Certifier',
+                'approved_by_printed_name' => 'Approver',
+                'verified_by_printed_name' => 'Verifier',
+                'load_items_on_create' => true,
+            ])
+            ->callMountedAction()
+            ->assertHasNoFormErrors();
+
+        $session = PhysicalCountSession::query()->latest('id')->first();
+        $this->assertNotNull($session);
+        $this->assertTrue($session->hasBookListLoaded());
+        $this->assertDatabaseHas('physical_count_lines', [
+            'physical_count_session_id' => $session->id,
+            'item_id' => $item->id,
+            'balance_per_card' => 12,
+            'on_hand_count' => 0,
+        ]);
     }
 }

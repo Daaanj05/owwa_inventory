@@ -221,7 +221,8 @@ class UserSessionAuditTest extends TestCase
 
         $this->actingAs($user)
             ->get(route('session.recover'))
-            ->assertRedirect(url('/login').'?reauth=1');
+            ->assertRedirect(url('/login'))
+            ->assertSessionHas('auth_signed_out', 'expired');
 
         $this->assertGuest();
 
@@ -241,7 +242,8 @@ class UserSessionAuditTest extends TestCase
 
         $this->actingAs($user)
             ->get(route('session.recover', ['reason' => 'idle_timeout']))
-            ->assertRedirect(url('/login').'?logged_out=1');
+            ->assertRedirect(url('/login'))
+            ->assertSessionHas('auth_signed_out', 'idle');
 
         $log = UserLog::query()->findOrFail($logId);
         $this->assertSame(UserLog::LOGOUT_IDLE_TIMEOUT, $log->logout_reason);
@@ -250,6 +252,7 @@ class UserSessionAuditTest extends TestCase
     public function test_session_recover_redirects_guests_to_login(): void
     {
         $this->get(route('session.recover'))
-            ->assertRedirect(url('/login').'?reauth=1');
+            ->assertRedirect(url('/login'))
+            ->assertSessionHas('auth_signed_out', 'expired');
     }
 }

@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Requisitions\Pages;
 
 use App\Filament\Concerns\CoaListPageExports;
+use App\Filament\Concerns\HasSearchRowToolbarActions;
 use App\Filament\Concerns\HasSystemAdminWizardHeading;
 use App\Filament\Concerns\ListensForRequisitionBroadcasts;
 use App\Filament\Concerns\SwitchesUcSentTab;
@@ -39,10 +40,12 @@ use Illuminate\Support\Arr;
 use Illuminate\Support\HtmlString;
 use Illuminate\Validation\ValidationException;
 use Livewire\Attributes\Url;
+use Livewire\Livewire;
 
 class ListRequisitions extends ListRecords
 {
     use CoaListPageExports;
+    use HasSearchRowToolbarActions;
     use HasSystemAdminWizardHeading;
     use ListensForRequisitionBroadcasts;
     use SwitchesUcSentTab;
@@ -189,6 +192,8 @@ class ListRequisitions extends ListRecords
 
     public function content(Schema $schema): Schema
     {
+        $this->registerRequisitionSearchRowExport();
+
         /** @var User|null $user */
         $user = Filament::auth()->user();
 
@@ -202,29 +207,38 @@ class ListRequisitions extends ListRecords
 
                 FilamentView::registerRenderHook(
                     TablesRenderHook::TOOLBAR_SEARCH_AFTER,
-                    fn (): HtmlString => new HtmlString(
-                        (string) view('filament.tables.requisitions-uc-toolbar-secondary', [
-                            'activeUcTab' => $this->ucTab ?? 'received',
-                            'ucOfficeId' => $this->ucOfficeId,
-                            'ucDepartmentId' => $this->ucDepartmentId,
-                            'officeOptions' => $this->getUcOfficeOptions(),
-                            'departmentOptions' => $this->getUcDepartmentOptions(),
-                            'scopeComplete' => $this->ucListScopeIsComplete(),
-                        ])
-                    ),
+                    function (): HtmlString {
+                        $livewire = Livewire::current();
+
+                        if (! $livewire instanceof self) {
+                            return new HtmlString('');
+                        }
+
+                        $user = Filament::auth()->user();
+
+                        if (! $user?->isUnitConsolidator()) {
+                            return new HtmlString('');
+                        }
+
+                        return new HtmlString(
+                            (string) view('filament.tables.requisitions-uc-toolbar-secondary', [
+                                'activeUcTab' => $livewire->ucTab ?? 'received',
+                                'activeTab' => $livewire->activeTab,
+                                'archivedCount' => $livewire->ucArchivedCount(),
+                                'ucOfficeId' => $livewire->ucOfficeId,
+                                'ucDepartmentId' => $livewire->ucDepartmentId,
+                                'officeOptions' => $livewire->getUcOfficeOptions(),
+                                'departmentOptions' => $livewire->getUcDepartmentOptions(),
+                                'scopeComplete' => $livewire->ucListScopeIsComplete(),
+                            ])
+                        );
+                    },
                     scopes: static::class,
                 );
             }
         }
 
         $actionsComponent = Actions::make([
-            $this->coaExportReportAction(
-                'coaRequisition',
-                'owwa.export.bulk.requisitions',
-                'Export RIS',
-            )->visible(fn (): bool => RequisitionExportActions::userCanExportRis(
-                Filament::auth()->user() instanceof User ? Filament::auth()->user() : null,
-            )),
             OwwaFormModalDefaults::createAction(OwwaFormModalDefaults::WIDTH_WIDE)
                 ->modalWidth(fn (): string => Filament::auth()->user()?->isEmployee()
                     ? OwwaFormModalDefaults::WIDTH_MEDIUM
@@ -543,23 +557,131 @@ class ListRequisitions extends ListRecords
                 ->visible(fn (): bool => RequisitionResource::canCreate()),
         ]);
 
-        /** @var mixed $actionsComponent */
-        $actionsComponent = $actionsComponent->alignEnd();
+        $components = [];
+        $flexChildren = [];
 
-        $flexComponent = Flex::make([
-            $this->getTabsContentComponent(),
-            $actionsComponent,
-        ]);
+        if ($this->getTabs() !== []) {
+            $flexChildren[] = $this->getTabsContentComponent();
+        }
 
-        /** @var mixed $flexComponent */
-        $flexComponent = $flexComponent->alignBetween()->verticallyAlignCenter();
+        if (RequisitionResource::canCreate()) {
+            /** @var mixed $actionsComponent */
+            $actionsComponent = $actionsComponent->alignEnd();
+            $flexChildren[] = $actionsComponent;
+        }
 
-        return $schema->components([
-            $flexComponent,
-            RenderHook::make(PanelsRenderHook::RESOURCE_PAGES_LIST_RECORDS_TABLE_BEFORE),
-            EmbeddedTable::make(),
-            RenderHook::make(PanelsRenderHook::RESOURCE_PAGES_LIST_RECORDS_TABLE_AFTER),
-        ]);
+        if ($flexChildren !== []) {
+            $flexComponent = Flex::make($flexChildren);
+            /** @var mixed $flexComponent */
+            $flexComponent = $flexComponent->alignBetween()->verticallyAlignCenter();
+
+            if ($user?->isUnitConsolidator()) {
+                $flexComponent = $flexComponent->extraAttributes([
+                    'class' => 'owwa-uc-requisition-page-actions',
+                ]);
+            }
+
+            $components[] = $flexComponent;
+        }
+
+        $exportUser = Filament::auth()->user();
+        if (RequisitionExportActions::userCanExportRis($exportUser instanceof User ? $exportUser : null)) {
+            $components[] = Actions::make([
+                $this->coaExportReportAction(
+                    'coaRequisition',
+                    'owwa.export.bulk.requisitions',
+                    'Export RIS',
+                ),
+            ])->extraAttributes(['class' => 'owwa-requisition-export-source']);
+        }
+
+        $components[] = RenderHook::make(PanelsRenderHook::RESOURCE_PAGES_LIST_RECORDS_TABLE_BEFORE);
+        $components[] = EmbeddedTable::make();
+        $components[] = RenderHook::make(PanelsRenderHook::RESOURCE_PAGES_LIST_RECORDS_TABLE_AFTER);
+
+        return $schema->components($components);
+    }
+
+    /**
+     * @return list<array{label: string, action?: string, url?: string, style?: string, schema?: string}>
+     */
+    protected function searchRowToolbarButtons(): array
+    {
+        $user = Filament::auth()->user();
+
+        if (! $user instanceof User || ! $user->isUnitConsolidator() || ! RequisitionResource::canCreate()) {
+            return [];
+        }
+
+        return [
+            [
+                'label' => 'New Requisition to Supply Custodian',
+                'action' => 'create',
+                'schema' => 'content',
+                'style' => 'primary',
+            ],
+        ];
+    }
+
+    public function ucArchivedCount(): int
+    {
+        /** @var User|null $user */
+        $user = Filament::auth()->user();
+
+        if (! $user instanceof User || ! $user->isUnitConsolidator()) {
+            return 0;
+        }
+
+        $query = RequisitionResource::getEloquentQuery()
+            ->where('status', Requisition::STATUS_REJECTED);
+
+        if (($this->ucTab ?? 'received') === 'sent') {
+            return (int) $query->where('requested_by', $user->id)->count();
+        }
+
+        if (! $this->ucListScopeIsComplete()) {
+            return 0;
+        }
+
+        return (int) $query
+            ->whereHas('requestedBy', fn (Builder $q): Builder => $q->where('role', User::ROLE_EMPLOYEE))
+            ->whereNull('compiled_into_requisition_id')
+            ->where('office_id', $this->ucOfficeId)
+            ->where('department_id', $this->ucDepartmentId)
+            ->count();
+    }
+
+    protected function registerRequisitionSearchRowExport(): void
+    {
+        $requestKey = 'owwa.requisition.search_row_export.'.static::class;
+
+        if (request()->attributes->get($requestKey)) {
+            return;
+        }
+
+        request()->attributes->set($requestKey, true);
+
+        $scope = static::class;
+
+        FilamentView::registerRenderHook(
+            TablesRenderHook::TOOLBAR_SEARCH_AFTER,
+            function () use ($scope): HtmlString {
+                $livewire = Livewire::current();
+
+                if (! is_object($livewire) || ! is_a($livewire, $scope)) {
+                    return new HtmlString('');
+                }
+
+                $user = Filament::auth()->user();
+
+                return new HtmlString(
+                    (string) view('filament.tables.requisition-search-row-export', [
+                        'showExport' => RequisitionExportActions::userCanExportRis($user instanceof User ? $user : null),
+                    ])
+                );
+            },
+            scopes: $scope,
+        );
     }
 
     protected function getTableQuery(): Builder

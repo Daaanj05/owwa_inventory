@@ -6,37 +6,57 @@ use Filament\Support\Facades\FilamentView;
 use Filament\Tables\View\TablesRenderHook;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\HtmlString;
+use Livewire\Livewire;
 
 trait HasSetupArchiveView
 {
     public bool $showingArchived = false;
 
+    protected bool $setupArchiveHookRegistered = false;
+
     /**
-     * @var array<class-string, true>
+     * Re-register on every Livewire request. A static flag caused the Active/Archive
+     * icons to vanish after the first AJAX update (mount does not re-run).
      */
-    private static array $setupArchiveHooksRegistered = [];
+    public function bootHasSetupArchiveView(): void
+    {
+        $this->registerSetupArchiveViewHook();
+    }
 
     protected function registerSetupArchiveViewHook(): void
     {
-        $class = static::class;
-        if (isset(self::$setupArchiveHooksRegistered[$class])) {
+        if ($this->setupArchiveHookRegistered) {
             return;
         }
 
-        self::$setupArchiveHooksRegistered[$class] = true;
+        $this->setupArchiveHookRegistered = true;
+
+        $scope = static::class;
 
         FilamentView::registerRenderHook(
-            TablesRenderHook::TOOLBAR_SEARCH_AFTER,
-            function (): HtmlString {
+            $this->setupArchiveViewRenderHook(),
+            function () use ($scope): HtmlString {
+                $livewire = Livewire::current();
+
+                if (! is_object($livewire) || ! is_a($livewire, $scope)) {
+                    return new HtmlString('');
+                }
+
+                /** @var self $livewire */
                 return new HtmlString(
                     (string) view('filament.tables.setup-archive-view-toggle', [
-                        'showingArchived' => $this->showingArchived,
-                        'archivedCount' => $this->setupArchiveViewArchivedCount(),
+                        'showingArchived' => $livewire->showingArchived,
+                        'archivedCount' => $livewire->setupArchiveViewArchivedCount(),
                     ])
                 );
             },
-            scopes: static::class,
+            scopes: $scope,
         );
+    }
+
+    protected function setupArchiveViewRenderHook(): string
+    {
+        return TablesRenderHook::TOOLBAR_SEARCH_AFTER;
     }
 
     abstract protected function setupArchiveViewArchivedCount(): int;

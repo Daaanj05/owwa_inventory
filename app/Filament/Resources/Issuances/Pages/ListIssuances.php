@@ -2,6 +2,8 @@
 
 namespace App\Filament\Resources\Issuances\Pages;
 
+use App\Filament\Concerns\HasSearchRowToolbarActions;
+use App\Filament\Concerns\HasSetupArchiveView;
 use App\Filament\Concerns\HasSystemAdminWizardHeading;
 use App\Filament\Concerns\StartsOwwaExportBusy;
 use App\Filament\Concerns\SyncsActiveItemCategory;
@@ -10,18 +12,14 @@ use App\Filament\Resources\Issuances\IssuanceResource;
 use App\Filament\Resources\Pages\ListRecordsWithoutFilterUrl;
 use App\Models\ItemCategory;
 use App\Support\CategoryWizardBreadcrumb;
-use Filament\Schemas\Components\Actions;
-use Filament\Schemas\Components\EmbeddedTable;
-use Filament\Schemas\Components\Flex;
-use Filament\Schemas\Components\RenderHook;
-use Filament\Schemas\Components\Tabs\Tab;
-use Filament\Schemas\Schema;
-use Filament\View\PanelsRenderHook;
+use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Livewire\Attributes\Url;
 
 class ListIssuances extends ListRecordsWithoutFilterUrl
 {
+    use HasSearchRowToolbarActions;
+    use HasSetupArchiveView;
     use HasSystemAdminWizardHeading;
     use StartsOwwaExportBusy;
     use SyncsActiveItemCategory;
@@ -66,10 +64,25 @@ class ListIssuances extends ListRecordsWithoutFilterUrl
         parent::mount();
 
         $this->syncActiveItemCategoryFromRequest();
+        $this->registerSetupArchiveViewHook();
+    }
 
-        if (($this->activeTab ?? null) === 'all' || ($this->activeTab ?? null) === 'today_rsmi') {
-            $this->activeTab = 'active';
-        }
+    protected function setupArchiveViewArchivedCount(): int
+    {
+        return IssuanceResource::getEloquentQuery()->onlyTrashed()->count();
+    }
+
+    protected function applySetupArchiveQuery(Builder $query): Builder
+    {
+        return $this->showingArchived
+            ? $query->onlyTrashed()
+            : $query->withoutTrashed();
+    }
+
+    public function table(Table $table): Table
+    {
+        return parent::table($table)
+            ->modifyQueryUsing(fn (Builder $query): Builder => $this->applySetupArchiveQuery($query));
     }
 
     /**
@@ -78,6 +91,8 @@ class ListIssuances extends ListRecordsWithoutFilterUrl
     public function getPageClasses(): array
     {
         $classes = parent::getPageClasses();
+        $classes[] = 'owwa-setup-archive-toggle';
+        $classes[] = 'owwa-search-row-toolbar';
         $classes[] = 'owwa-issuances-list';
 
         if ($this->isConsumablesCategory()) {
@@ -89,18 +104,6 @@ class ListIssuances extends ListRecordsWithoutFilterUrl
         return $classes;
     }
 
-    public function getTabs(): array
-    {
-        return [
-            'active' => Tab::make('Active')
-                ->modifyQueryUsing(fn (Builder $query): Builder => $query->withoutTrashed())
-                ->excludeQueryWhenResolvingRecord(),
-            'archived' => Tab::make('Archived')
-                ->modifyQueryUsing(fn (Builder $query): Builder => $query->onlyTrashed())
-                ->excludeQueryWhenResolvingRecord(),
-        ];
-    }
-
     public function isConsumablesCategory(): bool
     {
         return ItemCategory::query()
@@ -109,52 +112,29 @@ class ListIssuances extends ListRecordsWithoutFilterUrl
             ?->getTemplateSlug() === 'consumables';
     }
 
-    public function content(Schema $schema): Schema
+    /**
+     * @return list<array{label: string, action?: string, url?: string, style?: string}>
+     */
+    protected function searchRowToolbarButtons(): array
     {
-        $actions = [];
-
-        if ($this->isConsumablesCategory()) {
-            $actions[] = IssuanceRsmiExportAction::make();
+        if (! $this->isConsumablesCategory()) {
+            return [];
         }
 
-        if ($actions !== []) {
-            $actionsComponent = Actions::make($actions);
-            /** @var mixed $actionsComponent */
-            $actionsComponent = $actionsComponent->alignEnd();
-
-            $tabsAndExports = Flex::make([
-                $this->getTabsContentComponent(),
-                $actionsComponent,
-            ]);
-            /** @var mixed $tabsAndExports */
-            $tabsAndExports = $tabsAndExports->alignBetween()->verticallyAlignCenter();
-
-            return $schema
-                ->components([
-                    $tabsAndExports,
-                    RenderHook::make(PanelsRenderHook::RESOURCE_PAGES_LIST_RECORDS_TABLE_BEFORE),
-                    EmbeddedTable::make(),
-                    RenderHook::make(PanelsRenderHook::RESOURCE_PAGES_LIST_RECORDS_TABLE_AFTER),
-                ]);
-        }
-
-        $tabsOnly = Flex::make([
-            $this->getTabsContentComponent(),
-        ]);
-        /** @var mixed $tabsOnly */
-        $tabsOnly = $tabsOnly->alignStart()->verticallyAlignCenter();
-
-        return $schema
-            ->components([
-                $tabsOnly,
-                RenderHook::make(PanelsRenderHook::RESOURCE_PAGES_LIST_RECORDS_TABLE_BEFORE),
-                EmbeddedTable::make(),
-                RenderHook::make(PanelsRenderHook::RESOURCE_PAGES_LIST_RECORDS_TABLE_AFTER),
-            ]);
+        return [
+            [
+                'label' => 'Export Report',
+                'action' => 'exportRsmiReport',
+                'style' => 'gray',
+            ],
+        ];
     }
 
     protected function getHeaderActions(): array
     {
-        return [];
+        return [
+            IssuanceRsmiExportAction::make()
+                ->visible(fn (): bool => $this->isConsumablesCategory()),
+        ];
     }
 }

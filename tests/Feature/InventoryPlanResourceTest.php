@@ -38,7 +38,7 @@ class InventoryPlanResourceTest extends TestCase
         session()->put('active_item_category_id', $category->id);
 
         $livewire = Livewire::test(ListPhysicalInventoryPlans::class)
-            ->mountAction(TestAction::make('create')->schemaComponent(true, 'content'));
+            ->mountAction(TestAction::make('create'));
 
         $lineKey = array_key_first($livewire->get('mountedActions')[0]['data']['lines'] ?? []);
 
@@ -170,7 +170,7 @@ class InventoryPlanResourceTest extends TestCase
         Livewire::test(ListPhysicalInventoryPlans::class)
             ->assertCanSeeTableRecords([$activePlan])
             ->assertCanNotSeeTableRecords([$archivedPlan])
-            ->set('activeTab', 'archived')
+            ->set('showingArchived', true)
             ->assertCanSeeTableRecords([$archivedPlan])
             ->assertCanNotSeeTableRecords([$activePlan]);
     }
@@ -195,7 +195,8 @@ class InventoryPlanResourceTest extends TestCase
         session()->put('active_item_category_id', $category->id);
 
         Livewire::test(ListPhysicalInventoryPlans::class)
-            ->callTableAction('archive', $plan);
+            ->set('selectedTableRecords', [(string) $plan->getKey()])
+            ->callAction(TestAction::make('delete')->table($plan)->bulk());
 
         $this->assertSoftDeleted($plan);
     }
@@ -221,9 +222,10 @@ class InventoryPlanResourceTest extends TestCase
         session()->put('active_item_category_id', $category->id);
 
         Livewire::test(ListPhysicalInventoryPlans::class)
-            ->set('activeTab', 'archived')
+            ->set('showingArchived', true)
             ->assertCanSeeTableRecords([$plan])
-            ->callTableAction('restore', $plan);
+            ->set('selectedTableRecords', [(string) $plan->getKey()])
+            ->callAction(TestAction::make('restore')->table($plan)->bulk());
 
         $this->assertNotSoftDeleted($plan);
     }

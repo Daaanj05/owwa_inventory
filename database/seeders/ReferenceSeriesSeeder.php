@@ -209,6 +209,33 @@ class ReferenceSeriesSeeder extends Seeder
                 'last_generated_at' => null,
                 'archived_at' => now(),
             ],
+            [
+                'type' => ReferenceSeries::TYPE_PHYSICAL_COUNT_RPCI,
+                'name' => 'Physical count reference (RPCI)',
+                'prefix' => 'RPCI',
+                'pattern' => '{prefix}-{Y}-{m}-{seq:4}',
+                'next_sequence' => 1,
+                'reset_period' => ReferenceSeries::RESET_YEARLY,
+                'last_generated_at' => null,
+            ],
+            [
+                'type' => ReferenceSeries::TYPE_PHYSICAL_COUNT_RPCPPE,
+                'name' => 'Physical count reference (RPCPPE)',
+                'prefix' => 'RPCPPE',
+                'pattern' => '{prefix}-{Y}-{m}-{seq:4}',
+                'next_sequence' => 1,
+                'reset_period' => ReferenceSeries::RESET_YEARLY,
+                'last_generated_at' => null,
+            ],
+            [
+                'type' => ReferenceSeries::TYPE_PHYSICAL_COUNT_RPCSP,
+                'name' => 'Physical count reference (RPCSP)',
+                'prefix' => 'RPCSP',
+                'pattern' => '{prefix}-{Y}-{m}-{seq:4}',
+                'next_sequence' => 1,
+                'reset_period' => ReferenceSeries::RESET_YEARLY,
+                'last_generated_at' => null,
+            ],
         ];
 
         foreach ($defaults as $row) {

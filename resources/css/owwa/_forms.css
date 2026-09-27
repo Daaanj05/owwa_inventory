@@ -671,13 +671,30 @@ button[type="submit"].fi-btn:hover {
     box-shadow: none !important;
 }
 
-/* Setup lists: Active / Archive icons on the right of the toolbar row */
+/* Setup lists: Active / Archive icons on the right of the toolbar row, Bulk actions beside them */
+.fi-page.owwa-setup-archive-toggle .fi-ta-header-toolbar {
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: wrap !important;
+    align-items: center !important;
+    gap: 0.5rem !important;
+}
+
+.fi-page.owwa-setup-archive-toggle .fi-ta-header-toolbar > .fi-ta-actions {
+    order: 2 !important;
+    width: auto !important;
+    flex: 0 0 auto !important;
+    margin-left: 0 !important;
+    justify-content: flex-end !important;
+}
+
 .fi-page.owwa-setup-archive-toggle .fi-ta-header-toolbar > div:has(.fi-ta-search-field) {
     display: flex !important;
     flex-wrap: nowrap !important;
     align-items: center !important;
     gap: 0.5rem !important;
-    width: 100% !important;
+    flex: 1 1 auto !important;
+    min-width: 0 !important;
 }
 
 .fi-page.owwa-setup-archive-toggle .fi-ta-header-toolbar > div:has(.fi-ta-search-field) .fi-ta-search-field {
@@ -687,6 +704,59 @@ button[type="submit"].fi-btn:hover {
     max-width: 320px !important;
 }
 
+/* Incident reports hide the real create action; the toolbar button mounts it. */
+.fi-page.owwa-incident-reports-toolbar .owwa-incident-create-action-source {
+    display: none !important;
+}
+
+/* Search + action buttons on row 1; Active/Archive and Bulk actions on row 2, right */
+.fi-page.owwa-search-row-toolbar .fi-header-actions-ctn {
+    display: none !important;
+}
+
+.fi-page.owwa-search-row-toolbar.owwa-setup-archive-toggle .fi-ta-header-toolbar {
+    display: grid !important;
+    grid-template-columns: auto 1fr auto auto !important;
+    align-items: center !important;
+    column-gap: 0.5rem !important;
+    row-gap: 0.35rem !important;
+}
+
+.fi-page.owwa-search-row-toolbar.owwa-setup-archive-toggle .fi-ta-header-toolbar > div:has(.fi-ta-search-field) {
+    display: contents !important;
+    width: auto !important;
+    flex: none !important;
+}
+
+.fi-page.owwa-search-row-toolbar .fi-ta-header-toolbar > div:has(.fi-ta-search-field) .fi-ta-search-field {
+    grid-column: 1 !important;
+    grid-row: 1 !important;
+    order: unset !important;
+    margin-right: 0 !important;
+}
+
+.fi-page.owwa-search-row-toolbar .owwa-search-row-actions,
+.fi-page.owwa-search-row-toolbar .owwa-incident-search-row-actions {
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 0.5rem !important;
+    grid-column: 4 !important;
+    grid-row: 1 !important;
+    justify-self: end !important;
+    order: unset !important;
+    margin-left: 0 !important;
+    flex: 0 0 auto !important;
+}
+
+.fi-page.owwa-search-row-toolbar.owwa-setup-archive-toggle .fi-ta-header-toolbar > .fi-ta-actions {
+    grid-column: 3 !important;
+    grid-row: 2 !important;
+    width: auto !important;
+    justify-self: end !important;
+    order: unset !important;
+    margin-left: 0 !important;
+}
+
 .fi-page.owwa-setup-archive-toggle .owwa-setup-archive-view-toggle {
     display: inline-flex !important;
     align-items: center !important;
@@ -694,6 +764,25 @@ button[type="submit"].fi-btn:hover {
     flex: 0 0 auto !important;
     margin-left: auto !important;
     margin-right: 0 !important;
+    order: 99 !important;
+}
+
+.fi-page.owwa-search-row-toolbar.owwa-setup-archive-toggle .owwa-setup-archive-view-toggle {
+    display: inline-flex !important;
+    grid-column: 4 !important;
+    grid-row: 2 !important;
+    justify-self: end !important;
+    flex: none !important;
+    width: auto !important;
+    margin: 0 !important;
+    order: unset !important;
+}
+
+.fi-page.owwa-setup-create-toolbar .fi-ta-col-manager-dropdown,
+.fi-page.owwa-setup-create-toolbar .fi-ta-col-manager-modal {
+    grid-column: 3 !important;
+    grid-row: 1 !important;
+    justify-self: end !important;
 }
 
 .owwa-setup-archive-view-toggle__btn {
@@ -737,6 +826,29 @@ button[type="submit"].fi-btn:hover {
     font-weight: 700;
     line-height: 1rem;
     text-align: center;
+}
+
+/* Signatories Setup: compact create/edit fields */
+.fi-modal-window.owwa-signatory-modal {
+    max-width: 36rem !important;
+}
+
+.fi-modal-window.owwa-signatory-modal .fi-input-wrp {
+    min-height: 2.25rem !important;
+    height: 2.25rem !important;
+    padding-block: 0 !important;
+    box-sizing: border-box !important;
+}
+
+.fi-modal-window.owwa-signatory-modal .fi-input,
+.fi-modal-window.owwa-signatory-modal .fi-fo-text-input,
+.fi-modal-window.owwa-signatory-modal [data-slot="select-trigger"],
+.fi-modal-window.owwa-signatory-modal .fi-fo-select-trigger {
+    min-height: 2.25rem !important;
+    height: 2.25rem !important;
+    padding-block: 0.25rem !important;
+    padding-inline: 0.75rem !important;
+    box-sizing: border-box !important;
 }
 
 /* Signatories Setup: flash instruction when Role changes */
@@ -822,6 +934,17 @@ button[type="submit"].fi-btn:hover {
     display: inline-flex !important;
     align-items: center !important;
     gap: 0.5rem !important;
+    margin-left: auto !important;
+    flex: 0 0 auto !important;
+}
+
+.owwa-requisition-export-source {
+    display: none !important;
+}
+
+.fi-ta-ctn .fi-ta-header-toolbar .owwa-requisition-search-row-export {
+    display: inline-flex !important;
+    align-items: center !important;
     margin-left: auto !important;
     flex: 0 0 auto !important;
 }

@@ -43,6 +43,18 @@ class AiProcurementRunViewPresenterTest extends TestCase
         $this->assertArrayNotHasKey('kpis', $data);
     }
 
+    public function test_pending_status_label(): void
+    {
+        $run = AiProcurementRun::query()->create([
+            'ran_at' => now(),
+            'status' => 'pending',
+        ]);
+
+        $data = AiProcurementRunViewPresenter::forRecord($run);
+
+        $this->assertSame('Pending', $data['status']['label']);
+    }
+
     public function test_format_suggested_qty_handles_single_value(): void
     {
         $this->assertSame('12', AiProcurementRunViewPresenter::formatSuggestedQty(12, 12));

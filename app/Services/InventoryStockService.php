@@ -580,7 +580,7 @@ class InventoryStockService
             'acq' => $this->buildMovementMap('acquisitions', 'office_id', 'unit_cost'),
             'inTransfers' => $this->buildMovementMap('transfers', 'to_office_id', 'unit_cost'),
             'issuances' => $this->buildMovementMap('issuances', 'office_id', 'unit_cost'),
-            'outTransfers' => $this->buildMovementMap('transfers', 'from_office_id', 'unit_cost'),
+            'outTransfers' => $this->buildMovementMap('transfers', 'from_office_id', 'unit_cost', excludeReturns: true),
             'disposals' => $this->buildConfirmedDisposalMovementMap(),
         ];
     }
@@ -625,10 +625,19 @@ class InventoryStockService
             ->all();
     }
 
-    protected function buildMovementMap(string $table, string $officeColumn, string $costColumn): array
+    protected function buildMovementMap(string $table, string $officeColumn, string $costColumn, bool $excludeReturns = false): array
     {
-        return DB::table($table)
-            ->whereNull('deleted_at')
+        $query = DB::table($table)
+            ->whereNull('deleted_at');
+
+        if ($excludeReturns) {
+            $query->where(function ($scope): void {
+                $scope->whereNull('transfer_type')
+                    ->orWhere('transfer_type', '!=', 'return');
+            });
+        }
+
+        return $query
             ->select(
                 'item_id',
                 "{$officeColumn} as office_id",

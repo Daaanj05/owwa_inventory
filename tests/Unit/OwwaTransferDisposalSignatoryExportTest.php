@@ -240,6 +240,53 @@ class OwwaTransferDisposalSignatoryExportTest extends TestCase
 
         $this->assertSame('1', (string) $sheet->getCell('C34')->getValue());
         $this->assertSame(500.0, (float) $sheet->getCell('I23')->getValue());
+        $this->assertArrayNotHasKey('D35', $values);
+    }
+
+    public function test_wmr_transfer_without_cost_writes_agency_name_on_d35(): void
+    {
+        $office = new Office(['name' => 'Regional Office', 'fund_cluster' => '01']);
+        $item = new Item(['item_code' => 'CON-002', 'name' => 'Ink', 'unit' => 'bottle']);
+
+        $disposal = new Disposal([
+            'quantity' => 2,
+            'disposal_date' => now(),
+            'place_of_storage' => 'Warehouse B',
+            'disposal_mode' => 'transferred_without_cost',
+            'transfer_agency_name' => 'DOST Region IV-A',
+            'custodian_printed_name' => 'Prepared Person',
+            'approved_by_printed_name' => 'Approver Person',
+            'inspection_officer_printed_name' => 'Inspector Person',
+            'witness_printed_name' => 'Witness Person',
+        ]);
+        $disposal->setRelation('office', $office);
+        $disposal->setRelation('item', $item);
+
+        $values = DisposalExportLayout::cellValuesForWmr($disposal);
+        $prefix = (string) (OwwaCellMapping::form('WMR')['transfer_agency_prefix'] ?? 'Transferred without cost to ');
+
+        $this->assertSame('1', $values['C35']);
+        $this->assertSame($prefix.'DOST Region IV-A', $values['D35']);
+        $this->assertStringStartsWith($prefix, $values['D35']);
+        $this->assertStringEndsWith('DOST Region IV-A', $values['D35']);
+        $this->assertStringNotContainsString('__(Name of the Agency/Entity)__', $values['D35']);
+
+        $destroyed = new Disposal([
+            'quantity' => 1,
+            'disposal_date' => now(),
+            'disposal_mode' => 'destroyed',
+            'transfer_agency_name' => 'Should Not Appear',
+            'custodian_printed_name' => 'Prepared Person',
+            'approved_by_printed_name' => 'Approver Person',
+            'inspection_officer_printed_name' => 'Inspector Person',
+            'witness_printed_name' => 'Witness Person',
+        ]);
+        $destroyed->setRelation('office', $office);
+        $destroyed->setRelation('item', $item);
+
+        $destroyedValues = DisposalExportLayout::cellValuesForWmr($destroyed);
+        $this->assertSame('1', $destroyedValues['C32']);
+        $this->assertArrayNotHasKey('D35', $destroyedValues);
     }
 
     public function test_iirup_signatory_cells_use_configured_map(): void

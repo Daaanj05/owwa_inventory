@@ -85,7 +85,7 @@ class ScanAssetHandoffTest extends TestCase
             'inventory_unit_id' => $unit->id,
         ])
             ->test(ListDisposals::class)
-            ->assertActionMounted(TestAction::make('create')->schemaComponent(true, 'content'))
+            ->assertActionMounted(TestAction::make('create'))
             ->assertSet('mountedActions.0.data.item_id', $item->id)
             ->assertSet('mountedActions.0.data.inventory_unit_id', $unit->id)
             ->assertSet('mountedActions.0.data.quantity', 1);
@@ -135,7 +135,7 @@ class ScanAssetHandoffTest extends TestCase
             'property_number' => $unit->property_number,
         ])
             ->test(ListTransfers::class)
-            ->assertActionMounted(TestAction::make('create')->schemaComponent(true, 'content'))
+            ->assertActionMounted(TestAction::make('create'))
             ->assertSet('mountedActions.0.data.item_id', $item->id)
             ->assertSet('mountedActions.0.data.property_number', $unit->property_number)
             ->assertSet('mountedActions.0.data.quantity', 1);

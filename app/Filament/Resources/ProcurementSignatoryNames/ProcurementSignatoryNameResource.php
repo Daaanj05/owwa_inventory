@@ -13,6 +13,7 @@ use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
+use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
@@ -44,11 +45,20 @@ class ProcurementSignatoryNameResource extends Resource
                     ->label('Role')
                     ->options(SignatorySelect::roleOptions())
                     ->required()
-                    ->searchable(),
+                    ->searchable()
+                    ->live(),
                 TextInput::make('name')
-                    ->label('Printed name / designation')
+                    ->label(fn (Get $get): string => (string) ($get('role') ?? '') === ProcurementSignatoryName::ROLE_DISPOSAL_INSPECTION_OFFICER
+                        ? 'Name'
+                        : 'Printed name')
                     ->required()
                     ->maxLength(255),
+                TextInput::make('designation')
+                    ->label('Designation')
+                    ->required(fn (Get $get): bool => ProcurementSignatoryName::roleStoresDesignation((string) ($get('role') ?? '')))
+                    ->visible(fn (Get $get): bool => ProcurementSignatoryName::roleStoresDesignation((string) ($get('role') ?? '')))
+                    ->maxLength(255)
+                    ->helperText('Official title printed with this person’s name.'),
             ]);
     }
 
@@ -59,7 +69,12 @@ class ProcurementSignatoryNameResource extends Resource
         return $table
             ->columns([
                 TextColumn::make('name')
-                    ->label('Name')
+                    ->label('Printed name')
+                    ->searchable()
+                    ->sortable(),
+                TextColumn::make('designation')
+                    ->label('Designation')
+                    ->placeholder('—')
                     ->searchable()
                     ->sortable(),
                 TextColumn::make('role')

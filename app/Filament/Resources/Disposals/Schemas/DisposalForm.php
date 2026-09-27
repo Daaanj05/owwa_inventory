@@ -311,6 +311,7 @@ class DisposalForm
                                 'transferred_without_cost' => 'Transferred without cost',
                             ])
                             ->placeholder('Select mode')
+                            ->selectablePlaceholder(false)
                             ->required(fn (): bool => self::activeCategorySlug() === 'consumables')
                             ->live()
                             ->visible(fn (): bool => self::activeCategorySlug() === 'consumables'),
@@ -319,6 +320,13 @@ class DisposalForm
                             ->maxLength(255)
                             ->required(fn (): bool => self::activeCategorySlug() === 'consumables')
                             ->visible(fn (): bool => self::activeCategorySlug() === 'consumables'),
+                        TextInput::make('transfer_agency_name')
+                            ->label('Name of the agency/entity')
+                            ->maxLength(255)
+                            ->required(fn (Get $get): bool => self::activeCategorySlug() === 'consumables'
+                                && $get('disposal_mode') === 'transferred_without_cost')
+                            ->visible(fn (Get $get): bool => self::activeCategorySlug() === 'consumables'
+                                && $get('disposal_mode') === 'transferred_without_cost'),
                         Select::make('iirup_disposal_mode')
                             ->label('Disposal mode')
                             ->options([
@@ -327,6 +335,8 @@ class DisposalForm
                                 'destruction' => 'Destruction',
                                 'others' => 'Others',
                             ])
+                            ->placeholder('Select mode')
+                            ->selectablePlaceholder(false)
                             ->required(fn (): bool => self::isIirupCategory())
                             ->live()
                             ->visible(fn (): bool => self::isIirupCategory()),
@@ -345,12 +355,13 @@ class DisposalForm
                             ->visible(fn (Get $get): bool => self::isIirupCategory()
                                 && $get('iirup_disposal_mode') === 'others')
                             ->columnSpanFull(),
-                        SignatorySelect::make('accountable_officer_designation', ProcurementSignatoryName::ROLE_DISPOSAL_ACCOUNTABLE_DESIGNATION)
+                        SignatorySelect::makeDesignation('accountable_officer_designation', ProcurementSignatoryName::ROLE_DISPOSAL_ACCOUNTABLE_OFFICER)
                             ->label('Accountable officer designation')
                             ->required(fn (): bool => self::isIirupCategory())
                             ->visible(fn (): bool => self::isIirupCategory()),
-                        SignatorySelect::make('accountable_officer_station', ProcurementSignatoryName::ROLE_DISPOSAL_ACCOUNTABLE_STATION)
+                        TextInput::make('accountable_officer_station')
                             ->label('Station / office')
+                            ->maxLength(255)
                             ->required(fn (): bool => self::isIirupCategory())
                             ->visible(fn (): bool => self::isIirupCategory()),
                         TextInput::make('reason')
@@ -387,7 +398,7 @@ class DisposalForm
                     ->columnSpanFull()
                     ->compact()
                     ->schema([
-                        SignatorySelect::make('custodian_printed_name', ProcurementSignatoryName::ROLE_CUSTODIAN)
+                        SignatorySelect::make('custodian_printed_name', ProcurementSignatoryName::ROLE_DISPOSAL_ACCOUNTABLE_OFFICER)
                             ->label('Certified Correct')
                             ->helperText(fn (): ?string => SignatorySelect::disposalInstruction(
                                 self::activeCategorySlug() === 'consumables'
@@ -395,8 +406,15 @@ class DisposalForm
                                     : 'custodian_iirup'
                             ))
                             ->required()
-                            ->placeholder('Full name'),
-                        SignatorySelect::make('approved_by_printed_name', ProcurementSignatoryName::ROLE_APPROVED)
+                            ->placeholder('Full name')
+                            ->live()
+                            ->afterStateUpdated(function ($state, Set $set): void {
+                                $set('accountable_officer_designation', ProcurementSignatoryName::designationFor(
+                                    ProcurementSignatoryName::ROLE_DISPOSAL_ACCOUNTABLE_OFFICER,
+                                    is_string($state) ? $state : null,
+                                ));
+                            }),
+                        SignatorySelect::make('approved_by_printed_name', ProcurementSignatoryName::ROLE_DISPOSAL_AUTHORIZED_OFFICIAL)
                             ->label('Disposal Approved')
                             ->helperText(fn (): ?string => SignatorySelect::disposalInstruction(
                                 self::activeCategorySlug() === 'consumables'
@@ -404,13 +422,20 @@ class DisposalForm
                                     : 'approved_iirup'
                             ))
                             ->required()
-                            ->placeholder('Full name'),
-                        SignatorySelect::make('authorized_official_designation', ProcurementSignatoryName::ROLE_DISPOSAL_AUTHORIZED_DESIGNATION)
+                            ->placeholder('Full name')
+                            ->live()
+                            ->afterStateUpdated(function ($state, Set $set): void {
+                                $set('authorized_official_designation', ProcurementSignatoryName::designationFor(
+                                    ProcurementSignatoryName::ROLE_DISPOSAL_AUTHORIZED_OFFICIAL,
+                                    is_string($state) ? $state : null,
+                                ));
+                            }),
+                        SignatorySelect::makeDesignation('authorized_official_designation', ProcurementSignatoryName::ROLE_DISPOSAL_AUTHORIZED_OFFICIAL)
                             ->label('Designation of authorized official')
-                            ->required(fn (): bool => self::isIirupCategory())
-                            ->visible(fn (): bool => self::isIirupCategory()),
-                        SignatorySelect::make('inspection_officer_printed_name', ProcurementSignatoryName::ROLE_INSPECTION_OFFICER)
-                            ->label('Certified Correct')
+                            ->required(fn (): bool => self::isPpeCategory())
+                            ->visible(fn (): bool => self::isPpeCategory()),
+                        SignatorySelect::make('inspection_officer_printed_name', ProcurementSignatoryName::ROLE_DISPOSAL_INSPECTION_OFFICER)
+                            ->label('Inspection officer name')
                             ->helperText(fn (): ?string => SignatorySelect::disposalInstruction('inspection_officer'))
                             ->required()
                             ->placeholder('Full name'),
@@ -522,6 +547,11 @@ class DisposalForm
     protected static function isIirupCategory(): bool
     {
         return in_array(self::activeCategorySlug(), ['ppe', 'semi_expendable'], true);
+    }
+
+    protected static function isPpeCategory(): bool
+    {
+        return self::activeCategorySlug() === 'ppe';
     }
 
     protected static function requiresInventoryUnit(Get $get): bool

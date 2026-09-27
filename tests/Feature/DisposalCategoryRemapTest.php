@@ -6,6 +6,7 @@ use App\Filament\Resources\Disposals\DisposalResource;
 use App\Filament\Resources\Disposals\Pages\ListDisposals;
 use App\Filament\Resources\Disposals\Schemas\DisposalForm;
 use App\Filament\Resources\IncidentReports\IncidentReportResource;
+use App\Filament\Resources\IncidentReports\Pages\ListIncidentReports;
 use App\Filament\Resources\Transfers\Pages\ListTransfers;
 use App\Filament\Resources\Transfers\TransferResource;
 use App\Models\Disposal;
@@ -88,6 +89,54 @@ class DisposalCategoryRemapTest extends TestCase
         $this->assertSame(1, IncidentReportResource::getEloquentQuery()->count());
     }
 
+    public function test_incident_report_archive_toggle_filters_trashed_records(): void
+    {
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+
+        $category = ItemCategory::factory()->create(['name' => 'PPE']);
+        $item = Item::factory()->create(['item_category_id' => $category->id]);
+        $office = Office::factory()->create();
+        $custodian = User::factory()->create([
+            'role' => User::ROLE_SUPPLY_CUSTODIAN,
+            'office_id' => $office->id,
+        ]);
+
+        $this->actingAs($custodian);
+
+        $active = Disposal::query()->create([
+            'reference_code' => '2026-01-0901',
+            'item_id' => $item->id,
+            'office_id' => $office->id,
+            'quantity' => 1,
+            'disposal_date' => now(),
+            'disposal_type' => 'lost_stolen_damaged',
+            'property_status' => 'lost',
+            'circumstances' => 'Missing.',
+            'recorded_by' => $custodian->id,
+        ]);
+
+        $archived = Disposal::query()->create([
+            'reference_code' => '2026-01-0902',
+            'item_id' => $item->id,
+            'office_id' => $office->id,
+            'quantity' => 2,
+            'disposal_date' => now(),
+            'disposal_type' => 'lost_stolen_damaged',
+            'property_status' => 'damaged',
+            'circumstances' => 'Broken.',
+            'recorded_by' => $custodian->id,
+        ]);
+        $archived->delete();
+
+        Livewire::test(ListIncidentReports::class)
+            ->assertSet('showingArchived', false)
+            ->assertCanSeeTableRecords([$active])
+            ->assertCanNotSeeTableRecords([$archived])
+            ->set('showingArchived', true)
+            ->assertCanSeeTableRecords([$archived])
+            ->assertCanNotSeeTableRecords([$active]);
+    }
+
     public function test_disposal_form_default_type_for_consumables_is_wmr(): void
     {
         $category = ItemCategory::factory()->create(['name' => 'Consumables']);
@@ -131,7 +180,7 @@ class DisposalCategoryRemapTest extends TestCase
         $this->actingAs($custodian);
         session(['active_item_category_id' => $category->id]);
 
-        $create = TestAction::make('create')->schemaComponent(true, 'content');
+        $create = TestAction::make('create');
 
         Livewire::withQueryParams(['category' => (string) $category->id])
             ->test(ListDisposals::class)
@@ -155,7 +204,7 @@ class DisposalCategoryRemapTest extends TestCase
         $this->actingAs($custodian);
         session(['active_item_category_id' => $category->id]);
 
-        $create = TestAction::make('create')->schemaComponent(true, 'content');
+        $create = TestAction::make('create');
 
         Livewire::withQueryParams(['category' => (string) $category->id])
             ->test(ListDisposals::class)
@@ -179,7 +228,7 @@ class DisposalCategoryRemapTest extends TestCase
         $this->actingAs($custodian);
         session(['active_item_category_id' => $category->id]);
 
-        $create = TestAction::make('create')->schemaComponent(true, 'content');
+        $create = TestAction::make('create');
 
         Livewire::withQueryParams(['category' => (string) $category->id])
             ->test(ListTransfers::class)

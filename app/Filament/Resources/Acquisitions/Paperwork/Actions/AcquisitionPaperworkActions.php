@@ -131,8 +131,8 @@ class AcquisitionPaperworkActions
     {
         return Action::make('archivePr')
             ->label('Archive')
-            ->icon('heroicon-o-archive-box')
-            ->color('gray')
+            ->icon('heroicon-o-trash')
+            ->color('danger')
             ->visible(fn (AcquisitionPaperwork $record): bool => ! $record->isArchived()
                 && ($record->isPrEditable() || $record->isPrPendingApproval()))
             ->requiresConfirmation()

@@ -97,10 +97,11 @@ class ItemsTable
                 BulkActionGroup::make([
                     BulkAction::make('archive')
                         ->label('Archive selected')
-                        ->icon('heroicon-o-archive-box')
+                        ->color('danger')
+                        ->icon('heroicon-o-trash')
                         ->requiresConfirmation()
                         ->deselectRecordsAfterCompletion()
-                        ->visible(fn ($livewire): bool => ($livewire->activeTab ?? 'active') !== 'archived')
+                        ->visible(fn ($livewire): bool => ! (bool) ($livewire->showingArchived ?? false))
                         ->action(fn ($records) => $records->each(function (Item $record): void {
                             if ($record->archived_at === null) {
                                 $record->update(['archived_at' => now()]);
@@ -112,7 +113,7 @@ class ItemsTable
                         ->requiresConfirmation()
                         ->modalHeading('Restore selected items?')
                         ->deselectRecordsAfterCompletion()
-                        ->visible(fn ($livewire): bool => ($livewire->activeTab ?? 'active') === 'archived')
+                        ->visible(fn ($livewire): bool => (bool) ($livewire->showingArchived ?? false))
                         ->action(fn ($records) => $records->each(function (Item $record): void {
                             if ($record->archived_at !== null) {
                                 $record->update(['archived_at' => null]);

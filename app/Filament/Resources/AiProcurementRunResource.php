@@ -10,13 +10,14 @@ use App\Filament\Resources\AiProcurementRunResource\Schemas\AiProcurementRunModa
 use App\Filament\Support\ConfiguresOwwaViewAction;
 use App\Models\AiProcurementRun;
 use BackedEnum;
+use Filament\Actions\Action;
+use Filament\Actions\ActionGroup;
 use Filament\Facades\Filament;
 use Filament\Infolists;
 use Filament\Resources\Resource;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables;
 use Filament\Tables\Table;
-use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Str;
 use UnitEnum;
 
@@ -30,7 +31,7 @@ class AiProcurementRunResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedSparkles;
 
-    protected static ?int $navigationSort = 4;
+    protected static ?int $navigationSort = 2;
 
     protected static ?string $modelLabel = 'AI procurement run';
 
@@ -85,18 +86,14 @@ class AiProcurementRunResource extends Resource
                     ->formatStateUsing(fn (string $state) => match ($state) {
                         'processing' => 'Processing',
                         'failed' => 'Failed',
-                        'draft' => 'Draft',
-                        'for_approval' => 'For Approval',
+                        'pending' => 'Pending',
                         'approved' => 'Approved',
-                        'archived' => 'Archived',
                         default => ucfirst($state),
                     })
                     ->color(fn (string $state): string => match ($state) {
                         'processing' => 'warning',
                         'failed' => 'danger',
-                        'for_approval' => 'info',
                         'approved' => 'success',
-                        'archived' => 'gray',
                         default => 'gray',
                     })
                     ->sortable(),
@@ -106,25 +103,14 @@ class AiProcurementRunResource extends Resource
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->defaultSort('ran_at', 'desc')
-            ->modifyQueryUsing(function (Builder $query) {
-                $showArchived = request('archived') === '1';
-
-                if ($showArchived) {
-                    return $query->where('status', 'archived');
-                }
-
-                return $query->where('status', '!=', 'archived');
-            })
             ->filters([
                 Tables\Filters\SelectFilter::make('status')
                     ->label('Status')
                     ->options([
                         'processing' => 'Processing',
                         'failed' => 'Failed',
-                        'draft' => 'Draft',
-                        'for_approval' => 'For approval',
+                        'pending' => 'Pending',
                         'approved' => 'Approved',
-                        'archived' => 'Archived',
                     ]),
             ])
             ->recordActions([
@@ -135,6 +121,29 @@ class AiProcurementRunResource extends Resource
                     extraModalClass: 'owwa-ai-run-modal',
                     modelLabel: AiProcurementRunResource::getModelLabel(),
                 ),
+                ActionGroup::make([
+                    Action::make('archive')
+                        ->label('Archive')
+                        ->icon(Heroicon::OutlinedArchiveBox)
+                        ->color('gray')
+                        ->requiresConfirmation()
+                        ->modalHeading('Archive AI procurement run')
+                        ->modalDescription('This run will be hidden from the active list but kept for history. Use the archive icon view to restore it later.')
+                        ->visible(fn (AiProcurementRun $record): bool => ! $record->isArchived())
+                        ->action(fn (AiProcurementRun $record) => $record->archive()),
+                    Action::make('restore')
+                        ->label('Restore')
+                        ->icon(Heroicon::OutlinedArrowUturnLeft)
+                        ->color('gray')
+                        ->requiresConfirmation()
+                        ->modalHeading('Restore AI procurement run')
+                        ->modalDescription('This run will appear in the active list again.')
+                        ->visible(fn (AiProcurementRun $record): bool => $record->isArchived())
+                        ->action(fn (AiProcurementRun $record) => $record->restoreFromArchive()),
+                ])
+                    ->label('Actions')
+                    ->icon('heroicon-m-ellipsis-vertical')
+                    ->color('gray'),
             ])
             ->recordUrl(null)
             ->recordAction('view')

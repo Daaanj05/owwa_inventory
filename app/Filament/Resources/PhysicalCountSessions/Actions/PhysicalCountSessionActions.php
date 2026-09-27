@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\PhysicalCountSessions\Actions;
 
 use App\Filament\Resources\PhysicalCountSessions\PhysicalCountSessionResource;
+use App\Filament\Resources\PhysicalCountSessions\Schemas\PhysicalCountSessionForm;
 use App\Filament\Support\OwwaFormModalDefaults;
 use App\Models\PhysicalCountSession;
 use App\Services\PhysicalCountCompletionService;
@@ -33,7 +34,7 @@ class PhysicalCountSessionActions
             ->label('Load expected assets')
             ->icon('heroicon-o-arrow-down-tray')
             ->color('success')
-            ->visible(fn (PhysicalCountSession $record): bool => $record->supportsUnitQrScanning() && ! $record->hasBookListLoaded() && ! $record->isArchived())
+            ->visible(fn (PhysicalCountSession $record): bool => $record->supportsUnitQrScanning() && ! $record->hasBookListLoaded() && ! $record->isComplete() && ! $record->isArchived())
             ->requiresConfirmation()
             ->modalHeading('Load expected assets from custody records?')
             ->modalDescription('Loads all property tags accountable to this office — warehouse stock and items issued for use. Unscanned units appear as shortages.')
@@ -57,21 +58,21 @@ class PhysicalCountSessionActions
     public static function preloadStockLinesAction(?callable $afterSuccess = null): Action
     {
         return Action::make('preloadStockLines')
-            ->label('Load stock lines')
+            ->label('Load Items')
             ->icon('heroicon-o-arrow-down-tray')
             ->color('success')
-            ->visible(fn (PhysicalCountSession $record): bool => $record->isConsumablePhysicalCount() && ! $record->hasBookListLoaded() && ! $record->isArchived())
+            ->visible(fn (PhysicalCountSession $record): bool => $record->isConsumablePhysicalCount() && ! $record->hasBookListLoaded() && ! $record->isComplete() && ! $record->isArchived())
             ->requiresConfirmation()
-            ->modalHeading('Load stock lines from Stock Card balances?')
-            ->modalDescription('Loads consumable items with stock activity for this office. Inventory type is set automatically from the loaded items. Enter On hand per count manually for each line after loading.')
+            ->modalHeading('Load Items from office stock?')
+            ->modalDescription(PhysicalCountSessionForm::loadItemsHelperText())
             ->action(function (PhysicalCountSession $record, Action $action) use ($afterSuccess): void {
                 $result = app(PhysicalCountPreloadService::class)->preloadFromStockBalances($record);
 
                 $record->refresh()->load(['lines.item']);
 
                 Notification::make()
-                    ->title('Stock lines loaded')
-                    ->body("Created {$result['created']}, updated {$result['updated']}, skipped {$result['skipped']}.")
+                    ->title('Items loaded')
+                    ->body("Created {$result['created']}, updated {$result['updated']}, skipped {$result['skipped']}. Enter On hand per count for each item.")
                     ->success()
                     ->send();
 
@@ -161,7 +162,7 @@ class PhysicalCountSessionActions
     public static function editAction(): EditAction
     {
         return OwwaFormModalDefaults::editActionForResource(PhysicalCountSessionResource::class, OwwaFormModalDefaults::WIDTH_STANDARD)
-            ->visible(fn (PhysicalCountSession $record): bool => ! $record->isArchived())
+            ->visible(fn (PhysicalCountSession $record): bool => ! $record->isComplete() && ! $record->isArchived())
             ->after(function (PhysicalCountSession $record): void {
                 PhysicalCountPropertyClassResolver::syncSession($record);
             });
@@ -177,15 +178,16 @@ class PhysicalCountSessionActions
             self::preloadExpectedAssetsAction(),
             self::preloadStockLinesAction(),
             self::markCompleteAction(),
+            self::editAction(),
             ActionGroup::make([
-                self::editAction(),
                 self::printQrLabelsAction(),
                 self::exportOwwaAction(),
                 self::exportPdfAction(),
             ])
                 ->label('More')
                 ->icon('heroicon-m-ellipsis-horizontal')
-                ->color('gray'),
+                ->color('gray')
+                ->visible(fn (PhysicalCountSession $record): bool => $record->supportsUnitQrScanning() || $record->isComplete()),
         ];
     }
 }

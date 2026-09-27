@@ -102,10 +102,50 @@ class AcquisitionPaperwork extends Model
             }
         });
 
-        static::saved(function (AcquisitionPaperwork $paperwork): void {
-            ProcurementSignatoryName::remember(ProcurementSignatoryName::ROLE_REQUESTED, $paperwork->requested_by_name);
-            ProcurementSignatoryName::remember(ProcurementSignatoryName::ROLE_APPROVED, $paperwork->approved_by_name);
+        static::saving(function (AcquisitionPaperwork $paperwork): void {
+            $paperwork->applyPrintedNameDesignation(
+                'requested_by_name',
+                'requested_by_designation',
+                ProcurementSignatoryName::ROLE_REQUESTED,
+            );
+            $paperwork->applyPrintedNameDesignation(
+                'approved_by_name',
+                'approved_by_designation',
+                ProcurementSignatoryName::ROLE_APPROVED,
+            );
         });
+
+        static::saved(function (AcquisitionPaperwork $paperwork): void {
+            ProcurementSignatoryName::remember(
+                ProcurementSignatoryName::ROLE_REQUESTED,
+                $paperwork->requested_by_name,
+                $paperwork->requested_by_designation,
+            );
+            ProcurementSignatoryName::remember(
+                ProcurementSignatoryName::ROLE_APPROVED,
+                $paperwork->approved_by_name,
+                $paperwork->approved_by_designation,
+            );
+        });
+    }
+
+    /**
+     * Copy the designation stored on the printed-name signatory.
+     * A later phase save leaves an existing designation in place.
+     */
+    protected function applyPrintedNameDesignation(string $nameAttribute, string $designationAttribute, string $role): void
+    {
+        $designation = ProcurementSignatoryName::designationFor($role, $this->{$nameAttribute});
+
+        if ($designation !== null) {
+            $this->{$designationAttribute} = $designation;
+
+            return;
+        }
+
+        if ($this->isDirty($nameAttribute)) {
+            $this->{$designationAttribute} = null;
+        }
     }
 
     public function office(): BelongsTo

@@ -561,10 +561,12 @@ class AcquisitionPaperworkWorkflowTest extends TestCase
         \App\Models\ProcurementSignatoryName::remember(
             \App\Models\ProcurementSignatoryName::ROLE_REQUESTED,
             'Juan Dela Cruz',
+            'Administrative Aide',
         );
         \App\Models\ProcurementSignatoryName::remember(
             \App\Models\ProcurementSignatoryName::ROLE_APPROVED,
             'Maria Santos',
+            'Regional Director',
         );
 
         $livewire = Livewire::test(ListAcquisitions::class)
@@ -594,7 +596,9 @@ class AcquisitionPaperworkWorkflowTest extends TestCase
             'office_id' => $office->id,
             'purpose' => 'Printer supplies for RO',
             'requested_by_name' => 'Juan Dela Cruz',
+            'requested_by_designation' => 'Administrative Aide',
             'approved_by_name' => 'Maria Santos',
+            'approved_by_designation' => 'Regional Director',
         ]);
     }
 

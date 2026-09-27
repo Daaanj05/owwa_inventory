@@ -33,25 +33,12 @@ class PurchaseOrderSupplierDeliveryTermTest extends TestCase
         $custodian = User::factory()->create(['role' => User::ROLE_SUPPLY_CUSTODIAN]);
         $this->actingAs($custodian);
 
-        $supplierCreate = Livewire::test(ManageSuppliers::class)
-            ->mountAction('create');
-
-        $addressKey = array_key_first($supplierCreate->get('mountedActions.0.data.addresses') ?? []);
-
-        $supplierCreate
+        Livewire::test(ManageSuppliers::class)
+            ->mountAction('create')
             ->fillForm([
                 'name' => 'Acme Trading',
                 'tin' => '123456789',
-                'addresses' => filled($addressKey)
-                    ? [
-                        $addressKey => [
-                            'address' => '123 Main St',
-                            'is_default' => true,
-                        ],
-                    ]
-                    : [
-                        ['address' => '123 Main St', 'is_default' => true],
-                    ],
+                'address' => '123 Main St',
             ])
             ->callMountedAction()
             ->assertHasNoFormErrors();
@@ -77,6 +64,54 @@ class PurchaseOrderSupplierDeliveryTermTest extends TestCase
         ]);
 
         $this->assertFalse(Schema::hasColumn('suppliers', 'delivery_term'));
+    }
+
+    public function test_single_supplier_address_is_saved_as_the_default(): void
+    {
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+
+        $custodian = User::factory()->create(['role' => User::ROLE_SUPPLY_CUSTODIAN]);
+        $this->actingAs($custodian);
+
+        Livewire::test(ManageSuppliers::class)
+            ->mountAction('create')
+            ->fillForm([
+                'name' => 'Single Address Co',
+                'tin' => '222333444',
+                'address' => 'Only Road',
+            ])
+            ->callMountedAction()
+            ->assertHasNoFormErrors();
+
+        $this->assertDatabaseHas(SupplierAddress::class, [
+            'address' => 'Only Road',
+            'is_default' => true,
+        ]);
+    }
+
+    public function test_second_supplier_address_becomes_the_only_default(): void
+    {
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+
+        $custodian = User::factory()->create(['role' => User::ROLE_SUPPLY_CUSTODIAN]);
+        $this->actingAs($custodian);
+
+        Livewire::test(ManageSuppliers::class)
+            ->mountAction('create')
+            ->fillForm([
+                'name' => 'Two Address Co',
+                'tin' => '555666777',
+                'address' => 'First Road',
+                'secondary_address' => 'Second Road',
+            ])
+            ->callMountedAction()
+            ->assertHasNoFormErrors();
+
+        $supplier = Supplier::query()->where('name', 'Two Address Co')->first();
+        $this->assertNotNull($supplier);
+        $this->assertTrue((bool) $supplier->addresses()->where('address', 'First Road')->value('is_default'));
+        $this->assertFalse((bool) $supplier->addresses()->where('address', 'Second Road')->value('is_default'));
+        $this->assertSame(1, $supplier->addresses()->where('is_default', true)->count());
     }
 
     public function test_po_edit_modal_uses_supplier_and_delivery_term_selects(): void

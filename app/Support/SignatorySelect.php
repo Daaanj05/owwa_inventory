@@ -46,34 +46,52 @@ class SignatorySelect
     }
 
     /**
+     * Designation choices saved on signatories of a printed-name role.
+     */
+    public static function makeDesignation(string $name, string $printedNameRole): Select
+    {
+        return Select::make($name)
+            ->label('Designation')
+            ->options(function (Get $get) use ($name, $printedNameRole): array {
+                $options = collect(ProcurementSignatoryName::designationsForRole($printedNameRole))
+                    ->mapWithKeys(fn (string $value): array => [$value => $value])
+                    ->all();
+                $current = $get($name);
+                if (filled($current) && ! array_key_exists((string) $current, $options)) {
+                    $options[(string) $current] = (string) $current;
+                }
+
+                return $options;
+            })
+            ->searchable()
+            ->preload()
+            ->helperText('Designation of the selected person');
+    }
+
+    /**
      * Official OWWA instruction wording for a signatory role (Appendix PDFs).
      */
     public static function roleInstruction(string $role): ?string
     {
         return match ($role) {
             ProcurementSignatoryName::ROLE_REQUESTED => 'Name of the person requesting the purchase of the item/s.',
-            ProcurementSignatoryName::ROLE_REQUESTED_DESIGNATION => 'Signature, printed name and designation of the person requesting the purchase of the item/s.',
             ProcurementSignatoryName::ROLE_APPROVED => 'Name of the person approving the purchase of the item/s.',
-            ProcurementSignatoryName::ROLE_APPROVED_DESIGNATION => 'Signature, printed name and designation of the person approving the purchase of the item/s.',
             ProcurementSignatoryName::ROLE_INSPECTION_OFFICER => 'Signs the Inspection portion: inspected, verified, and found in order as to quantity and specifications.',
             ProcurementSignatoryName::ROLE_CUSTODIAN => 'Acknowledges receipt on Acceptance: name, signature, date, and complete/partial mark.',
-            ProcurementSignatoryName::ROLE_TRANSFER_APPROVED,
-            ProcurementSignatoryName::ROLE_TRANSFER_APPROVED_DESIGNATION => 'Signature over printed name and designation of Agency/Entity Head (or Head of Supply/Property Unit) and the date of approval.',
-            ProcurementSignatoryName::ROLE_TRANSFER_RELEASED,
-            ProcurementSignatoryName::ROLE_TRANSFER_RELEASED_DESIGNATION => 'Signature over printed name and designation of the assigned releasing officer of the Supply and/or Property Unit and the date released.',
-            ProcurementSignatoryName::ROLE_TRANSFER_RECEIVED,
-            ProcurementSignatoryName::ROLE_TRANSFER_RECEIVED_DESIGNATION => 'Signature over printed name and designation of the assigned receiving officer or employee/user and the date of receipt.',
-            ProcurementSignatoryName::ROLE_TRANSFER_FROM_ACCOUNTABLE => 'Name of the accountable officer/agency/fund cluster where the property is located.',
-            ProcurementSignatoryName::ROLE_TRANSFER_TO_ACCOUNTABLE => 'Name of the accountable officer/agency/fund cluster where the property is to be transferred.',
-            ProcurementSignatoryName::ROLE_PHYSICAL_COUNT_ACCOUNTABLE,
-            ProcurementSignatoryName::ROLE_PHYSICAL_COUNT_ACCOUNTABLE_DESIGNATION => 'Name and official designation of the accountable officer.',
-            ProcurementSignatoryName::ROLE_PHYSICAL_COUNT_CERTIFIED => 'Certified correct by the Inventory Committee Chair and Members.',
-            ProcurementSignatoryName::ROLE_PHYSICAL_COUNT_APPROVED => 'Approved by the Head of Agency/Entity or his/her authorized representative.',
-            ProcurementSignatoryName::ROLE_PHYSICAL_COUNT_VERIFIED => 'Verified by the COA Representative.',
+            ProcurementSignatoryName::ROLE_TRANSFER_APPROVED => 'Name of the Approver',
+            ProcurementSignatoryName::ROLE_TRANSFER_RELEASED => 'Name of the Issuer',
+            ProcurementSignatoryName::ROLE_TRANSFER_RECEIVED => 'Name of the Receiver',
+            ProcurementSignatoryName::ROLE_TRANSFER_APPROVED_DESIGNATION,
+            ProcurementSignatoryName::ROLE_TRANSFER_RELEASED_DESIGNATION,
+            ProcurementSignatoryName::ROLE_TRANSFER_RECEIVED_DESIGNATION => 'Designation of the selected person',
+            ProcurementSignatoryName::ROLE_PHYSICAL_COUNT_ACCOUNTABLE => 'Name of the accountable officer for whom this inventory is held.',
+            ProcurementSignatoryName::ROLE_PHYSICAL_COUNT_CERTIFIED => 'Name of Inventory Committee Chair and Member.',
+            ProcurementSignatoryName::ROLE_PHYSICAL_COUNT_APPROVED => 'Name of Head of Agency/Entity or authorized representative.',
+            ProcurementSignatoryName::ROLE_PHYSICAL_COUNT_VERIFIED => 'Name of COA Representative.',
+            ProcurementSignatoryName::ROLE_DISPOSAL_ACCOUNTABLE_OFFICER => 'Name of the accountable officer on the disposal report.',
+            ProcurementSignatoryName::ROLE_DISPOSAL_AUTHORIZED_OFFICIAL => 'Name of the authorized official approving inspection and disposition.',
             ProcurementSignatoryName::ROLE_DISPOSAL_WITNESS => 'Name of the person who witnessed the disposal.',
-            ProcurementSignatoryName::ROLE_DISPOSAL_AUTHORIZED_DESIGNATION => 'Designation of the Authorized Official approving inspection and disposition.',
-            ProcurementSignatoryName::ROLE_DISPOSAL_ACCOUNTABLE_DESIGNATION => 'Designation of the Accountable Officer.',
-            ProcurementSignatoryName::ROLE_DISPOSAL_ACCOUNTABLE_STATION => 'Station of the Accountable Officer.',
+            ProcurementSignatoryName::ROLE_DISPOSAL_INSPECTION_OFFICER => 'Name of the inspection officer on the disposal report.',
             default => null,
         };
     }
@@ -88,7 +106,7 @@ class SignatorySelect
             'custodian_iirup' => 'Name of the Accountable Officer.',
             'approved_consumables' => 'Name of the Head / Authorized Representative.',
             'approved_iirup' => 'Name of the Head / Authorized Representative.',
-            'inspection_officer' => 'Name of the Inspection Officer.',
+            'inspection_officer' => 'Name of the inspection officer on the disposal report.',
             'witness' => 'Name of the person who witnessed the disposal.',
             default => null,
         };
@@ -114,28 +132,20 @@ class SignatorySelect
     {
         return [
             ProcurementSignatoryName::ROLE_REQUESTED => 'Requested By',
-            ProcurementSignatoryName::ROLE_REQUESTED_DESIGNATION => 'Requested by (designation)',
             ProcurementSignatoryName::ROLE_APPROVED => 'Approve By',
-            ProcurementSignatoryName::ROLE_APPROVED_DESIGNATION => 'Approved by (designation)',
             ProcurementSignatoryName::ROLE_INSPECTION_OFFICER => 'Inspection officer',
             ProcurementSignatoryName::ROLE_CUSTODIAN => 'Custodian / accountable officer',
             ProcurementSignatoryName::ROLE_TRANSFER_APPROVED => 'Transfer — Approved by',
-            ProcurementSignatoryName::ROLE_TRANSFER_APPROVED_DESIGNATION => 'Transfer — Approved by designation',
             ProcurementSignatoryName::ROLE_TRANSFER_RELEASED => 'Transfer — Released by',
-            ProcurementSignatoryName::ROLE_TRANSFER_RELEASED_DESIGNATION => 'Transfer — Released by designation',
             ProcurementSignatoryName::ROLE_TRANSFER_RECEIVED => 'Transfer — Received by',
-            ProcurementSignatoryName::ROLE_TRANSFER_RECEIVED_DESIGNATION => 'Transfer — Received by designation',
-            ProcurementSignatoryName::ROLE_TRANSFER_FROM_ACCOUNTABLE => 'Transfer — From accountable officer',
-            ProcurementSignatoryName::ROLE_TRANSFER_TO_ACCOUNTABLE => 'Transfer — To accountable officer',
-            ProcurementSignatoryName::ROLE_PHYSICAL_COUNT_ACCOUNTABLE => 'Physical count — Accountable officer',
-            ProcurementSignatoryName::ROLE_PHYSICAL_COUNT_ACCOUNTABLE_DESIGNATION => 'Physical count — Accountable designation',
-            ProcurementSignatoryName::ROLE_PHYSICAL_COUNT_CERTIFIED => 'Physical count — Certified by',
+            ProcurementSignatoryName::ROLE_PHYSICAL_COUNT_ACCOUNTABLE => 'Physical count — Accountable Officer',
+            ProcurementSignatoryName::ROLE_PHYSICAL_COUNT_CERTIFIED => 'Physical count — Certified Correct by',
             ProcurementSignatoryName::ROLE_PHYSICAL_COUNT_APPROVED => 'Physical count — Approved by',
             ProcurementSignatoryName::ROLE_PHYSICAL_COUNT_VERIFIED => 'Physical count — Verified by',
+            ProcurementSignatoryName::ROLE_DISPOSAL_ACCOUNTABLE_OFFICER => 'Disposal — Accountable officer',
+            ProcurementSignatoryName::ROLE_DISPOSAL_AUTHORIZED_OFFICIAL => 'Disposal — Authorized official',
+            ProcurementSignatoryName::ROLE_DISPOSAL_INSPECTION_OFFICER => 'Disposal — Inspection officer name',
             ProcurementSignatoryName::ROLE_DISPOSAL_WITNESS => 'Disposal — Witness',
-            ProcurementSignatoryName::ROLE_DISPOSAL_AUTHORIZED_DESIGNATION => 'Disposal — Authorized official designation',
-            ProcurementSignatoryName::ROLE_DISPOSAL_ACCOUNTABLE_DESIGNATION => 'Disposal — Accountable designation',
-            ProcurementSignatoryName::ROLE_DISPOSAL_ACCOUNTABLE_STATION => 'Disposal — Accountable station',
         ];
     }
 
@@ -149,34 +159,26 @@ class SignatorySelect
         return [
             'pr_iar' => [
                 ProcurementSignatoryName::ROLE_REQUESTED,
-                ProcurementSignatoryName::ROLE_REQUESTED_DESIGNATION,
                 ProcurementSignatoryName::ROLE_APPROVED,
-                ProcurementSignatoryName::ROLE_APPROVED_DESIGNATION,
                 ProcurementSignatoryName::ROLE_INSPECTION_OFFICER,
                 ProcurementSignatoryName::ROLE_CUSTODIAN,
             ],
             'transfer' => [
                 ProcurementSignatoryName::ROLE_TRANSFER_APPROVED,
-                ProcurementSignatoryName::ROLE_TRANSFER_APPROVED_DESIGNATION,
                 ProcurementSignatoryName::ROLE_TRANSFER_RELEASED,
-                ProcurementSignatoryName::ROLE_TRANSFER_RELEASED_DESIGNATION,
                 ProcurementSignatoryName::ROLE_TRANSFER_RECEIVED,
-                ProcurementSignatoryName::ROLE_TRANSFER_RECEIVED_DESIGNATION,
-                ProcurementSignatoryName::ROLE_TRANSFER_FROM_ACCOUNTABLE,
-                ProcurementSignatoryName::ROLE_TRANSFER_TO_ACCOUNTABLE,
             ],
             'physical_count' => [
                 ProcurementSignatoryName::ROLE_PHYSICAL_COUNT_ACCOUNTABLE,
-                ProcurementSignatoryName::ROLE_PHYSICAL_COUNT_ACCOUNTABLE_DESIGNATION,
                 ProcurementSignatoryName::ROLE_PHYSICAL_COUNT_CERTIFIED,
                 ProcurementSignatoryName::ROLE_PHYSICAL_COUNT_APPROVED,
                 ProcurementSignatoryName::ROLE_PHYSICAL_COUNT_VERIFIED,
             ],
             'disposal' => [
+                ProcurementSignatoryName::ROLE_DISPOSAL_ACCOUNTABLE_OFFICER,
+                ProcurementSignatoryName::ROLE_DISPOSAL_AUTHORIZED_OFFICIAL,
+                ProcurementSignatoryName::ROLE_DISPOSAL_INSPECTION_OFFICER,
                 ProcurementSignatoryName::ROLE_DISPOSAL_WITNESS,
-                ProcurementSignatoryName::ROLE_DISPOSAL_AUTHORIZED_DESIGNATION,
-                ProcurementSignatoryName::ROLE_DISPOSAL_ACCOUNTABLE_DESIGNATION,
-                ProcurementSignatoryName::ROLE_DISPOSAL_ACCOUNTABLE_STATION,
             ],
         ];
     }
@@ -225,6 +227,21 @@ class SignatorySelect
         }
 
         return $options;
+    }
+
+    public static function tabForRole(?string $role): ?string
+    {
+        if ($role === null || $role === '') {
+            return null;
+        }
+
+        foreach (self::roleGroups() as $tab => $roles) {
+            if (in_array($role, $roles, true)) {
+                return $tab;
+            }
+        }
+
+        return null;
     }
 
     public static function defaultRoleForTab(?string $tab): ?string

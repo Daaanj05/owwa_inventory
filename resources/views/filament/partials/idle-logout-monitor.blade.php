@@ -17,7 +17,11 @@
             timer: null,
             warningTimer: null,
             countdown: null,
-            resetIdle() {
+            lastBroadcastAt: 0,
+            activityKey: 'owwa_idle_activity_at',
+            logoutKey: 'owwa_idle_logout_at',
+            broadcastGapMs: 2000,
+            resetIdle(broadcast = true) {
                 clearTimeout(this.timer);
                 clearTimeout(this.warningTimer);
                 clearInterval(this.countdown);
@@ -38,19 +42,43 @@
                     }, this.idleMs - this.warningMs);
                 }
                 this.timer = setTimeout(() => this.logout(), this.idleMs);
+                if (broadcast) {
+                    this.broadcastActivity();
+                }
+            },
+            broadcastActivity() {
+                const now = Date.now();
+                if (now - this.lastBroadcastAt < this.broadcastGapMs) {
+                    return;
+                }
+                this.lastBroadcastAt = now;
+                try {
+                    localStorage.setItem(this.activityKey, String(now));
+                } catch (e) {}
             },
             logout() {
                 clearTimeout(this.timer);
                 clearTimeout(this.warningTimer);
                 clearInterval(this.countdown);
+                try {
+                    localStorage.setItem(this.logoutKey, String(Date.now()));
+                } catch (e) {}
                 // Navigate to recover (GET logout). Do not POST with the page CSRF —
                 // a stale token returns 419 and leaves the user signed in.
                 window.location.replace(@js($recoverUrl));
             },
             init() {
                 const events = ['mousedown', 'mousemove', 'keydown', 'scroll', 'touchstart', 'click'];
-                events.forEach((event) => window.addEventListener(event, () => this.resetIdle(), { passive: true }));
-                this.resetIdle();
+                events.forEach((event) => window.addEventListener(event, () => this.resetIdle(true), { passive: true }));
+                window.addEventListener('storage', (event) => {
+                    if (event.key === this.activityKey && event.newValue) {
+                        this.resetIdle(false);
+                    }
+                    if (event.key === this.logoutKey && event.newValue) {
+                        window.location.replace(@js($recoverUrl));
+                    }
+                });
+                this.resetIdle(false);
             },
         }"
         x-cloak
@@ -71,7 +99,7 @@
                     <span x-show="secondsLeft > 0">in <strong x-text="secondsLeft"></strong> seconds</span>.
                 </p>
                 <div class="owwa-idle-logout-actions">
-                    <button type="button" class="owwa-idle-logout-btn owwa-idle-logout-btn--primary" @click="resetIdle()">
+                    <button type="button" class="owwa-idle-logout-btn owwa-idle-logout-btn--primary" @click="resetIdle(true)">
                         Stay signed in
                     </button>
                     <button type="button" class="owwa-idle-logout-btn" @click="logout()">

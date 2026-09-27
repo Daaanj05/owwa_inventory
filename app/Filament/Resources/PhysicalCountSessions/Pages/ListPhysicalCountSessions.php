@@ -2,6 +2,8 @@
 
 namespace App\Filament\Resources\PhysicalCountSessions\Pages;
 
+use App\Filament\Concerns\HasSearchRowToolbarActions;
+use App\Filament\Concerns\HasSetupArchiveView;
 use App\Filament\Concerns\SyncsActiveItemCategory;
 use App\Filament\Resources\PhysicalCountSessions\Concerns\HasPhysicalCountWizardBreadcrumbs;
 use App\Filament\Resources\PhysicalCountSessions\PhysicalCountSessionResource;
@@ -16,7 +18,7 @@ use App\Support\PhysicalCountPropertyClassResolver;
 use Filament\Actions\Action;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ListRecords;
-use Filament\Schemas\Components\Tabs\Tab;
+use Filament\Tables\Table;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Database\Eloquent\Builder;
 use Livewire\Attributes\Url;
@@ -24,12 +26,16 @@ use Livewire\Attributes\Url;
 class ListPhysicalCountSessions extends ListRecords
 {
     use HasPhysicalCountWizardBreadcrumbs;
+    use HasSearchRowToolbarActions;
+    use HasSetupArchiveView;
     use SyncsActiveItemCategory;
 
     #[Url]
     public int|string|null $category = null;
 
     protected static string $resource = PhysicalCountSessionResource::class;
+
+    protected bool $loadItemsOnCreate = true;
 
     public function getTitle(): string|Htmlable
     {
@@ -51,17 +57,71 @@ class ListPhysicalCountSessions extends ListRecords
         parent::mount();
 
         $this->syncActiveItemCategoryFromRequest();
+        $this->registerSetupArchiveViewHook();
     }
 
-    public function getTabs(): array
+    protected function setupArchiveViewArchivedCount(): int
+    {
+        $query = PhysicalCountSession::query()->whereNotNull('archived_at');
+        $categoryId = $this->activeItemCategoryId();
+        if ($categoryId > 0) {
+            $query->where('item_category_id', $categoryId);
+        }
+
+        return CustodianOfficeScope::applyOfficeColumn($query)->count();
+    }
+
+    public function table(Table $table): Table
+    {
+        return parent::table($table)
+            ->modifyQueryUsing(fn (Builder $query): Builder => $this->applySetupArchiveQuery($query))
+            ->emptyStateHeading(fn (): string => $this->showingArchived
+                ? 'No archived physical counts'
+                : 'No physical counts')
+            ->emptyStateDescription(fn (): string => $this->showingArchived
+                ? 'Archived sessions will appear here. Switch back to Active to continue counting.'
+                : 'Create a physical count session to get started.');
+    }
+
+    /**
+     * @return list<array{label: string, action?: string, url?: string, style?: string}>
+     */
+    protected function searchRowToolbarButtons(): array
+    {
+        if ($this->showingArchived) {
+            return [];
+        }
+
+        $buttons = [];
+
+        if ($this->activeCategorySupportsMobileCount()) {
+            $buttons[] = [
+                'label' => 'Start count (mobile)',
+                'url' => PhysicalCountSessionResource::getUrl('start-mobile', [
+                    'category' => $this->activeItemCategoryId(),
+                ]),
+                'style' => 'primary',
+            ];
+        }
+
+        $buttons[] = [
+            'label' => 'New physical count',
+            'action' => 'create',
+            'style' => 'primary',
+        ];
+
+        return $buttons;
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    public function getPageClasses(): array
     {
         return [
-            'active' => Tab::make('Active')
-                ->modifyQueryUsing(fn (Builder $query): Builder => $query->whereNull('archived_at'))
-                ->excludeQueryWhenResolvingRecord(),
-            'archived' => Tab::make('Archived')
-                ->modifyQueryUsing(fn (Builder $query): Builder => $query->whereNotNull('archived_at'))
-                ->excludeQueryWhenResolvingRecord(),
+            ...parent::getPageClasses(),
+            'owwa-setup-archive-toggle',
+            'owwa-search-row-toolbar',
         ];
     }
 
@@ -72,13 +132,23 @@ class ListPhysicalCountSessions extends ListRecords
                 ->label('Start count (mobile)')
                 ->icon('heroicon-o-device-phone-mobile')
                 ->color('primary')
-                ->visible(fn (): bool => $this->activeCategorySupportsMobileCount())
+                ->visible(fn (): bool => ! $this->showingArchived && $this->activeCategorySupportsMobileCount())
                 ->url(fn (): string => PhysicalCountSessionResource::getUrl('start-mobile', [
                     'category' => $this->activeItemCategoryId(),
                 ])),
-            OwwaFormModalDefaults::createActionForResource(PhysicalCountSessionResource::class, OwwaFormModalDefaults::WIDTH_STANDARD)
+            OwwaFormModalDefaults::createActionForResource(
+                PhysicalCountSessionResource::class,
+                OwwaFormModalDefaults::WIDTH_STANDARD,
+                $this->consumableCreateModalDescription(),
+            )
+                ->visible(fn (): bool => ! $this->showingArchived)
                 ->fillForm(fn (): array => PhysicalCountSessionForm::defaultCreateFormData($this->activeItemCategoryId()))
                 ->mutateFormDataUsing(function (array $data): array {
+                    $this->loadItemsOnCreate = array_key_exists('load_items_on_create', $data)
+                        ? (bool) $data['load_items_on_create']
+                        : false;
+                    unset($data['load_items_on_create']);
+
                     $categoryId = $this->activeItemCategoryId();
                     if ($categoryId > 0) {
                         $data['item_category_id'] = $categoryId;
@@ -104,20 +174,32 @@ class ListPhysicalCountSessions extends ListRecords
                     PhysicalCountPropertyClassResolver::syncSession($record);
 
                     if ($record->isConsumablePhysicalCount()) {
+                        if ($this->loadItemsOnCreate) {
+                            $result = app(PhysicalCountPreloadService::class)->preloadFromStockBalances($record);
+
+                            Notification::make()
+                                ->title('Physical count created — items loaded')
+                                ->body("Created {$result['created']}, updated {$result['updated']}, skipped {$result['skipped']}. Next: enter On hand per count for each item.")
+                                ->success()
+                                ->send();
+
+                            return;
+                        }
+
                         Notification::make()
                             ->title('Physical count session created')
-                            ->body('Next: load stock lines or add items. Inventory type is set automatically from those items.')
+                            ->body('Next: Load Items from the session view, or add items manually. Inventory type is set automatically from those items.')
                             ->success()
                             ->actions([
                                 Action::make('preload')
-                                    ->label('Load stock lines now')
+                                    ->label('Load Items now')
                                     ->button()
                                     ->action(function () use ($record): void {
                                         $result = app(PhysicalCountPreloadService::class)->preloadFromStockBalances($record);
 
                                         Notification::make()
-                                            ->title('Stock lines loaded')
-                                            ->body("Created {$result['created']}, updated {$result['updated']}, skipped {$result['skipped']}.")
+                                            ->title('Items loaded')
+                                            ->body("Created {$result['created']}, updated {$result['updated']}, skipped {$result['skipped']}. Enter On hand per count for each item.")
                                             ->success()
                                             ->send();
                                     }),
@@ -157,6 +239,25 @@ class ListPhysicalCountSessions extends ListRecords
                 })
                 ->successRedirectUrl(fn (PhysicalCountSession $record): string => PhysicalCountSessionResource::viewModalUrl($record)),
         ];
+    }
+
+    protected function consumableCreateModalDescription(): ?string
+    {
+        if (! $this->activeCategoryIsConsumable()) {
+            return null;
+        }
+
+        return PhysicalCountSessionForm::loadItemsCreateModalDescription();
+    }
+
+    protected function activeCategoryIsConsumable(): bool
+    {
+        $categoryId = $this->activeItemCategoryId();
+        if ($categoryId <= 0) {
+            return true;
+        }
+
+        return ItemCategory::query()->find($categoryId)?->getTemplateSlug() === 'consumables';
     }
 
     protected function activeCategorySupportsMobileCount(): bool

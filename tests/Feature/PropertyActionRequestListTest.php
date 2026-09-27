@@ -201,6 +201,82 @@ class PropertyActionRequestListTest extends TestCase
             ->assertCanNotSeeTableRecords([$requestB]);
     }
 
+    public function test_uc_property_return_uses_archive_icons_like_requisitions(): void
+    {
+        $office = Office::factory()->create();
+        $department = Department::query()->create([
+            'office_id' => $office->id,
+            'name' => 'Operations',
+            'code' => 'OPS',
+        ]);
+        $employee = User::factory()->create([
+            'role' => User::ROLE_EMPLOYEE,
+            'office_id' => $office->id,
+            'department_id' => $department->id,
+        ]);
+        $uc = User::factory()->create([
+            'role' => User::ROLE_UNIT_CONSOLIDATOR,
+            'office_id' => $office->id,
+            'department_id' => $department->id,
+        ]);
+        $uc->syncOfficeAssignments([
+            ['office_id' => $office->id, 'department_id' => $department->id],
+        ]);
+
+        $active = PropertyActionRequest::query()->create([
+            'reference_code' => 'PAREQ-ACTIVE',
+            'action_type' => PropertyActionRequest::ACTION_RETURN,
+            'reason_code' => 'good_condition',
+            'requested_by' => $employee->id,
+            'accountable_user_id' => $uc->id,
+            'office_id' => $office->id,
+            'department_id' => $department->id,
+            'status' => PropertyActionRequest::STATUS_PENDING_UC,
+        ]);
+        $archived = PropertyActionRequest::query()->create([
+            'reference_code' => 'PAREQ-ARCHIVED',
+            'action_type' => PropertyActionRequest::ACTION_RETURN,
+            'reason_code' => 'good_condition',
+            'requested_by' => $employee->id,
+            'accountable_user_id' => $uc->id,
+            'office_id' => $office->id,
+            'department_id' => $department->id,
+            'status' => PropertyActionRequest::STATUS_PENDING_UC,
+            'archived_at' => now(),
+        ]);
+
+        $html = Livewire::actingAs($uc)
+            ->test(ListPropertyActionRequests::class, [
+                'ucTab' => 'received',
+                'ucOfficeId' => $office->id,
+                'ucDepartmentId' => $department->id,
+            ])
+            ->assertSeeHtml('owwa-uc-archive-toggle')
+            ->assertSeeHtml('aria-label="Active"')
+            ->assertSeeHtml('aria-label="Archived"')
+            ->assertCanSeeTableRecords([$active])
+            ->assertCanNotSeeTableRecords([$archived])
+            ->set('activeTab', 'archived')
+            ->assertCanSeeTableRecords([$archived])
+            ->assertCanNotSeeTableRecords([$active])
+            ->html();
+
+        $this->assertMatchesRegularExpression(
+            '/owwa-search-row-actions[\s\S]*New Property Return/',
+            $html,
+        );
+        $this->assertStringNotContainsString('fi-header-actions-ctn', $html);
+
+        Livewire::actingAs($uc)
+            ->test(ListPropertyActionRequests::class, [
+                'ucTab' => 'received',
+                'ucOfficeId' => $office->id,
+                'ucDepartmentId' => $department->id,
+            ])
+            ->mountAction('create')
+            ->assertActionMounted('create');
+    }
+
     public function test_uc_sent_list_shows_endorsed_employee_property_returns(): void
     {
         $office = Office::factory()->create();

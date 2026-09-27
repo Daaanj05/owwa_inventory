@@ -2,6 +2,8 @@
 
 namespace App\Filament\Resources\Items\Pages;
 
+use App\Filament\Concerns\HasSearchRowToolbarActions;
+use App\Filament\Concerns\HasSetupArchiveView;
 use App\Filament\Concerns\HasSystemAdminWizardHeading;
 use App\Filament\Concerns\SyncsActiveItemCategory;
 use App\Filament\Resources\Items\Actions\ItemBulkCreateAction;
@@ -12,19 +14,15 @@ use App\Models\ItemCategory;
 use App\Support\CategoryWizardBreadcrumb;
 use Filament\Actions\Action;
 use Filament\Resources\Pages\ListRecords;
-use Filament\Schemas\Components\Actions;
-use Filament\Schemas\Components\EmbeddedTable;
-use Filament\Schemas\Components\Flex;
-use Filament\Schemas\Components\RenderHook;
-use Filament\Schemas\Components\Tabs\Tab;
-use Filament\Schemas\Schema;
-use Filament\View\PanelsRenderHook;
+use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Livewire\Attributes\On;
 use Livewire\Attributes\Url;
 
 class ListItems extends ListRecords
 {
+    use HasSearchRowToolbarActions;
+    use HasSetupArchiveView;
     use HasSystemAdminWizardHeading;
     use SyncsActiveItemCategory;
 
@@ -62,6 +60,18 @@ class ListItems extends ListRecords
         parent::mount();
 
         $this->syncActiveItemCategoryFromRequest();
+        $this->registerSetupArchiveViewHook();
+    }
+
+    protected function setupArchiveViewArchivedCount(): int
+    {
+        return ItemResource::getEloquentQuery()->whereNotNull('archived_at')->count();
+    }
+
+    public function table(Table $table): Table
+    {
+        return parent::table($table)
+            ->modifyQueryUsing(fn (Builder $query): Builder => $this->applySetupArchiveQuery($query));
     }
 
     public function getHeading(): string|\Illuminate\Contracts\Support\Htmlable
@@ -84,56 +94,61 @@ class ListItems extends ListRecords
         return null;
     }
 
-    public function getTabs(): array
+    protected function getHeaderActions(): array
     {
         return [
-            'active' => Tab::make('Active')
-                ->modifyQueryUsing(fn (Builder $query): Builder => $query->whereNull('archived_at'))
-                ->excludeQueryWhenResolvingRecord(),
-            'archived' => Tab::make('Archived')
-                ->modifyQueryUsing(fn (Builder $query): Builder => $query->whereNotNull('archived_at'))
-                ->excludeQueryWhenResolvingRecord(),
+            ItemImportAction::make()
+                ->extraAttributes(fn (): array => $this->isActiveImportableCategory()
+                    ? []
+                    : ['class' => 'hidden']),
+            ItemBulkCreateAction::make()
+                ->visible(fn (): bool => ! $this->showingArchived),
+            OwwaFormModalDefaults::createActionForResource(ItemResource::class, OwwaFormModalDefaults::WIDTH_COMPACT)
+                ->visible(fn (): bool => ! $this->showingArchived)
+                ->fillForm(fn (): array => [
+                    'item_category_id' => $this->activeItemCategoryId() ?: null,
+                ])
+                ->modalHeading('Item')
+                ->mutateDataUsing(function (array $data): array {
+                    $categoryId = $this->activeItemCategoryId();
+                    if ($categoryId > 0) {
+                        $data['item_category_id'] = $categoryId;
+                    }
+
+                    return $data;
+                }),
         ];
     }
 
-    public function content(Schema $schema): Schema
+    /**
+     * @return list<array{label: string, action?: string, url?: string, style?: string}>
+     */
+    protected function searchRowToolbarButtons(): array
     {
-        $createAction = OwwaFormModalDefaults::createActionForResource(ItemResource::class, OwwaFormModalDefaults::WIDTH_COMPACT)
-            ->fillForm(fn (): array => [
-                'item_category_id' => $this->activeItemCategoryId() ?: null,
-            ])
-            ->modalHeading('Item')
-            ->mutateDataUsing(function (array $data): array {
-                $categoryId = $this->activeItemCategoryId();
-                if ($categoryId > 0) {
-                    $data['item_category_id'] = $categoryId;
-                }
+        $buttons = [];
 
-                return $data;
-            });
+        if ($this->isActiveImportableCategory()) {
+            $buttons[] = [
+                'label' => 'Import',
+                'action' => 'importConsumableItems',
+                'style' => 'gray',
+            ];
+        }
 
-        return $schema
-            ->components([
-                Flex::make([
-                    $this->getTabsContentComponent(),
-                    Actions::make([
-                        ItemImportAction::make()
-                            ->extraAttributes(fn (): array => $this->isActiveImportableCategory()
-                                ? []
-                                : ['class' => 'hidden']),
-                        ItemBulkCreateAction::make(),
-                        $createAction,
-                    ])->alignEnd(),
-                ])->alignBetween()->verticallyAlignCenter(),
-                RenderHook::make(PanelsRenderHook::RESOURCE_PAGES_LIST_RECORDS_TABLE_BEFORE),
-                EmbeddedTable::make(),
-                RenderHook::make(PanelsRenderHook::RESOURCE_PAGES_LIST_RECORDS_TABLE_AFTER),
-            ]);
-    }
+        if (! $this->showingArchived) {
+            $buttons[] = [
+                'label' => 'Add Many Items',
+                'action' => 'bulkCreateItems',
+                'style' => 'primary',
+            ];
+            $buttons[] = [
+                'label' => 'New Item',
+                'action' => 'create',
+                'style' => 'primary',
+            ];
+        }
 
-    protected function getHeaderActions(): array
-    {
-        return [];
+        return $buttons;
     }
 
     public function importConsumableResultsAction(): Action
@@ -226,7 +241,12 @@ class ListItems extends ListRecords
      */
     public function getPageClasses(): array
     {
-        $classes = array_merge(parent::getPageClasses(), ['owwa-items-list-page', 'owwa-wide-table-page']);
+        $classes = array_merge(parent::getPageClasses(), [
+            'owwa-setup-archive-toggle',
+            'owwa-search-row-toolbar',
+            'owwa-items-list-page',
+            'owwa-wide-table-page',
+        ]);
 
         $categoryName = ItemCategory::query()->whereKey($this->activeItemCategoryId())->value('name');
 

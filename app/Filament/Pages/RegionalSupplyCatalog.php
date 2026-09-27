@@ -26,7 +26,7 @@ class RegionalSupplyCatalog extends Page
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedBuildingStorefront;
 
-    protected static string|UnitEnum|null $navigationGroup = 'Requisitions';
+    protected static string|UnitEnum|null $navigationGroup = 'Regional supply';
 
     protected static ?string $navigationLabel = 'Regional Supply Catalog';
 
@@ -70,7 +70,7 @@ class RegionalSupplyCatalog extends Page
         $dashboardUrl = route('filament.admin.pages.dashboard');
 
         return new HtmlString(sprintf(
-            '<span class="owwa-wizard-title" role="list"><a class="owwa-wizard-step owwa-wizard-step-link" href="%s" role="listitem">Requisitions</a><span class="owwa-wizard-separator" aria-hidden="true">&gt;</span><span class="owwa-wizard-step owwa-wizard-step-current" role="listitem">Regional Supply Catalog</span></span>',
+            '<span class="owwa-wizard-title" role="list"><a class="owwa-wizard-step owwa-wizard-step-link" href="%s" role="listitem">Regional supply</a><span class="owwa-wizard-separator" aria-hidden="true">&gt;</span><span class="owwa-wizard-step owwa-wizard-step-current" role="listitem">Regional Supply Catalog</span></span>',
             e($dashboardUrl),
         ));
     }

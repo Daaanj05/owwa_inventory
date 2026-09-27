@@ -38,11 +38,12 @@ class AuditSessionController extends Controller
             $this->endSession($request, $reason);
         }
 
-        $query = $reason === UserLog::LOGOUT_IDLE_TIMEOUT
-            ? ['logged_out' => '1']
-            : ['reauth' => '1'];
-
-        return redirect()->to($this->defaultLoginUrl().'?'.http_build_query($query));
+        return redirect()
+            ->to($this->defaultLoginUrl())
+            ->with(
+                'auth_signed_out',
+                $reason === UserLog::LOGOUT_IDLE_TIMEOUT ? 'idle' : 'expired',
+            );
     }
 
     public function idleLogout(Request $request): RedirectResponse

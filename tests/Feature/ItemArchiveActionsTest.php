@@ -46,14 +46,13 @@ class ItemArchiveActionsTest extends TestCase
 
         Livewire::withQueryParams(['category' => (string) $category->id])
             ->test(ListItems::class)
-            ->set('activeTab', 'active')
             ->callAction(TestAction::make('archive')->table($item));
 
         $this->assertNotNull($item->fresh()->archived_at);
 
         Livewire::withQueryParams(['category' => (string) $category->id])
             ->test(ListItems::class)
-            ->set('activeTab', 'archived')
+            ->set('showingArchived', true)
             ->callAction(TestAction::make('restore')->table($item->fresh()));
 
         $this->assertNull($item->fresh()->archived_at);

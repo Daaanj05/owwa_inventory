@@ -127,8 +127,8 @@ class PurchaseOrderActions
     {
         return Action::make('archivePo')
             ->label('Archive')
-            ->icon('heroicon-o-archive-box')
-            ->color('gray')
+            ->icon('heroicon-o-trash')
+            ->color('danger')
             ->visible(fn (PurchaseOrder $record): bool => ! $record->isArchived()
                 && ($record->isDraft() || $record->isPendingApproval()))
             ->requiresConfirmation()

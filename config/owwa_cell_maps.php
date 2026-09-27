@@ -488,6 +488,8 @@ return [
             'sold_public' => 'C34',
             'transferred_without_cost' => 'C35',
         ],
+        'transfer_agency' => 'D35',
+        'transfer_agency_prefix' => 'Transferred without cost to ',
         'signatures' => [
             'prepared_by' => 'B25',
             'approved_by' => 'G25',

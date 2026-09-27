@@ -25,6 +25,7 @@ class Disposal extends Model
         'reason',
         'disposal_type',
         'disposal_mode',
+        'transfer_agency_name',
         'wmr_inspection_item_no',
         'remarks',
         'property_number',
@@ -147,22 +148,18 @@ class Disposal extends Model
         });
 
         static::saved(function (Disposal $disposal): void {
-            ProcurementSignatoryName::remember(ProcurementSignatoryName::ROLE_CUSTODIAN, $disposal->custodian_printed_name);
-            ProcurementSignatoryName::remember(ProcurementSignatoryName::ROLE_APPROVED, $disposal->approved_by_printed_name);
-            ProcurementSignatoryName::remember(ProcurementSignatoryName::ROLE_INSPECTION_OFFICER, $disposal->inspection_officer_printed_name);
-            ProcurementSignatoryName::remember(ProcurementSignatoryName::ROLE_DISPOSAL_WITNESS, $disposal->witness_printed_name);
             ProcurementSignatoryName::remember(
-                ProcurementSignatoryName::ROLE_DISPOSAL_AUTHORIZED_DESIGNATION,
-                $disposal->authorized_official_designation,
-            );
-            ProcurementSignatoryName::remember(
-                ProcurementSignatoryName::ROLE_DISPOSAL_ACCOUNTABLE_DESIGNATION,
+                ProcurementSignatoryName::ROLE_DISPOSAL_ACCOUNTABLE_OFFICER,
+                $disposal->custodian_printed_name,
                 $disposal->accountable_officer_designation,
             );
             ProcurementSignatoryName::remember(
-                ProcurementSignatoryName::ROLE_DISPOSAL_ACCOUNTABLE_STATION,
-                $disposal->accountable_officer_station,
+                ProcurementSignatoryName::ROLE_DISPOSAL_AUTHORIZED_OFFICIAL,
+                $disposal->approved_by_printed_name,
+                $disposal->authorized_official_designation,
             );
+            ProcurementSignatoryName::remember(ProcurementSignatoryName::ROLE_DISPOSAL_INSPECTION_OFFICER, $disposal->inspection_officer_printed_name);
+            ProcurementSignatoryName::remember(ProcurementSignatoryName::ROLE_DISPOSAL_WITNESS, $disposal->witness_printed_name);
         });
     }
 }

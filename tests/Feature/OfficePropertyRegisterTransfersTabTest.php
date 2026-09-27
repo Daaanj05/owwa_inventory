@@ -45,6 +45,7 @@ class OfficePropertyRegisterTransfersTabTest extends TestCase
                 'from_office_id' => $other->id,
                 'to_office_id' => $home->id,
                 'quantity' => 1,
+                'transfer_type' => 'donation',
                 'transfer_date' => now()->toDateString(),
                 'recorded_by' => $custodian->id,
             ]);
@@ -54,6 +55,7 @@ class OfficePropertyRegisterTransfersTabTest extends TestCase
                 'from_office_id' => $home->id,
                 'to_office_id' => $other->id,
                 'quantity' => 2,
+                'transfer_type' => 'return',
                 'transfer_date' => now()->toDateString(),
                 'recorded_by' => $custodian->id,
             ]);
@@ -71,6 +73,8 @@ class OfficePropertyRegisterTransfersTabTest extends TestCase
             ->assertSee('Outgoing')
             ->assertSee('Home Office')
             ->assertSee('Other Office')
+            ->assertSee('Donation')
+            ->assertSee('Return to stock')
             ->set('direction', 'incoming')
             ->assertSee('PTR-IN-1')
             ->assertDontSee('PTR-OUT-1')

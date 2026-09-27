@@ -29,9 +29,17 @@
                 <h2 class="owwa-login-form-title">Welcome!</h2>
             </div>
 
-            @if (request()->boolean('logged_out') || request()->boolean('reauth'))
+            @php
+                $signedOutNotice = session('auth_signed_out');
+                if (! in_array($signedOutNotice, ['idle', 'expired'], true)) {
+                    $signedOutNotice = request()->boolean('logged_out')
+                        ? 'idle'
+                        : (request()->boolean('reauth') ? 'expired' : null);
+                }
+            @endphp
+            @if (in_array($signedOutNotice, ['idle', 'expired'], true))
                 <div class="owwa-login-verified-banner" role="status">
-                    @if (request()->boolean('logged_out'))
+                    @if ($signedOutNotice === 'idle')
                         Signed out due to inactivity. Please sign in again.
                     @else
                         Signed out. Please sign in again.

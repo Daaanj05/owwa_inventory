@@ -21,7 +21,7 @@
             <dd>{{ $header['category_name'] }}</dd>
         </div>
         <div class="owwa-stock-ledger-header-item">
-            <dt>Balance on hand</dt>
+            <dt>Received</dt>
             <dd>{{ number_format((int) ($header['total_on_hand'] ?? 0)) }}</dd>
         </div>
     </dl>

@@ -349,7 +349,7 @@ class ProcurementAnalyticsPageTest extends TestCase
         $job->handle(app(AiProcurementRecommendationService::class));
 
         $run->refresh();
-        $this->assertSame('draft', $run->status);
+        $this->assertSame('pending', $run->status);
         $this->assertStringContainsString('Reorder high-priority toner', (string) $run->raw_response);
         $this->assertGreaterThan(0, $run->items()->count());
     }
@@ -405,7 +405,7 @@ class ProcurementAnalyticsPageTest extends TestCase
             'ran_at' => now(),
             'period_from' => now()->subMonths(11)->startOfMonth()->toDateString(),
             'period_to' => now()->endOfMonth()->toDateString(),
-            'status' => 'draft',
+            'status' => 'pending',
             'raw_response' => "Reorder paper supplies now.\n\n| Priority | Item |",
             'created_by' => $custodian->id,
         ]);
@@ -598,7 +598,7 @@ class ProcurementAnalyticsPageTest extends TestCase
             'ran_at' => now(),
             'period_from' => now()->subMonths(11)->startOfMonth()->toDateString(),
             'period_to' => now()->endOfMonth()->toDateString(),
-            'status' => 'draft',
+            'status' => 'pending',
             'raw_response' => "Stock gaps need attention now.\n\n| Priority | Item |",
             'created_by' => $custodian->id,
         ]);
@@ -628,7 +628,7 @@ class ProcurementAnalyticsPageTest extends TestCase
             'ran_at' => now(),
             'period_from' => now()->subMonths(11)->startOfMonth()->toDateString(),
             'period_to' => now()->endOfMonth()->toDateString(),
-            'status' => 'draft',
+            'status' => 'pending',
             'raw_response' => "Stock gaps need attention now.\n\n| Priority | Item |",
             'created_by' => $custodian->id,
         ]);
@@ -665,7 +665,7 @@ class ProcurementAnalyticsPageTest extends TestCase
             'ran_at' => now(),
             'period_from' => now()->subMonths(11)->startOfMonth()->toDateString(),
             'period_to' => now()->endOfMonth()->toDateString(),
-            'status' => 'draft',
+            'status' => 'pending',
             'raw_response' => "View-result narrative ready.\n\n| Priority | Item |",
             'created_by' => $custodian->id,
         ]);

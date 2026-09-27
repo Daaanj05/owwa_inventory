@@ -93,6 +93,11 @@ class ReferenceCodeService
         return $this->nextCode(ReferenceSeries::typeForAcquisitionPaperworkIar());
     }
 
+    public function forPhysicalCount(string $countType): string
+    {
+        return $this->nextCode(ReferenceSeries::typeForPhysicalCount($countType));
+    }
+
     public function forItemCode(ItemCategory $category): string
     {
         $type = $this->itemCodeSeriesType($category->getTemplateSlug());

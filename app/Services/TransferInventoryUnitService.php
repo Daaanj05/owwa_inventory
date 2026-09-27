@@ -13,6 +13,10 @@ class TransferInventoryUnitService
     {
         $transfer->loadMissing(['item.category']);
 
+        if ($transfer->isReturnToStock()) {
+            return;
+        }
+
         $slug = $transfer->item?->category?->getTemplateSlug();
         if (! in_array($slug, ['ppe', 'semi_expendable'], true)) {
             return;

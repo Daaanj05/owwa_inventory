@@ -39,7 +39,8 @@ class LoginCsrfSyncTest extends TestCase
     {
         Filament::setCurrentPanel(Filament::getPanel('admin'));
 
-        $this->get(route('filament.admin.auth.login', ['reauth' => 1]))
+        $this->followingRedirects()
+            ->get(route('session.recover'))
             ->assertOk()
             ->assertSee('Signed out. Please sign in again.', false);
     }
@@ -48,7 +49,8 @@ class LoginCsrfSyncTest extends TestCase
     {
         Filament::setCurrentPanel(Filament::getPanel('admin'));
 
-        $this->get(route('filament.admin.auth.login', ['logged_out' => 1]))
+        $this->followingRedirects()
+            ->get(route('session.recover', ['reason' => 'idle_timeout']))
             ->assertOk()
             ->assertSee('Signed out due to inactivity. Please sign in again.', false);
     }
@@ -71,11 +73,12 @@ class LoginCsrfSyncTest extends TestCase
 
         $this->actingAs($user)
             ->get(route('session.recover'))
-            ->assertRedirect(url('/login').'?reauth=1');
+            ->assertRedirect(url('/login'))
+            ->assertSessionHas('auth_signed_out', 'expired');
 
         $this->assertGuest();
 
-        $this->get(route('filament.admin.auth.login', ['reauth' => 1]))->assertOk();
+        $this->get(route('filament.admin.auth.login'))->assertOk();
 
         Livewire::test(Login::class)
             ->set('data', [

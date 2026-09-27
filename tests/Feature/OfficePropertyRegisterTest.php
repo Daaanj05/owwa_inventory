@@ -91,11 +91,9 @@ class OfficePropertyRegisterTest extends TestCase
             ->assertSee('Office Property Registry')
             ->assertSee('Bond Paper')
             ->assertSee('Received')
-            ->assertSee('Distributed')
-            ->assertSee('Balance')
-            ->assertSee('10')
-            ->assertSee('3')
-            ->assertSee('7');
+            ->assertDontSee('Distributed')
+            ->assertDontSee('Balance')
+            ->assertSee('10');
     }
 
     public function test_uc_can_open_office_stock_ledger_modal(): void

@@ -2,7 +2,6 @@
 
 namespace App\Services;
 
-use App\Models\Distribution;
 use App\Models\Issuance;
 use App\Models\Item;
 use App\Models\Transfer;
@@ -62,14 +61,13 @@ class OfficePropertyRegisterService
             ->distinct()
             ->pluck('item_id');
 
-        $distributionItemIds = Distribution::query()
-            ->where('office_id', $officeId)
-            ->when($user->department_id, fn (Builder $query): Builder => $query->where('department_id', $user->department_id))
+        $transferItemIds = Transfer::query()
+            ->where('to_office_id', $officeId)
             ->whereHas('item', fn (Builder $itemQuery): Builder => $itemQuery->where('item_category_id', $categoryId))
             ->distinct()
             ->pluck('item_id');
 
-        $itemIds = $issuanceItemIds->merge($distributionItemIds)->unique()->values();
+        $itemIds = $issuanceItemIds->merge($transferItemIds)->unique()->values();
 
         if ($itemIds->isEmpty()) {
             return new Paginator([], 0, $perPage, 1);
@@ -88,26 +86,28 @@ class OfficePropertyRegisterService
             });
         }
 
-        $items = $query->get()->map(function (Item $item) use ($officeId): object {
-            $received = $this->balanceService->issuedQuantity((int) $item->id, $officeId);
-            $issued = $this->balanceService->distributedQuantity((int) $item->id, $officeId);
-            $balance = $this->balanceService->availableQuantity((int) $item->id, $officeId);
+        $incomingByItem = Transfer::query()
+            ->where('to_office_id', $officeId)
+            ->whereIn('item_id', $itemIds)
+            ->selectRaw('item_id, SUM(quantity) as total')
+            ->groupBy('item_id')
+            ->pluck('total', 'item_id');
+
+        $items = $query->get()->map(function (Item $item) use ($officeId, $incomingByItem): object {
+            $received = $this->balanceService->issuedQuantity((int) $item->id, $officeId)
+                + (int) ($incomingByItem[$item->id] ?? 0);
 
             return (object) [
                 'item_id' => $item->id,
                 'item_name' => $item->name,
                 'category_name' => $item->category?->name ?? '—',
                 'received' => $received,
-                'distributed' => $issued,
-                'balance' => $balance,
             ];
         });
 
         $sorted = $items->sortBy(
             match ($sortBy) {
                 'received' => 'received',
-                'distributed', 'issued' => 'distributed',
-                'balance' => 'balance',
                 'category_name' => 'category_name',
                 default => 'item_name',
             },
@@ -145,13 +145,12 @@ class OfficePropertyRegisterService
             ->where('item_id', $itemId)
             ->exists();
 
-        $hasDistribution = Distribution::query()
-            ->where('office_id', $officeId)
-            ->when($user->department_id, fn (Builder $query): Builder => $query->where('department_id', $user->department_id))
+        $hasTransfer = Transfer::query()
             ->where('item_id', $itemId)
+            ->where('to_office_id', $officeId)
             ->exists();
 
-        if (! $hasIssuance && ! $hasDistribution) {
+        if (! $hasIssuance && ! $hasTransfer) {
             throw new AuthorizationException('This item is not in your office registry.');
         }
     }
@@ -179,15 +178,6 @@ class OfficePropertyRegisterService
             ->when($user->department_id, fn (Builder $query): Builder => $query->where('department_id', $user->department_id))
             ->where('item_id', $itemId)
             ->orderBy('issuance_date')
-            ->orderBy('id')
-            ->get();
-
-        $distributions = Distribution::query()
-            ->with(['requisition', 'distributedTo'])
-            ->where('office_id', $officeId)
-            ->when($user->department_id, fn (Builder $query): Builder => $query->where('department_id', $user->department_id))
-            ->where('item_id', $itemId)
-            ->orderBy('distribution_date')
             ->orderBy('id')
             ->get();
 
@@ -231,23 +221,6 @@ class OfficePropertyRegisterService
             ]);
         }
 
-        foreach ($distributions as $distribution) {
-            $reference = $distribution->requisition?->displayTransactionNumber()
-                ?? $distribution->requisition?->reference_code
-                ?? ('Distribution #'.$distribution->id);
-
-            $events->push([
-                'sort_date' => $distribution->distribution_date?->format('Y-m-d') ?? '0000-01-01',
-                'sort_id' => $distribution->id,
-                'date' => $distribution->distribution_date?->format('M j, Y') ?? '—',
-                'reference' => $reference,
-                'employee' => $distribution->distributedTo?->name ?? '—',
-                'type' => 'Distributed',
-                'quantity' => (int) $distribution->quantity,
-                'direction' => -1,
-            ]);
-        }
-
         $events = $events->sortBy([
             ['sort_date', 'asc'],
             ['sort_id', 'asc'],
@@ -275,7 +248,7 @@ class OfficePropertyRegisterService
             'header' => [
                 'item_name' => $item->name,
                 'category_name' => $item->category?->name ?? '—',
-                'total_on_hand' => (string) $this->balanceService->availableQuantity($itemId, $officeId),
+                'total_on_hand' => (string) $this->receivedQuantity($itemId, $officeId, $user->department_id),
             ],
             'columns' => [
                 'date' => 'Date',
@@ -447,6 +420,8 @@ class OfficePropertyRegisterService
             $query->where(function (Builder $scope) use ($term): void {
                 $scope->where('reference_code', 'like', $term)
                     ->orWhere('property_number', 'like', $term)
+                    ->orWhere('transfer_type', 'like', $term)
+                    ->orWhere('transfer_type_other', 'like', $term)
                     ->orWhereHas('item', fn (Builder $itemQuery): Builder => $itemQuery->where('name', 'like', $term))
                     ->orWhereHas('fromOffice', fn (Builder $officeQuery): Builder => $officeQuery->where('name', 'like', $term))
                     ->orWhereHas('toOffice', fn (Builder $officeQuery): Builder => $officeQuery->where('name', 'like', $term));
@@ -470,6 +445,7 @@ class OfficePropertyRegisterService
                     'quantity' => (int) $transfer->quantity,
                     'from_office_name' => $transfer->fromOffice?->name ?? '—',
                     'to_office_name' => $transfer->toOffice?->name ?? '—',
+                    'transfer_type_label' => Transfer::typeLabel($transfer->transfer_type, $transfer->transfer_type_other),
                     'direction' => $directionLabel,
                     'property_number' => $transfer->property_number,
                 ];
@@ -516,6 +492,7 @@ class OfficePropertyRegisterService
             'transfer_date' => $transfer->transfer_date?->format('M d, Y') ?? '—',
             'from_office_name' => $transfer->fromOffice?->name ?? '—',
             'to_office_name' => $transfer->toOffice?->name ?? '—',
+            'transfer_type_label' => Transfer::typeLabel($transfer->transfer_type, $transfer->transfer_type_other),
             'identifier_label' => $identifierLabel,
             'identifier' => filled($identifier) ? $identifier : '—',
             'condition' => filled($transfer->condition) ? $transfer->condition : '—',
@@ -523,6 +500,22 @@ class OfficePropertyRegisterService
             'from_accountable_officer' => filled($transfer->from_accountable_officer) ? $transfer->from_accountable_officer : '—',
             'to_accountable_officer' => filled($transfer->to_accountable_officer) ? $transfer->to_accountable_officer : '—',
         ];
+    }
+
+    protected function receivedQuantity(int $itemId, int $officeId, ?int $departmentId): int
+    {
+        $issued = (int) Issuance::query()
+            ->where('item_id', $itemId)
+            ->where('office_id', $officeId)
+            ->when($departmentId, fn (Builder $query): Builder => $query->where('department_id', $departmentId))
+            ->sum('quantity');
+
+        $incoming = (int) Transfer::query()
+            ->where('item_id', $itemId)
+            ->where('to_office_id', $officeId)
+            ->sum('quantity');
+
+        return $issued + $incoming;
     }
 
     protected function applyOfficeScope(Builder $query, User $user): void

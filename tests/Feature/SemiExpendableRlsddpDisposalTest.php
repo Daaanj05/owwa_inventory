@@ -128,8 +128,12 @@ class SemiExpendableRlsddpDisposalTest extends TestCase
             $values[$header['entity_name']['cell']],
         );
         $this->assertSame(
-            ($header['department_office']['label'] ?? '').'Admin',
+            ($header['department_office']['label'] ?? '').'Admin - OWWA Regional Office',
             $values[$header['department_office']['cell']],
+        );
+        $this->assertSame(
+            'Accountable Officer',
+            $values[OwwaCellMapping::form('RLSDDP')['signatures']['accountable_officer']],
         );
     }
 
@@ -160,7 +164,7 @@ class SemiExpendableRlsddpDisposalTest extends TestCase
         $header = OwwaCellMapping::form('RLSDDP')['header'];
 
         $this->assertSame(
-            ($header['department_office']['label'] ?? '').'Admin',
+            ($header['department_office']['label'] ?? '').'Admin - OWWA Regional Office',
             $values[$header['department_office']['cell']],
         );
 

@@ -8,6 +8,7 @@ use App\Support\LoginRememberedEmail;
 use Filament\Auth\Http\Responses\Contracts\LoginResponse;
 use Filament\Auth\Pages\Login as BaseLogin;
 use Filament\Facades\Filament;
+use Filament\Forms\Components\Checkbox;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Components\Component;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
@@ -50,6 +51,9 @@ class Login extends BaseLogin
         // not to any previously stored "intended" URL.
         Session::forget('url.intended');
 
+        // Checkbox means "remember email" only — never Laravel stay-logged-in.
+        $rememberEmailOnly = (bool) ($this->data['remember'] ?? false);
+
         $this->form->fill(array_merge(
             $this->form->getRawState(),
             array_filter(
@@ -57,6 +61,7 @@ class Login extends BaseLogin
                 fn (mixed $value, string|int $key): bool => $key === 'remember' || filled($value),
                 ARRAY_FILTER_USE_BOTH,
             ),
+            ['remember' => false],
         ));
 
         $this->ensureIsNotRateLimited();
@@ -74,24 +79,29 @@ class Login extends BaseLogin
         RateLimiter::clear($this->throttleKey());
 
         if ($response !== null) {
-            $this->syncRememberedEmailCookie();
+            $this->syncRememberedEmailCookie($rememberEmailOnly);
         }
 
         return $response;
     }
 
-    protected function syncRememberedEmailCookie(): void
+    protected function syncRememberedEmailCookie(bool $rememberEmailOnly): void
     {
-        $remember = (bool) ($this->data['remember'] ?? false);
         $email = (string) ($this->data['email'] ?? '');
 
-        if ($remember) {
+        if ($rememberEmailOnly) {
             LoginRememberedEmail::remember($email);
 
             return;
         }
 
         LoginRememberedEmail::forget();
+    }
+
+    protected function getRememberFormComponent(): Component
+    {
+        return Checkbox::make('remember')
+            ->label('Remember email');
     }
 
     protected function ensureIsNotRateLimited(): void

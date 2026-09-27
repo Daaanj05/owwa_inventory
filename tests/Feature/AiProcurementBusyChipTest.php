@@ -83,7 +83,7 @@ class AiProcurementBusyChipTest extends TestCase
             ->test(AiProcurementBusyChip::class)
             ->assertSet('processingRunId', $run->id);
 
-        $run->update(['status' => 'draft', 'summary' => 'Ready']);
+        $run->update(['status' => 'pending', 'summary' => 'Ready']);
 
         $component
             ->call('refreshProcessingRun')
@@ -115,7 +115,7 @@ class AiProcurementBusyChipTest extends TestCase
             ->test(AiProcurementBusyChip::class)
             ->assertSet('processingRunId', $run->id);
 
-        $run->update(['status' => 'draft', 'summary' => 'Ready']);
+        $run->update(['status' => 'pending', 'summary' => 'Ready']);
 
         $component->call('refreshProcessingRun');
 

@@ -42,6 +42,21 @@ class EmployeeCustodyTest extends TestCase
             ->assertSee('Employee Custody')
             ->assertDontSee('Distinct items')
             ->assertDontSee('Total on hand');
+
+        $html = Livewire::actingAs($uc)
+            ->test(EmployeeCustody::class)
+            ->html();
+
+        $categoryAt = strpos($html, 'aria-label="Item category"');
+        $employeeAt = strpos($html, 'aria-label="Employee"');
+        $searchAt = strpos($html, 'Search items');
+
+        $this->assertNotFalse($categoryAt);
+        $this->assertNotFalse($employeeAt);
+        $this->assertNotFalse($searchAt);
+        $this->assertLessThan($employeeAt, $categoryAt);
+        $this->assertLessThan($searchAt, $employeeAt);
+        $this->assertMatchesRegularExpression('/<option[^>]*disabled[^>]*>\s*Select employee/u', $html);
     }
 
     public function test_employee_custody_shows_export_all_item_and_period_filters_below_employee(): void

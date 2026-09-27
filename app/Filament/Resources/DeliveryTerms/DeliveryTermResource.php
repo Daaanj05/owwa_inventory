@@ -36,13 +36,15 @@ class DeliveryTermResource extends Resource
     public static function form(Schema $schema): Schema
     {
         return $schema
+            ->columns(1)
             ->components([
                 TextInput::make('label')
                     ->label('Delivery term')
                     ->required()
                     ->maxLength(255)
                     ->unique(ignoreRecord: true)
-                    ->placeholder('e.g. FOB Destination'),
+                    ->placeholder('e.g. FOB Destination')
+                    ->columnSpanFull(),
             ]);
     }
 

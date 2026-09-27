@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\PropertyActionRequests\Pages;
 
+use App\Filament\Concerns\HasSearchRowToolbarActions;
 use App\Filament\Concerns\SwitchesUcSentTab;
 use App\Filament\Resources\PropertyActionRequests\Actions\PropertyActionRequestEmployeeActions;
 use App\Filament\Resources\PropertyActionRequests\PropertyActionRequestResource;
@@ -15,17 +16,22 @@ use App\Models\User;
 use Filament\Actions\Action;
 use Filament\Facades\Filament;
 use Filament\Resources\Pages\ListRecords;
+use Filament\Schemas\Components\EmbeddedTable;
+use Filament\Schemas\Components\RenderHook;
 use Filament\Schemas\Components\Tabs\Tab;
 use Filament\Schemas\Schema;
 use Filament\Support\Facades\FilamentView;
 use Filament\Tables\View\TablesRenderHook;
+use Filament\View\PanelsRenderHook;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\HtmlString;
 use Illuminate\Validation\ValidationException;
 use Livewire\Attributes\Url;
+use Livewire\Livewire;
 
 class ListPropertyActionRequests extends ListRecords
 {
+    use HasSearchRowToolbarActions;
     use SwitchesUcSentTab;
 
     protected static string $resource = PropertyActionRequestResource::class;
@@ -88,17 +94,6 @@ class ListPropertyActionRequests extends ListRecords
         }
 
         if ($user?->isUnitConsolidator()) {
-            return [
-                'active' => Tab::make('Active')
-                    ->modifyQueryUsing(fn (Builder $query): Builder => $query->whereNull('archived_at'))
-                    ->excludeQueryWhenResolvingRecord(),
-                'archived' => Tab::make('Archived')
-                    ->modifyQueryUsing(fn (Builder $query): Builder => $query->whereNotNull('archived_at'))
-                    ->excludeQueryWhenResolvingRecord(),
-            ];
-        }
-
-        if ($user?->isSupplyCustodian()) {
             return [
                 'active' => Tab::make('Active')
                     ->modifyQueryUsing(fn (Builder $query): Builder => $query->whereNull('archived_at'))
@@ -224,6 +219,17 @@ class ListPropertyActionRequests extends ListRecords
         ];
     }
 
+    public function cacheInteractsWithHeaderActions(): void
+    {
+        parent::cacheInteractsWithHeaderActions();
+
+        $user = Filament::auth()->user();
+
+        if ($user instanceof User && $user->isUnitConsolidator()) {
+            $this->cachedHeaderActions = [];
+        }
+    }
+
     public function getPageClasses(): array
     {
         $classes = array_merge(parent::getPageClasses(), ['owwa-tight-page']);
@@ -252,22 +258,107 @@ class ListPropertyActionRequests extends ListRecords
 
                 FilamentView::registerRenderHook(
                     TablesRenderHook::TOOLBAR_SEARCH_AFTER,
-                    fn (): HtmlString => new HtmlString(
-                        (string) view('filament.tables.property-returns-uc-toolbar-secondary', [
-                            'activeUcTab' => $this->ucTab ?? 'received',
-                            'ucOfficeId' => $this->ucOfficeId,
-                            'ucDepartmentId' => $this->ucDepartmentId,
-                            'officeOptions' => $this->getUcOfficeOptions(),
-                            'departmentOptions' => $this->getUcDepartmentOptions(),
-                            'scopeComplete' => $this->ucListScopeIsComplete(),
-                        ])
-                    ),
+                    function (): HtmlString {
+                        $livewire = Livewire::current();
+
+                        if (! $livewire instanceof self) {
+                            return new HtmlString('');
+                        }
+
+                        $user = Filament::auth()->user();
+
+                        if (! $user?->isUnitConsolidator()) {
+                            return new HtmlString('');
+                        }
+
+                        return new HtmlString(
+                            (string) view('filament.tables.property-returns-uc-toolbar-secondary', [
+                                'activeUcTab' => $livewire->ucTab ?? 'received',
+                                'activeTab' => $livewire->activeTab,
+                                'archivedCount' => $livewire->ucArchivedCount(),
+                                'ucOfficeId' => $livewire->ucOfficeId,
+                                'ucDepartmentId' => $livewire->ucDepartmentId,
+                                'officeOptions' => $livewire->getUcOfficeOptions(),
+                                'departmentOptions' => $livewire->getUcDepartmentOptions(),
+                                'scopeComplete' => $livewire->ucListScopeIsComplete(),
+                            ])
+                        );
+                    },
                     scopes: static::class,
                 );
             }
         }
 
+        if ($user?->isUnitConsolidator()) {
+            return $schema->components([
+                RenderHook::make(PanelsRenderHook::RESOURCE_PAGES_LIST_RECORDS_TABLE_BEFORE),
+                EmbeddedTable::make(),
+                RenderHook::make(PanelsRenderHook::RESOURCE_PAGES_LIST_RECORDS_TABLE_AFTER),
+            ]);
+        }
+
         return parent::content($schema);
+    }
+
+    /**
+     * @return list<array{label: string, action?: string, url?: string, style?: string}>
+     */
+    protected function searchRowToolbarButtons(): array
+    {
+        $user = Filament::auth()->user();
+
+        if (! $user instanceof User || ! $user->isUnitConsolidator() || ! PropertyActionRequestResource::canCreate()) {
+            return [];
+        }
+
+        return [
+            [
+                'label' => 'New Property Return',
+                'action' => 'create',
+                'style' => 'primary',
+            ],
+        ];
+    }
+
+    public function ucArchivedCount(): int
+    {
+        /** @var User|null $user */
+        $user = Filament::auth()->user();
+
+        if (! $user instanceof User || ! $user->isUnitConsolidator()) {
+            return 0;
+        }
+
+        $query = PropertyActionRequestResource::getEloquentQuery()
+            ->whereNotNull('archived_at');
+
+        if (($this->ucTab ?? 'received') === 'sent') {
+            return (int) $query->where(function (Builder $scope) use ($user): void {
+                $scope
+                    ->where('requested_by', $user->id)
+                    ->orWhere(function (Builder $endorsed) use ($user): void {
+                        $endorsed
+                            ->where('uc_approved_by', $user->id)
+                            ->where('status', '!=', PropertyActionRequest::STATUS_PENDING_UC)
+                            ->whereHas(
+                                'requestedBy',
+                                fn (Builder $requester): Builder => $requester->where('role', User::ROLE_EMPLOYEE),
+                            );
+                    });
+            })->count();
+        }
+
+        if (! $this->ucListScopeIsComplete()) {
+            return 0;
+        }
+
+        return (int) $query
+            ->where('status', PropertyActionRequest::STATUS_PENDING_UC)
+            ->whereNull('compiled_into_property_action_request_id')
+            ->whereHas('requestedBy', fn (Builder $q): Builder => $q->where('role', User::ROLE_EMPLOYEE))
+            ->where('office_id', $this->ucOfficeId)
+            ->where('department_id', $this->ucDepartmentId)
+            ->count();
     }
 
     protected function getTableQuery(): Builder

@@ -103,6 +103,15 @@
     margin-bottom: 0.25rem !important;
 }
 
+.fi-modal-window.owwa-supplier-modal .fi-modal-content {
+    padding-top: 0.65rem;
+    padding-bottom: 0.35rem;
+}
+
+.fi-modal-window.owwa-supplier-modal .fi-modal-footer {
+    padding-top: 0.35rem;
+}
+
 .owwa-doc-picker-select .fi-select-input .fi-dropdown-panel,
 .fi-modal-window.owwa-doc-picker-modal .fi-select-input .fi-dropdown-panel {
     max-height: min(22rem, 55vh) !important;
@@ -154,14 +163,56 @@
     margin-top: 0.35rem;
 }
 
-.fi-modal-window.owwa-view-record-modal .fi-section-header {
-    padding-top: 0.45rem !important;
-    padding-bottom: 0.3rem !important;
+.fi-modal-window.owwa-view-record-modal .owwa-pc-view-hero-main {
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    padding: 0 0 0.25rem;
 }
 
-.fi-modal-window.owwa-view-record-modal .fi-section-content-ctn {
-    padding-top: 0.35rem !important;
+.fi-modal-window.owwa-view-record-modal .owwa-record-hero .owwa-pc-scan-card {
+    border: 0;
+    border-radius: 0;
+    border-top: 1px solid #e5e7eb;
+    background: transparent;
+    box-shadow: none;
+    padding: 0.75rem 0 0;
+}
+
+.dark .fi-modal-window.owwa-view-record-modal .owwa-record-hero .owwa-pc-scan-card {
+    border-top-color: #374151;
+}
+
+.fi-modal-window.owwa-view-record-modal .fi-section,
+.fi-modal-window.owwa-view-record-modal .fi-sc-section {
+    background: transparent !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    --tw-ring-shadow: 0 0 #0000 !important;
+    --tw-ring-offset-shadow: 0 0 #0000 !important;
+}
+
+.fi-modal-window.owwa-view-record-modal .fi-section-header {
+    border-top: 0 !important;
+    border-bottom: 1px solid #e5e7eb !important;
+    margin-top: 0.65rem;
+    padding-top: 0.15rem !important;
     padding-bottom: 0.45rem !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+}
+
+.dark .fi-modal-window.owwa-view-record-modal .fi-section-header {
+    border-bottom-color: #374151 !important;
+}
+
+.fi-modal-window.owwa-view-record-modal .fi-section-content-ctn,
+.fi-modal-window.owwa-view-record-modal .fi-section-content {
+    padding-top: 0.65rem !important;
+    padding-bottom: 0.45rem !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
 }
 
 .fi-modal-window.owwa-view-record-modal .fi-in-entry {
@@ -1016,6 +1067,10 @@
     grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
+.owwa-pc-view-hero-main:has(.owwa-pc-view-meta > :nth-child(5):last-child) .owwa-pc-view-meta {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
 .owwa-pc-view-meta dd {
     margin: 0.125rem 0 0;
     font-weight: 500;
@@ -1284,11 +1339,44 @@
     padding-block: 0.4rem !important;
 }
 
+/* Record modals: one 2.25rem box. The theme also borders the inner input, which stacks a second outline inside the wrapper. */
+.fi-modal-window.owwa-record-modal .fi-input-wrp:not(:is(.fi-fo-table-repeater .fi-input-wrp)) {
+    min-height: 2.25rem !important;
+    padding-block: 0 !important;
+    align-items: center !important;
+    box-sizing: border-box !important;
+}
+
+.fi-modal-window.owwa-record-modal .fi-input-wrp:not(:is(.fi-fo-table-repeater .fi-input-wrp)) input.fi-input:not(textarea),
+.fi-modal-window.owwa-record-modal .fi-input-wrp:not(:is(.fi-fo-table-repeater .fi-input-wrp)) .fi-fo-text-input:not(textarea) {
+    border: 0 !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    min-height: 0 !important;
+    height: 2.25rem !important;
+    padding-block: 0 !important;
+}
+
+.fi-modal-window.owwa-record-modal .fi-input-wrp:not(:is(.fi-fo-table-repeater .fi-input-wrp)) textarea.fi-input {
+    border: 0 !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    min-height: 3.5rem !important;
+    height: auto !important;
+}
+
+.fi-modal-window.owwa-record-modal .fi-input-wrp:not(:is(.fi-fo-table-repeater .fi-input-wrp)) .fi-input:focus {
+    border: 0 !important;
+    box-shadow: none !important;
+}
+
 .fi-modal-window.owwa-record-modal .fi-modal-footer,
 .fi-modal-window.owwa-physical-count-modal .fi-modal-footer {
     position: sticky;
     bottom: 0;
-    z-index: 2;
+    z-index: 20;
     background: var(--white, #fff);
     border-top: none;
     display: flex;
@@ -1297,6 +1385,7 @@
     justify-content: flex-end;
     border-bottom-left-radius: 0.75rem !important;
     border-bottom-right-radius: 0.75rem !important;
+    pointer-events: auto;
 }
 
 /* PO/PR/IAR: footer must stay in normal flow (override sticky above). */
@@ -1355,6 +1444,134 @@
     font-size: 0.6875rem;
     color: #6b7280;
     line-height: 1.35;
+}
+
+/* Physical count edit: compact count-line columns + vertical guides */
+.fi-modal-window.owwa-record-modal .owwa-pc-count-lines-repeater.fi-fo-table-repeater,
+.fi-modal-window.owwa-physical-count-modal .owwa-pc-count-lines-repeater.fi-fo-table-repeater {
+    overflow-x: auto !important;
+}
+
+.fi-modal-window.owwa-record-modal .owwa-pc-count-lines-repeater.fi-fo-table-repeater > table,
+.fi-modal-window.owwa-physical-count-modal .owwa-pc-count-lines-repeater.fi-fo-table-repeater > table {
+    table-layout: fixed;
+    width: 100%;
+    min-width: 0;
+}
+
+.fi-modal-window.owwa-record-modal .owwa-pc-count-lines-repeater > table > thead > tr > th,
+.fi-modal-window.owwa-physical-count-modal .owwa-pc-count-lines-repeater > table > thead > tr > th {
+    text-align: center !important;
+    vertical-align: middle !important;
+    white-space: normal;
+    padding: 0.25rem 0.2rem !important;
+}
+
+.fi-modal-window.owwa-record-modal .owwa-pc-count-lines-repeater > table > tbody > tr > td,
+.fi-modal-window.owwa-physical-count-modal .owwa-pc-count-lines-repeater > table > tbody > tr > td {
+    text-align: start !important;
+    vertical-align: middle !important;
+    padding: 0.1rem 0.2rem !important;
+}
+
+/* Qty columns stay centered and narrow */
+.fi-modal-window.owwa-record-modal .owwa-pc-count-lines-repeater > table > thead > tr > th:nth-child(5),
+.fi-modal-window.owwa-record-modal .owwa-pc-count-lines-repeater > table > thead > tr > th:nth-child(6),
+.fi-modal-window.owwa-record-modal .owwa-pc-count-lines-repeater > table > tbody > tr > td:nth-child(5),
+.fi-modal-window.owwa-record-modal .owwa-pc-count-lines-repeater > table > tbody > tr > td:nth-child(6),
+.fi-modal-window.owwa-physical-count-modal .owwa-pc-count-lines-repeater > table > thead > tr > th:nth-child(5),
+.fi-modal-window.owwa-physical-count-modal .owwa-pc-count-lines-repeater > table > thead > tr > th:nth-child(6),
+.fi-modal-window.owwa-physical-count-modal .owwa-pc-count-lines-repeater > table > tbody > tr > td:nth-child(5),
+.fi-modal-window.owwa-physical-count-modal .owwa-pc-count-lines-repeater > table > tbody > tr > td:nth-child(6) {
+    text-align: center !important;
+    padding-inline: 0.1rem !important;
+}
+
+/* Stock No. + Unit: less clipping */
+.fi-modal-window.owwa-record-modal .owwa-pc-count-lines-repeater > table > tbody > tr > td:nth-child(3) .fi-input,
+.fi-modal-window.owwa-record-modal .owwa-pc-count-lines-repeater > table > tbody > tr > td:nth-child(4) .fi-input,
+.fi-modal-window.owwa-physical-count-modal .owwa-pc-count-lines-repeater > table > tbody > tr > td:nth-child(3) .fi-input,
+.fi-modal-window.owwa-physical-count-modal .owwa-pc-count-lines-repeater > table > tbody > tr > td:nth-child(4) .fi-input {
+    padding-inline: 0.15rem !important;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.fi-modal-window.owwa-record-modal .owwa-pc-count-lines-repeater > table > tbody > tr > td .fi-input-wrp,
+.fi-modal-window.owwa-record-modal .owwa-pc-count-lines-repeater > table > tbody > tr > td .fi-fo-placeholder,
+.fi-modal-window.owwa-physical-count-modal .owwa-pc-count-lines-repeater > table > tbody > tr > td .fi-input-wrp,
+.fi-modal-window.owwa-physical-count-modal .owwa-pc-count-lines-repeater > table > tbody > tr > td .fi-fo-placeholder {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+}
+
+.fi-modal-window.owwa-record-modal .owwa-pc-count-lines-repeater > table > tbody > tr > td .fi-input,
+.fi-modal-window.owwa-record-modal .owwa-pc-count-lines-repeater > table > tbody > tr > td .fi-select-input,
+.fi-modal-window.owwa-physical-count-modal .owwa-pc-count-lines-repeater > table > tbody > tr > td .fi-input,
+.fi-modal-window.owwa-physical-count-modal .owwa-pc-count-lines-repeater > table > tbody > tr > td .fi-select-input {
+    text-align: start;
+    min-width: 0;
+    width: 100%;
+    padding-inline: 0.15rem !important;
+}
+
+.fi-modal-window.owwa-record-modal .owwa-pc-count-lines-repeater > table > tbody > tr > td:nth-child(5) .fi-input,
+.fi-modal-window.owwa-record-modal .owwa-pc-count-lines-repeater > table > tbody > tr > td:nth-child(6) .fi-input,
+.fi-modal-window.owwa-physical-count-modal .owwa-pc-count-lines-repeater > table > tbody > tr > td:nth-child(5) .fi-input,
+.fi-modal-window.owwa-physical-count-modal .owwa-pc-count-lines-repeater > table > tbody > tr > td:nth-child(6) .fi-input,
+.fi-modal-window.owwa-record-modal .owwa-pc-count-lines-repeater .owwa-pc-qty-input,
+.fi-modal-window.owwa-physical-count-modal .owwa-pc-count-lines-repeater .owwa-pc-qty-input {
+    text-align: center;
+    padding-inline: 0.2rem !important;
+    max-width: 100%;
+    width: 100%;
+    margin-inline: auto;
+}
+
+.fi-modal-window.owwa-record-modal .owwa-pc-count-lines-repeater .owwa-pc-article-cell,
+.fi-modal-window.owwa-physical-count-modal .owwa-pc-count-lines-repeater .owwa-pc-article-cell {
+    width: 100%;
+    min-width: 0;
+}
+
+.fi-modal-window.owwa-record-modal .owwa-pc-count-lines-repeater .owwa-pc-article-cell .fi-input-wrp,
+.fi-modal-window.owwa-physical-count-modal .owwa-pc-count-lines-repeater .owwa-pc-article-cell .fi-input-wrp {
+    width: 100%;
+}
+
+.fi-modal-window.owwa-record-modal .owwa-pc-count-lines-repeater > table > tbody > tr > td > .fi-fo-field,
+.fi-modal-window.owwa-record-modal .owwa-pc-count-lines-repeater > table > tbody > tr > td > .fi-grid-col,
+.fi-modal-window.owwa-physical-count-modal .owwa-pc-count-lines-repeater > table > tbody > tr > td > .fi-fo-field,
+.fi-modal-window.owwa-physical-count-modal .owwa-pc-count-lines-repeater > table > tbody > tr > td > .fi-grid-col {
+    width: 100%;
+    min-width: 0;
+}
+
+/* Delete column — compact but not cramped */
+.fi-modal-window.owwa-record-modal .owwa-pc-count-lines-repeater > table > thead > tr > th:has(.fi-fo-table-repeater-actions),
+.fi-modal-window.owwa-record-modal .owwa-pc-count-lines-repeater > table > tbody > tr > td:has(.fi-fo-table-repeater-actions),
+.fi-modal-window.owwa-record-modal .owwa-pc-count-lines-repeater > table .fi-fo-table-repeater-empty-header-cell,
+.fi-modal-window.owwa-physical-count-modal .owwa-pc-count-lines-repeater > table > thead > tr > th:has(.fi-fo-table-repeater-actions),
+.fi-modal-window.owwa-physical-count-modal .owwa-pc-count-lines-repeater > table > tbody > tr > td:has(.fi-fo-table-repeater-actions),
+.fi-modal-window.owwa-physical-count-modal .owwa-pc-count-lines-repeater > table .fi-fo-table-repeater-empty-header-cell,
+.fi-modal-window.owwa-record-modal .owwa-pc-count-lines-repeater > table > thead > tr > th:last-child,
+.fi-modal-window.owwa-record-modal .owwa-pc-count-lines-repeater > table > tbody > tr > td:last-child,
+.fi-modal-window.owwa-physical-count-modal .owwa-pc-count-lines-repeater > table > thead > tr > th:last-child,
+.fi-modal-window.owwa-physical-count-modal .owwa-pc-count-lines-repeater > table > tbody > tr > td:last-child {
+    width: 2.75rem !important;
+    min-width: 2.75rem !important;
+    max-width: 2.75rem !important;
+    padding-inline: 0.15rem !important;
+    box-sizing: border-box !important;
+    white-space: nowrap !important;
+}
+
+.fi-modal-window.owwa-record-modal .owwa-pc-count-lines-repeater .fi-fo-table-repeater-actions,
+.fi-modal-window.owwa-physical-count-modal .owwa-pc-count-lines-repeater .fi-fo-table-repeater-actions {
+    justify-content: center;
+    width: 100%;
+    min-width: 0;
 }
 
 /* Create/edit form modals — full-width sections (no half-modal dead space) */
@@ -3160,6 +3377,17 @@
     font-size: 0.8125rem;
     line-height: 1.5;
     color: #475569;
+}
+
+.owwa-transfer-return-hint {
+    margin: 0;
+    padding: 0.65rem 0.85rem;
+    border-radius: 0.5rem;
+    border: 1px solid #fecaca;
+    background: #fef2f2;
+    font-size: 0.8125rem;
+    line-height: 1.5;
+    color: #b91c1c;
 }
 
 .owwa-stock-transfer-link {

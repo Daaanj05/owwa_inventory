@@ -19,6 +19,10 @@ class PhysicalCountPreloadService
      */
     public function preloadFromCustodyRecords(PhysicalCountSession $session): array
     {
+        if ($session->isComplete()) {
+            throw new InvalidArgumentException('Cannot load expected assets on a completed physical count session.');
+        }
+
         if (! $session->supportsUnitQrScanning()) {
             throw new InvalidArgumentException('Custody preload is only available for PPE and semi-expendable physical count sessions.');
         }
@@ -45,6 +49,10 @@ class PhysicalCountPreloadService
      */
     public function preloadFromStockBalances(PhysicalCountSession $session): array
     {
+        if ($session->isComplete()) {
+            throw new InvalidArgumentException('Cannot load items on a completed physical count session.');
+        }
+
         if (! $session->isConsumablePhysicalCount()) {
             throw new InvalidArgumentException('Stock preload is only available for consumable (RPCI) physical count sessions.');
         }

@@ -68,6 +68,50 @@ class AcquisitionListViewToggleTest extends TestCase
             ->assertCanNotSeeTableRecords([$active]);
     }
 
+    public function test_pr_list_defaults_to_the_current_calendar_year(): void
+    {
+        $office = Office::factory()->create(['is_regional_supply' => true]);
+        $category = ItemCategory::factory()->create(['name' => 'Consumables']);
+        session()->put('active_item_category_id', $category->id);
+
+        $user = User::factory()->create([
+            'role' => User::ROLE_SUPPLY_CUSTODIAN,
+            'office_id' => $office->id,
+            'email_verified_at' => now(),
+        ]);
+
+        $thisYear = AcquisitionPaperwork::query()->create([
+            'office_id' => $office->id,
+            'item_category_id' => $category->id,
+            'requesting_office_id' => $office->id,
+            'recorded_by' => $user->id,
+            'purpose' => 'Current year PR',
+            'pr_date' => now(),
+            'pr_number' => 'PR-THIS-YEAR',
+        ]);
+
+        $lastYear = AcquisitionPaperwork::query()->create([
+            'office_id' => $office->id,
+            'item_category_id' => $category->id,
+            'requesting_office_id' => $office->id,
+            'recorded_by' => $user->id,
+            'purpose' => 'Prior year PR',
+            'pr_date' => now()->subYear(),
+            'pr_number' => 'PR-LAST-YEAR',
+        ]);
+
+        Livewire::actingAs($user)
+            ->withQueryParams(['category' => (string) $category->id])
+            ->test(ListAcquisitions::class)
+            ->assertSet('filterDateFrom', now()->startOfYear()->toDateString())
+            ->assertSet('filterDateUntil', now()->endOfYear()->toDateString())
+            ->assertCanSeeTableRecords([$thisYear])
+            ->assertCanNotSeeTableRecords([$lastYear])
+            ->set('filterDateFrom', null)
+            ->set('filterDateUntil', null)
+            ->assertCanSeeTableRecords([$thisYear, $lastYear]);
+    }
+
     public function test_received_list_shows_opening_toggle_labels(): void
     {
         $office = Office::factory()->create(['is_regional_supply' => true]);

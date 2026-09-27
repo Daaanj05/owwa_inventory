@@ -19,6 +19,14 @@ trait HasAcquisitionListViewToggle
 
     public ?string $filterDateUntil = null;
 
+    public function mountHasAcquisitionListViewToggle(): void
+    {
+        if (blank($this->filterDateFrom) && blank($this->filterDateUntil)) {
+            $this->filterDateFrom = now()->startOfYear()->toDateString();
+            $this->filterDateUntil = now()->endOfYear()->toDateString();
+        }
+    }
+
     abstract protected function acquisitionListToggleMode(): string;
 
     abstract protected function acquisitionListToggleBadgeCount(): int;

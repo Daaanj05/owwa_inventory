@@ -103,10 +103,10 @@ class OfficePropertyRegister extends Page
     public function getSubheading(): ?string
     {
         if ($this->tab === self::TAB_TRANSFERS) {
-            return 'Incoming = transferred into your office. Outgoing = transferred out. From/To offices shown on each row.';
+            return 'Incoming = transferred into your office. Outgoing = transferred out. Each row shows the transfer type and both offices.';
         }
 
-        return 'Received (SC issuance) - Distributed (to employees) = Balance. Partial distribution versus employee request is OK; office balance follows SC RIS issuance, not employee request qty.';
+        return 'Received is the quantity already received by this office. Transfers lists how that property moved.';
     }
 
     /** @return array<int, string> */
@@ -183,7 +183,7 @@ class OfficePropertyRegister extends Page
 
     public function sortByColumn(string $column): void
     {
-        $allowed = ['item_name', 'category_name', 'received', 'distributed', 'balance'];
+        $allowed = ['item_name', 'category_name', 'received'];
 
         if (! in_array($column, $allowed, true)) {
             return;

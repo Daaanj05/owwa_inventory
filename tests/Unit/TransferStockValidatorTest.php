@@ -9,6 +9,7 @@ use App\Models\Transfer;
 use App\Models\User;
 use App\Services\TransferItemOptionsService;
 use App\Services\TransferStockValidator;
+use App\Support\SupplyOfficeResolver;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -36,6 +37,7 @@ class TransferStockValidatorTest extends TestCase
             'from_office_id' => $office->id,
             'to_office_id' => $other->id,
             'item_id' => $item->id,
+            'transfer_type' => 'relocate',
             'quantity' => 10,
         ], $user);
     }
@@ -56,6 +58,7 @@ class TransferStockValidatorTest extends TestCase
                 'from_office_id' => $office->id,
                 'to_office_id' => $office->id,
                 'item_id' => $item->id,
+                'transfer_type' => 'donation',
                 'quantity' => 1,
             ], $user);
             $this->fail('Expected ValidationException');
@@ -81,6 +84,7 @@ class TransferStockValidatorTest extends TestCase
             'from_office_id' => $satellite->id,
             'to_office_id' => $destination->id,
             'item_id' => $item->id,
+            'transfer_type' => 'reassignment',
             'quantity' => 1,
         ], $user);
 
@@ -112,6 +116,7 @@ class TransferStockValidatorTest extends TestCase
             'from_office_id' => $office->id,
             'to_office_id' => $other->id,
             'item_id' => $item->id,
+            'transfer_type' => 'relocate',
             'quantity' => 8,
         ], $transfer, $user);
 
@@ -140,11 +145,145 @@ class TransferStockValidatorTest extends TestCase
                 'from_office_id' => $office->id,
                 'to_office_id' => $other->id,
                 'item_id' => $item->id,
+                'transfer_type' => 'others',
+                'transfer_type_other' => 'Loan',
                 'quantity' => 1,
             ], $user);
             $this->fail('Expected ValidationException');
         } catch (ValidationException $e) {
             $this->assertArrayHasKey('quantity', $e->errors());
+        }
+    }
+
+    public function test_requires_a_transfer_type(): void
+    {
+        $office = Office::factory()->create();
+        $other = Office::factory()->create();
+        $item = Item::factory()->create();
+        $user = User::factory()->create([
+            'role' => User::ROLE_SUPPLY_CUSTODIAN,
+            'office_id' => $office->id,
+        ]);
+
+        $this->createAcquisition($item->id, $office->id, 5);
+
+        try {
+            app(TransferStockValidator::class)->validateForCreate([
+                'from_office_id' => $office->id,
+                'to_office_id' => $other->id,
+                'item_id' => $item->id,
+                'quantity' => 1,
+            ], $user);
+            $this->fail('Expected ValidationException');
+        } catch (ValidationException $e) {
+            $this->assertArrayHasKey('transfer_type', $e->errors());
+        }
+    }
+
+    public function test_requires_a_written_reason_for_others(): void
+    {
+        $office = Office::factory()->create();
+        $other = Office::factory()->create();
+        $item = Item::factory()->create();
+        $user = User::factory()->create([
+            'role' => User::ROLE_SUPPLY_CUSTODIAN,
+            'office_id' => $office->id,
+        ]);
+
+        $this->createAcquisition($item->id, $office->id, 5);
+
+        try {
+            app(TransferStockValidator::class)->validateForCreate([
+                'from_office_id' => $office->id,
+                'to_office_id' => $other->id,
+                'item_id' => $item->id,
+                'transfer_type' => 'others',
+                'quantity' => 1,
+            ], $user);
+            $this->fail('Expected ValidationException');
+        } catch (ValidationException $e) {
+            $this->assertArrayHasKey('transfer_type_other', $e->errors());
+        }
+    }
+
+    public function test_return_rejects_quantity_above_what_is_still_issued(): void
+    {
+        $from = Office::factory()->create();
+        $regional = Office::factory()->create(['is_regional_supply' => true]);
+        $item = Item::factory()->create();
+        $user = User::factory()->create([
+            'role' => User::ROLE_SUPPLY_CUSTODIAN,
+            'office_id' => $regional->id,
+        ]);
+
+        $this->createIssuance($item->id, $from->id, 1, 'SPLV-RET-1');
+
+        try {
+            app(TransferStockValidator::class)->validateForCreate([
+                'from_office_id' => $from->id,
+                'to_office_id' => $regional->id,
+                'item_id' => $item->id,
+                'property_number' => 'SPLV-RET-1',
+                'transfer_type' => 'return',
+                'quantity' => 2,
+            ], $user);
+            $this->fail('Expected ValidationException');
+        } catch (ValidationException $e) {
+            $this->assertArrayHasKey('quantity', $e->errors());
+        }
+    }
+
+    public function test_return_allows_quantity_still_issued_without_source_stock(): void
+    {
+        $from = Office::factory()->create();
+        $regional = Office::factory()->create(['is_regional_supply' => true]);
+        $item = Item::factory()->create();
+        $user = User::factory()->create([
+            'role' => User::ROLE_SUPPLY_CUSTODIAN,
+            'office_id' => $regional->id,
+        ]);
+
+        $this->createIssuance($item->id, $from->id, 1, 'SPLV-RET-2');
+
+        app(TransferStockValidator::class)->validateForCreate([
+            'from_office_id' => $from->id,
+            'to_office_id' => $regional->id,
+            'item_id' => $item->id,
+            'property_number' => 'SPLV-RET-2',
+            'transfer_type' => 'return',
+            'quantity' => 1,
+        ], $user);
+
+        $this->assertTrue(true);
+    }
+
+    public function test_return_is_rejected_when_the_regional_office_is_missing(): void
+    {
+        $from = Office::factory()->create();
+        $item = Item::factory()->create();
+        $user = User::factory()->create([
+            'role' => User::ROLE_SUPPLY_CUSTODIAN,
+            'office_id' => $from->id,
+        ]);
+
+        $this->createIssuance($item->id, $from->id, 1, 'SPLV-RET-3');
+
+        $this->mock(SupplyOfficeResolver::class, function ($mock): void {
+            $mock->shouldReceive('resolve')->andReturn(null);
+        });
+
+        try {
+            app(TransferStockValidator::class)->validateForCreate([
+                'from_office_id' => $from->id,
+                'to_office_id' => $from->id,
+                'item_id' => $item->id,
+                'property_number' => 'SPLV-RET-3',
+                'transfer_type' => 'return',
+                'quantity' => 1,
+            ], $user);
+            $this->fail('Expected ValidationException');
+        } catch (ValidationException $e) {
+            $this->assertArrayHasKey('to_office_id', $e->errors());
         }
     }
 
@@ -161,13 +300,14 @@ class TransferStockValidatorTest extends TestCase
         ]);
     }
 
-    protected function createIssuance(int $itemId, int $officeId, int $quantity): void
+    protected function createIssuance(int $itemId, int $officeId, int $quantity, ?string $propertyNumber = null): void
     {
         DB::table('issuances')->insert([
             'reference_code' => 'ISS-TEST-'.$itemId.'-'.$officeId.'-'.uniqid(),
             'item_id' => $itemId,
             'office_id' => $officeId,
             'quantity' => $quantity,
+            'property_number' => $propertyNumber,
             'issuance_date' => now()->toDateString(),
             'created_at' => now(),
             'updated_at' => now(),

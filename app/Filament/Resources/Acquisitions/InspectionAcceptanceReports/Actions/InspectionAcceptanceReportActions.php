@@ -134,8 +134,8 @@ class InspectionAcceptanceReportActions
     {
         return Action::make('archiveIar')
             ->label('Archive')
-            ->icon('heroicon-o-archive-box')
-            ->color('gray')
+            ->icon('heroicon-o-trash')
+            ->color('danger')
             ->visible(fn (InspectionAcceptanceReport $record): bool => ! $record->isArchived()
                 && ($record->isDraft() || $record->isPendingApproval()))
             ->requiresConfirmation()

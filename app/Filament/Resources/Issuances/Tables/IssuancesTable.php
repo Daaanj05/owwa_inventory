@@ -157,7 +157,7 @@ class IssuancesTable
                 BulkActionGroup::make([
                     OwwaListExportActions::bulkAction('owwa.export.bulk.issuances')
                         ->label('Export Issuances')
-                        ->visible(fn (): bool => ($table->getLivewire()->activeTab ?? 'active') === 'active'),
+                        ->visible(fn (): bool => ! (bool) ($table->getLivewire()->showingArchived ?? false)),
                     DeleteBulkAction::make()
                         ->label('Archive selected')
                         ->action(function (Collection $records): void {
@@ -165,7 +165,7 @@ class IssuancesTable
                                 $record->batchLines()->each->delete();
                             });
                         })
-                        ->visible(fn (): bool => ($table->getLivewire()->activeTab ?? 'active') === 'active'),
+                        ->visible(fn (): bool => ! (bool) ($table->getLivewire()->showingArchived ?? false)),
                     RestoreBulkAction::make()
                         ->action(function (Collection $records): void {
                             $records->each(function (Issuance $record): void {
@@ -180,7 +180,7 @@ class IssuancesTable
                                     ->restore();
                             });
                         })
-                        ->visible(fn (): bool => ($table->getLivewire()->activeTab ?? 'active') === 'archived'),
+                        ->visible(fn (): bool => (bool) ($table->getLivewire()->showingArchived ?? false)),
                 ]),
             ])
             ->recordUrl(null)

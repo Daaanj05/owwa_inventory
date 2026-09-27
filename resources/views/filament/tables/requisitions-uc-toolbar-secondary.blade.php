@@ -4,7 +4,7 @@
     $isSent = $activeUcTab === 'sent';
 @endphp
 
-<div class="owwa-uc-toolbar-secondary">
+<div class="owwa-uc-toolbar-secondary {{ $isReceived ? 'is-received' : 'is-sent' }}">
     <div class="owwa-uc-secondary-tabs">
         <button
             type="button"
@@ -52,6 +52,38 @@
             </select>
         </div>
     @endif
+</div>
+
+@php
+    $showingArchived = ($activeTab ?? 'active') === 'archived';
+    $archivedCount = (int) ($archivedCount ?? 0);
+@endphp
+
+<div class="owwa-setup-archive-view-toggle owwa-uc-archive-toggle {{ $isReceived ? 'is-received' : 'is-sent' }}" role="group" aria-label="Active or archived view">
+    <button
+        type="button"
+        wire:click="$set('activeTab', 'active')"
+        class="owwa-setup-archive-view-toggle__btn {{ ! $showingArchived ? 'is-active' : '' }}"
+        title="Active"
+        aria-label="Active"
+        aria-pressed="{{ ! $showingArchived ? 'true' : 'false' }}"
+    >
+        <x-filament::icon icon="heroicon-o-list-bullet" class="h-5 w-5" />
+    </button>
+
+    <button
+        type="button"
+        wire:click="$set('activeTab', 'archived')"
+        class="owwa-setup-archive-view-toggle__btn {{ $showingArchived ? 'is-active' : '' }}"
+        title="Archived"
+        aria-label="Archived"
+        aria-pressed="{{ $showingArchived ? 'true' : 'false' }}"
+    >
+        <x-filament::icon icon="heroicon-o-archive-box" class="h-5 w-5" />
+        @if ($archivedCount > 0)
+            <span class="owwa-setup-archive-view-toggle__badge">{{ $archivedCount }}</span>
+        @endif
+    </button>
 </div>
 
 @if ($isReceived && ! ($scopeComplete ?? false))

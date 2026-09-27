@@ -8,9 +8,7 @@ use BackedEnum;
 use Filament\Actions\Action;
 use Filament\Actions\EditAction;
 use Filament\Facades\Filament;
-use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\TextInput;
-use Filament\Forms\Components\Toggle;
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
@@ -38,9 +36,11 @@ class SupplierResource extends Resource
     public static function form(Schema $schema): Schema
     {
         return $schema
+            ->columns(1)
+            ->dense()
             ->components([
                 TextInput::make('name')
-                    ->label('Supplier name')
+                    ->label('Supplier Name')
                     ->required()
                     ->maxLength(255)
                     ->unique(ignoreRecord: true),
@@ -50,21 +50,13 @@ class SupplierResource extends Resource
                     ->extraInputAttributes(['inputmode' => 'numeric', 'pattern' => '[0-9]*'])
                     ->dehydrateStateUsing(fn (?string $state): ?string => Supplier::normalizeTin($state))
                     ->maxLength(20),
-                Repeater::make('addresses')
-                    ->relationship()
-                    ->label('Addresses')
-                    ->schema([
-                        TextInput::make('address')
-                            ->required()
-                            ->maxLength(500)
-                            ->columnSpanFull(),
-                        Toggle::make('is_default')
-                            ->label('Default address')
-                            ->default(false),
-                    ])
-                    ->defaultItems(1)
-                    ->addActionLabel('Add address')
-                    ->columnSpanFull(),
+                TextInput::make('address')
+                    ->label('Address')
+                    ->required()
+                    ->maxLength(500),
+                TextInput::make('secondary_address')
+                    ->label('Secondary Address (Optional)')
+                    ->maxLength(500),
             ]);
     }
 

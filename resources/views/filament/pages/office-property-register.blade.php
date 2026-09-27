@@ -66,6 +66,7 @@
                                     <th class="owwa-num">Qty</th>
                                     <th>From office</th>
                                     <th>To office</th>
+                                    <th>Type</th>
                                     <th>Direction</th>
                                 </tr>
                             </thead>
@@ -91,11 +92,12 @@
                                         <td class="owwa-num owwa-cell-primary">{{ number_format((int) $row->quantity) }}</td>
                                         <td class="owwa-cell-muted">{{ $row->from_office_name }}</td>
                                         <td class="owwa-cell-muted">{{ $row->to_office_name }}</td>
+                                        <td class="owwa-cell-primary">{{ $row->transfer_type_label }}</td>
                                         <td class="owwa-cell-primary">{{ $row->direction }}</td>
                                     </tr>
                                 @empty
                                     <tr>
-                                        <td colspan="7">
+                                        <td colspan="8">
                                             <div class="owwa-empty">
                                                 <p class="owwa-empty-title">No transfers yet</p>
                                                 <p class="owwa-empty-desc">Transfers into or out of your office will appear here with From/To offices.</p>
@@ -114,15 +116,13 @@
                                             'item_name' => 'Item',
                                             'category_name' => 'Category',
                                             'received' => 'Received',
-                                            'distributed' => 'Distributed',
-                                            'balance' => 'Balance',
                                         ];
                                     @endphp
                                     @foreach($columns as $col => $label)
                                         <th
                                             wire:click="sortByColumn('{{ $col }}')"
                                             style="cursor: pointer; user-select: none;"
-                                            class="{{ in_array($col, ['received', 'distributed', 'balance'], true) ? 'owwa-num' : '' }}"
+                                            class="{{ $col === 'received' ? 'owwa-num' : '' }}"
                                         >
                                             {{ $label }}
                                             @if($sortBy === $col)
@@ -147,15 +147,13 @@
                                         </td>
                                         <td class="owwa-cell-muted">{{ $row->category_name }}</td>
                                         <td class="owwa-num owwa-cell-primary">{{ number_format((int) $row->received) }}</td>
-                                        <td class="owwa-num owwa-cell-muted">{{ number_format((int) $row->distributed) }}</td>
-                                        <td class="owwa-num owwa-cell-primary">{{ number_format((int) $row->balance) }}</td>
                                     </tr>
                                 @empty
                                     <tr>
-                                        <td colspan="5">
+                                        <td colspan="3">
                                             <div class="owwa-empty">
                                                 <p class="owwa-empty-title">No stock on record</p>
-                                                <p class="owwa-empty-desc">Items received from SC or distributed from your office will appear here.</p>
+                                                <p class="owwa-empty-desc">Items received by your office will appear here.</p>
                                             </div>
                                         </td>
                                     </tr>

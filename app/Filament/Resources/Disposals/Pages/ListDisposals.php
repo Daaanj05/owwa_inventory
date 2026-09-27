@@ -2,6 +2,8 @@
 
 namespace App\Filament\Resources\Disposals\Pages;
 
+use App\Filament\Concerns\HasSearchRowToolbarActions;
+use App\Filament\Concerns\HasSetupArchiveView;
 use App\Filament\Concerns\HasSystemAdminWizardHeading;
 use App\Filament\Concerns\StartsOwwaExportBusy;
 use App\Filament\Concerns\SyncsActiveItemCategory;
@@ -18,18 +20,14 @@ use App\Support\CustodianOfficeScope;
 use App\Support\OfficeSignatoryDefaults;
 use App\Support\ScanAssetHandoff;
 use Filament\Notifications\Notification;
-use Filament\Schemas\Components\Actions;
-use Filament\Schemas\Components\EmbeddedTable;
-use Filament\Schemas\Components\Flex;
-use Filament\Schemas\Components\RenderHook;
-use Filament\Schemas\Components\Tabs\Tab;
-use Filament\Schemas\Schema;
-use Filament\View\PanelsRenderHook;
+use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Livewire\Attributes\Url;
 
 class ListDisposals extends ListRecordsWithoutFilterUrl
 {
+    use HasSearchRowToolbarActions;
+    use HasSetupArchiveView;
     use HasSystemAdminWizardHeading;
     use StartsOwwaExportBusy;
     use SyncsActiveItemCategory;
@@ -85,24 +83,74 @@ class ListDisposals extends ListRecordsWithoutFilterUrl
         parent::mount();
 
         $this->syncActiveItemCategoryFromRequest();
+        $this->registerSetupArchiveViewHook();
         $this->mountCreateFromScanQuery();
     }
 
-    public function getTabs(): array
+    protected function setupArchiveViewArchivedCount(): int
+    {
+        return DisposalResource::getEloquentQuery()->onlyTrashed()->count();
+    }
+
+    protected function applySetupArchiveQuery(Builder $query): Builder
+    {
+        return $this->showingArchived
+            ? $query->onlyTrashed()
+            : $query->withoutTrashed();
+    }
+
+    public function table(Table $table): Table
+    {
+        return parent::table($table)
+            ->modifyQueryUsing(fn (Builder $query): Builder => $this->applySetupArchiveQuery($query));
+    }
+
+    /**
+     * @return list<array{label: string, action?: string, url?: string, style?: string}>
+     */
+    protected function searchRowToolbarButtons(): array
+    {
+        $buttons = [
+            [
+                'label' => 'Export Report',
+                'action' => 'exportDisposalReport',
+                'style' => 'gray',
+            ],
+        ];
+
+        if (! $this->showingArchived) {
+            $buttons[] = [
+                'label' => 'New disposal',
+                'action' => 'create',
+                'style' => 'primary',
+            ];
+        }
+
+        return $buttons;
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    public function getPageClasses(): array
     {
         return [
-            'active' => Tab::make('Active')
-                ->modifyQueryUsing(fn (Builder $query): Builder => $query->withoutTrashed())
-                ->excludeQueryWhenResolvingRecord(),
-            'archived' => Tab::make('Archived')
-                ->modifyQueryUsing(fn (Builder $query): Builder => $query->onlyTrashed())
-                ->excludeQueryWhenResolvingRecord(),
+            ...parent::getPageClasses(),
+            'owwa-setup-archive-toggle',
+            'owwa-search-row-toolbar',
         ];
     }
 
-    public function content(Schema $schema): Schema
+    public function cacheInteractsWithHeaderActions(): void
     {
-        $actionsComponent = Actions::make([
+        $this->cachedHeaderActions = [];
+
+        parent::cacheInteractsWithHeaderActions();
+    }
+
+    protected function getHeaderActions(): array
+    {
+        return [
             DisposalExportReportAction::make(),
             OwwaFormModalDefaults::createActionForResource(DisposalResource::class, OwwaFormModalDefaults::WIDTH_MEDIUM)
                 ->fillForm(function (): array {
@@ -129,32 +177,9 @@ class ListDisposals extends ListRecordsWithoutFilterUrl
                         ),
                         $data,
                     );
-                }),
-        ]);
-
-        /** @var mixed $actionsComponent */
-        $actionsComponent = $actionsComponent->alignEnd();
-
-        $flexComponent = Flex::make([
-            $this->getTabsContentComponent(),
-            $actionsComponent,
-        ]);
-
-        /** @var mixed $flexComponent */
-        $flexComponent = $flexComponent->alignBetween()->verticallyAlignCenter();
-
-        return $schema
-            ->components([
-                $flexComponent,
-                RenderHook::make(PanelsRenderHook::RESOURCE_PAGES_LIST_RECORDS_TABLE_BEFORE),
-                EmbeddedTable::make(),
-                RenderHook::make(PanelsRenderHook::RESOURCE_PAGES_LIST_RECORDS_TABLE_AFTER),
-            ]);
-    }
-
-    protected function getHeaderActions(): array
-    {
-        return [];
+                })
+                ->visible(fn (): bool => ! $this->showingArchived),
+        ];
     }
 
     protected function mountCreateFromScanQuery(): void
@@ -191,6 +216,7 @@ class ListDisposals extends ListRecordsWithoutFilterUrl
 
         $this->pendingCreateFormData = ScanAssetHandoff::disposalFormDefaults($resolved['unit'], $disposalType);
 
-        $this->mountAction('create', [], ['schemaComponent' => 'content']);
+        $this->cacheInteractsWithHeaderActions();
+        $this->mountAction('create');
     }
 }

@@ -176,12 +176,16 @@ class OwwaItemReportService
                     'sort_date' => $transfer->transfer_date,
                     'date' => $transfer->transfer_date?->format('Y-m-d'),
                     'reference' => $transfer->reference_code,
-                    'type' => 'transfer_in',
+                    'type' => $transfer->transfer_type === Transfer::TYPE_RETURN
+                        ? 'return'
+                        : ($transfer->transfer_type ?: 'transfer_in'),
                     'receipt_qty' => $transfer->quantity,
                     'issue_qty' => null,
                     'issue_office' => $transfer->fromOffice?->name,
                     'office_officer' => $transfer->to_accountable_officer ?? $transfer->toOffice?->name,
-                    'remarks' => $transfer->remarks,
+                    'remarks' => $transfer->transfer_type === Transfer::TYPE_OTHERS
+                        ? ($transfer->transfer_type_other ?: $transfer->remarks)
+                        : $transfer->remarks,
                     'property_number' => $transfer->property_number,
                     'unit_cost' => $transfer->unit_cost,
                 ];
@@ -194,6 +198,10 @@ class OwwaItemReportService
             ->orderBy('transfer_date')
             ->get()
             ->each(function (Transfer $transfer) use (&$rowsByItem, $unitCost): void {
+                if ($transfer->transfer_type === Transfer::TYPE_RETURN) {
+                    return;
+                }
+
                 if ($unitCost !== null && ! UnitCostKey::equals(
                     $transfer->unit_cost !== null ? (float) $transfer->unit_cost : null,
                     $unitCost,
@@ -206,12 +214,14 @@ class OwwaItemReportService
                     'sort_date' => $transfer->transfer_date,
                     'date' => $transfer->transfer_date?->format('Y-m-d'),
                     'reference' => $transfer->reference_code,
-                    'type' => 'transfer_out',
+                    'type' => $transfer->transfer_type ?: 'transfer_out',
                     'receipt_qty' => null,
                     'issue_qty' => $transfer->quantity,
                     'issue_office' => $transfer->toOffice?->name,
                     'office_officer' => $transfer->from_accountable_officer ?? $transfer->fromOffice?->name,
-                    'remarks' => $transfer->remarks,
+                    'remarks' => $transfer->transfer_type === Transfer::TYPE_OTHERS
+                        ? ($transfer->transfer_type_other ?: $transfer->remarks)
+                        : $transfer->remarks,
                     'property_number' => $transfer->property_number,
                     'unit_cost' => $transfer->unit_cost,
                 ];

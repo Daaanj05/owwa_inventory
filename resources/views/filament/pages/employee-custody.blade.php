@@ -15,14 +15,14 @@
 <x-filament-panels::page>
     <div class="owwa-inventory-layout">
         <div class="owwa-search-wrap" style="display:flex;gap:0.75rem;flex-wrap:wrap;align-items:center;">
-            <select wire:model.live="employee" class="owwa-search-bar" style="max-width:16rem;" aria-label="Employee" required>
-                <option value="">Select employee…</option>
-                @foreach ($employeeOptions as $value => $label)
+            <select wire:model.live="category" class="owwa-search-bar" style="max-width:14rem;" aria-label="Item category" @disabled(! $hasEmployee)>
+                @foreach ($categoryOptions as $value => $label)
                     <option value="{{ $value }}">{{ $label }}</option>
                 @endforeach
             </select>
-            <select wire:model.live="category" class="owwa-search-bar" style="max-width:14rem;" aria-label="Item category" @disabled(! $hasEmployee)>
-                @foreach ($categoryOptions as $value => $label)
+            <select wire:model.live="employee" class="owwa-search-bar" style="max-width:16rem;" aria-label="Employee">
+                <option value="" disabled @selected(blank($this->employee))>Select employee…</option>
+                @foreach ($employeeOptions as $value => $label)
                     <option value="{{ $value }}">{{ $label }}</option>
                 @endforeach
             </select>

@@ -103,11 +103,15 @@ class TransferInventoryUnitServiceTest extends TestCase
         $this->assertContains('Ana Approved', ProcurementSignatoryName::suggestionsForRole(
             ProcurementSignatoryName::ROLE_TRANSFER_APPROVED,
         ));
-        $this->assertContains('Chief', ProcurementSignatoryName::suggestionsForRole(
-            ProcurementSignatoryName::ROLE_TRANSFER_APPROVED_DESIGNATION,
+        $this->assertSame('Chief', ProcurementSignatoryName::designationFor(
+            ProcurementSignatoryName::ROLE_TRANSFER_APPROVED,
+            'Ana Approved',
         ));
-        $this->assertContains('From Officer', ProcurementSignatoryName::suggestionsForRole(
+        $this->assertNotContains('From Officer', ProcurementSignatoryName::suggestionsForRole(
             ProcurementSignatoryName::ROLE_TRANSFER_FROM_ACCOUNTABLE,
+        ));
+        $this->assertSame([], ProcurementSignatoryName::suggestionsForRole(
+            ProcurementSignatoryName::ROLE_TRANSFER_APPROVED_DESIGNATION,
         ));
     }
 

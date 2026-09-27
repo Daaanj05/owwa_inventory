@@ -2,6 +2,8 @@
 
 namespace App\Filament\Resources\PhysicalInventoryPlans\Pages;
 
+use App\Filament\Concerns\HasSearchRowToolbarActions;
+use App\Filament\Concerns\HasSetupArchiveView;
 use App\Filament\Concerns\SyncsActiveItemCategory;
 use App\Filament\Resources\PhysicalCountSessions\PhysicalCountSessionResource;
 use App\Filament\Resources\PhysicalInventoryPlans\PhysicalInventoryPlanResource;
@@ -15,19 +17,15 @@ use App\Support\CategoryWizardBreadcrumb;
 use Filament\Actions\CreateAction;
 use Filament\Facades\Filament;
 use Filament\Resources\Pages\ListRecords;
-use Filament\Schemas\Components\Actions;
-use Filament\Schemas\Components\EmbeddedTable;
-use Filament\Schemas\Components\Flex;
-use Filament\Schemas\Components\RenderHook;
-use Filament\Schemas\Components\Tabs\Tab;
-use Filament\Schemas\Schema;
-use Filament\View\PanelsRenderHook;
+use Filament\Tables\Table;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Database\Eloquent\Builder;
 use Livewire\Attributes\Url;
 
 class ListPhysicalInventoryPlans extends ListRecords
 {
+    use HasSearchRowToolbarActions;
+    use HasSetupArchiveView;
     use SyncsActiveItemCategory;
 
     protected static string $resource = PhysicalInventoryPlanResource::class;
@@ -67,6 +65,7 @@ class ListPhysicalInventoryPlans extends ListRecords
         parent::mount();
 
         $this->syncActiveItemCategoryFromRequest();
+        $this->registerSetupArchiveViewHook();
 
         if ((int) ($this->create ?? 0) !== 1 || ! PhysicalInventoryPlanResource::canCreate()) {
             return;
@@ -74,18 +73,26 @@ class ListPhysicalInventoryPlans extends ListRecords
 
         $this->create = null;
 
-        $this->mountAction('create', [], ['schemaComponent' => 'content']);
+        $this->cacheInteractsWithHeaderActions();
+        $this->mountAction('create');
     }
 
-    public function getTabs(): array
+    protected function setupArchiveViewArchivedCount(): int
     {
-        return [
-            'active' => Tab::make('Active')
-                ->modifyQueryUsing(fn (Builder $query): Builder => $query->withoutTrashed())
-                ->excludeQueryWhenResolvingRecord(),
-            'archived' => Tab::make('Archived')
-                ->modifyQueryUsing(fn (Builder $query): Builder => $query->onlyTrashed()),
-        ];
+        return PhysicalInventoryPlanResource::getEloquentQuery()->onlyTrashed()->count();
+    }
+
+    protected function applySetupArchiveQuery(Builder $query): Builder
+    {
+        return $this->showingArchived
+            ? $query->onlyTrashed()
+            : $query->withoutTrashed();
+    }
+
+    public function table(Table $table): Table
+    {
+        return parent::table($table)
+            ->modifyQueryUsing(fn (Builder $query): Builder => $this->applySetupArchiveQuery($query));
     }
 
     public function startPlanLineCount(int $lineId): void
@@ -103,9 +110,46 @@ class ListPhysicalInventoryPlans extends ListRecords
         $this->redirect(PhysicalCountSessionResource::getUrl('view', ['record' => $session]));
     }
 
-    public function content(Schema $schema): Schema
+    /**
+     * @return list<array{label: string, action?: string, url?: string, style?: string}>
+     */
+    protected function searchRowToolbarButtons(): array
     {
-        $actionsComponent = Actions::make([
+        if ($this->showingArchived) {
+            return [];
+        }
+
+        return [
+            [
+                'label' => 'New Inventory Schedule',
+                'action' => 'create',
+                'style' => 'primary',
+            ],
+        ];
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    public function getPageClasses(): array
+    {
+        return [
+            ...parent::getPageClasses(),
+            'owwa-setup-archive-toggle',
+            'owwa-search-row-toolbar',
+        ];
+    }
+
+    public function cacheInteractsWithHeaderActions(): void
+    {
+        $this->cachedHeaderActions = [];
+
+        parent::cacheInteractsWithHeaderActions();
+    }
+
+    protected function getHeaderActions(): array
+    {
+        return [
             OwwaFormModalDefaults::createAction(OwwaFormModalDefaults::WIDTH_STANDARD)
                 ->label('New Inventory Schedule')
                 ->modalHeading('New Inventory Schedule')
@@ -128,31 +172,8 @@ class ListPhysicalInventoryPlans extends ListRecords
                         $data['lines'] ?? [],
                     );
                 })
-                ->successRedirectUrl(fn ($record): string => PhysicalInventoryPlanResource::viewModalUrl($record)),
-        ]);
-
-        /** @var mixed $actionsComponent */
-        $actionsComponent = $actionsComponent->alignEnd();
-
-        $flexComponent = Flex::make([
-            $this->getTabsContentComponent(),
-            $actionsComponent,
-        ]);
-
-        /** @var mixed $flexComponent */
-        $flexComponent = $flexComponent->alignBetween()->verticallyAlignCenter();
-
-        return $schema
-            ->components([
-                $flexComponent,
-                RenderHook::make(PanelsRenderHook::RESOURCE_PAGES_LIST_RECORDS_TABLE_BEFORE),
-                EmbeddedTable::make(),
-                RenderHook::make(PanelsRenderHook::RESOURCE_PAGES_LIST_RECORDS_TABLE_AFTER),
-            ]);
-    }
-
-    protected function getHeaderActions(): array
-    {
-        return [];
+                ->successRedirectUrl(fn ($record): string => PhysicalInventoryPlanResource::viewModalUrl($record))
+                ->visible(fn (): bool => ! $this->showingArchived),
+        ];
     }
 }

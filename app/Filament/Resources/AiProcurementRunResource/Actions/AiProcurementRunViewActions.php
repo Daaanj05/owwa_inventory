@@ -13,29 +13,13 @@ class AiProcurementRunViewActions
     public static function modalFooterActions(): array
     {
         return [
-            Action::make('markForApproval')
-                ->label('Mark for approval')
-                ->visible(fn (AiProcurementRun $record): bool => $record->status === 'draft')
-                ->action(function (AiProcurementRun $record, Action $action): void {
-                    $record->update(['status' => 'for_approval']);
-                    $action->halt();
-                }),
             Action::make('approveRun')
                 ->label('Mark approved')
                 ->color('success')
-                ->visible(fn (AiProcurementRun $record): bool => in_array($record->status, ['draft', 'for_approval'], true))
+                ->visible(fn (AiProcurementRun $record): bool => $record->status === 'pending')
                 ->requiresConfirmation()
                 ->action(function (AiProcurementRun $record, Action $action): void {
                     $record->update(['status' => 'approved']);
-                    $action->halt();
-                }),
-            Action::make('archiveRun')
-                ->label('Archive run')
-                ->color('warning')
-                ->visible(fn (AiProcurementRun $record): bool => $record->status !== 'archived')
-                ->requiresConfirmation()
-                ->action(function (AiProcurementRun $record, Action $action): void {
-                    $record->update(['status' => 'archived']);
                     $action->halt();
                 }),
             Action::make('printRun')

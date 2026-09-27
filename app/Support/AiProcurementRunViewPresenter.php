@@ -16,10 +16,8 @@ class AiProcurementRunViewPresenter
         $itemCount = $record->items->count();
 
         $statusMeta = match ($record->status) {
-            'draft' => ['bg' => '#f1f5f9', 'text' => '#475569', 'dot' => '#94a3b8', 'label' => 'Draft'],
-            'for_approval' => ['bg' => '#fef3c7', 'text' => '#92400e', 'dot' => '#f59e0b', 'label' => 'For approval'],
+            'pending' => ['bg' => '#f1f5f9', 'text' => '#475569', 'dot' => '#94a3b8', 'label' => 'Pending'],
             'approved' => ['bg' => '#dcfce7', 'text' => '#166534', 'dot' => '#22c55e', 'label' => 'Approved'],
-            'archived' => ['bg' => '#f3f4f6', 'text' => '#6b7280', 'dot' => '#9ca3af', 'label' => 'Archived'],
             default => ['bg' => '#f1f5f9', 'text' => '#475569', 'dot' => '#94a3b8', 'label' => ucfirst((string) $record->status)],
         };
 

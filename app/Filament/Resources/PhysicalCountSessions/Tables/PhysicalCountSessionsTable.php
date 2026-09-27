@@ -78,7 +78,7 @@ class PhysicalCountSessionsTable
                     ->badge()
                     ->state(fn (PhysicalCountSession $record): string => $record->isArchived() ? 'Archived' : 'Active')
                     ->color(fn (PhysicalCountSession $record): string => $record->isArchived() ? 'gray' : 'success')
-                    ->visible(fn ($livewire): bool => ($livewire->activeTab ?? 'active') === 'archived'),
+                    ->visible(fn ($livewire): bool => (bool) ($livewire->showingArchived ?? false)),
             ])
             ->filters([
                 SelectFilter::make('status')
@@ -104,8 +104,8 @@ class PhysicalCountSessionsTable
                         ->color('gray')
                         ->requiresConfirmation()
                         ->modalHeading('Archive physical count session')
-                        ->modalDescription('This session will be hidden from the active list but kept for history. Use the Archived tab to view or restore it.')
-                        ->visible(fn (PhysicalCountSession $record): bool => ! $record->isArchived())
+                        ->modalDescription('This session will be hidden from the active list but kept for history. Use the archive icon view to restore it later.')
+                        ->visible(fn (PhysicalCountSession $record): bool => ! $record->isComplete() && ! $record->isArchived())
                         ->action(fn (PhysicalCountSession $record) => $record->update(['archived_at' => now()])),
                     Action::make('restore')
                         ->label('Restore')
@@ -115,15 +115,30 @@ class PhysicalCountSessionsTable
                 ])
                     ->label('Actions')
                     ->icon('heroicon-m-ellipsis-vertical')
-                    ->color('gray'),
+                    ->color('gray')
+                    ->visible(fn (PhysicalCountSession $record): bool => $record->isArchived() || ! $record->isComplete()),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
                     BulkAction::make('archive')
                         ->label('Archive selected')
-                        ->icon('heroicon-o-archive-box')
+                        ->color('danger')
+                        ->icon('heroicon-o-trash')
                         ->requiresConfirmation()
-                        ->action(fn ($records) => $records->each->update(['archived_at' => now()])),
+                        ->visible(fn ($livewire): bool => ! (bool) ($livewire->showingArchived ?? false))
+                        ->action(fn ($records) => $records
+                            ->filter(fn (PhysicalCountSession $record): bool => ! $record->isComplete() && ! $record->isArchived())
+                            ->each->update(['archived_at' => now()])),
+                    BulkAction::make('restore')
+                        ->label('Restore selected')
+                        ->icon('heroicon-o-arrow-uturn-left')
+                        ->requiresConfirmation()
+                        ->modalHeading('Restore selected physical counts?')
+                        ->deselectRecordsAfterCompletion()
+                        ->visible(fn ($livewire): bool => (bool) ($livewire->showingArchived ?? false))
+                        ->action(fn ($records) => $records
+                            ->filter(fn (PhysicalCountSession $record): bool => $record->isArchived())
+                            ->each->update(['archived_at' => null])),
                 ]),
             ])
             ->recordUrl(null)

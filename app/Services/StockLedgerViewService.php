@@ -282,6 +282,11 @@ class StockLedgerViewService
             'issue' => 'Issue',
             'transfer_in' => 'Transfer in',
             'transfer_out' => 'Transfer out',
+            'return' => 'Return to stock',
+            'donation' => 'Donation',
+            'relocate' => 'Relocate',
+            'reassignment' => 'Reassignment',
+            'others' => 'Others',
             'disposal' => 'Disposal',
             default => ucfirst(str_replace('_', ' ', $type)),
         };

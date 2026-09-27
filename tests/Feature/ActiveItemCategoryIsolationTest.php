@@ -87,7 +87,7 @@ class ActiveItemCategoryIsolationTest extends TestCase
 
         session(['active_item_category_id' => $ppe->id]);
 
-        $create = TestAction::make('create')->schemaComponent(true, 'content');
+        $create = TestAction::make('create');
 
         Livewire::actingAs($custodian)
             ->withQueryParams(['category' => $consumables->id])
@@ -99,7 +99,6 @@ class ActiveItemCategoryIsolationTest extends TestCase
                 'reorder_level' => 5,
                 'inventory_type' => 'office_supplies',
             ])
-            ->mountAction('submit')
             ->callMountedAction()
             ->assertNotified();
 
@@ -125,7 +124,7 @@ class ActiveItemCategoryIsolationTest extends TestCase
         Livewire::actingAs($custodian)
             ->withQueryParams(['category' => $consumables->id])
             ->test(ListItems::class)
-            ->mountAction(TestAction::make('create')->schemaComponent(true, 'content'))
+            ->mountAction(TestAction::make('create'))
             ->assertFormFieldIsHidden('item_code')
             ->assertFormFieldIsHidden('value_type_display');
     }

@@ -154,6 +154,11 @@ class DisposalResource extends Resource
                             'transferred_without_cost' => 'Transferred without cost',
                             default => '—',
                         }),
+                    TextEntry::make('transfer_agency_name')
+                        ->label('Name of the agency/entity')
+                        ->placeholder('—')
+                        ->visible(fn (Disposal $record): bool => $record->disposal_mode === 'transferred_without_cost')
+                        ->columnSpanFull(),
                 ])
                 ->columns(2)
                 ->columnSpanFull(),

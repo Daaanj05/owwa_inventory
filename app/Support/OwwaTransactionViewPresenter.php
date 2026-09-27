@@ -135,10 +135,9 @@ class OwwaTransactionViewPresenter
                     'lost_stolen_damaged' => 'Lost / Damaged',
                     default => 'Disposed',
                 }],
-            ],
-            kpis: [
                 ['label' => 'Quantity', 'value' => (string) $record->quantity],
             ],
+            kpis: [],
         );
         $hero['referenceLabel'] = 'Reference';
 

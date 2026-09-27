@@ -133,7 +133,6 @@ class AdminPanelProvider extends PanelProvider
                 NavigationGroup::make('Office'),
                 NavigationGroup::make('Regional supply'),
                 NavigationGroup::make('Requisitions'),
-                NavigationGroup::make('Compliance'),
                 NavigationGroup::make('Analytics'),
                 NavigationGroup::make('Setup'),
             ])
@@ -216,7 +215,7 @@ class AdminPanelProvider extends PanelProvider
             ->all();
 
         $incidentNav = NavigationItem::make('Incident reports')
-            ->group('Compliance')
+            ->group('Regional supply')
             ->icon(Heroicon::OutlinedExclamationTriangle)
             ->sort(50)
             ->url(fn (): string => IncidentReportResource::getUrl())

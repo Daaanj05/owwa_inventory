@@ -552,7 +552,7 @@ class ItemImportConsumablesTest extends TestCase
 
         $component = Livewire::withQueryParams(['category' => (string) $category->id])
             ->test(ListItems::class)
-            ->callAction(TestAction::make('importConsumableItems')->schemaComponent(true, 'content'), [
+            ->callAction(TestAction::make('importConsumableItems'), [
                 'file' => $upload,
             ]);
 
@@ -896,14 +896,14 @@ class ItemImportConsumablesTest extends TestCase
         session(['active_item_category_id' => $consumables->id]);
         $consumablesPage = Livewire::withQueryParams(['category' => (string) $consumables->id])
             ->test(ListItems::class);
-        $consumablesPage->assertActionExists(TestAction::make('importConsumableItems')->schemaComponent(true, 'content'));
+        $consumablesPage->assertActionExists(TestAction::make('importConsumableItems'));
         $this->assertTrue($consumablesPage->instance()->isActiveConsumablesCategory());
 
         session(['active_item_category_id' => $ppe->id]);
         $ppePage = Livewire::withQueryParams(['category' => (string) $ppe->id])
             ->test(ListItems::class);
         $this->assertFalse($ppePage->instance()->isActiveConsumablesCategory());
-        $ppePage->assertActionExists(TestAction::make('importConsumableItems')->schemaComponent(true, 'content'));
+        $ppePage->assertActionExists(TestAction::make('importConsumableItems'));
     }
 
     public function test_ppe_category_import_is_supported(): void

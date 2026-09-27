@@ -168,10 +168,8 @@ class AcquisitionProcurementUxTest extends TestCase
 
         Livewire::actingAs($custodian)
             ->test(ListAcquisitions::class, ['category' => $category->id])
-            ->filterTable('date_range', [
-                'from' => now()->subDays(5)->toDateString(),
-                'until' => now()->toDateString(),
-            ])
+            ->set('filterDateFrom', now()->subDays(5)->toDateString())
+            ->set('filterDateUntil', now()->toDateString())
             ->assertCanSeeTableRecords([$inRange])
             ->assertCanNotSeeTableRecords([$outOfRange]);
     }
@@ -194,10 +192,8 @@ class AcquisitionProcurementUxTest extends TestCase
 
         Livewire::actingAs($custodian)
             ->test(ListAcquisitions::class, ['category' => $category->id])
-            ->filterTable('date_range', [
-                'from' => now()->toDateString(),
-                'until' => now()->subDays(5)->toDateString(),
-            ])
+            ->set('filterDateFrom', now()->toDateString())
+            ->set('filterDateUntil', now()->subDays(5)->toDateString())
             ->assertCanSeeTableRecords([$early, $late]);
     }
 

@@ -5,6 +5,7 @@ namespace App\Filament\Resources\IncidentReports\Schemas;
 use App\Models\InventoryUnit;
 use App\Models\Issuance;
 use App\Models\ItemCategory;
+use App\Models\Office;
 use App\Services\DisposalInventoryUnitService;
 use App\Services\InventoryStockService;
 use App\Support\CustodianOfficeScope;
@@ -62,16 +63,11 @@ class IncidentReportForm
                             ->label('Report date')
                             ->required()
                             ->default(now()),
-                    ])
-                    ->columns(2),
-
-                Section::make('Property involved')
-                    ->columnSpanFull()
-                    ->schema([
                         Select::make('item_category_filter')
                             ->label('Category')
                             ->options(fn (): array => self::incidentCategoryOptions())
                             ->placeholder('All property categories')
+                            ->selectablePlaceholder(false)
                             ->live()
                             ->dehydrated(false)
                             ->afterStateUpdated(function (Set $set) use ($unitService): void {
@@ -100,25 +96,6 @@ class IncidentReportForm
                             ->preload()
                             ->live()
                             ->afterStateUpdated($syncItemOffice),
-                        ...self::officeFields($syncItemOffice),
-                        Select::make('department_id')
-                            ->label('Department')
-                            ->relationship(
-                                'department',
-                                'name',
-                                fn (Builder $query, Get $get) => $query
-                                    ->active()
-                                    ->when(
-                                        filled($get('office_id')),
-                                        fn (Builder $scoped): Builder => $scoped->where('office_id', $get('office_id')),
-                                    ),
-                            )
-                            ->searchable()
-                            ->preload()
-                            ->placeholder('—')
-                            ->helperText('Maps to RLSDDP Department/Office.')
-                            ->visible(fn (Get $get): bool => filled($get('office_id')))
-                            ->required(fn (Get $get): bool => self::itemCategorySlug($get) === 'semi_expendable'),
                         TextInput::make('quantity')
                             ->label('Quantity')
                             ->required()
@@ -157,6 +134,39 @@ class IncidentReportForm
                             ->label('Summary')
                             ->placeholder('Brief summary of the incident')
                             ->columnSpanFull(),
+                    ])
+                    ->columns(2),
+
+                Section::make('Assignment')
+                    ->columnSpanFull()
+                    ->schema([
+                        ...self::officeFields($syncItemOffice),
+                        Select::make('department_id')
+                            ->label('Department')
+                            ->relationship(
+                                'department',
+                                'name',
+                                fn (Builder $query, Get $get) => $query
+                                    ->active()
+                                    ->when(
+                                        filled($get('office_id')),
+                                        fn (Builder $scoped): Builder => $scoped->where('office_id', $get('office_id')),
+                                    ),
+                            )
+                            ->searchable()
+                            ->preload()
+                            ->placeholder('—')
+                            ->visible(fn (Get $get): bool => filled($get('office_id')))
+                            ->required(fn (Get $get): bool => self::itemCategorySlug($get) === 'semi_expendable'),
+                        TextInput::make('custodian_printed_name')
+                            ->label('Accountable officer')
+                            ->maxLength(255)
+                            ->placeholder('Full name')
+                            ->required(),
+                        TextInput::make('accountable_officer_designation')
+                            ->label('Designation')
+                            ->helperText('Designation title of the accountable officer.')
+                            ->maxLength(255),
                     ])
                     ->columns(2),
 
@@ -302,12 +312,6 @@ class IncidentReportForm
                             ->rows(3)
                             ->columnSpanFull()
                             ->required(),
-                        TextInput::make('accountable_officer_designation')
-                            ->label('Accountable officer designation')
-                            ->maxLength(255),
-                        TextInput::make('accountable_officer_station')
-                            ->label('Accountable officer station / office')
-                            ->maxLength(255),
                         Toggle::make('police_notified')
                             ->label('Police notified')
                             ->live(),
@@ -317,8 +321,11 @@ class IncidentReportForm
                         DatePicker::make('police_notified_date')
                             ->label('Police notification date')
                             ->visible(fn (Get $get): bool => (bool) $get('police_notified')),
-                        TextInput::make('gov_id_type')
-                            ->label('Government ID type'),
+                        Select::make('gov_id_type')
+                            ->label('Government ID type')
+                            ->options(self::governmentIdTypeOptions())
+                            ->searchable()
+                            ->placeholder('Select a government ID'),
                         TextInput::make('gov_id_no')
                             ->label('ID number'),
                         DatePicker::make('gov_id_date_issued')
@@ -328,17 +335,6 @@ class IncidentReportForm
                     ])
                     ->columns(2)
                     ->collapsible(),
-
-                Section::make('Signatories')
-                    ->columnSpanFull()
-                    ->schema([
-                        TextInput::make('custodian_printed_name')
-                            ->label('Accountable officer')
-                            ->maxLength(255)
-                            ->placeholder('Full name')
-                            ->required(),
-                    ])
-                    ->columns(2),
             ]);
     }
 
@@ -365,36 +361,69 @@ class IncidentReportForm
     {
         return ItemCategory::query()
             ->whereIn('id', self::incidentCategoryIds())
-            ->orderBy('name')
-            ->pluck('name', 'id')
+            ->get()
+            ->sortBy(fn (ItemCategory $category): int => match ($category->getTemplateSlug()) {
+                'semi_expendable' => 0,
+                'ppe' => 1,
+                default => 2,
+            })
+            ->mapWithKeys(fn (ItemCategory $category): array => [$category->id => $category->name])
             ->all();
     }
 
     /**
-     * @return array<int, Hidden|Select>
+     * Government-issued IDs used in Philippine transactions (DFA acceptable IDs, plus other agency cards).
+     *
+     * @return array<string, string>
+     */
+    public static function governmentIdTypeOptions(): array
+    {
+        $types = [
+            'PhilID / ePhilID',
+            'Philippine Passport',
+            'UMID',
+            'SSS ID',
+            'GSIS eCard',
+            "Driver's License",
+            'PRC ID',
+            'PhilHealth ID',
+            'TIN ID',
+            'Postal ID',
+            "Voter's ID",
+            'OWWA E-Card',
+            'Senior Citizen ID',
+            'PWD ID',
+            "Seafarer's Record Book / SID",
+            'NBI Clearance',
+            'AFP ID',
+            'PNP ID',
+            'Barangay ID',
+            'ACR I-Card',
+        ];
+
+        return array_combine($types, $types);
+    }
+
+    public static function defaultOfficeId(): ?int
+    {
+        $regionalId = Office::query()->active()->where('is_regional_supply', true)->value('id');
+
+        return $regionalId !== null ? (int) $regionalId : CustodianOfficeScope::inventoryOfficeId();
+    }
+
+    /**
+     * @return array<int, Select>
      */
     protected static function officeFields(callable $afterStateUpdated): array
     {
-        if (CustodianOfficeScope::hasFixedInventoryOffice()) {
-            return [
-                Hidden::make('office_id')
-                    ->default(fn (): ?int => CustodianOfficeScope::inventoryOfficeId())
-                    ->dehydrated(),
-            ];
-        }
-
         return [
             Select::make('office_id')
                 ->label('Office')
-                ->relationship(
-                    'office',
-                    'name',
-                    fn ($query) => CustodianOfficeScope::officeQuery($query),
-                )
+                ->options(fn (): array => Office::query()->active()->orderBy('name')->pluck('name', 'id')->all())
                 ->required()
                 ->searchable()
                 ->preload()
-                ->default(fn (): ?int => CustodianOfficeScope::inventoryOfficeId())
+                ->default(fn (): ?int => self::defaultOfficeId())
                 ->dehydrated()
                 ->live()
                 ->afterStateUpdated($afterStateUpdated),

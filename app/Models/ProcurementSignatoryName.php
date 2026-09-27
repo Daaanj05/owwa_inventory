@@ -45,7 +45,13 @@ class ProcurementSignatoryName extends Model
 
     public const ROLE_PHYSICAL_COUNT_VERIFIED = 'physical_count_verified';
 
+    public const ROLE_DISPOSAL_ACCOUNTABLE_OFFICER = 'disposal_accountable_officer';
+
+    public const ROLE_DISPOSAL_AUTHORIZED_OFFICIAL = 'disposal_authorized_official';
+
     public const ROLE_DISPOSAL_WITNESS = 'disposal_witness';
+
+    public const ROLE_DISPOSAL_INSPECTION_OFFICER = 'disposal_inspection_officer';
 
     public const ROLE_DISPOSAL_AUTHORIZED_DESIGNATION = 'disposal_authorized_designation';
 
@@ -55,6 +61,7 @@ class ProcurementSignatoryName extends Model
 
     protected $fillable = [
         'name',
+        'designation',
         'role',
         'archived_at',
     ];
@@ -98,6 +105,20 @@ class ProcurementSignatoryName extends Model
         $this->update(['archived_at' => null]);
     }
 
+    public static function roleStoresDesignation(string $role): bool
+    {
+        return in_array($role, [
+            self::ROLE_REQUESTED,
+            self::ROLE_APPROVED,
+            self::ROLE_TRANSFER_APPROVED,
+            self::ROLE_TRANSFER_RELEASED,
+            self::ROLE_TRANSFER_RECEIVED,
+            self::ROLE_PHYSICAL_COUNT_ACCOUNTABLE,
+            self::ROLE_DISPOSAL_ACCOUNTABLE_OFFICER,
+            self::ROLE_DISPOSAL_AUTHORIZED_OFFICIAL,
+        ], true);
+    }
+
     /**
      * @return list<string>
      */
@@ -123,12 +144,50 @@ class ProcurementSignatoryName extends Model
             ->all();
     }
 
-    public static function remember(string $role, ?string $name): void
+    /**
+     * @return list<string>
+     */
+    public static function designationsForRole(string $role): array
+    {
+        return static::query()
+            ->active()
+            ->where('role', $role)
+            ->whereNotNull('designation')
+            ->orderBy('designation')
+            ->pluck('designation')
+            ->map(fn (mixed $designation): string => trim((string) $designation))
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    public static function designationFor(string $role, ?string $name): ?string
+    {
+        $normalized = trim((string) $name);
+        if ($normalized === '') {
+            return null;
+        }
+
+        $designation = static::query()
+            ->active()
+            ->where('role', $role)
+            ->where('name', $normalized)
+            ->value('designation');
+
+        $designation = trim((string) $designation);
+
+        return $designation !== '' ? $designation : null;
+    }
+
+    public static function remember(string $role, ?string $name, ?string $designation = null): void
     {
         $normalized = trim((string) $name);
         if ($normalized === '') {
             return;
         }
+
+        $normalizedDesignation = trim((string) $designation);
 
         /** @var self $record */
         $record = static::query()->firstOrNew([
@@ -136,13 +195,20 @@ class ProcurementSignatoryName extends Model
             'role' => $role,
         ]);
 
+        if (! static::roleStoresDesignation($role)) {
+            $record->designation = null;
+        } elseif ($normalizedDesignation !== '') {
+            $record->designation = $normalizedDesignation;
+        }
+
         if ($record->exists && $record->isArchived()) {
-            $record->restoreFromArchive();
+            $record->archived_at = null;
+            $record->save();
 
             return;
         }
 
-        if (! $record->exists) {
+        if (! $record->exists || $record->isDirty()) {
             $record->save();
         }
     }

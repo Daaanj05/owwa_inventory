@@ -21,12 +21,13 @@ class LoginRememberedEmailTest extends TestCase
         Filament::setCurrentPanel(Filament::getPanel('admin'));
 
         $office = Office::factory()->create();
-        User::factory()->create([
+        $user = User::factory()->create([
             'role' => User::ROLE_SUPPLY_CUSTODIAN,
             'office_id' => $office->id,
             'email' => 'remember.me@example.com',
             'password' => 'password',
             'email_verified_at' => now(),
+            'remember_token' => null,
         ]);
 
         Livewire::test(Login::class)
@@ -44,6 +45,14 @@ class LoginRememberedEmailTest extends TestCase
             ->first(fn ($cookie) => $cookie->getName() === LoginRememberedEmail::COOKIE);
         $this->assertNotNull($queued);
         $this->assertSame('remember.me@example.com', $queued->getValue());
+
+        $user->refresh();
+        $this->assertNull($user->remember_token);
+        $this->assertFalse(
+            collect(Cookie::getQueuedCookies())->contains(
+                fn ($cookie) => str_starts_with($cookie->getName(), 'remember_web_'),
+            ),
+        );
     }
 
     public function test_successful_login_without_remember_forgets_email_cookie(): void

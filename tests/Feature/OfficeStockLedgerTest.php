@@ -74,15 +74,13 @@ class OfficeStockLedgerTest extends TestCase
         $ledger = app(OfficePropertyRegisterService::class)->presentOfficeStockLedger($uc, $item->id);
 
         $balances = collect($ledger['rows'])->pluck('balance')->map(fn ($balance): int => (int) $balance)->all();
+        $types = collect($ledger['rows'])->pluck('type')->all();
 
         $this->assertContains(10, $balances);
-        $this->assertContains(7, $balances);
-        $this->assertSame('7', $ledger['header']['total_on_hand']);
+        $this->assertNotContains(7, $balances);
+        $this->assertSame('10', $ledger['header']['total_on_hand']);
+        $this->assertNotContains('Distributed', $types);
         $this->assertFalse($ledger['show_property_units']);
-
-        $distributionRow = collect($ledger['rows'])->firstWhere('type', 'Distributed');
-        $this->assertNotNull($distributionRow);
-        $this->assertSame($employee->name, $distributionRow['employee']);
         $this->assertArrayHasKey('employee', $ledger['columns']);
     }
 }

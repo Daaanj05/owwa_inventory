@@ -45,7 +45,7 @@ class AiProcurementBusyChip extends Component
             $completed = AiProcurementRun::query()
                 ->whereKey($previousProcessingId)
                 ->where('created_by', $userId)
-                ->whereIn('status', ['draft', 'failed'])
+                ->whereIn('status', ['pending', 'failed'])
                 ->first();
 
             if ($completed !== null && $this->completedRunId !== $completed->id) {

@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\LogsUserActivity;
+use App\Services\ReferenceCodeService;
 use App\Support\PhysicalCountPropertyClassResolver;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -68,11 +69,8 @@ class PhysicalCountSession extends Model
             }
 
             if (blank($session->reference_code)) {
-                $session->reference_code = 'PC-'.now()->format('Ymd').'-'.str_pad(
-                    (string) (static::query()->whereDate('created_at', now()->toDateString())->count() + 1),
-                    4,
-                    '0',
-                    STR_PAD_LEFT
+                $session->reference_code = app(ReferenceCodeService::class)->forPhysicalCount(
+                    $session->count_type ?: self::TYPE_RPCI
                 );
             }
 
@@ -91,9 +89,6 @@ class PhysicalCountSession extends Model
         ProcurementSignatoryName::remember(
             ProcurementSignatoryName::ROLE_PHYSICAL_COUNT_ACCOUNTABLE,
             $this->accountable_officer_name,
-        );
-        ProcurementSignatoryName::remember(
-            ProcurementSignatoryName::ROLE_PHYSICAL_COUNT_ACCOUNTABLE_DESIGNATION,
             $this->accountable_officer_designation,
         );
         ProcurementSignatoryName::remember(
@@ -251,7 +246,7 @@ class PhysicalCountSession extends Model
     {
         $missing = [];
 
-        foreach (['accountable_officer_name', 'inventory_type_label', 'count_date'] as $field) {
+        foreach (['accountable_officer_name', 'accountable_officer_designation', 'date_of_assumption', 'inventory_type_label', 'count_date'] as $field) {
             if ($field === 'inventory_type_label' && $this->usesDerivedInventoryTypeLabel()) {
                 continue;
             }

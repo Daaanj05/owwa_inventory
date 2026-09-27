@@ -41,7 +41,7 @@ class ItemBulkCreateTest extends TestCase
 
         Livewire::withQueryParams(['category' => (string) $category->id])
             ->test(ListItems::class)
-            ->callAction(TestAction::make('bulkCreateItems')->schemaComponent(true, 'content'), [
+            ->callAction(TestAction::make('bulkCreateItems'), [
                 'item_category_id' => $category->id,
                 'items' => [
                     [
@@ -120,7 +120,7 @@ class ItemBulkCreateTest extends TestCase
 
         Livewire::withQueryParams(['category' => (string) $category->id])
             ->test(ListItems::class)
-            ->callAction(TestAction::make('bulkCreateItems')->schemaComponent(true, 'content'), [
+            ->callAction(TestAction::make('bulkCreateItems'), [
                 'item_category_id' => $category->id,
                 'items' => [
                     [
@@ -157,7 +157,7 @@ class ItemBulkCreateTest extends TestCase
 
         Livewire::withQueryParams(['category' => (string) $category->id])
             ->test(ListItems::class)
-            ->callAction(TestAction::make('bulkCreateItems')->schemaComponent(true, 'content'), [
+            ->callAction(TestAction::make('bulkCreateItems'), [
                 'item_category_id' => $category->id,
                 'items' => [
                     [
@@ -209,7 +209,7 @@ class ItemBulkCreateTest extends TestCase
 
         Livewire::withQueryParams(['category' => (string) $category->id])
             ->test(ListItems::class)
-            ->callAction(TestAction::make('bulkCreateItems')->schemaComponent(true, 'content'), [
+            ->callAction(TestAction::make('bulkCreateItems'), [
                 'item_category_id' => $category->id,
                 'items' => [
                     [

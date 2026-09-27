@@ -40,10 +40,8 @@
             letter-spacing: .06em;
             margin-left: 8px;
         }
-        .status-draft { background: #e5e7eb; color: #4b5563; }
-        .status-for_approval { background: #fef3c7; color: #92400e; }
+        .status-pending { background: #e5e7eb; color: #4b5563; }
         .status-approved { background: #dcfce7; color: #166534; }
-        .status-archived { background: #e5e7eb; color: #4b5563; }
         .section-title {
             font-size: 12px;
             font-weight: 700;

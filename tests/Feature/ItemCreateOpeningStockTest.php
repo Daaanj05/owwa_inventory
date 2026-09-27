@@ -41,7 +41,7 @@ class ItemCreateOpeningStockTest extends TestCase
 
         Livewire::withQueryParams(['category' => (string) $category->id])
             ->test(ListItems::class)
-            ->callAction(TestAction::make('create')->schemaComponent(true, 'content'), [
+            ->callAction(TestAction::make('create'), [
                 'item_category_id' => $category->id,
                 'base_name' => 'Bond Paper',
                 'sub_item' => 'Legal',
@@ -78,7 +78,7 @@ class ItemCreateOpeningStockTest extends TestCase
 
         Livewire::withQueryParams(['category' => (string) $category->id])
             ->test(ListItems::class)
-            ->mountAction(TestAction::make('create')->schemaComponent(true, 'content'))
+            ->mountAction(TestAction::make('create'))
             ->assertDontSee('Starting quantity')
             ->assertDontSee('Starting unit cost')
             ->assertDontSee('Optional. If blank, starting stock is stored at');

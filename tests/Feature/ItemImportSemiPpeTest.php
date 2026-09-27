@@ -128,12 +128,12 @@ class ItemImportSemiPpeTest extends TestCase
         session(['active_item_category_id' => $semi->id]);
         Livewire::withQueryParams(['category' => (string) $semi->id])
             ->test(ListItems::class)
-            ->assertActionExists(TestAction::make('importConsumableItems')->schemaComponent(true, 'content'));
+            ->assertActionExists(TestAction::make('importConsumableItems'));
 
         session(['active_item_category_id' => $ppe->id]);
         Livewire::withQueryParams(['category' => (string) $ppe->id])
             ->test(ListItems::class)
-            ->assertActionExists(TestAction::make('importConsumableItems')->schemaComponent(true, 'content'));
+            ->assertActionExists(TestAction::make('importConsumableItems'));
     }
 
     public function test_wrong_category_consumable_sheet_on_ppe_page_fails_before_create(): void

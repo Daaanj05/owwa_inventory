@@ -39,7 +39,7 @@ class ProcurementAnalytics extends Page
 
     protected static ?string $title = 'Procurement Analytics';
 
-    protected static ?int $navigationSort = 5;
+    protected static ?int $navigationSort = 1;
 
     protected string $view = 'filament.pages.procurement-analytics';
 
@@ -150,7 +150,7 @@ class ProcurementAnalytics extends Page
         $latest = AiProcurementRun::query()
             ->whereKey($pendingRunId)
             ->where('created_by', $userId)
-            ->whereIn('status', ['draft', 'failed'])
+            ->whereIn('status', ['pending', 'failed'])
             ->first();
 
         if ($latest === null) {

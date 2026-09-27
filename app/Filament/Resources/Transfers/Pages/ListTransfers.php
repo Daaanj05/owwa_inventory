@@ -2,8 +2,11 @@
 
 namespace App\Filament\Resources\Transfers\Pages;
 
-use App\Filament\Concerns\CoaListPageExports;
+use App\Filament\Concerns\HasSearchRowToolbarActions;
+use App\Filament\Concerns\HasSetupArchiveView;
 use App\Filament\Concerns\HasSystemAdminWizardHeading;
+use App\Filament\Concerns\OwwaListExportActions;
+use App\Filament\Concerns\StartsOwwaExportBusy;
 use App\Filament\Concerns\SyncsActiveItemCategory;
 use App\Filament\Resources\Transfers\TransferResource;
 use App\Filament\Support\OwwaFormModalDefaults;
@@ -11,20 +14,16 @@ use App\Models\ItemCategory;
 use App\Support\CategoryWizardBreadcrumb;
 use App\Support\CustodianOfficeScope;
 use Filament\Resources\Pages\ListRecords;
-use Filament\Schemas\Components\Actions;
-use Filament\Schemas\Components\EmbeddedTable;
-use Filament\Schemas\Components\Flex;
-use Filament\Schemas\Components\RenderHook;
-use Filament\Schemas\Components\Tabs\Tab;
-use Filament\Schemas\Schema;
-use Filament\View\PanelsRenderHook;
+use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Livewire\Attributes\Url;
 
 class ListTransfers extends ListRecords
 {
-    use CoaListPageExports;
+    use HasSearchRowToolbarActions;
+    use HasSetupArchiveView;
     use HasSystemAdminWizardHeading;
+    use StartsOwwaExportBusy;
     use SyncsActiveItemCategory;
 
     protected static string $resource = TransferResource::class;
@@ -84,6 +83,7 @@ class ListTransfers extends ListRecords
         parent::mount();
 
         $this->syncActiveItemCategoryFromRequest();
+        $this->registerSetupArchiveViewHook();
 
         if ((int) ($this->create ?? 0) !== 1 || ! TransferResource::canCreate()) {
             return;
@@ -116,25 +116,76 @@ class ListTransfers extends ListRecords
             'transfer_date' => now()->toDateString(),
         ]);
 
-        $this->mountAction('create', [], ['schemaComponent' => 'content']);
+        $this->cacheInteractsWithHeaderActions();
+        $this->mountAction('create');
     }
 
-    public function getTabs(): array
+    protected function setupArchiveViewArchivedCount(): int
+    {
+        return TransferResource::getEloquentQuery()->onlyTrashed()->count();
+    }
+
+    protected function applySetupArchiveQuery(Builder $query): Builder
+    {
+        return $this->showingArchived
+            ? $query->onlyTrashed()
+            : $query->withoutTrashed();
+    }
+
+    public function table(Table $table): Table
+    {
+        return parent::table($table)
+            ->modifyQueryUsing(fn (Builder $query): Builder => $this->applySetupArchiveQuery($query));
+    }
+
+    /**
+     * @return list<array{label: string, action?: string, url?: string, style?: string}>
+     */
+    protected function searchRowToolbarButtons(): array
+    {
+        $buttons = [
+            [
+                'label' => 'Export Report',
+                'action' => 'coaTransfer',
+                'style' => 'gray',
+            ],
+        ];
+
+        if (! $this->showingArchived) {
+            $buttons[] = [
+                'label' => 'New transfer',
+                'action' => 'create',
+                'style' => 'primary',
+            ];
+        }
+
+        return $buttons;
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    public function getPageClasses(): array
     {
         return [
-            'active' => Tab::make('Active')
-                ->modifyQueryUsing(fn (Builder $query): Builder => $query->withoutTrashed())
-                ->excludeQueryWhenResolvingRecord(),
-            'archived' => Tab::make('Archived')
-                ->modifyQueryUsing(fn (Builder $query): Builder => $query->onlyTrashed())
-                ->excludeQueryWhenResolvingRecord(),
+            ...parent::getPageClasses(),
+            'owwa-setup-archive-toggle',
+            'owwa-search-row-toolbar',
         ];
     }
 
-    public function content(Schema $schema): Schema
+    public function cacheInteractsWithHeaderActions(): void
     {
-        $actionsComponent = Actions::make([
-            $this->coaExportReportAction('coaTransfer', 'owwa.export.bulk.transfers'),
+        $this->cachedHeaderActions = [];
+
+        parent::cacheInteractsWithHeaderActions();
+    }
+
+    protected function getHeaderActions(): array
+    {
+        return [
+            OwwaListExportActions::headerAction('coaTransfer', 'owwa.export.bulk.transfers')
+                ->livewire($this),
             OwwaFormModalDefaults::createActionForResource(TransferResource::class, OwwaFormModalDefaults::WIDTH_STANDARD)
                 ->fillForm(function (): array {
                     $defaults = [
@@ -149,31 +200,8 @@ class ListTransfers extends ListRecords
                     }
 
                     return $defaults;
-                }),
-        ]);
-
-        /** @var mixed $actionsComponent */
-        $actionsComponent = $actionsComponent->alignEnd();
-
-        $flexComponent = Flex::make([
-            $this->getTabsContentComponent(),
-            $actionsComponent,
-        ]);
-
-        /** @var mixed $flexComponent */
-        $flexComponent = $flexComponent->alignBetween()->verticallyAlignCenter();
-
-        return $schema
-            ->components([
-                $flexComponent,
-                RenderHook::make(PanelsRenderHook::RESOURCE_PAGES_LIST_RECORDS_TABLE_BEFORE),
-                EmbeddedTable::make(),
-                RenderHook::make(PanelsRenderHook::RESOURCE_PAGES_LIST_RECORDS_TABLE_AFTER),
-            ]);
-    }
-
-    protected function getHeaderActions(): array
-    {
-        return [];
+                })
+                ->visible(fn (): bool => ! $this->showingArchived),
+        ];
     }
 }

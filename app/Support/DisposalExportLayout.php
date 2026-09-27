@@ -148,7 +148,7 @@ class DisposalExportLayout
         OwwaCellMapping::applyHeader($values, (array) ($map['header'] ?? []), [
             'entity_name' => $office?->name ?? '',
             'fund_cluster' => '',
-            'department_office' => $department?->name ?? $office?->name ?? '',
+            'department_office' => self::formatDepartmentOfficeLabel($department?->name, $office?->name),
             'rlsddp_no' => $disposal->reference_code ?? '',
             'accountable_officer' => $disposal->custodian_printed_name ?? '',
             'rlsddp_date' => $disposal->disposal_date?->format('Y-m-d') ?? '',
@@ -179,7 +179,8 @@ class DisposalExportLayout
      */
     protected static function applyWmrDisposalMode(array &$values, Disposal $disposal): void
     {
-        $marks = (array) (OwwaCellMapping::form('WMR')['disposal_mode_marks'] ?? []);
+        $wmrMap = OwwaCellMapping::form('WMR');
+        $marks = (array) ($wmrMap['disposal_mode_marks'] ?? []);
         $itemNo = '1';
         $mode = $disposal->disposal_mode;
 
@@ -194,6 +195,19 @@ class DisposalExportLayout
         if ($cell !== null) {
             $values[$cell] = $itemNo;
         }
+
+        if ($mode !== 'transferred_without_cost') {
+            return;
+        }
+
+        $agency = trim((string) ($disposal->transfer_agency_name ?? ''));
+        if ($agency === '') {
+            return;
+        }
+
+        $agencyCell = $wmrMap['transfer_agency'] ?? 'D35';
+        $prefix = (string) ($wmrMap['transfer_agency_prefix'] ?? 'Transferred without cost to ');
+        $values[$agencyCell] = $prefix.$agency;
     }
 
     /**
@@ -308,6 +322,18 @@ class DisposalExportLayout
         if (isset($govId['date_issued'])) {
             $values[$govId['date_issued']] = 'Date Issued : '.($disposal->gov_id_date_issued?->format('Y-m-d') ?? '');
         }
+    }
+
+    protected static function formatDepartmentOfficeLabel(?string $department, ?string $office): string
+    {
+        $department = trim((string) $department);
+        $office = trim((string) $office);
+
+        if ($department !== '' && $office !== '') {
+            return $department.' - '.$office;
+        }
+
+        return $department !== '' ? $department : $office;
     }
 
     /**

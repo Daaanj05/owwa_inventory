@@ -78,9 +78,9 @@ class PhysicalInventoryPlansTable
                 BulkActionGroup::make([
                     DeleteBulkAction::make()
                         ->label('Archive selected')
-                        ->visible(fn (): bool => in_array($table->getLivewire()->activeTab ?? 'active', ['active', 'all'], true)),
+                        ->visible(fn (): bool => ! (bool) ($table->getLivewire()->showingArchived ?? false)),
                     RestoreBulkAction::make()
-                        ->visible(fn (): bool => in_array($table->getLivewire()->activeTab ?? 'active', ['archived', 'all'], true)),
+                        ->visible(fn (): bool => (bool) ($table->getLivewire()->showingArchived ?? false)),
                 ]),
             ])
             ->recordUrl(null)
