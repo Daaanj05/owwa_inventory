@@ -2,11 +2,11 @@
 
 namespace App\Filament\Resources\ReferenceSeries\Pages;
 
+use App\Filament\Concerns\HasSetupActiveTabToolbar;
 use App\Filament\Concerns\HasSystemAdminWizardHeading;
 use App\Filament\Resources\ReferenceSeries\ReferenceSeriesResource;
 use Filament\Resources\Pages\ListRecords;
 use Filament\Schemas\Components\EmbeddedTable;
-use Filament\Schemas\Components\Flex;
 use Filament\Schemas\Components\RenderHook;
 use Filament\Schemas\Components\Tabs\Tab;
 use Filament\Schemas\Schema;
@@ -15,6 +15,7 @@ use Illuminate\Database\Eloquent\Builder;
 
 class ListReferenceSeries extends ListRecords
 {
+    use HasSetupActiveTabToolbar;
     use HasSystemAdminWizardHeading;
 
     protected static string $resource = ReferenceSeriesResource::class;
@@ -28,11 +29,6 @@ class ListReferenceSeries extends ListRecords
     public function getRecord(): mixed
     {
         return null;
-    }
-
-    public function getSubheading(): string|\Illuminate\Contracts\Support\Htmlable|null
-    {
-        return 'Archived formats are hidden from active lists; new reference numbers use only active formats.';
     }
 
     public function getTabs(): array
@@ -51,9 +47,6 @@ class ListReferenceSeries extends ListRecords
     {
         return $schema
             ->components([
-                Flex::make([
-                    $this->getTabsContentComponent(),
-                ])->alignStart(),
                 RenderHook::make(PanelsRenderHook::RESOURCE_PAGES_LIST_RECORDS_TABLE_BEFORE),
                 EmbeddedTable::make(),
                 RenderHook::make(PanelsRenderHook::RESOURCE_PAGES_LIST_RECORDS_TABLE_AFTER),
@@ -63,5 +56,10 @@ class ListReferenceSeries extends ListRecords
     protected function getHeaderActions(): array
     {
         return [];
+    }
+
+    protected function setupActiveTabArchivedCount(): int
+    {
+        return (int) ReferenceSeriesResource::getEloquentQuery()->whereNotNull('archived_at')->count();
     }
 }

@@ -10,6 +10,7 @@ use App\Models\ItemCategory;
 use App\Models\Office;
 use App\Models\User;
 use Database\Seeders\ItemAttributeOptionSeeder;
+use Filament\Actions\Testing\TestAction;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
@@ -31,7 +32,6 @@ class ItemAttributeOptionSelectTest extends TestCase
                 'kind' => ItemAttributeOption::KIND_UNIT,
                 'value' => 'carton',
                 'label' => 'carton',
-                'is_active' => true,
             ])
             ->assertHasNoFormErrors();
 
@@ -39,7 +39,100 @@ class ItemAttributeOptionSelectTest extends TestCase
             'kind' => ItemAttributeOption::KIND_UNIT,
             'value' => 'carton',
             'label' => 'carton',
+            'is_active' => true,
         ]);
+    }
+
+    public function test_classification_tabs_filter_the_list_and_archive_replaces_delete(): void
+    {
+        Filament::setCurrentPanel(Filament::getPanel('system-admin'));
+
+        $admin = User::factory()->create(['role' => User::ROLE_SYSTEM_ADMIN]);
+        $this->actingAs($admin);
+
+        $unit = ItemAttributeOption::query()->create([
+            'kind' => ItemAttributeOption::KIND_UNIT,
+            'value' => 'ream',
+            'label' => 'Ream',
+            'is_active' => true,
+        ]);
+        $ppe = ItemAttributeOption::query()->create([
+            'kind' => ItemAttributeOption::KIND_PPE_TYPE,
+            'value' => 'land',
+            'label' => 'Land',
+            'is_active' => true,
+        ]);
+
+        Livewire::test(ManageItemAttributeOptions::class)
+            ->assertSeeHtml('owwa-acquisition-doc-tabs')
+            ->assertSee('Measurement unit')
+            ->assertSee('Type of PPE')
+            ->assertCanSeeTableRecords([$unit])
+            ->assertCanNotSeeTableRecords([$ppe])
+            ->assertActionDoesNotExist(TestAction::make('delete')->table($unit))
+            ->callAction(TestAction::make('archive')->table($unit))
+            ->set('kind', ItemAttributeOption::KIND_PPE_TYPE)
+            ->assertCanSeeTableRecords([$ppe])
+            ->assertCanNotSeeTableRecords([$unit])
+            ->mountAction('create')
+            ->assertMountedActionModalSee('Choose the list this value belongs to.')
+            ->assertMountedActionModalSee('office_supplies')
+            ->assertMountedActionModalSee('Office Supplies Inventory')
+            ->assertMountedActionModalSee('Name shown on item forms.')
+            ->assertMountedActionModalSee('Classification')
+            ->assertMountedActionModalSee('Save & add another')
+            ->assertMountedActionModalDontSee('Create & create another')
+            ->assertMountedActionModalDontSeeHtml('data.is_active');
+
+        $this->assertDatabaseHas(ItemAttributeOption::class, [
+            'id' => $unit->id,
+            'is_active' => false,
+        ]);
+    }
+
+    public function test_search_row_shows_new_button_and_archive_view_filters_the_open_classification(): void
+    {
+        Filament::setCurrentPanel(Filament::getPanel('system-admin'));
+
+        $admin = User::factory()->create(['role' => User::ROLE_SYSTEM_ADMIN]);
+        $this->actingAs($admin);
+
+        $active = ItemAttributeOption::query()->create([
+            'kind' => ItemAttributeOption::KIND_UNIT,
+            'value' => 'box',
+            'label' => 'Box',
+            'is_active' => true,
+        ]);
+        $archived = ItemAttributeOption::query()->create([
+            'kind' => ItemAttributeOption::KIND_UNIT,
+            'value' => 'pack',
+            'label' => 'Pack',
+            'is_active' => false,
+        ]);
+
+        $component = Livewire::test(ManageItemAttributeOptions::class)
+            ->assertSeeHtml('owwa-wizard-title')
+            ->assertDontSeeHtml('fi-breadcrumbs')
+            ->assertSeeHtml('owwa-search-row-actions')
+            ->assertSeeHtml('owwa-acquisition-doc-tabs')
+            ->assertSeeHtml('owwa-setup-archive-view-toggle')
+            ->assertSee('New Item Attribute List')
+            ->assertSee('Measurement unit')
+            ->assertDontSeeHtml('fi-header-actions-ctn')
+            ->assertCanSeeTableRecords([$active])
+            ->assertCanNotSeeTableRecords([$archived]);
+
+        $html = $component->html();
+        $this->assertMatchesRegularExpression(
+            '/owwa-search-row-actions[\s\S]*New Item Attribute List/',
+            $html,
+        );
+
+        $component
+            ->set('activeTab', 'archived')
+            ->assertCanSeeTableRecords([$archived])
+            ->assertCanNotSeeTableRecords([$active])
+            ->assertActionExists(TestAction::make('restore')->table($archived));
     }
 
     public function test_item_form_selects_attribute_options_and_base_name(): void

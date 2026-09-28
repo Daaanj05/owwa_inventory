@@ -2,11 +2,11 @@
 
 namespace App\Filament\Resources\UserLogs\Pages;
 
+use App\Filament\Concerns\HasSetupActiveTabToolbar;
 use App\Filament\Concerns\HasSystemAdminWizardHeading;
 use App\Filament\Resources\UserLogs\UserLogResource;
 use Filament\Resources\Pages\ListRecords;
 use Filament\Schemas\Components\EmbeddedTable;
-use Filament\Schemas\Components\Flex;
 use Filament\Schemas\Components\RenderHook;
 use Filament\Schemas\Components\Tabs\Tab;
 use Filament\Schemas\Schema;
@@ -15,6 +15,7 @@ use Illuminate\Database\Eloquent\Builder;
 
 class ListUserLogs extends ListRecords
 {
+    use HasSetupActiveTabToolbar;
     use HasSystemAdminWizardHeading;
 
     protected static string $resource = UserLogResource::class;
@@ -26,13 +27,6 @@ class ListUserLogs extends ListRecords
     public function getRecord(): mixed
     {
         return null;
-    }
-
-    public function getSubheading(): string|\Illuminate\Contracts\Support\Htmlable|null
-    {
-        $days = (int) config('inventory.audit_log_archive_days', 30);
-
-        return "Active shows the last {$days} days; Archived is older history (retained for audit).";
     }
 
     public function getTabs(): array
@@ -60,9 +54,6 @@ class ListUserLogs extends ListRecords
     {
         return $schema
             ->components([
-                Flex::make([
-                    $this->getTabsContentComponent(),
-                ])->alignStart(),
                 RenderHook::make(PanelsRenderHook::RESOURCE_PAGES_LIST_RECORDS_TABLE_BEFORE),
                 EmbeddedTable::make(),
                 RenderHook::make(PanelsRenderHook::RESOURCE_PAGES_LIST_RECORDS_TABLE_AFTER),
@@ -72,5 +63,18 @@ class ListUserLogs extends ListRecords
     protected function getHeaderActions(): array
     {
         return [];
+    }
+
+    protected function setupActiveTabArchivedCount(): int
+    {
+        $days = (int) config('inventory.audit_log_archive_days', 30);
+        $recent = now()->subDays($days);
+
+        return (int) UserLogResource::getEloquentQuery()
+            ->where(function (Builder $query) use ($recent): void {
+                $query->whereNotNull('archived_at')
+                    ->orWhere('logged_in_at', '<', $recent);
+            })
+            ->count();
     }
 }

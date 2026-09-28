@@ -2,13 +2,13 @@
 
 namespace App\Filament\Resources\Offices\Pages;
 
+use App\Filament\Concerns\HasSetupActiveTabToolbar;
 use App\Filament\Concerns\HasSystemAdminWizardHeading;
 use App\Filament\Resources\Offices\OfficeResource;
 use App\Filament\Support\OwwaFormModalDefaults;
+use App\Models\Office;
 use Filament\Resources\Pages\ListRecords;
-use Filament\Schemas\Components\Actions;
 use Filament\Schemas\Components\EmbeddedTable;
-use Filament\Schemas\Components\Flex;
 use Filament\Schemas\Components\RenderHook;
 use Filament\Schemas\Components\Tabs\Tab;
 use Filament\Schemas\Schema;
@@ -17,6 +17,7 @@ use Illuminate\Database\Eloquent\Builder;
 
 class ListOffices extends ListRecords
 {
+    use HasSetupActiveTabToolbar;
     use HasSystemAdminWizardHeading;
 
     protected static string $resource = OfficeResource::class;
@@ -51,12 +52,6 @@ class ListOffices extends ListRecords
     {
         return $schema
             ->components([
-                Flex::make([
-                    $this->getTabsContentComponent(),
-                    Actions::make([
-                        OwwaFormModalDefaults::createActionForResource(OfficeResource::class, OwwaFormModalDefaults::WIDTH_COMPACT),
-                    ])->alignEnd(),
-                ])->alignBetween()->verticallyAlignCenter(),
                 RenderHook::make(PanelsRenderHook::RESOURCE_PAGES_LIST_RECORDS_TABLE_BEFORE),
                 EmbeddedTable::make(),
                 RenderHook::make(PanelsRenderHook::RESOURCE_PAGES_LIST_RECORDS_TABLE_AFTER),
@@ -65,6 +60,24 @@ class ListOffices extends ListRecords
 
     protected function getHeaderActions(): array
     {
-        return [];
+        return [
+            OwwaFormModalDefaults::createActionForResource(OfficeResource::class, OwwaFormModalDefaults::WIDTH_COMPACT)
+                ->label('New Office'),
+        ];
+    }
+
+    protected function setupToolbarCreateLabel(): ?string
+    {
+        return 'New Office';
+    }
+
+    protected function setupActiveTabArchivedCount(): int
+    {
+        return (int) Office::query()->whereNotNull('archived_at')->count();
+    }
+
+    protected function getTableQuery(): Builder
+    {
+        return Office::query();
     }
 }

@@ -153,7 +153,7 @@ class ListTransfers extends ListRecords
 
         if (! $this->showingArchived) {
             $buttons[] = [
-                'label' => 'New transfer',
+                'label' => 'New Transfer',
                 'action' => 'create',
                 'style' => 'primary',
             ];
@@ -187,6 +187,7 @@ class ListTransfers extends ListRecords
             OwwaListExportActions::headerAction('coaTransfer', 'owwa.export.bulk.transfers')
                 ->livewire($this),
             OwwaFormModalDefaults::createActionForResource(TransferResource::class, OwwaFormModalDefaults::WIDTH_STANDARD)
+                ->label('New Transfer')
                 ->fillForm(function (): array {
                     $defaults = [
                         'item_category_filter' => $this->activeItemCategoryId() ?: null,

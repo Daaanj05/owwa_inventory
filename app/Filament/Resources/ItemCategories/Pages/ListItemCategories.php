@@ -2,13 +2,12 @@
 
 namespace App\Filament\Resources\ItemCategories\Pages;
 
+use App\Filament\Concerns\HasSetupActiveTabToolbar;
 use App\Filament\Concerns\HasSystemAdminWizardHeading;
 use App\Filament\Resources\ItemCategories\ItemCategoryResource;
 use App\Filament\Support\OwwaFormModalDefaults;
 use Filament\Resources\Pages\ListRecords;
-use Filament\Schemas\Components\Actions;
 use Filament\Schemas\Components\EmbeddedTable;
-use Filament\Schemas\Components\Flex;
 use Filament\Schemas\Components\RenderHook;
 use Filament\Schemas\Components\Tabs\Tab;
 use Filament\Schemas\Schema;
@@ -17,6 +16,7 @@ use Illuminate\Database\Eloquent\Builder;
 
 class ListItemCategories extends ListRecords
 {
+    use HasSetupActiveTabToolbar;
     use HasSystemAdminWizardHeading;
 
     protected static string $resource = ItemCategoryResource::class;
@@ -28,15 +28,6 @@ class ListItemCategories extends ListRecords
     public function getRecord(): mixed
     {
         return null;
-    }
-
-    public function getSubheading(): string|\Illuminate\Contracts\Support\Htmlable|null
-    {
-        $total = \App\Models\ItemCategory::query()->whereNull('archived_at')->count();
-
-        return $total > 0
-            ? "{$total} active ".\Illuminate\Support\Str::plural('category', $total).' defined.'
-            : 'No active categories yet. Create categories before adding items.';
     }
 
     public function getTabs(): array
@@ -55,12 +46,6 @@ class ListItemCategories extends ListRecords
     {
         return $schema
             ->components([
-                Flex::make([
-                    $this->getTabsContentComponent(),
-                    Actions::make([
-                        OwwaFormModalDefaults::createActionForResource(ItemCategoryResource::class, OwwaFormModalDefaults::WIDTH_COMPACT),
-                    ])->alignEnd(),
-                ])->alignBetween()->verticallyAlignCenter(),
                 RenderHook::make(PanelsRenderHook::RESOURCE_PAGES_LIST_RECORDS_TABLE_BEFORE),
                 EmbeddedTable::make(),
                 RenderHook::make(PanelsRenderHook::RESOURCE_PAGES_LIST_RECORDS_TABLE_AFTER),
@@ -69,6 +54,19 @@ class ListItemCategories extends ListRecords
 
     protected function getHeaderActions(): array
     {
-        return [];
+        return [
+            OwwaFormModalDefaults::createActionForResource(ItemCategoryResource::class, OwwaFormModalDefaults::WIDTH_COMPACT)
+                ->label('New Item Category'),
+        ];
+    }
+
+    protected function setupToolbarCreateLabel(): ?string
+    {
+        return 'New Item Category';
+    }
+
+    protected function setupActiveTabArchivedCount(): int
+    {
+        return (int) ItemCategoryResource::getEloquentQuery()->whereNotNull('archived_at')->count();
     }
 }

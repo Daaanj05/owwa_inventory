@@ -105,7 +105,7 @@ class ListPhysicalCountSessions extends ListRecords
         }
 
         $buttons[] = [
-            'label' => 'New physical count',
+            'label' => 'New Physical Count',
             'action' => 'create',
             'style' => 'primary',
         ];
@@ -141,6 +141,7 @@ class ListPhysicalCountSessions extends ListRecords
                 OwwaFormModalDefaults::WIDTH_STANDARD,
                 $this->consumableCreateModalDescription(),
             )
+                ->label('New Physical Count')
                 ->visible(fn (): bool => ! $this->showingArchived)
                 ->fillForm(fn (): array => PhysicalCountSessionForm::defaultCreateFormData($this->activeItemCategoryId()))
                 ->mutateFormDataUsing(function (array $data): array {

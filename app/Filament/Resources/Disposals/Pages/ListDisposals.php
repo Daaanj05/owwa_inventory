@@ -120,7 +120,7 @@ class ListDisposals extends ListRecordsWithoutFilterUrl
 
         if (! $this->showingArchived) {
             $buttons[] = [
-                'label' => 'New disposal',
+                'label' => 'New Disposal',
                 'action' => 'create',
                 'style' => 'primary',
             ];
@@ -153,6 +153,7 @@ class ListDisposals extends ListRecordsWithoutFilterUrl
         return [
             DisposalExportReportAction::make(),
             OwwaFormModalDefaults::createActionForResource(DisposalResource::class, OwwaFormModalDefaults::WIDTH_MEDIUM)
+                ->label('New Disposal')
                 ->fillForm(function (): array {
                     $defaults = [
                         'disposal_type' => DisposalForm::defaultDisposalType(),

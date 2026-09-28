@@ -33,14 +33,14 @@ class UcRequisitionToolbarTest extends TestCase
             'ucOfficeId' => $office->id,
             'ucDepartmentId' => $department->id,
         ])
-            ->assertSee('New Requisition to Supply Custodian')
+            ->assertSee('New Requisition To Supply Custodian')
             ->assertSeeHtml('aria-label="Active"')
             ->assertSeeHtml('aria-label="Archived"')
             ->assertSeeHtml('owwa-uc-requisition-page-actions')
             ->html();
 
         $this->assertMatchesRegularExpression(
-            '/owwa-search-row-actions[\s\S]*New Requisition to Supply Custodian/',
+            '/owwa-search-row-actions[\s\S]*New Requisition To Supply Custodian/',
             $html,
         );
         $this->assertStringContainsString('owwa-uc-archive-toggle', $html);

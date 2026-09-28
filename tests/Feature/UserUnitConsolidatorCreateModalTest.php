@@ -37,7 +37,7 @@ class UserUnitConsolidatorCreateModalTest extends TestCase
         $this->actingAs($admin);
 
         $component = Livewire::test(ListUsers::class)
-            ->mountAction(TestAction::make('create')->schemaComponent(true, 'content'))
+            ->mountAction(TestAction::make('create'))
             ->fillForm([
                 'first_name' => 'Test',
                 'last_name' => 'Consolidator',
@@ -95,7 +95,7 @@ class UserUnitConsolidatorCreateModalTest extends TestCase
         $this->actingAs($admin);
 
         $component = Livewire::test(ListUsers::class)
-            ->mountAction(TestAction::make('create')->schemaComponent(true, 'content'))
+            ->mountAction(TestAction::make('create'))
             ->fillForm([
                 'first_name' => 'Multi',
                 'last_name' => 'Dept',

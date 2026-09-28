@@ -496,8 +496,8 @@
 ═══════════════════════════════════════════════════════════ */
 .fi-page[class*="fi-resource-"] .fi-page-header-main-ctn {
     row-gap: 0.75rem !important;
-    padding-top: 1rem !important;
-    padding-bottom: 1rem !important;
+    padding-top: 0.15rem !important;
+    padding-bottom: 0.35rem !important;
 }
 
 .fi-page[class*="fi-resource-"] .fi-header {
@@ -509,7 +509,19 @@
 
 .fi-page[class*="fi-resource-"] .fi-page-content {
     gap: 1rem !important;
-    row-gap: 1rem !important;
+    row-gap: 0.35rem !important;
+}
+
+.fi-page.owwa-setup-archive-toggle .fi-header,
+.fi-page.owwa-item-attribute-list .fi-header {
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    padding-top: 0.5rem !important;
+}
+
+.fi-page.owwa-item-attribute-list button.owwa-pa-view-tab {
+    font-family: inherit;
+    line-height: 1.25;
 }
 
 .fi-page.owwa-uc-requisitions-tabs .fi-page-header-main-ctn {
@@ -548,13 +560,15 @@
     background-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22none%22%20viewBox%3D%220%200%2024%2024%22%20stroke-width%3D%221.5%22%20stroke%3D%22%232563eb%22%3E%3Cpath%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20d%3D%22M21%207.5l-9-5.25L3%207.5m18%200l-9%205.25m9-5.25v10.5l-9%205.25M3%207.5m0%2010.5l9%205.25m-9-5.25v-10.5l9-5.25m0%2010.5l9%205.25m9-5.25v-10.5l-9-5.25%22%2F%3E%3C%2Fsvg%3E");
 }
 
-/* Requisitions — sidebar uses Heroicon::OutlinedDocumentText */
-.fi-page.fi-resource-requisitions .fi-header-heading::before {
+/* Requisitions and purchase orders — sidebar uses Heroicon::OutlinedDocumentText */
+.fi-page.fi-resource-requisitions .fi-header-heading::before,
+.fi-page.fi-resource-purchase-orders .fi-header-heading::before {
     background-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22none%22%20viewBox%3D%220%200%2024%2024%22%20stroke-width%3D%221.5%22%20stroke%3D%22%232563eb%22%3E%3Cpath%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20d%3D%22M19.5%2014.25v-2.625a3.375%203.375%200%200%200-3.375-3.375h-1.5a1.125%201.125%200%200%201-1.125-1.125v-1.5a3.375%203.375%200%200%200-3.375-3.375H8.25m2.25%200H5.625c-.621%200-1.125.504-1.125%201.125v17.25c0%20.621.504%201.125%201.125%201.125h12.75c.621%200%201.125-.504%201.125-1.125V11.25a9%209%200%200%200-9-9Z%22%2F%3E%3C%2Fsvg%3E");
 }
 
 /* Setup / System Admin resources — title row icon matches sidebar navigation */
-.fi-page.fi-resource-fiscal-years .fi-header-heading::before {
+.fi-page.fi-resource-fiscal-years .fi-header-heading::before,
+.fi-page.fi-resource-physical-inventory-plans .fi-header-heading::before {
     background-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22none%22%20viewBox%3D%220%200%2024%2024%22%20stroke-width%3D%221.5%22%20stroke%3D%22%232563eb%22%3E%3Cpath%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20d%3D%22M6.75%203v2.25M17.25%203v2.25M3%2018.75V7.5a2.25%202.25%200%20012.25-2.25h13.5A2.25%202.25%200%200121%207.5v11.25m-18%200A2.25%202.25%200%20005.25%2021h13.5A2.25%202.25%200%200021%2018.75m-18%200v-7.5A2.25%202.25%200%20015.25%209h13.5A2.25%202.25%200%200121%2011.25v7.5%22%2F%3E%3C%2Fsvg%3E");
 }
 
@@ -563,7 +577,7 @@
 }
 
 .fi-page.fi-resource-offices .fi-header-heading::before {
-    background-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22none%22%20viewBox%3D%220%200%2024%2024%22%20stroke-width%3D%221.5%22%20stroke%3D%22%232563eb%22%3E%3Cpath%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20d%3D%22M2.25%2021h19.5m-18-18v18m10.5-18v18m-10.5%200h15m-15-18h15m0%200h3.375c.621%200%201.125.504%201.125%201.125V20.25m-4.5-18v18M4.875%203.75H3.375c-.621%200-1.125.504-1.125%201.125v15.75c0%20.621.504%201.125%201.125%201.125h1.5m14.25-18V6.375c0-.621-.504-1.125-1.125-1.125H4.875c-.621%200-1.125.504-1.125%201.125V18.75%22%2F%3E%3C%2Fsvg%3E");
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke-width='1.5' stroke='%232563eb'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M3.75 21h16.5M4.5 3h15M5.25 3v18m13.5-18v18M9 6.75h1.5m-1.5 3h1.5m-1.5 3h1.5m3-6H15m-1.5 3H15m-1.5 3H15M9 21v-3.375c0-.621.504-1.125 1.125-1.125h3.75c.621 0 1.125.504 1.125 1.125V21'/%3E%3C/svg%3E");
 }
 
 .fi-page.fi-resource-departments .fi-header-heading::before {
@@ -578,8 +592,57 @@
     background-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22none%22%20viewBox%3D%220%200%2024%2024%22%20stroke-width%3D%221.5%22%20stroke%3D%22%232563eb%22%3E%3Cpath%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20d%3D%22M9%2012.75%2011.25%2015%2015%209.75m-3-7.036A11.959%2011.959%200%20013.598%206%2011.99%2011.99%200%20003%209.749c0%205.592%203.824%2010.29%209%2011.623%205.176-1.332%209-6.03%209-11.622%200-1.31-.21-2.571-.598-3.751h-.152c-3.196%200-6.1-1.248-8.25-3.285z%22%2F%3E%3C%2Fsvg%3E");
 }
 
-.fi-page.fi-resource-reference-series .fi-header-heading::before {
+.fi-page.fi-resource-reference-series .fi-header-heading::before,
+.fi-page.fi-resource-uacs-object-codes .fi-header-heading::before {
     background-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22none%22%20viewBox%3D%220%200%2024%2024%22%20stroke-width%3D%221.5%22%20stroke%3D%22%232563eb%22%3E%3Cpath%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20d%3D%22M5.25%208.25h15m-16.5%207.5h15m-1.8-13.5-3.9%2019.5m-2.1-19.5-3.9%2019.5%22%2F%3E%3C%2Fsvg%3E");
+}
+
+.fi-page.fi-resource-item-attribute-options .fi-header-heading::before {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke-width='1.5' stroke='%232563eb'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M8.25 6.75h12M8.25 12h12m-12 5.25h12M3.75 6.75h.007v.008H3.75V6.75Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0ZM3.75 12h.007v.008H3.75V12Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm-.375 5.25h.007v.008H3.75v-.008Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z'/%3E%3C/svg%3E");
+}
+
+.fi-page.fi-resource-suppliers .fi-header-heading::before {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke-width='1.5' stroke='%232563eb'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M13.5 21v-7.5a.75.75 0 0 1 .75-.75h3a.75.75 0 0 1 .75.75V21m-4.5 0H2.36m11.14 0H18m0 0h3.64m-1.39 0V9.349M3.75 21V9.349m0 0a3.001 3.001 0 0 0 3.75-.615A2.993 2.993 0 0 0 9.75 9.75c.896 0 1.7-.393 2.25-1.016a2.993 2.993 0 0 0 2.25 1.016c.896 0 1.7-.393 2.25-1.016a3.001 3.001 0 0 0 3.75.614m-16.5 0a3.004 3.004 0 0 1-.621-4.72L4.318 3.44A1.5 1.5 0 0 1 5.378 3h13.243a1.5 1.5 0 0 1 1.06.44l1.19 1.189a3 3 0 0 1-.621 4.72M6.75 18h3.75a.75.75 0 0 0 .75-.75V13.5a.75.75 0 0 0-.75-.75H6.75a.75.75 0 0 0-.75.75v3.75c0 .414.336.75.75.75Z'/%3E%3C/svg%3E");
+}
+
+.fi-page.fi-resource-delivery-terms .fi-header-heading::before {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke-width='1.5' stroke='%232563eb'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M8.25 18.75a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 0 1-1.125-1.125V14.25m17.25 4.5a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m3 0h1.125c.621 0 1.129-.504 1.09-1.124a17.902 17.902 0 0 0-3.213-9.193 2.056 2.056 0 0 0-1.58-.86H14.25M16.5 18.75h-2.25m0-11.177v-.958c0-.568-.422-1.048-.987-1.106a48.554 48.554 0 0 0-10.026 0 1.106 1.106 0 0 0-.987 1.106v7.635m12-6.677v6.677m0 4.5v-4.5m0 0h-12'/%3E%3C/svg%3E");
+}
+
+.fi-page.fi-resource-procurement-signatory-names .fi-header-heading::before {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke-width='1.5' stroke='%232563eb'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0 1 15.75 21H5.25A2.25 2.25 0 0 1 3 18.75V8.25A2.25 2.25 0 0 1 5.25 6H10'/%3E%3C/svg%3E");
+}
+
+.fi-page.fi-resource-ai-procurement-runs .fi-header-heading::before {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke-width='1.5' stroke='%232563eb'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09ZM18.259 8.715 18 9.75l-.259-1.035a3.375 3.375 0 0 0-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 0 0 2.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 0 0 2.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 0 0-2.456 2.456ZM16.894 20.567 16.5 21.75l-.394-1.183a2.25 2.25 0 0 0-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 0 0 1.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 0 0 1.423 1.423l1.183.394-1.183.394a2.25 2.25 0 0 0-1.423 1.423Z'/%3E%3C/svg%3E");
+}
+
+.fi-page.fi-resource-property-action-requests .fi-header-heading::before {
+    background-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22none%22%20viewBox%3D%220%200%2024%2024%22%20stroke-width%3D%221.5%22%20stroke%3D%22%232563eb%22%3E%3Cpath%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20d%3D%22M11.42%2015.17%2017.25%2021A2.652%202.652%200%200021%2017.25l-5.877-5.877M11.42%2015.17%202.81%206.58a2.652%202.652%200%20013.12-4.24l2.87%202.87m-5.18%2010.06%205.18-5.18m5.18%205.18%202.87%202.87a2.652%202.652%200%20004.24-3.12l-2.87-2.87m-5.18-10.06-5.18%205.18%22%2F%3E%3C%2Fsvg%3E");
+}
+
+.fi-page.fi-resource-incident-reports .fi-header-heading::before {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke-width='1.5' stroke='%232563eb'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z'/%3E%3C/svg%3E");
+}
+
+.fi-page.fi-resource-disposals .fi-header-heading::before {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke-width='1.5' stroke='%232563eb'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0'/%3E%3C/svg%3E");
+}
+
+.fi-page.fi-resource-transfers .fi-header-heading::before {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke-width='1.5' stroke='%232563eb'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M7.5 21 3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5'/%3E%3C/svg%3E");
+}
+
+.fi-page.fi-resource-issuances .fi-header-heading::before {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke-width='1.5' stroke='%232563eb'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5'/%3E%3C/svg%3E");
+}
+
+.fi-page.fi-resource-acquisitions .fi-header-heading::before {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke-width='1.5' stroke='%232563eb'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3'/%3E%3C/svg%3E");
+}
+
+.fi-page.fi-resource-inspection-acceptance-reports .fi-header-heading::before {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke-width='1.5' stroke='%232563eb'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M11.35 3.836c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 0 0 .75-.75 2.25 2.25 0 0 0-.1-.664m-5.8 0A2.251 2.251 0 0 1 13.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m8.9-4.414c.376.023.75.05 1.124.08 1.131.094 1.976 1.057 1.976 2.192V16.5A2.25 2.25 0 0 1 18 18.75h-2.25m-7.5-10.5H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V18.75m-7.5-10.5h6.375c.621 0 1.125.504 1.125 1.125v9.375m-8.25-3 1.5 1.5 3-3.75'/%3E%3C/svg%3E");
 }
 
 .owwa-pa-page-title {
@@ -1381,6 +1444,42 @@ button[type="submit"].fi-btn:hover {
     width: auto !important;
     margin: 0 !important;
     order: unset !important;
+}
+
+.fi-page.owwa-search-row-toolbar.owwa-setup-archive-toggle.owwa-archive-icons-on-search-row .owwa-setup-archive-view-toggle {
+    grid-row: 1 !important;
+}
+
+.fi-page.owwa-item-attribute-list.owwa-search-row-toolbar .fi-ta-header-toolbar {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) auto !important;
+    align-items: center !important;
+    column-gap: 0.75rem !important;
+    row-gap: 0.5rem !important;
+}
+
+.fi-page.owwa-item-attribute-list.owwa-search-row-toolbar .fi-ta-header-toolbar > div:has(.fi-ta-search-field) {
+    display: contents !important;
+}
+
+.fi-page.owwa-item-attribute-list .owwa-search-row-actions {
+    grid-column: 2 !important;
+    grid-row: 1 !important;
+    justify-self: end !important;
+}
+
+.fi-page.owwa-item-attribute-list .owwa-acquisition-doc-tabs-wrap {
+    grid-column: 1 !important;
+    grid-row: 2 !important;
+    justify-self: start !important;
+    min-width: 0 !important;
+}
+
+.fi-page.owwa-item-attribute-list .owwa-setup-archive-view-toggle {
+    grid-column: 2 !important;
+    grid-row: 2 !important;
+    justify-self: end !important;
+    margin-left: 0 !important;
 }
 
 .fi-page.owwa-setup-create-toolbar .fi-ta-col-manager-dropdown,
@@ -3526,9 +3625,6 @@ button[type="submit"].fi-btn:hover {
     width: fit-content;
     max-width: 100%;
     color: #111827;
-    font-size: 1.25rem;
-    line-height: 1.2;
-    font-weight: 600;
     letter-spacing: -0.02em;
 }
 
@@ -3574,8 +3670,8 @@ button[type="submit"].fi-btn:hover {
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke-width='1.5' stroke='%232563eb'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M3.75 6A2.25 2.25 0 0 1 6 3.75h2.25A2.25 2.25 0 0 1 10.5 6v2.25a2.25 2.25 0 0 1-2.25 2.25H6a2.25 2.25 0 0 1-2.25-2.25V6ZM13.5 15.75a2.25 2.25 0 0 1 2.25-2.25H18a2.25 2.25 0 0 1 2.25 2.25V18A2.25 2.25 0 0 1 18 20.25h-2.25a2.25 2.25 0 0 1-2.25-2.25v-2.25ZM13.5 6.75a2.25 2.25 0 0 1 2.25-2.25H18A2.25 2.25 0 0 1 20.25 6v2.25A2.25 2.25 0 0 1 18 10.5h-2.25A2.25 2.25 0 0 1 13.5 8.25V6.75ZM3.75 15.75a2.25 2.25 0 0 1 2.25-2.25h2.25a2.25 2.25 0 0 1 2.25 2.25V18a2.25 2.25 0 0 1-2.25 2.25H6a2.25 2.25 0 0 1-2.25-2.25v-2.25Z' /%3E%3C/svg%3E");
 }
 
-/* Hide page-level title ::before when wizard breadcrumb supplies the category icon */
-.fi-page .fi-header-heading:has(.owwa-wizard-title)::before {
+/* Hide page-level title ::before when the wizard title already includes the category icon */
+.fi-page .fi-header-heading:has(.owwa-wizard-step-icon)::before {
     display: none;
 }
 

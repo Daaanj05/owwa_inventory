@@ -250,7 +250,7 @@ class ListRequisitions extends ListRecords
                             : (Filament::auth()->user()?->isUnitConsolidator() ? ' owwa-requisition-uc-modal' : '')),
                 ])
                 ->label(fn (): string => Filament::auth()->user()?->isUnitConsolidator()
-                    ? 'New Requisition to Supply Custodian'
+                    ? 'New Requisition To Supply Custodian'
                     : 'New Requisition')
                 ->createAnother(false)
                 ->closeModalByClickingAway(fn (): bool => ! (Filament::auth()->user()?->isUnitConsolidator() ?? false))
@@ -383,7 +383,7 @@ class ListRequisitions extends ListRecords
                     ]);
                 })
                 ->modalHeading(fn (): string => Filament::auth()->user()?->isUnitConsolidator()
-                    ? 'New Requisition to Supply Custodian'
+                    ? 'New Requisition To Supply Custodian'
                     : 'New Requisition')
                 ->modalDescription(function (Action $action): string {
                     /** @var User|null $user */
@@ -615,7 +615,7 @@ class ListRequisitions extends ListRecords
 
         return [
             [
-                'label' => 'New Requisition to Supply Custodian',
+                'label' => 'New Requisition To Supply Custodian',
                 'action' => 'create',
                 'schema' => 'content',
                 'style' => 'primary',

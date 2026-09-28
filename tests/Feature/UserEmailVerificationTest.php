@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Filament\Pages\Auth\Login;
 use App\Filament\Resources\Users\Pages\ListUsers;
+use App\Models\Department;
 use App\Models\Office;
 use App\Models\User;
 use App\Notifications\UserWelcomeNotification;
@@ -26,6 +27,11 @@ class UserEmailVerificationTest extends TestCase
         Filament::setCurrentPanel(Filament::getPanel('system-admin'));
 
         $office = Office::factory()->create();
+        $department = Department::query()->create([
+            'office_id' => $office->id,
+            'name' => 'Admin',
+            'code' => 'ADM',
+        ]);
         $admin = User::factory()->create([
             'role' => User::ROLE_SYSTEM_ADMIN,
             'email_verified_at' => now(),
@@ -34,13 +40,14 @@ class UserEmailVerificationTest extends TestCase
         $this->actingAs($admin);
 
         Livewire::test(ListUsers::class)
-            ->mountAction(TestAction::make('create')->schemaComponent(true, 'content'))
+            ->mountAction(TestAction::make('create'))
             ->fillForm([
                 'first_name' => 'Jane',
                 'last_name' => 'Employee',
                 'email' => 'jane.employee@example.com',
                 'role' => User::ROLE_EMPLOYEE,
                 'office_id' => $office->id,
+                'department_id' => $department->id,
             ])
             ->callMountedAction()
             ->assertHasNoFormErrors()
@@ -166,6 +173,11 @@ class UserEmailVerificationTest extends TestCase
         Filament::setCurrentPanel(Filament::getPanel('system-admin'));
 
         $office = Office::factory()->create();
+        $department = Department::query()->create([
+            'office_id' => $office->id,
+            'name' => 'Admin',
+            'code' => 'ADM',
+        ]);
         $admin = User::factory()->create([
             'role' => User::ROLE_SYSTEM_ADMIN,
             'email_verified_at' => now(),
@@ -174,13 +186,14 @@ class UserEmailVerificationTest extends TestCase
         $this->actingAs($admin);
 
         Livewire::test(ListUsers::class)
-            ->mountAction(TestAction::make('create')->schemaComponent(true, 'content'))
+            ->mountAction(TestAction::make('create'))
             ->fillForm([
                 'first_name' => 'Backup',
                 'last_name' => 'Password',
                 'email' => 'backup.password@example.com',
                 'role' => User::ROLE_EMPLOYEE,
                 'office_id' => $office->id,
+                'department_id' => $department->id,
             ])
             ->callMountedAction()
             ->assertHasNoFormErrors()

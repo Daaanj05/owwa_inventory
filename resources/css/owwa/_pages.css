@@ -16,9 +16,6 @@
     width: fit-content;
     max-width: 100%;
     color: #111827;
-    font-size: 1.25rem;
-    line-height: 1.2;
-    font-weight: 600;
     letter-spacing: -0.02em;
 }
 
@@ -64,8 +61,8 @@
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke-width='1.5' stroke='%232563eb'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M3.75 6A2.25 2.25 0 0 1 6 3.75h2.25A2.25 2.25 0 0 1 10.5 6v2.25a2.25 2.25 0 0 1-2.25 2.25H6a2.25 2.25 0 0 1-2.25-2.25V6ZM13.5 15.75a2.25 2.25 0 0 1 2.25-2.25H18a2.25 2.25 0 0 1 2.25 2.25V18A2.25 2.25 0 0 1 18 20.25h-2.25a2.25 2.25 0 0 1-2.25-2.25v-2.25ZM13.5 6.75a2.25 2.25 0 0 1 2.25-2.25H18A2.25 2.25 0 0 1 20.25 6v2.25A2.25 2.25 0 0 1 18 10.5h-2.25A2.25 2.25 0 0 1 13.5 8.25V6.75ZM3.75 15.75a2.25 2.25 0 0 1 2.25-2.25h2.25a2.25 2.25 0 0 1 2.25 2.25V18a2.25 2.25 0 0 1-2.25 2.25H6a2.25 2.25 0 0 1-2.25-2.25v-2.25Z' /%3E%3C/svg%3E");
 }
 
-/* Hide page-level title ::before when wizard breadcrumb supplies the category icon */
-.fi-page .fi-header-heading:has(.owwa-wizard-title)::before {
+/* Hide page-level title ::before when the wizard title already includes the category icon */
+.fi-page .fi-header-heading:has(.owwa-wizard-step-icon)::before {
     display: none;
 }
 

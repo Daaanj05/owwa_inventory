@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Users\Pages;
 
+use App\Filament\Concerns\HasSetupActiveTabToolbar;
 use App\Filament\Concerns\HasSystemAdminWizardHeading;
 use App\Filament\Resources\Users\UserResource;
 use App\Filament\Support\OwwaFormModalDefaults;
@@ -13,9 +14,7 @@ use App\Support\FriendlyMessages;
 use App\Support\MailDelivery;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ListRecords;
-use Filament\Schemas\Components\Actions;
 use Filament\Schemas\Components\EmbeddedTable;
-use Filament\Schemas\Components\Flex;
 use Filament\Schemas\Components\RenderHook;
 use Filament\Schemas\Components\Tabs\Tab;
 use Filament\Schemas\Schema;
@@ -26,6 +25,7 @@ use Illuminate\Support\Str;
 
 class ListUsers extends ListRecords
 {
+    use HasSetupActiveTabToolbar;
     use HasSystemAdminWizardHeading;
 
     protected static string $resource = UserResource::class;
@@ -46,20 +46,6 @@ class ListUsers extends ListRecords
         app(PasswordResetRequestService::class)->pruneExpired();
     }
 
-    public function getSubheading(): string|\Illuminate\Contracts\Support\Htmlable|null
-    {
-        $total = User::count();
-        $custodians = User::where('role', User::ROLE_SUPPLY_CUSTODIAN)->count();
-
-        if ($total === 0) {
-            return 'No users yet.';
-        }
-
-        $line = "{$total} ".\Illuminate\Support\Str::plural('user', $total).", {$custodians} Supply ".\Illuminate\Support\Str::plural('Custodian', $custodians).'.';
-
-        return $line.' Archived lists System Admin accounts.';
-    }
-
     public function getTabs(): array
     {
         return [
@@ -74,69 +60,8 @@ class ListUsers extends ListRecords
 
     public function content(Schema $schema): Schema
     {
-        $generatedPassword = null;
-        $welcomeMailResult = null;
-        $pendingAssignments = [];
-
-        $createAction = OwwaFormModalDefaults::createActionForResource(UserResource::class, OwwaFormModalDefaults::WIDTH_MEDIUM)
-            ->extraModalWindowAttributes(['class' => OwwaFormModalDefaults::MODAL_WINDOW_CLASS.' owwa-user-form-modal'])
-            ->mutateDataUsing(function (array $data) use (&$generatedPassword, &$pendingAssignments): array {
-                $generatedPassword = $this->generateTemporaryPassword();
-                $data['password'] = $generatedPassword;
-                $data['email_verified_at'] = null;
-                $data['must_change_password'] = true;
-
-                $data = UserAssignmentActionHooks::prepareCreateData($data);
-                $pendingAssignments = $data['_assignments'] ?? [];
-                unset($data['_assignments']);
-
-                return $data;
-            })
-            ->after(function (User $record) use (&$generatedPassword, &$welcomeMailResult, &$pendingAssignments): void {
-                if ($record->isUnitConsolidator() && $pendingAssignments !== []) {
-                    $record->syncOfficeAssignments($pendingAssignments);
-                }
-
-                $welcomeMailResult = MailDelivery::notify($record, new UserWelcomeNotification(
-                    $generatedPassword ?? '',
-                    User::panelLoginUrlFor($record),
-                    User::guestEmailVerificationUrlFor($record),
-                ));
-            })
-            ->successNotification(function (Model $record) use (&$generatedPassword, &$welcomeMailResult): Notification {
-                $password = $generatedPassword ?? '—';
-
-                if ($welcomeMailResult?->success && $welcomeMailResult->wasQueued) {
-                    return Notification::make()
-                        ->title('User created')
-                        ->success()
-                        ->body(FriendlyMessages::welcomeEmailQueued($record->email, $password))
-                        ->seconds(16);
-                }
-
-                if ($welcomeMailResult?->success) {
-                    return Notification::make()
-                        ->title('User created')
-                        ->success()
-                        ->body(FriendlyMessages::welcomeEmailSent($record->email, $password))
-                        ->seconds(12);
-                }
-
-                return Notification::make()
-                    ->title('User created')
-                    ->warning()
-                    ->body(FriendlyMessages::welcomeEmailFailed($record->email, $password))
-                    ->seconds(24);
-            });
-
         return $schema
             ->components([
-                Flex::make([
-                    $this->getTabsContentComponent(),
-                    Actions::make([
-                        $createAction,
-                    ])->alignEnd(),
-                ])->alignBetween()->verticallyAlignCenter(),
                 RenderHook::make(PanelsRenderHook::RESOURCE_PAGES_LIST_RECORDS_TABLE_BEFORE),
                 EmbeddedTable::make(),
                 RenderHook::make(PanelsRenderHook::RESOURCE_PAGES_LIST_RECORDS_TABLE_AFTER),
@@ -145,7 +70,73 @@ class ListUsers extends ListRecords
 
     protected function getHeaderActions(): array
     {
-        return [];
+        $generatedPassword = null;
+        $welcomeMailResult = null;
+        $pendingAssignments = [];
+
+        return [
+            OwwaFormModalDefaults::createActionForResource(UserResource::class, OwwaFormModalDefaults::WIDTH_MEDIUM)
+                ->label('New Users')
+                ->extraModalWindowAttributes(['class' => OwwaFormModalDefaults::MODAL_WINDOW_CLASS.' owwa-user-form-modal'])
+                ->mutateDataUsing(function (array $data) use (&$generatedPassword, &$pendingAssignments): array {
+                    $generatedPassword = $this->generateTemporaryPassword();
+                    $data['password'] = $generatedPassword;
+                    $data['email_verified_at'] = null;
+                    $data['must_change_password'] = true;
+
+                    $data = UserAssignmentActionHooks::prepareCreateData($data);
+                    $pendingAssignments = $data['_assignments'] ?? [];
+                    unset($data['_assignments']);
+
+                    return $data;
+                })
+                ->after(function (User $record) use (&$generatedPassword, &$welcomeMailResult, &$pendingAssignments): void {
+                    if ($record->isUnitConsolidator() && $pendingAssignments !== []) {
+                        $record->syncOfficeAssignments($pendingAssignments);
+                    }
+
+                    $welcomeMailResult = MailDelivery::notify($record, new UserWelcomeNotification(
+                        $generatedPassword ?? '',
+                        User::panelLoginUrlFor($record),
+                        User::guestEmailVerificationUrlFor($record),
+                    ));
+                })
+                ->successNotification(function (Model $record) use (&$generatedPassword, &$welcomeMailResult): Notification {
+                    $password = $generatedPassword ?? '—';
+
+                    if ($welcomeMailResult?->success && $welcomeMailResult->wasQueued) {
+                        return Notification::make()
+                            ->title('User created')
+                            ->success()
+                            ->body(FriendlyMessages::welcomeEmailQueued($record->email, $password))
+                            ->seconds(16);
+                    }
+
+                    if ($welcomeMailResult?->success) {
+                        return Notification::make()
+                            ->title('User created')
+                            ->success()
+                            ->body(FriendlyMessages::welcomeEmailSent($record->email, $password))
+                            ->seconds(12);
+                    }
+
+                    return Notification::make()
+                        ->title('User created')
+                        ->warning()
+                        ->body(FriendlyMessages::welcomeEmailFailed($record->email, $password))
+                        ->seconds(24);
+                }),
+        ];
+    }
+
+    protected function setupToolbarCreateLabel(): ?string
+    {
+        return 'New Users';
+    }
+
+    protected function setupActiveTabArchivedCount(): int
+    {
+        return (int) UserResource::getEloquentQuery()->where('role', User::ROLE_SYSTEM_ADMIN)->count();
     }
 
     protected function generateTemporaryPassword(): string

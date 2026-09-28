@@ -102,7 +102,7 @@ class UserManagementTest extends TestCase
         $this->actingAs($admin);
 
         Livewire::test(ListUsers::class)
-            ->mountAction(TestAction::make('create')->schemaComponent(true, 'content'))
+            ->mountAction(TestAction::make('create'))
             ->fillForm([
                 'first_name' => 'No',
                 'last_name' => 'Department',
@@ -144,7 +144,7 @@ class UserManagementTest extends TestCase
         $this->actingAs($admin);
 
         Livewire::test(ListUsers::class)
-            ->mountAction(TestAction::make('create')->schemaComponent(true, 'content'))
+            ->mountAction(TestAction::make('create'))
             ->fillForm([
                 'first_name' => 'Supply',
                 'last_name' => 'Custodian',
@@ -183,7 +183,7 @@ class UserManagementTest extends TestCase
         $this->actingAs($admin);
 
         Livewire::test(ListUsers::class)
-            ->mountAction(TestAction::make('create')->schemaComponent(true, 'content'))
+            ->mountAction(TestAction::make('create'))
             ->fillForm([
                 'first_name' => 'Supply',
                 'last_name' => 'Custodian',

@@ -27,7 +27,7 @@ class UacsObjectCodeModalTest extends TestCase
         $this->actingAs($admin);
 
         Livewire::test(ListUacsObjectCodes::class)
-            ->callAction(TestAction::make('create')->schemaComponent(true, 'content'), [
+            ->callAction(TestAction::make('create'), [
                 'code' => '10605030',
                 'name' => 'Office Equipment',
                 'property_class' => null,
