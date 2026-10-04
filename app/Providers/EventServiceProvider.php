@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Listeners\BroadcastDatabaseNotificationsSent;
 use App\Listeners\LogFailedLogin;
 use App\Listeners\LogUserLogin;
 use App\Listeners\LogUserLogout;
@@ -9,6 +10,7 @@ use Illuminate\Auth\Events\Failed;
 use Illuminate\Auth\Events\Login;
 use Illuminate\Auth\Events\Logout;
 use Illuminate\Foundation\Support\Providers\EventServiceProvider as ServiceProvider;
+use Illuminate\Notifications\Events\NotificationSent;
 
 class EventServiceProvider extends ServiceProvider
 {
@@ -21,6 +23,9 @@ class EventServiceProvider extends ServiceProvider
         ],
         Failed::class => [
             LogFailedLogin::class,
+        ],
+        NotificationSent::class => [
+            BroadcastDatabaseNotificationsSent::class,
         ],
     ];
 }

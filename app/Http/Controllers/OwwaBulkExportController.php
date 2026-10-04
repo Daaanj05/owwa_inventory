@@ -21,18 +21,26 @@ use App\Models\PurchaseOrder;
 use App\Models\Requisition;
 use App\Models\Transfer;
 use App\Models\User;
-use App\Services\AcquisitionPaperworkPdfExportService;
 use App\Services\AnnexA4PdfExportService;
-use App\Services\LibreOfficePdfConverter;
+use App\Services\InspectionAcceptanceReportFastExcelExportService;
+use App\Services\InspectionAcceptanceReportFastPdfExportService;
 use App\Services\OwwaItemReportService;
 use App\Services\OwwaTemplateExportService;
+use App\Services\PurchaseOrderFastExcelExportService;
+use App\Services\PurchaseOrderFastPdfExportService;
+use App\Services\PurchaseRequestFastExcelExportService;
+use App\Services\PurchaseRequestFastPdfExportService;
+use App\Services\RsmiFastPdfExportService;
+use App\Services\StockCardFastExcelExportService;
+use App\Services\StockCardFastPdfExportService;
+use App\Services\StockCardFastQueuedExportService;
 use App\Services\StockCardPdfExportService;
 use App\Services\StockLevelExportService;
 use App\Support\CustodianOfficeScope;
 use App\Support\OwwaExportDiagnostics;
 use App\Support\OwwaExportFilename;
-use App\Support\OwwaPdfBinaryMerger;
 use App\Support\OwwaReferenceLabels;
+use App\Support\StockCardLedgerDateRange;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
 use Illuminate\Http\Request;
@@ -58,7 +66,11 @@ class OwwaBulkExportController extends Controller
         protected OwwaItemReportService $itemReport,
         protected StockLevelExportService $stockLevelExport,
         protected StockCardPdfExportService $stockCardPdfExport,
+        protected StockCardFastPdfExportService $stockCardFastPdfExport,
+        protected StockCardFastExcelExportService $stockCardFastExcelExport,
+        protected StockCardFastQueuedExportService $stockCardFastQueuedExport,
         protected AnnexA4PdfExportService $annexA4PdfExport,
+        protected RsmiFastPdfExportService $rsmiFastPdfExport,
     ) {}
 
     /**
@@ -186,12 +198,16 @@ class OwwaBulkExportController extends Controller
                 'format' => $format,
             ]);
 
+            $dateRange = StockCardLedgerDateRange::fromRequest($request);
+            $dateFrom = $dateRange['from'] ?? null;
+            $dateTo = $dateRange['to'] ?? null;
+
             $response = $format === 'pdf'
-                ? $this->stockCardPdfExport->downloadMerged($pairs, $slug)
+                ? $this->stockCardPdfExport->downloadMerged($pairs, $slug, $dateFrom, $dateTo)
                 : match ($slug) {
                     'ppe' => $this->itemReport->downloadPropertyCardBulk($pairs),
                     'semi_expendable' => $this->itemReport->downloadAnnexA1Bulk($pairs),
-                    default => $this->itemReport->downloadStockCardBulk($pairs),
+                    default => $this->itemReport->downloadStockCardBulk($pairs, $dateFrom, $dateTo),
                 };
 
             OwwaExportDiagnostics::info('stock_cards_built', [
@@ -210,6 +226,83 @@ class OwwaBulkExportController extends Controller
 
             throw $throwable;
         }
+    }
+
+    public function stockCardsFast(Request $request): Response|BinaryFileResponse
+    {
+        abort_unless(StockLevels::canAccess(), 403);
+
+        $previewHtml = $request->boolean('preview');
+        $request->query->set(
+            'export_max',
+            (string) ($previewHtml ? StockLevelExportService::BATCH_SIZE : StockLevelExportService::FAST_MAX),
+        );
+        $request->query->set('fast_pack', $previewHtml ? '0' : '1');
+
+        $pairs = $this->resolveStockLevelPairs($request);
+
+        abort_if($pairs->isEmpty(), 404);
+
+        $dateRange = StockCardLedgerDateRange::fromRequest($request);
+        $dateFrom = $dateRange['from'] ?? null;
+        $dateTo = $dateRange['to'] ?? null;
+
+        $count = $pairs->count();
+        $packZip = ! $previewHtml && $count > StockLevelExportService::BATCH_SIZE;
+
+        $this->logExportActivity('Exported bulk stock cards (PDF)', properties: [
+            'count' => $count,
+            'format' => $packZip ? 'zip' : 'pdf',
+            'mode' => 'fast',
+            'pack' => $packZip ? 'zip' : 'single',
+            'date_from' => $dateFrom?->toDateString(),
+            'date_to' => $dateTo?->toDateString(),
+        ]);
+
+        if ($packZip) {
+            return $this->stockCardFastQueuedExport->downloadZip($pairs, 'pdf', $dateFrom, $dateTo);
+        }
+
+        return $this->stockCardFastPdfExport->download(
+            $pairs,
+            previewHtml: $previewHtml,
+            dateFrom: $dateFrom,
+            dateTo: $dateTo,
+        );
+    }
+
+    public function stockCardsFastExcel(Request $request): StreamedResponse|BinaryFileResponse
+    {
+        abort_unless(StockLevels::canAccess(), 403);
+
+        $request->query->set('export_max', (string) StockLevelExportService::FAST_MAX);
+        $request->query->set('fast_pack', '1');
+
+        $pairs = $this->resolveStockLevelPairs($request);
+
+        abort_if($pairs->isEmpty(), 404);
+
+        $dateRange = StockCardLedgerDateRange::fromRequest($request);
+        $dateFrom = $dateRange['from'] ?? null;
+        $dateTo = $dateRange['to'] ?? null;
+
+        $count = $pairs->count();
+        $packZip = $count > StockLevelExportService::BATCH_SIZE;
+
+        $this->logExportActivity('Exported bulk stock cards (Excel)', properties: [
+            'count' => $count,
+            'format' => $packZip ? 'zip' : 'xlsx',
+            'mode' => 'fast',
+            'pack' => $packZip ? 'zip' : 'single',
+            'date_from' => $dateFrom?->toDateString(),
+            'date_to' => $dateTo?->toDateString(),
+        ]);
+
+        if ($packZip) {
+            return $this->stockCardFastQueuedExport->downloadZip($pairs, 'xlsx', $dateFrom, $dateTo);
+        }
+
+        return $this->stockCardFastExcelExport->download($pairs, $dateFrom, $dateTo);
     }
 
     /**
@@ -326,7 +419,7 @@ class OwwaBulkExportController extends Controller
         return $this->issuancesRsmi($request);
     }
 
-    public function issuancesRsmi(Request $request): StreamedResponse|Response
+    public function issuancesRsmi(Request $request): StreamedResponse|Response|BinaryFileResponse
     {
         abort_unless(IssuanceResource::canViewAny(), 403);
 
@@ -339,9 +432,20 @@ class OwwaBulkExportController extends Controller
         abort_unless($dateFrom <= $dateTo, 422);
 
         $categoryId = (int) $request->query('category', 0);
+        $maxRecords = $format === 'pdf'
+            ? StockLevelExportService::FAST_MAX
+            : self::MAX_IDS;
 
         $query = IssuanceResource::getEloquentQuery()
-            ->with(['requisition', 'item.category', 'office', 'department', 'batch'])
+            ->with([
+                'requisition',
+                'consolidatedRequisition',
+                'item.category',
+                'office',
+                'department',
+                'batch',
+                'issuedBy',
+            ])
             ->whereDate('issuance_date', '>=', $dateFrom)
             ->whereDate('issuance_date', '<=', $dateTo)
             ->orderBy('issuance_date')
@@ -351,10 +455,35 @@ class OwwaBulkExportController extends Controller
             $query->whereHas('item', fn (Builder $builder): Builder => $builder->where('item_category_id', $categoryId));
         }
 
-        $records = $query->limit(self::MAX_IDS + 1)->get();
+        $records = $query->limit($maxRecords + 1)->get();
 
         abort_if($records->isEmpty(), 404, 'No issuances found for the selected date range.');
-        abort_if($records->count() > self::MAX_IDS, 422, 'Too many records (max '.self::MAX_IDS.'). Narrow the date range.');
+        abort_if(
+            $records->count() > $maxRecords,
+            422,
+            'Too many records (max '.$maxRecords.'). Narrow the date range.',
+        );
+
+        if ($format === 'pdf') {
+            $count = $records->count();
+            $packZip = $count > StockLevelExportService::BATCH_SIZE;
+
+            $this->logExportActivity('Exported RSMI report', properties: [
+                'count' => $count,
+                'date_from' => $dateFrom,
+                'date_to' => $dateTo,
+                'format' => $packZip ? 'zip' : 'pdf',
+                'mode' => 'fast',
+                'pack' => $packZip ? 'zip' : 'single',
+                'category' => $categoryId > 0 ? $categoryId : null,
+            ]);
+
+            if ($packZip) {
+                return $this->rsmiFastPdfExport->downloadZip($records);
+            }
+
+            return $this->rsmiFastPdfExport->downloadMany($records);
+        }
 
         $this->logExportActivity('Exported RSMI report', properties: [
             'count' => $records->count(),
@@ -365,17 +494,6 @@ class OwwaBulkExportController extends Controller
         ]);
 
         abort_unless($this->owwaExport->canExportIssuancesAsRsmiWorkbook($records), 422, 'Issuances cannot be exported as RSMI workbook.');
-
-        if ($format === 'pdf') {
-            $spreadsheet = $this->owwaExport->issuancesRsmiFilledSpreadsheet($records);
-            $binary = $this->owwaExport->spreadsheetToPdfBinary($spreadsheet);
-            $spreadsheet->disconnectWorksheets();
-
-            return response($binary, 200, [
-                'Content-Type' => 'application/pdf',
-                'Content-Disposition' => 'attachment; filename="'.OwwaExportFilename::batch('RSMI', ext: 'pdf').'"',
-            ]);
-        }
 
         if ($records->count() === 1) {
             return $this->owwaExport->downloadIssuance($records->first());
@@ -655,8 +773,15 @@ class OwwaBulkExportController extends Controller
         );
     }
 
-    public function procurement(Request $request, AcquisitionPaperworkPdfExportService $pdfExport): StreamedResponse|Response
-    {
+    public function procurement(
+        Request $request,
+        PurchaseRequestFastPdfExportService $prFastPdfExport,
+        PurchaseRequestFastExcelExportService $prFastExcelExport,
+        PurchaseOrderFastPdfExportService $poFastPdfExport,
+        PurchaseOrderFastExcelExportService $poFastExcelExport,
+        InspectionAcceptanceReportFastPdfExportService $iarFastPdfExport,
+        InspectionAcceptanceReportFastExcelExportService $iarFastExcelExport,
+    ): StreamedResponse|Response {
         $documentType = (string) $request->query('document_type', '');
         abort_unless(in_array($documentType, ['pr', 'po', 'iar'], true), 422);
 
@@ -684,7 +809,7 @@ class OwwaBulkExportController extends Controller
         abort_if($records->isEmpty(), 404, 'No '.$formCode.' records found for the selected date range.');
         abort_if($records->count() > self::MAX_IDS, 422, 'Too many records (max '.self::MAX_IDS.'). Narrow the date range.');
 
-        $this->logExportActivity('bulk_procurement_'.$documentType.($format === 'pdf' ? '_pdf' : ''), null, [
+        $this->logExportActivity('bulk_procurement_'.$documentType.'_'.$format, null, [
             'count' => $records->count(),
             'date_from' => $dateFrom,
             'date_to' => $dateTo,
@@ -692,123 +817,17 @@ class OwwaBulkExportController extends Controller
             'category' => $categoryId > 0 ? $categoryId : null,
         ]);
 
-        if ($format === 'pdf') {
-            return $this->procurementMergedPdfResponse($records, $documentType, $formCode, $pdfExport);
-        }
-
-        return $this->mergedOwwaWorkbookResponseAllSheets(
-            $records,
-            $this->procurementSpreadsheetBuilder($documentType, $pdfExport),
-            $documentType,
-            $formCode,
-            $this->procurementSheetTitleResolver($documentType),
-        );
-    }
-
-    /**
-     * Bulk PDF must match single-record “Save as PDF” fidelity (LibreOffice).
-     * Prefer per-record LibreOffice PDFs merged into one file; fall back to one
-     * LibreOffice convert of the merged workbook.
-     *
-     * @param  Collection<int, AcquisitionPaperwork|PurchaseOrder|InspectionAcceptanceReport>  $records
-     */
-    protected function procurementMergedPdfResponse(
-        Collection $records,
-        string $documentType,
-        string $formCode,
-        AcquisitionPaperworkPdfExportService $pdfExport,
-    ): Response {
-        $builder = $this->procurementSpreadsheetBuilder($documentType, $pdfExport);
-        $perRecordTimeout = max(60, (int) config('services.libreoffice.timeout', 90));
-        $pdfParts = [];
-
-        foreach ($records as $record) {
-            $spreadsheet = $builder($record);
-            $part = $this->owwaExport->spreadsheetToLibreOfficePdfBinary($spreadsheet, $perRecordTimeout);
-            $spreadsheet->disconnectWorksheets();
-            unset($spreadsheet);
-
-            if ($part === null) {
-                $pdfParts = [];
-                break;
-            }
-
-            $pdfParts[] = $part;
-        }
-
-        $binary = null;
-
-        if (count($pdfParts) === $records->count()) {
-            try {
-                $binary = OwwaPdfBinaryMerger::merge($pdfParts);
-            } catch (Throwable $exception) {
-                Log::warning('owwa_export_bulk: PDF merge failed; trying merged-workbook LibreOffice.', [
-                    'owwa_export' => true,
-                    'document_type' => $documentType,
-                    'message' => $exception->getMessage(),
-                ]);
-            }
-        }
-
-        if ($binary === null) {
-            $merged = $this->buildMergedOwwaWorkbookAllSheets(
-                $records,
-                $builder,
-                $documentType,
-                $this->procurementSheetTitleResolver($documentType),
-            );
-
-            $mergedTimeout = max(
-                $perRecordTimeout,
-                45 * max(1, $merged->getSheetCount()),
-                120,
-            );
-            $binary = $this->owwaExport->spreadsheetToLibreOfficePdfBinary($merged, $mergedTimeout);
-
-            $merged->disconnectWorksheets();
-            unset($merged);
-        }
-
-        if ($binary === null) {
-            abort(503, LibreOfficePdfConverter::unavailableMessage());
-        }
-
-        $filename = OwwaExportFilename::batch($formCode, ext: 'pdf');
-
-        return response($binary, 200, [
-            'Content-Type' => 'application/pdf',
-            'Content-Disposition' => 'attachment; filename="'.$filename.'"',
-        ]);
-    }
-
-    /**
-     * @return callable(AcquisitionPaperwork|PurchaseOrder|InspectionAcceptanceReport): Spreadsheet
-     */
-    protected function procurementSpreadsheetBuilder(string $documentType, AcquisitionPaperworkPdfExportService $pdfExport): callable
-    {
-        return function ($record) use ($documentType, $pdfExport): Spreadsheet {
-            return match ($documentType) {
-                'po' => $pdfExport->purchaseOrderFilledSpreadsheet($record),
-                'iar' => $this->owwaExport->acquisitionPaperworkFilledSpreadsheet(
-                    $pdfExport->paperworkFromIar($record),
-                    'iar',
-                ),
-                default => $this->owwaExport->acquisitionPaperworkFilledSpreadsheet($record, 'pr'),
-            };
-        };
-    }
-
-    /**
-     * @return callable(AcquisitionPaperwork|PurchaseOrder|InspectionAcceptanceReport): string
-     */
-    protected function procurementSheetTitleResolver(string $documentType): callable
-    {
-        return function ($record) use ($documentType): string {
-            return match ($documentType) {
-                'po' => (string) ($record->number ?? ('PO_'.$record->getKey())),
-                'iar' => (string) ($record->number ?? ('IAR_'.$record->getKey())),
-                default => (string) ($record->pr_number ?? $record->reference_code ?? ('PR_'.$record->getKey())),
-            };
+        // PR / PO / IAR use coded lookalike exports (not Official template fill).
+        return match ($documentType) {
+            'po' => $format === 'pdf'
+                ? $poFastPdfExport->downloadMany($records)
+                : $poFastExcelExport->downloadMany($records),
+            'iar' => $format === 'pdf'
+                ? $iarFastPdfExport->downloadMany($records)
+                : $iarFastExcelExport->downloadMany($records),
+            default => $format === 'pdf'
+                ? $prFastPdfExport->downloadMany($records)
+                : $prFastExcelExport->downloadMany($records),
         };
     }
 
@@ -935,35 +954,6 @@ class OwwaBulkExportController extends Controller
         $merged->setActiveSheetIndex(0);
 
         return $merged;
-    }
-
-    /**
-     * @template TModel of \Illuminate\Database\Eloquent\Model
-     *
-     * @param  Collection<int, TModel>  $records
-     * @param  callable(TModel): Spreadsheet  $toSpreadsheet
-     * @param  callable(TModel): string  $sheetBaseTitle
-     */
-    protected function mergedOwwaWorkbookResponseAllSheets(
-        Collection $records,
-        callable $toSpreadsheet,
-        string $label,
-        ?string $formCode,
-        callable $sheetBaseTitle,
-    ): StreamedResponse {
-        $merged = $this->buildMergedOwwaWorkbookAllSheets($records, $toSpreadsheet, $label, $sheetBaseTitle);
-
-        $writer = new Xlsx($merged);
-        $downloadName = $formCode !== null
-            ? OwwaExportFilename::batch($formCode)
-            : OwwaExportFilename::bulkWorkbook($label);
-
-        return response()->streamDownload(function () use ($writer, $merged): void {
-            $writer->save('php://output');
-            $merged->disconnectWorksheets();
-        }, $downloadName, [
-            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        ]);
     }
 
     /**

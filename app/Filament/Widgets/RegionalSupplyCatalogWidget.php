@@ -40,8 +40,7 @@ class RegionalSupplyCatalogWidget extends Widget
         $categoryId = SyncsActiveItemCategory::resolveCategoryIdFromContext();
 
         return app(InventoryStockService::class)
-            ->getStockLevelsList(filled($categoryId) ? (int) $categoryId : null)
-            ->where('office_id', $supplyOfficeId)
+            ->getStockLevelsList(filled($categoryId) ? (int) $categoryId : null, $supplyOfficeId)
             ->sortByDesc('stock')
             ->take(5)
             ->values();

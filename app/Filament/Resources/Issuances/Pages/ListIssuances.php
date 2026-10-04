@@ -27,6 +27,12 @@ class ListIssuances extends ListRecordsWithoutFilterUrl
     #[Url]
     public int|string|null $category = null;
 
+    public ?int $rsmiExportCount = null;
+
+    public bool $rsmiExportCountReady = false;
+
+    public string $rsmiExportSizeStamp = '0';
+
     protected static string $resource = IssuanceResource::class;
 
     public function getTitle(): string|\Illuminate\Contracts\Support\Htmlable
@@ -136,5 +142,87 @@ class ListIssuances extends ListRecordsWithoutFilterUrl
             IssuanceRsmiExportAction::make()
                 ->visible(fn (): bool => $this->isConsumablesCategory()),
         ];
+    }
+
+    public function scheduleDeferredRsmiExportSize(): void
+    {
+        $this->rsmiExportCountReady = false;
+        $this->rsmiExportCount = null;
+        $this->js('queueMicrotask(() => $wire.refreshRsmiExportSize())');
+    }
+
+    public function refreshRsmiExportSize(): void
+    {
+        $data = $this->mountedRsmiExportFormData();
+        $dateFrom = (string) ($data['date_from'] ?? '');
+        $dateTo = (string) ($data['date_to'] ?? '');
+
+        if (blank($dateFrom) || blank($dateTo) || $dateFrom > $dateTo) {
+            $this->rsmiExportCount = 0;
+            $this->rsmiExportCountReady = true;
+            $this->bumpMountedRsmiExportSizeStamp();
+
+            return;
+        }
+
+        $this->rsmiExportCount = $this->countRsmiExportLines(
+            $dateFrom,
+            $dateTo,
+            $this->activeItemCategoryId(),
+        );
+        $this->rsmiExportCountReady = true;
+        $this->bumpMountedRsmiExportSizeStamp();
+    }
+
+    public function countRsmiExportLines(string $dateFrom, string $dateTo, int $categoryId = 0): int
+    {
+        $query = IssuanceResource::getEloquentQuery()
+            ->whereDate('issuance_date', '>=', $dateFrom)
+            ->whereDate('issuance_date', '<=', $dateTo);
+
+        if ($categoryId > 0) {
+            $query->whereHas('item', fn (Builder $builder): Builder => $builder->where('item_category_id', $categoryId));
+        }
+
+        return (int) $query->count();
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function mountedRsmiExportFormData(): array
+    {
+        if ($this->mountedActions === [] || $this->mountedActions === null) {
+            return [];
+        }
+
+        $index = array_key_last($this->mountedActions);
+        if ($index === null) {
+            return [];
+        }
+
+        $data = $this->mountedActions[$index]['data'] ?? [];
+
+        return is_array($data) ? $data : [];
+    }
+
+    protected function bumpMountedRsmiExportSizeStamp(): void
+    {
+        if ($this->mountedActions === [] || $this->mountedActions === null) {
+            return;
+        }
+
+        $index = array_key_last($this->mountedActions);
+        if ($index === null) {
+            return;
+        }
+
+        if (! isset($this->mountedActions[$index]['data']) || ! is_array($this->mountedActions[$index]['data'])) {
+            $this->mountedActions[$index]['data'] = [];
+        }
+
+        $stamp = (string) microtime(true);
+        $this->mountedActions[$index]['data']['export_size_stamp'] = $stamp;
+        $this->rsmiExportSizeStamp = $stamp;
     }
 }

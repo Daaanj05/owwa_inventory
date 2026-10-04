@@ -37,7 +37,7 @@ class AcquisitionPaperworkWorkflowTest extends TestCase
         ]);
 
         $this->actingAs($user)
-            ->get(route('owwa.export.acquisition-paperwork.pr', $paperwork))
+            ->get(route('owwa.export.acquisition-paperwork.pr-fast-xlsx', $paperwork))
             ->assertOk()
             ->assertHeader('content-type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
 
@@ -47,25 +47,6 @@ class AcquisitionPaperworkWorkflowTest extends TestCase
 
         $this->actingAs($user)
             ->get(route('owwa.export.acquisition-paperwork.iar', $paperwork))
-            ->assertOk();
-    }
-
-    public function test_legacy_procurement_export_routes_still_work(): void
-    {
-        if (! $this->acquisitionPaperworkTemplatesExist()) {
-            $this->markTestSkipped('OWWA acquisition paperwork templates are not installed.');
-        }
-
-        Filament::setCurrentPanel(Filament::getPanel('admin'));
-
-        $paperwork = $this->createCompletedPaperwork();
-        $user = User::factory()->create([
-            'role' => User::ROLE_SUPPLY_CUSTODIAN,
-            'office_id' => $paperwork->office_id,
-        ]);
-
-        $this->actingAs($user)
-            ->get(route('owwa.export.procurement.pr', $paperwork))
             ->assertOk();
     }
 
@@ -215,22 +196,16 @@ class AcquisitionPaperworkWorkflowTest extends TestCase
         $this->assertStringContainsString('Partial', (string) $sheet->getCell('C32')->getValue());
     }
 
-    public function test_pr_pdf_export_is_generated_from_spreadsheet(): void
+    public function test_pr_pdf_export_is_generated_from_lookalike(): void
     {
-        $this->skipUnlessLibreOfficeAvailable();
-
-        if (! $this->acquisitionPaperworkTemplatesExist()) {
-            $this->markTestSkipped('OWWA acquisition paperwork templates are not installed.');
-        }
-
         $paperwork = $this->createPaperworkDraft();
         $paperwork->update([
             'pr_number' => '2026-01-0021',
             'pr_status' => AcquisitionPaperwork::STATUS_APPROVED,
         ]);
 
-        $response = app(\App\Services\AcquisitionPaperworkPdfExportService::class)
-            ->downloadPrPdf($paperwork->fresh(['lines.item', 'itemCategory', 'office', 'requestingOffice', 'department']));
+        $response = app(\App\Services\PurchaseRequestFastPdfExportService::class)
+            ->download($paperwork->fresh(['lines.item', 'itemCategory', 'office', 'requestingOffice', 'department']));
 
         $this->assertSame(200, $response->getStatusCode());
         $this->assertSame('application/pdf', $response->headers->get('content-type'));

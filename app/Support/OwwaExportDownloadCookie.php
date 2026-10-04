@@ -28,6 +28,9 @@ final class OwwaExportDownloadCookie
     /**
      * Build a same-origin relative download URL so Livewire redirects stay on the
      * host/port the user is actually browsing (e.g. :8080 vs APP_URL :8443).
+     *
+     * Signed temporary URLs keep their query string unchanged — appending a download
+     * token would invalidate Laravel's signature.
      */
     public static function sameOriginDownloadUrl(string $url, ?string $token = null): string
     {
@@ -39,8 +42,12 @@ final class OwwaExportDownloadCookie
             parse_str($parts['query'], $query);
         }
 
-        $token ??= self::makeToken();
-        $query[self::TOKEN_QUERY] = $token;
+        $isSigned = isset($query['signature']) || isset($query['expires']);
+
+        if (! $isSigned) {
+            $token ??= self::makeToken();
+            $query[self::TOKEN_QUERY] = $token;
+        }
 
         $queryString = http_build_query($query);
 

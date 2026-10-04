@@ -31,3 +31,16 @@ Broadcast::channel('issuances.custodian', function (User $user): bool {
 Broadcast::channel('issuances.user.{userId}', function (User $user, int $userId): bool {
     return (int) $user->id === $userId;
 });
+
+Broadcast::channel('property-actions.office.{officeId}', function (User $user, int $officeId): bool {
+    return $user->hasOfficeAssignment($officeId)
+        && ($user->isUnitConsolidator() || $user->isEmployee());
+});
+
+Broadcast::channel('property-actions.custodian', function (User $user): bool {
+    return $user->isSupplyCustodian();
+});
+
+Broadcast::channel('property-actions.user.{userId}', function (User $user, int $userId): bool {
+    return (int) $user->id === $userId;
+});

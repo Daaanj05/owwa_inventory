@@ -28,8 +28,7 @@ class PhysicalCountStockReconciliationService
         $category = ItemCategory::query()->findOrFail($itemCategoryId);
         $categorySlug = $category->getTemplateSlug();
 
-        $rows = $this->stockService->getStockLevelsList($itemCategoryId)
-            ->where('office_id', $officeId)
+        $rows = $this->stockService->getStockLevelsList($itemCategoryId, $officeId)
             ->values();
 
         $taggedByKey = $this->accountableUnitCounts($officeId, $itemCategoryId);

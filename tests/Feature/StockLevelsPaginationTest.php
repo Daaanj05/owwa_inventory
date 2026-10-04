@@ -9,8 +9,10 @@ use App\Models\ItemCategory;
 use App\Models\Office;
 use App\Models\User;
 use App\Services\AcquisitionUnitService;
+use App\Services\InventoryStockService;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Livewire\Livewire;
 use Tests\TestCase;
 
@@ -59,5 +61,59 @@ class StockLevelsPaginationTest extends TestCase
 
         $this->assertStringContainsString('/stock-levels', $paginator->url(2));
         $this->assertStringNotContainsString('/livewire-', $paginator->url(2));
+    }
+
+    public function test_category_page_does_not_query_once_per_catalog_item(): void
+    {
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+
+        $office = Office::factory()->create(['is_regional_supply' => true]);
+        $category = ItemCategory::factory()->create(['name' => 'Consumables']);
+        $user = User::factory()->create([
+            'role' => User::ROLE_SUPPLY_CUSTODIAN,
+            'office_id' => $office->id,
+        ]);
+
+        for ($i = 1; $i <= 30; $i++) {
+            $item = Item::factory()->create([
+                'item_category_id' => $category->id,
+            ]);
+
+            Acquisition::query()->create([
+                'reference_code' => 'ACQ-SL-'.$i,
+                'item_id' => $item->id,
+                'office_id' => $office->id,
+                'quantity' => 1,
+                'unit_cost' => 10,
+                'acquisition_date' => now()->toDateString(),
+                'recorded_by' => $user->id,
+            ]);
+        }
+
+        app(InventoryStockService::class)->forgetMovementTotalsCache();
+        $this->actingAs($user);
+
+        $component = Livewire::test(StockLevels::class, ['category' => $category->id]);
+        $instance = $component->instance();
+
+        $cache = new \ReflectionProperty($instance, 'resolvedStockLevels');
+        $cache->setValue($instance, null);
+
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+
+        $summary = $instance->getStockLevelsSummary();
+        $paginator = $instance->getStockLevels();
+
+        $queryCount = count(DB::getQueryLog());
+
+        $this->assertSame(30, $summary['total']);
+        $this->assertLessThanOrEqual(10, $paginator->count());
+        $this->assertSame(30, $paginator->total());
+        $this->assertLessThan(
+            20,
+            $queryCount,
+            "Stock levels issued {$queryCount} queries for one category.",
+        );
     }
 }

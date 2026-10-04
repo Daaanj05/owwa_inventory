@@ -6,6 +6,7 @@ use App\Support\AiProcurementSummaryRestore;
 use Filament\Facades\Filament;
 use Filament\Livewire\DatabaseNotifications as BaseDatabaseNotifications;
 use Filament\Notifications\Notification;
+use Filament\Support\Facades\FilamentView;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Notifications\DatabaseNotification;
@@ -23,8 +24,17 @@ class OwwaNotificationDropdown extends BaseDatabaseNotifications
 
     public const NOTIFICATION_PAGE_SIZE = 15;
 
+    /**
+     * @var Collection<int, DatabaseNotification>|null
+     */
+    protected ?Collection $visibleNotificationsCache = null;
+
     public function getPollingInterval(): ?string
     {
+        if (filled(config('filament.broadcasting.echo.key'))) {
+            return null;
+        }
+
         return Filament::getDatabaseNotificationsPollingInterval();
     }
 
@@ -32,11 +42,13 @@ class OwwaNotificationDropdown extends BaseDatabaseNotifications
     {
         $this->tab = in_array($tab, ['all', 'unread'], true) ? $tab : 'all';
         $this->notificationLimit = self::NOTIFICATION_PAGE_SIZE;
+        $this->visibleNotificationsCache = null;
     }
 
     public function loadMoreNotifications(): void
     {
         $this->notificationLimit += self::NOTIFICATION_PAGE_SIZE;
+        $this->visibleNotificationsCache = null;
     }
 
     public function hasMoreNotifications(): bool
@@ -64,15 +76,31 @@ class OwwaNotificationDropdown extends BaseDatabaseNotifications
             return;
         }
 
-        $url = $this->resolveNotificationUrl($notification);
+        $url = $this->resolveNotificationUrl($notification, (int) $notification->notifiable_id);
 
         if ($notification->unread()) {
             $notification->markAsRead();
         }
 
         if (filled($url)) {
-            $this->redirect($url, navigate: true);
+            $this->redirect($url, navigate: FilamentView::hasSpaMode($url));
         }
+    }
+
+    public function markNotificationRead(string $id): void
+    {
+        /** @var DatabaseNotification|null $notification */
+        $notification = $this->getNotificationsQuery()->where('id', $id)->first();
+
+        if ($notification === null) {
+            return;
+        }
+
+        if ($notification->unread()) {
+            $notification->markAsRead();
+        }
+
+        $this->visibleNotificationsCache = null;
     }
 
     /**
@@ -80,6 +108,10 @@ class OwwaNotificationDropdown extends BaseDatabaseNotifications
      */
     public function getVisibleNotifications(): Collection
     {
+        if ($this->visibleNotificationsCache !== null) {
+            return $this->visibleNotificationsCache;
+        }
+
         $query = $this->getNotificationsQuery()->latest();
 
         if ($this->tab === 'unread') {
@@ -89,7 +121,7 @@ class OwwaNotificationDropdown extends BaseDatabaseNotifications
         /** @var EloquentCollection<int, DatabaseNotification> $notifications */
         $notifications = $query->limit($this->notificationLimit)->get();
 
-        return $notifications;
+        return $this->visibleNotificationsCache = $notifications;
     }
 
     /**
@@ -120,13 +152,13 @@ class OwwaNotificationDropdown extends BaseDatabaseNotifications
         return $this->getNotification($notification);
     }
 
-    protected function resolveNotificationUrl(DatabaseNotification $notification): ?string
+    protected function resolveNotificationUrl(DatabaseNotification $notification, ?int $userId = null): ?string
     {
         $actions = $notification->data['actions'] ?? [];
 
         foreach ($actions as $action) {
             if (filled($action['url'] ?? null)) {
-                return $this->sanitizeNotificationActionUrl((string) $action['url']);
+                return $this->sanitizeNotificationActionUrl((string) $action['url'], $userId);
             }
         }
 
@@ -136,7 +168,7 @@ class OwwaNotificationDropdown extends BaseDatabaseNotifications
     /**
      * Legacy AI completion links used ?ai_run=N. Strip that query and queue a one-shot summary restore.
      */
-    protected function sanitizeNotificationActionUrl(string $url): string
+    protected function sanitizeNotificationActionUrl(string $url, ?int $userId = null): string
     {
         $parts = parse_url($url);
         if ($parts === false) {
@@ -149,8 +181,10 @@ class OwwaNotificationDropdown extends BaseDatabaseNotifications
         }
 
         // One-shot: never re-queue a run the user already viewed (page or prior bell click).
-        if (isset($query['ai_run']) && is_numeric($query['ai_run']) && Auth::id() !== null) {
-            AiProcurementSummaryRestore::remember((int) Auth::id(), (int) $query['ai_run']);
+        $userId ??= $this->getUser()?->getAuthIdentifier() ?? Auth::id();
+
+        if (isset($query['ai_run']) && is_numeric($query['ai_run']) && $userId !== null) {
+            AiProcurementSummaryRestore::remember((int) $userId, (int) $query['ai_run']);
         }
 
         unset($query['ai_run']);
@@ -179,7 +213,10 @@ class OwwaNotificationDropdown extends BaseDatabaseNotifications
     }
 
     #[On('databaseNotificationsSent')]
-    public function refresh(): void {}
+    public function refresh(): void
+    {
+        $this->visibleNotificationsCache = null;
+    }
 
     public function markAllNotificationsAsRead(): void
     {
@@ -190,10 +227,25 @@ class OwwaNotificationDropdown extends BaseDatabaseNotifications
         }
 
         $user->unreadNotifications->markAsRead();
+        $this->visibleNotificationsCache = null;
     }
 
     public function render(): View
     {
+        $this->visibleNotificationsCache = null;
+
         return view('livewire.owwa-notification-dropdown');
+    }
+
+    /**
+     * Shown on the first page paint. The list and unread badge load on the follow-up request.
+     */
+    public function placeholder(): string
+    {
+        return view('livewire.partials.owwa-notification-bell', [
+            'interactive' => false,
+            'unreadCount' => 0,
+            'wrap' => true,
+        ])->render();
     }
 }

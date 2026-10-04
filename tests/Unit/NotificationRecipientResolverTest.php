@@ -36,6 +36,22 @@ class NotificationRecipientResolverTest extends TestCase
         $this->assertTrue($recipients->contains('id', $regionalCustodian->id));
     }
 
+    public function test_supply_custodians_for_regional_office_falls_back_when_regional_office_has_none(): void
+    {
+        Office::factory()->create(['is_regional_supply' => true]);
+        $otherOffice = Office::factory()->create(['is_regional_supply' => false]);
+
+        $fallbackCustodian = User::factory()->create([
+            'role' => User::ROLE_SUPPLY_CUSTODIAN,
+            'office_id' => $otherOffice->id,
+        ]);
+
+        $recipients = app(NotificationRecipientResolver::class)->supplyCustodiansForRegionalOffice();
+
+        $this->assertCount(1, $recipients);
+        $this->assertTrue($recipients->contains('id', $fallbackCustodian->id));
+    }
+
     public function test_supply_custodians_for_office_scopes_to_office(): void
     {
         $officeA = Office::factory()->create();

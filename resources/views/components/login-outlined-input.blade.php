@@ -4,6 +4,7 @@
     'type' => 'text',
     'placeholder' => "\u{200B}",
     'revealable' => false,
+    'value' => '',
 ])
 
 @php
@@ -24,8 +25,11 @@
             @else
                 type="{{ $type }}"
             @endif
-            name="{{ $name }}"
+            @if (! $isPassword && filled($name))
+                name="{{ $name }}"
+            @endif
             wire:model="{{ $name }}"
+            value="{{ $value }}"
             placeholder="{{ $placeholder }}"
             autocomplete="{{ $isPassword ? 'current-password' : 'email' }}"
             class="owwa-login-outlined-input"

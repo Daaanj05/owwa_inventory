@@ -60,6 +60,10 @@ abstract class TestCase extends BaseTestCase
             app(\App\Services\InventoryStockService::class)->forgetMovementTotalsCache();
         }
 
+        if (class_exists(\App\Support\DashboardKpiCache::class)) {
+            \App\Support\DashboardKpiCache::bump();
+        }
+
         if (class_exists(\App\Support\InventoryCategoryOptions::class)) {
             \App\Support\InventoryCategoryOptions::forgetCache();
         }

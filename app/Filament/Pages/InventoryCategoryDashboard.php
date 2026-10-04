@@ -108,6 +108,17 @@ class InventoryCategoryDashboard extends Page
             ];
         }
 
+        $user = Filament::auth()->user();
+        $categoryId = $this->categoryRecord?->id;
+        $officeId = $user?->office_id;
+
+        if ($categoryId !== null && $officeId !== null) {
+            return app(InventoryStockService::class)->summarizeCategoryOfficeStock(
+                (int) $categoryId,
+                (int) $officeId,
+            );
+        }
+
         $rows = $this->getCategoryStockRows();
         $total = $rows->count();
         $lowCount = $rows->where('is_low', true)->count();
@@ -208,17 +219,13 @@ class InventoryCategoryDashboard extends Page
     /** @return Collection<int, object> */
     protected function getCategoryStockRows(): Collection
     {
-        $rows = app(InventoryStockService::class)->getStockLevelsList();
         $user = Filament::auth()->user();
+        $categoryId = $this->categoryRecord?->id;
+        $officeId = $user?->office_id;
 
-        if ($user && $user->office_id) {
-            $rows = $rows->where('office_id', (int) $user->office_id)->values();
-        }
-
-        if ($this->categoryRecord) {
-            $rows = $rows->where('category_name', $this->categoryRecord->name)->values();
-        }
-
-        return $rows;
+        return app(InventoryStockService::class)->getStockLevelsList(
+            $categoryId !== null ? (int) $categoryId : null,
+            $officeId !== null ? (int) $officeId : null,
+        );
     }
 }

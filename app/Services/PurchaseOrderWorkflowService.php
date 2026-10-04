@@ -6,6 +6,7 @@ use App\Models\AcquisitionPaperwork;
 use App\Models\PurchaseOrder;
 use App\Models\PurchaseOrderLine;
 use App\Models\Supplier;
+use App\Support\DashboardKpiCache;
 use App\Support\SupplyOfficeResolver;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -209,12 +210,15 @@ class PurchaseOrderWorkflowService
             ],
         ]);
 
+        DashboardKpiCache::bump();
+
         return $purchaseOrder->fresh() ?? $purchaseOrder;
     }
 
     public function archive(PurchaseOrder $purchaseOrder): PurchaseOrder
     {
         $purchaseOrder->update(['archived_at' => now()]);
+        DashboardKpiCache::bump();
 
         return $purchaseOrder;
     }
@@ -222,6 +226,7 @@ class PurchaseOrderWorkflowService
     public function restore(PurchaseOrder $purchaseOrder): PurchaseOrder
     {
         $purchaseOrder->update(['archived_at' => null]);
+        DashboardKpiCache::bump();
 
         return $purchaseOrder;
     }

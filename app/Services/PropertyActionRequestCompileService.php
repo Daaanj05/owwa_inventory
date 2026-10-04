@@ -7,13 +7,93 @@ use App\Models\PropertyActionRequestLine;
 use App\Models\User;
 use App\Notifications\RequisitionWorkflowDatabaseNotification;
 use App\Support\NotificationRecipientResolver;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Collection as SupportCollection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use InvalidArgumentException;
 
 class PropertyActionRequestCompileService
 {
+    /**
+     * @return array<int, string>
+     */
+    public function eligibleEmployeePropertyReturnOptions(
+        User $unitConsolidator,
+        ?int $officeId = null,
+        ?int $departmentId = null,
+    ): array {
+        if (! $unitConsolidator->isUnitConsolidator()) {
+            return [];
+        }
+
+        return $this->eligibleEmployeePropertyReturnsQuery($unitConsolidator, $officeId, $departmentId)
+            ->orderByDesc('created_at')
+            ->get()
+            ->mapWithKeys(fn (PropertyActionRequest $request): array => [
+                $request->id => $this->employeePropertyReturnOptionLabel($request),
+            ])
+            ->all();
+    }
+
+    public function employeePropertyReturnOptionLabel(PropertyActionRequest $request): string
+    {
+        $request->loadMissing(['requestedBy']);
+
+        if (! isset($request->lines_count)) {
+            $request->loadCount('lines');
+        }
+
+        $reference = $request->reference_code ?? '#'.$request->id;
+        $employeeName = $request->requestedBy?->name ?? 'Employee';
+        $lineCount = (int) $request->lines_count;
+        $lineLabel = Str::plural('item', $lineCount);
+        $reason = $request->reasonLabel();
+
+        return "{$reference} — {$employeeName} · {$lineCount} {$lineLabel} · {$reason}";
+    }
+
+    public function eligibleEmployeePropertyReturnsQuery(
+        User $unitConsolidator,
+        ?int $officeId = null,
+        ?int $departmentId = null,
+    ): Builder {
+        $query = PropertyActionRequest::query()
+            ->where('status', PropertyActionRequest::STATUS_PENDING_UC)
+            ->whereNotNull('uc_approved_at')
+            ->whereNull('compiled_into_property_action_request_id')
+            ->whereNull('archived_at')
+            ->whereHas('requestedBy', fn (Builder $query): Builder => $query->where('role', User::ROLE_EMPLOYEE))
+            ->with(['requestedBy', 'office', 'department'])
+            ->withCount('lines');
+
+        if ($officeId !== null && $officeId > 0) {
+            $query->where('office_id', $officeId);
+        }
+
+        if ($departmentId !== null && $departmentId > 0) {
+            $query->where('department_id', $departmentId);
+        }
+
+        $assignments = $unitConsolidator->relationLoaded('assignments')
+            ? $unitConsolidator->assignments
+            : $unitConsolidator->assignments()->get();
+
+        if ($assignments->isEmpty()) {
+            return $query->whereRaw('1 = 0');
+        }
+
+        return $query->where(function (Builder $scope) use ($assignments): void {
+            foreach ($assignments as $assignment) {
+                $scope->orWhere(function (Builder $row) use ($assignment): void {
+                    $row->where('office_id', (int) $assignment->office_id)
+                        ->where('department_id', (int) $assignment->department_id);
+                });
+            }
+        });
+    }
+
     /**
      * @param  Collection<int, PropertyActionRequest>|SupportCollection<int, PropertyActionRequest>|array<int, int|PropertyActionRequest>  $sources
      */
@@ -21,6 +101,8 @@ class PropertyActionRequestCompileService
         User $unitConsolidator,
         Collection|SupportCollection|array $sources,
         ?string $remarks = null,
+        ?string $actionType = null,
+        ?string $reasonCode = null,
     ): PropertyActionRequest {
         if (! $unitConsolidator->isUnitConsolidator()) {
             throw new InvalidArgumentException('Only Unit Consolidators can compile property returns.');
@@ -51,15 +133,29 @@ class PropertyActionRequestCompileService
             throw new InvalidArgumentException('Selected property returns are outside your office/department coverage.');
         }
 
-        return DB::transaction(function () use ($unitConsolidator, $eligible, $officeId, $departmentId, $remarks): PropertyActionRequest {
+        return DB::transaction(function () use ($unitConsolidator, $eligible, $officeId, $departmentId, $remarks, $actionType, $reasonCode): PropertyActionRequest {
             $actionTypes = $eligible->pluck('action_type')->unique()->values();
             $reasonCodes = $eligible->pluck('reason_code')->unique()->values();
 
-            $batch = PropertyActionRequest::query()->create([
-                'action_type' => $actionTypes->count() === 1
+            $resolvedActionType = filled($actionType)
+                ? (string) $actionType
+                : (string) ($actionTypes->count() === 1
                     ? $actionTypes->first()
-                    : PropertyActionRequest::ACTION_RETURN,
-                'reason_code' => $reasonCodes->count() === 1 ? $reasonCodes->first() : 'other',
+                    : PropertyActionRequest::ACTION_RETURN);
+
+            if (filled($reasonCode)) {
+                $resolvedReasonCode = (string) $reasonCode;
+            } elseif ($reasonCodes->count() === 1) {
+                $resolvedReasonCode = (string) $reasonCodes->first();
+            } else {
+                $resolvedReasonCode = $resolvedActionType === PropertyActionRequest::ACTION_RETURN
+                    ? 'good_condition'
+                    : (string) ($reasonCodes->first() ?? 'good_condition');
+            }
+
+            $batch = PropertyActionRequest::query()->create([
+                'action_type' => $resolvedActionType,
+                'reason_code' => $resolvedReasonCode,
                 'reason_detail' => $this->buildCompiledReasonDetail($eligible, $remarks),
                 'requested_by' => $unitConsolidator->id,
                 'accountable_user_id' => $unitConsolidator->id,

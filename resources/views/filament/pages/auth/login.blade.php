@@ -2,6 +2,8 @@
     use Filament\Facades\Filament;
 
     $isSystemAdminPanel = Filament::getCurrentPanel()?->getId() === 'system-admin';
+    $loginUrl = Filament::getCurrentOrDefaultPanel()?->getLoginUrl() ?? url('/login');
+    $rememberChecked = (bool) ($this->data['remember'] ?? false);
 @endphp
 
 <div class="owwa-login-wrapper">
@@ -60,11 +62,26 @@
                 </div>
             @endif
 
-            <form wire:submit="authenticate" class="owwa-login-form">
-                <x-login-outlined-input label="{{ __('filament-panels::auth/pages/login.form.email.label') }}"
-                    name="data.email" type="email" />
-                <x-login-outlined-input label="{{ __('filament-panels::auth/pages/login.form.password.label') }}"
-                    name="data.password" type="password" :revealable="filament()->arePasswordsRevealable()" />
+            <form
+                method="post"
+                action="{{ $loginUrl }}"
+                wire:submit="authenticate"
+                class="owwa-login-form"
+            >
+                @csrf
+                <x-login-outlined-input
+                    label="{{ __('filament-panels::auth/pages/login.form.email.label') }}"
+                    name="data.email"
+                    type="email"
+                    :value="$this->data['email'] ?? ''"
+                />
+                <x-login-outlined-input
+                    label="{{ __('filament-panels::auth/pages/login.form.password.label') }}"
+                    name="data.password"
+                    type="password"
+                    value=""
+                    :revealable="filament()->arePasswordsRevealable()"
+                />
                 @if (filament()->hasPasswordReset())
                     <p class="owwa-login-forgot">
                         <a href="{{ filament()->getRequestPasswordResetUrl() }}" class="owwa-login-forgot-link" tabindex="-1">
@@ -73,8 +90,13 @@
                     </p>
                 @endif
                 <label class="owwa-login-remember">
-                    <input type="checkbox" wire:model="data.remember" class="owwa-login-remember-input">
-                    <span>{{ __('filament-panels::auth/pages/login.form.remember.label') }}</span>
+                    <input
+                        type="checkbox"
+                        wire:model="data.remember"
+                        class="owwa-login-remember-input"
+                        @checked($rememberChecked)
+                    >
+                    <span>Remember email</span>
                 </label>
                 <button type="submit" class="owwa-login-submit-btn" wire:loading.attr="disabled"
                     wire:loading.attr="aria-busy" wire:target="authenticate">
@@ -123,7 +145,6 @@
 
 @php
     $csrfUrl = route('session.csrf');
-    $loginUrl = \Filament\Facades\Filament::getCurrentOrDefaultPanel()?->getLoginUrl() ?? url('/login');
 @endphp
 <script>
     (function () {
@@ -194,8 +215,6 @@
         }
 
         document.addEventListener('livewire:init', () => {
-            syncCsrf();
-
             if (typeof Livewire === 'undefined' || typeof Livewire.interceptRequest !== 'function') {
                 return;
             }
@@ -224,10 +243,6 @@
             if (event.persisted) {
                 syncCsrf();
             }
-        });
-
-        window.addEventListener('focus', () => {
-            syncCsrf();
         });
     })();
 </script>

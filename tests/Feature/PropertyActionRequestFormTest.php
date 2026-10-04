@@ -37,7 +37,31 @@ class PropertyActionRequestFormTest extends TestCase
             ->test(ListPropertyActionRequests::class)
             ->mountAction('create')
             ->assertFormFieldExists('item_category_id')
-            ->assertFormFieldExists('lines');
+            ->assertFormFieldExists('lines')
+            ->assertFormFieldExists('reason_code')
+            ->assertFormFieldDoesNotExist('action_type_display');
+
+        $source = file_get_contents(app_path('Filament/Resources/PropertyActionRequests/Schemas/PropertyActionRequestForm.php'));
+        $this->assertIsString($source);
+        $this->assertStringContainsString("->label('Line items')", $source);
+        $this->assertStringNotContainsString('action_type_display', $source);
+    }
+
+    public function test_create_modal_opens_with_one_blank_line_item(): void
+    {
+        [$employee] = $this->seedEmployeeIssuance();
+
+        $component = Livewire::actingAs($employee)
+            ->test(ListPropertyActionRequests::class)
+            ->mountAction('create');
+
+        $mounted = $component->instance()->mountedActions ?? [];
+        $lines = $mounted[0]['data']['lines'] ?? [];
+
+        $this->assertIsArray($lines);
+        $this->assertCount(1, array_values($lines));
+        $first = array_values($lines)[0];
+        $this->assertTrue(blank($first['issuance_id'] ?? null));
     }
 
     public function test_create_rejects_submission_without_category(): void

@@ -10,10 +10,12 @@ use App\Services\InventoryStockService;
 use App\Services\IssuanceNotificationService;
 use App\Services\IssuanceUnitAssignmentService;
 use App\Services\ReferenceCodeService;
+use App\Support\DashboardKpiCache;
 use App\Support\SemiExpendableUsefulLife;
 use App\Support\SemiExpendableValueCategory;
-use Illuminate\Broadcasting\BroadcastException;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
+use Throwable;
 
 class IssuanceObserver
 {
@@ -78,31 +80,47 @@ class IssuanceObserver
     public function created(Issuance $issuance): void
     {
         app(InventoryStockService::class)->forgetMovementTotalsCache();
+        DashboardKpiCache::bump();
         app(IssuanceNotificationService::class)->handleCreated($issuance);
         app(EmployeeRequisitionClosureService::class)->closeFromIssuance($issuance);
 
-        if (filled(config('filament.broadcasting.echo.key'))) {
+        if (! filled(config('filament.broadcasting.echo.key'))) {
+            return;
+        }
+
+        $send = function () use ($issuance): void {
             try {
                 IssuanceChanged::dispatch($issuance);
-            } catch (BroadcastException $exception) {
+            } catch (Throwable $exception) {
                 report($exception);
             }
+        };
+
+        if (DB::transactionLevel() > 0) {
+            DB::afterCommit($send);
+
+            return;
         }
+
+        $send();
     }
 
     public function updated(Issuance $issuance): void
     {
         app(InventoryStockService::class)->forgetMovementTotalsCache();
+        DashboardKpiCache::bump();
     }
 
     public function deleted(Issuance $issuance): void
     {
         app(InventoryStockService::class)->forgetMovementTotalsCache();
+        DashboardKpiCache::bump();
     }
 
     public function restored(Issuance $issuance): void
     {
         app(InventoryStockService::class)->forgetMovementTotalsCache();
+        DashboardKpiCache::bump();
     }
 
     public function saving(Issuance $issuance): void

@@ -11,6 +11,8 @@ use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 
 class ConsumptionAnalyticsService
 {
@@ -32,44 +34,46 @@ class ConsumptionAnalyticsService
         bool $includeYearInLabels = false,
         array $itemIds = [],
     ): array {
-        $periods = $this->buildPeriods($from, $to, $includeYearInLabels);
-        $labels = $periods->map(fn ($p) => $p['label'])->values()->all();
+        $cacheKey = $this->consumptionCacheKey(
+            'department',
+            $from,
+            $to,
+            $departmentIds,
+            $officeIds,
+            $includeYearInLabels,
+            $itemIds,
+        );
 
-        $query = Issuance::query()
-            ->whereBetween('issuance_date', [$from->copy()->startOfDay(), $to->copy()->endOfDay()])
-            ->whereNotNull('department_id');
-
-        $this->applyScopeFilters($query, $departmentIds, $officeIds, $itemIds);
-
-        $departments = $this->resolveChartDepartments($departmentIds, $officeIds);
-
-        $series = [];
-        foreach (array_keys($departments) as $deptId) {
-            $series[(string) $deptId] = array_fill(0, count($periods), 0);
+        if ($this->shouldCacheConsumptionResult($departmentIds, $officeIds, $itemIds)) {
+            /** @var array{labels: array<string>, series: array<string, array<int>>, departments: array<int, string>} */
+            return Cache::remember(
+                $cacheKey,
+                60,
+                fn (): array => $this->computeConsumptionByDimensionAndPeriod(
+                    'department_id',
+                    $this->resolveChartDepartments($departmentIds, $officeIds),
+                    $from,
+                    $to,
+                    $departmentIds,
+                    $officeIds,
+                    $includeYearInLabels,
+                    $itemIds,
+                    'departments',
+                ),
+            );
         }
 
-        $periodKeys = $periods->pluck('key')->all();
-        $issuances = (clone $query)->get(['department_id', 'issuance_date', 'quantity']);
-
-        foreach ($issuances as $row) {
-            $period = Carbon::parse($row->issuance_date)->format('Y-m');
-            $idx = array_search($period, $periodKeys, true);
-            if ($idx !== false && isset($series[(string) $row->department_id])) {
-                $series[(string) $row->department_id][$idx] += (int) $row->quantity;
-            }
-        }
-
-        $departmentNames = $departments;
-        $outSeries = [];
-        foreach ($series as $deptId => $values) {
-            $outSeries[$departmentNames[(int) $deptId] ?? 'Department #'.$deptId] = $values;
-        }
-
-        return [
-            'labels' => $labels,
-            'series' => $outSeries,
-            'departments' => $departmentNames,
-        ];
+        return $this->computeConsumptionByDimensionAndPeriod(
+            'department_id',
+            $this->resolveChartDepartments($departmentIds, $officeIds),
+            $from,
+            $to,
+            $departmentIds,
+            $officeIds,
+            $includeYearInLabels,
+            $itemIds,
+            'departments',
+        );
     }
 
     /**
@@ -90,44 +94,46 @@ class ConsumptionAnalyticsService
         bool $includeYearInLabels = false,
         array $itemIds = [],
     ): array {
-        $periods = $this->buildPeriods($from, $to, $includeYearInLabels);
-        $labels = $periods->map(fn ($p) => $p['label'])->values()->all();
+        $cacheKey = $this->consumptionCacheKey(
+            'office',
+            $from,
+            $to,
+            $departmentIds,
+            $officeIds,
+            $includeYearInLabels,
+            $itemIds,
+        );
 
-        $query = Issuance::query()
-            ->whereBetween('issuance_date', [$from->copy()->startOfDay(), $to->copy()->endOfDay()])
-            ->whereNotNull('office_id');
-
-        $this->applyScopeFilters($query, $departmentIds, $officeIds, $itemIds);
-
-        $offices = $this->resolveChartOffices($officeIds);
-
-        $series = [];
-        foreach (array_keys($offices) as $officeId) {
-            $series[(string) $officeId] = array_fill(0, count($periods), 0);
+        if ($this->shouldCacheConsumptionResult($departmentIds, $officeIds, $itemIds)) {
+            /** @var array{labels: array<string>, series: array<string, array<int>>, offices: array<int, string>} */
+            return Cache::remember(
+                $cacheKey,
+                60,
+                fn (): array => $this->computeConsumptionByDimensionAndPeriod(
+                    'office_id',
+                    $this->resolveChartOffices($officeIds),
+                    $from,
+                    $to,
+                    $departmentIds,
+                    $officeIds,
+                    $includeYearInLabels,
+                    $itemIds,
+                    'offices',
+                ),
+            );
         }
 
-        $periodKeys = $periods->pluck('key')->all();
-        $issuances = (clone $query)->get(['office_id', 'issuance_date', 'quantity']);
-
-        foreach ($issuances as $row) {
-            $period = Carbon::parse($row->issuance_date)->format('Y-m');
-            $idx = array_search($period, $periodKeys, true);
-            if ($idx !== false && isset($series[(string) $row->office_id])) {
-                $series[(string) $row->office_id][$idx] += (int) $row->quantity;
-            }
-        }
-
-        $officeNames = $offices;
-        $outSeries = [];
-        foreach ($series as $officeId => $values) {
-            $outSeries[$officeNames[(int) $officeId] ?? 'Office #'.$officeId] = $values;
-        }
-
-        return [
-            'labels' => $labels,
-            'series' => $outSeries,
-            'offices' => $officeNames,
-        ];
+        return $this->computeConsumptionByDimensionAndPeriod(
+            'office_id',
+            $this->resolveChartOffices($officeIds),
+            $from,
+            $to,
+            $departmentIds,
+            $officeIds,
+            $includeYearInLabels,
+            $itemIds,
+            'offices',
+        );
     }
 
     /**
@@ -318,6 +324,130 @@ class ConsumptionAnalyticsService
             'values' => $values,
             'total' => $total,
         ];
+    }
+
+    /**
+     * @param  array<int>  $departmentIds
+     * @param  array<int>  $officeIds
+     * @param  array<int>  $itemIds
+     * @param  array<int, string>  $dimensionNames  id => name
+     * @return array{labels: array<string>, series: array<string, array<int>>, departments?: array<int, string>, offices?: array<int, string>}
+     */
+    protected function computeConsumptionByDimensionAndPeriod(
+        string $dimensionColumn,
+        array $dimensionNames,
+        CarbonInterface $from,
+        CarbonInterface $to,
+        array $departmentIds,
+        array $officeIds,
+        bool $includeYearInLabels,
+        array $itemIds,
+        string $namesKey,
+    ): array {
+        $periods = $this->buildPeriods($from, $to, $includeYearInLabels);
+        $labels = $periods->map(fn ($p) => $p['label'])->values()->all();
+        $periodKeys = $periods->pluck('key')->all();
+        $periodIndex = array_flip($periodKeys);
+
+        $series = [];
+        foreach (array_keys($dimensionNames) as $dimensionId) {
+            $series[(string) $dimensionId] = array_fill(0, count($periods), 0);
+        }
+
+        $query = Issuance::query()
+            ->whereBetween('issuance_date', [$from->copy()->startOfDay(), $to->copy()->endOfDay()])
+            ->whereNotNull($dimensionColumn);
+
+        $this->applyScopeFilters($query, $departmentIds, $officeIds, $itemIds);
+
+        $periodSql = $this->monthYearSql($column = 'issuance_date');
+
+        $rows = (clone $query)
+            ->selectRaw("{$dimensionColumn}, {$periodSql} as ym, SUM(quantity) as total_quantity")
+            ->groupByRaw("{$dimensionColumn}, {$periodSql}")
+            ->get();
+
+        foreach ($rows as $row) {
+            $dimensionId = (string) $row->{$dimensionColumn};
+            $period = (string) $row->ym;
+            if (! isset($series[$dimensionId], $periodIndex[$period])) {
+                continue;
+            }
+
+            $series[$dimensionId][$periodIndex[$period]] += (int) $row->total_quantity;
+        }
+
+        $outSeries = [];
+        $fallbackPrefix = $namesKey === 'offices' ? 'Office #' : 'Department #';
+        foreach ($series as $dimensionId => $values) {
+            $outSeries[$dimensionNames[(int) $dimensionId] ?? $fallbackPrefix.$dimensionId] = $values;
+        }
+
+        return [
+            'labels' => $labels,
+            'series' => $outSeries,
+            $namesKey => $dimensionNames,
+        ];
+    }
+
+    /**
+     * Cache only the default dashboard filter (all offices/departments/items).
+     *
+     * @param  array<int>  $departmentIds
+     * @param  array<int>  $officeIds
+     * @param  array<int>  $itemIds
+     */
+    protected function shouldCacheConsumptionResult(array $departmentIds, array $officeIds, array $itemIds): bool
+    {
+        if ($this->isIsolatedSqliteTestDatabase()) {
+            return false;
+        }
+
+        return $departmentIds === [] && $officeIds === [] && $itemIds === [];
+    }
+
+    /**
+     * PHPUnit in this project forces sqlite :memory: even when APP_ENV stays local.
+     */
+    protected function isIsolatedSqliteTestDatabase(): bool
+    {
+        return config('database.default') === 'sqlite'
+            && config('database.connections.sqlite.database') === ':memory:';
+    }
+
+    /**
+     * @param  array<int>  $departmentIds
+     * @param  array<int>  $officeIds
+     * @param  array<int>  $itemIds
+     */
+    protected function consumptionCacheKey(
+        string $dimension,
+        CarbonInterface $from,
+        CarbonInterface $to,
+        array $departmentIds,
+        array $officeIds,
+        bool $includeYearInLabels,
+        array $itemIds,
+    ): string {
+        return 'consumption.analytics.'.$dimension.'.'.md5(json_encode([
+            $from->toDateString(),
+            $to->toDateString(),
+            $departmentIds,
+            $officeIds,
+            $includeYearInLabels,
+            $itemIds,
+        ], JSON_THROW_ON_ERROR));
+    }
+
+    protected function monthYearSql(string $column): string
+    {
+        $driver = DB::connection()->getDriverName();
+
+        return match ($driver) {
+            'sqlite' => "strftime('%Y-%m', {$column})",
+            'pgsql' => "to_char({$column}, 'YYYY-MM')",
+            default => "DATE_FORMAT({$column}, '%Y-%m')",
+        };
     }
 
     /**

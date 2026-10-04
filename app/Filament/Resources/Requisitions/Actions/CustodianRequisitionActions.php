@@ -5,6 +5,7 @@ namespace App\Filament\Resources\Requisitions\Actions;
 use App\Filament\Resources\Acquisitions\AcquisitionResource;
 use App\Filament\Resources\Requisitions\Schemas\RequisitionInfolistSchema;
 use App\Filament\Resources\Requisitions\Schemas\RequisitionIssuanceFormSchema;
+use App\Filament\Support\OwwaFormModalDefaults;
 use App\Models\Requisition;
 use App\Models\User;
 use App\Services\RequisitionFulfillmentService;
@@ -14,6 +15,8 @@ use App\Support\RequisitionStatus;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Select;
 use Filament\Notifications\Notification;
+use Filament\Support\Enums\Alignment;
+use Filament\Support\Enums\Size;
 use Illuminate\Support\Facades\Auth;
 
 class CustodianRequisitionActions
@@ -92,20 +95,28 @@ class CustodianRequisitionActions
 
     public static function reviewAndIssueAction(): Action
     {
-        return Action::make('acceptAndIssue')
-            ->label('Review & issue')
-            ->icon('heroicon-o-check-circle')
-            ->color('success')
-            ->requiresConfirmation()
-            ->modalHeading('Review And Issue Stock')
-            ->modalDescription(fn (Requisition $record): string|\Illuminate\Contracts\Support\Htmlable => RequisitionInfolistSchema::acceptIssueModalDescription($record))
-            ->modalSubmitActionLabel('Yes, issue stock')
-            ->visible(fn (Requisition $record): bool => self::canAcceptAndIssue($record))
-            ->fillForm(fn (Requisition $record): array => RequisitionIssuanceFormSchema::defaultFormState($record, remainderOnly: false))
-            ->form(fn (Requisition $record): array => RequisitionIssuanceFormSchema::issueModalFields($record, remainderOnly: false))
-            ->action(function (Requisition $record, array $data): void {
-                self::runIssueAction($record, $data, 'Stock issued');
-            });
+        return OwwaFormModalDefaults::apply(
+            Action::make('acceptAndIssue')
+                ->label('Review & issue')
+                ->icon('heroicon-o-check-circle')
+                ->color('success')
+                ->requiresConfirmation()
+                ->modalAlignment(Alignment::Start)
+                ->modalFooterActionsAlignment(Alignment::End)
+                ->modalHeading('Review And Issue Stock')
+                ->modalDescription(fn (Requisition $record): string|\Illuminate\Contracts\Support\Htmlable => RequisitionInfolistSchema::acceptIssueModalDescription($record))
+                ->modalSubmitActionLabel('Yes, Issue Stock')
+                ->modalSubmitAction(fn (Action $action): Action => $action->size(Size::Small))
+                ->modalCancelAction(fn (Action $action): Action => $action->size(Size::Small))
+                ->visible(fn (Requisition $record): bool => self::canAcceptAndIssue($record))
+                ->fillForm(fn (Requisition $record): array => RequisitionIssuanceFormSchema::defaultFormState($record, remainderOnly: false))
+                ->form(fn (Requisition $record): array => RequisitionIssuanceFormSchema::issueModalFields($record, remainderOnly: false))
+                ->action(function (Requisition $record, array $data): void {
+                    self::runIssueAction($record, $data, 'Stock issued');
+                }),
+            OwwaFormModalDefaults::WIDTH_WIDE,
+            'owwa-requisition-issue-modal',
+        );
     }
 
     /**
@@ -118,20 +129,28 @@ class CustodianRequisitionActions
 
     public static function issueRemainderAction(): Action
     {
-        return Action::make('issueRemainder')
-            ->label('Issue remainder')
-            ->icon('heroicon-o-arrow-up-tray')
-            ->color('primary')
-            ->requiresConfirmation()
-            ->modalHeading('Issue Remainder From Requisition')
-            ->modalDescription(fn (Requisition $record): string|\Illuminate\Contracts\Support\Htmlable => RequisitionInfolistSchema::acceptIssueModalDescription($record))
-            ->modalSubmitActionLabel('Yes, issue remainder')
-            ->visible(fn (Requisition $record): bool => self::canIssueRemainder($record))
-            ->fillForm(fn (Requisition $record): array => RequisitionIssuanceFormSchema::defaultFormState($record, remainderOnly: true))
-            ->form(fn (Requisition $record): array => RequisitionIssuanceFormSchema::issueModalFields($record, remainderOnly: true))
-            ->action(function (Requisition $record, array $data): void {
-                self::runIssueAction($record, $data, 'Stock issued');
-            });
+        return OwwaFormModalDefaults::apply(
+            Action::make('issueRemainder')
+                ->label('Issue Remainder')
+                ->icon('heroicon-o-arrow-up-tray')
+                ->color('primary')
+                ->requiresConfirmation()
+                ->modalAlignment(Alignment::Start)
+                ->modalFooterActionsAlignment(Alignment::End)
+                ->modalHeading('Issue Remainder From Requisition')
+                ->modalDescription(fn (Requisition $record): string|\Illuminate\Contracts\Support\Htmlable => RequisitionInfolistSchema::acceptIssueModalDescription($record))
+                ->modalSubmitActionLabel('Yes, Issue Remainder')
+                ->modalSubmitAction(fn (Action $action): Action => $action->size(Size::Small))
+                ->modalCancelAction(fn (Action $action): Action => $action->size(Size::Small))
+                ->visible(fn (Requisition $record): bool => self::canIssueRemainder($record))
+                ->fillForm(fn (Requisition $record): array => RequisitionIssuanceFormSchema::defaultFormState($record, remainderOnly: true))
+                ->form(fn (Requisition $record): array => RequisitionIssuanceFormSchema::issueModalFields($record, remainderOnly: true))
+                ->action(function (Requisition $record, array $data): void {
+                    self::runIssueAction($record, $data, 'Stock issued');
+                }),
+            OwwaFormModalDefaults::WIDTH_WIDE,
+            'owwa-requisition-issue-modal',
+        );
     }
 
     public static function createPurchaseRequestAction(): Action

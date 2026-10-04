@@ -100,6 +100,52 @@ class ConsumptionAnalyticsTest extends TestCase
         $this->assertSame(0, $totals['values'][$satelliteIndex]);
     }
 
+    public function test_office_period_series_match_totals_after_sql_aggregate(): void
+    {
+        $regional = Office::factory()->create(['name' => 'Regional Office']);
+        $satellite = Office::factory()->create(['name' => 'Satellite Office']);
+        $item = Item::factory()->create();
+
+        $from = Carbon::parse('2026-01-01');
+        $to = Carbon::parse('2026-03-31');
+
+        Issuance::withoutEvents(function () use ($item, $regional, $satellite): void {
+            Issuance::query()->create([
+                'reference_code' => 'ISS-AGG-1',
+                'item_id' => $item->id,
+                'office_id' => $regional->id,
+                'quantity' => 7,
+                'issuance_date' => '2026-01-10',
+            ]);
+            Issuance::query()->create([
+                'reference_code' => 'ISS-AGG-2',
+                'item_id' => $item->id,
+                'office_id' => $regional->id,
+                'quantity' => 3,
+                'issuance_date' => '2026-02-12',
+            ]);
+            Issuance::query()->create([
+                'reference_code' => 'ISS-AGG-3',
+                'item_id' => $item->id,
+                'office_id' => $satellite->id,
+                'quantity' => 5,
+                'issuance_date' => '2026-01-20',
+            ]);
+        });
+
+        $service = app(ConsumptionAnalyticsService::class);
+        $period = $service->getConsumptionByOfficeAndPeriod($from, $to);
+        $totals = $service->getConsumptionTotalsByOffice($from, $to);
+
+        $this->assertSame([7, 3, 0], $period['series']['Regional Office']);
+        $this->assertSame([5, 0, 0], $period['series']['Satellite Office']);
+        $this->assertSame(15, $totals['total']);
+        $this->assertSame(
+            array_sum($period['series']['Regional Office']) + array_sum($period['series']['Satellite Office']),
+            $totals['total'],
+        );
+    }
+
     public function test_consumption_can_filter_to_one_office_only(): void
     {
         $regional = Office::factory()->create(['name' => 'Regional Office']);

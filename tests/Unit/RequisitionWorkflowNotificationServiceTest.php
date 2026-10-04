@@ -80,6 +80,32 @@ class RequisitionWorkflowNotificationServiceTest extends TestCase
         Notification::assertSentTo($custodian, RequisitionWorkflowDatabaseNotification::class);
     }
 
+    public function test_unit_consolidator_create_notifies_custodian_via_fallback_when_regional_has_none(): void
+    {
+        Notification::fake();
+
+        Office::factory()->create(['is_regional_supply' => true]);
+        $office = Office::factory()->create();
+        $uc = User::factory()->create([
+            'role' => User::ROLE_UNIT_CONSOLIDATOR,
+            'office_id' => $office->id,
+        ]);
+        $custodian = User::factory()->create([
+            'role' => User::ROLE_SUPPLY_CUSTODIAN,
+            'office_id' => $office->id,
+        ]);
+
+        $requisition = Requisition::query()->create([
+            'office_id' => $office->id,
+            'requested_by' => $uc->id,
+            'status' => Requisition::STATUS_PENDING,
+        ]);
+
+        $this->service->handleCreated($requisition);
+
+        Notification::assertSentTo($custodian, RequisitionWorkflowDatabaseNotification::class);
+    }
+
     public function test_unit_consolidator_reject_notifies_employee_with_mail(): void
     {
         Notification::fake();

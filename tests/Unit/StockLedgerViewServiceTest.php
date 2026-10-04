@@ -165,24 +165,33 @@ class StockLedgerViewServiceTest extends TestCase
         $this->assertSame('Partial issue for training', $issueRow['remarks']);
     }
 
-    public function test_assert_visible_in_stock_list_rejects_unknown_pairs(): void
+    public function test_assert_can_open_ledger_rejects_item_without_stock_activity(): void
     {
-        $visible = collect([
-            (object) ['item_id' => 1, 'office_id' => 2],
+        Office::factory()->create([
+            'name' => 'AAA Regional Supply',
+            'is_regional_supply' => true,
+        ]);
+        $category = ItemCategory::factory()->create(['name' => 'Consumables']);
+        $item = Item::factory()->create(['item_category_id' => $category->id]);
+        $office = Office::factory()->create([
+            'name' => 'ZZZ Field Office',
+            'is_regional_supply' => false,
         ]);
 
         $this->expectException(AuthorizationException::class);
 
-        app(StockLedgerViewService::class)->assertVisibleInStockList(99, 2, $visible);
+        app(StockLedgerViewService::class)->assertCanOpenLedger($item->id, $office->id);
     }
 
-    public function test_assert_visible_in_stock_list_allows_listed_pairs(): void
+    public function test_assert_can_open_ledger_allows_item_with_acquisition(): void
     {
-        $visible = collect([
-            (object) ['item_id' => 5, 'office_id' => 8],
-        ]);
+        $category = ItemCategory::factory()->create(['name' => 'Consumables']);
+        $item = Item::factory()->create(['item_category_id' => $category->id]);
+        $office = Office::factory()->create();
 
-        app(StockLedgerViewService::class)->assertVisibleInStockList(5, 8, $visible);
+        $this->createAcquisition($item->id, $office->id, 4);
+
+        app(StockLedgerViewService::class)->assertCanOpenLedger($item->id, $office->id);
 
         $this->assertTrue(true);
     }

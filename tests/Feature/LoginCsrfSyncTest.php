@@ -3,6 +3,9 @@
 namespace Tests\Feature;
 
 use App\Filament\Pages\Auth\Login;
+use App\Filament\Pages\InventoryCategoryDashboard;
+use App\Filament\Resources\Requisitions\RequisitionResource;
+use App\Models\ItemCategory;
 use App\Models\Office;
 use App\Models\User;
 use Filament\Facades\Filament;
@@ -28,11 +31,20 @@ class LoginCsrfSyncTest extends TestCase
     {
         Filament::setCurrentPanel(Filament::getPanel('admin'));
 
+        config()->set('filament.broadcasting.echo', [
+            'broadcaster' => 'pusher',
+            'key' => 'test-key',
+            'cluster' => 'ap1',
+            'forceTLS' => true,
+        ]);
+
         $this->get(route('filament.admin.auth.login'))
             ->assertOk()
             ->assertSee('session\/csrf', false)
             ->assertSee('owwa_login_419_reauth', false)
-            ->assertSee('function syncCsrf', false);
+            ->assertSee('function syncCsrf', false)
+            ->assertDontSee("addEventListener('focus'", false)
+            ->assertDontSee('EchoFactory', false);
     }
 
     public function test_login_page_shows_reauth_status_message(): void
@@ -89,5 +101,78 @@ class LoginCsrfSyncTest extends TestCase
             ->call('authenticate')
             ->assertHasNoFormErrors()
             ->assertRedirect();
+    }
+
+    public function test_category_dashboard_starts_echo(): void
+    {
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+
+        config()->set('filament.broadcasting.echo', [
+            'broadcaster' => 'pusher',
+            'key' => 'test-key',
+            'cluster' => 'ap1',
+            'forceTLS' => true,
+        ]);
+
+        $office = Office::factory()->create();
+        $category = ItemCategory::factory()->create();
+        $user = User::factory()->create([
+            'role' => User::ROLE_SUPPLY_CUSTODIAN,
+            'office_id' => $office->id,
+            'email_verified_at' => now(),
+        ]);
+
+        $this->actingAs($user)
+            ->get(InventoryCategoryDashboard::getUrl(['category' => $category->id]))
+            ->assertOk()
+            ->assertSee('EchoFactory', false);
+    }
+
+    public function test_employee_dashboard_starts_echo(): void
+    {
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+
+        config()->set('filament.broadcasting.echo', [
+            'broadcaster' => 'pusher',
+            'key' => 'test-key',
+            'cluster' => 'ap1',
+            'forceTLS' => true,
+        ]);
+
+        $office = Office::factory()->create();
+        $user = User::factory()->create([
+            'role' => User::ROLE_EMPLOYEE,
+            'office_id' => $office->id,
+            'email_verified_at' => now(),
+        ]);
+
+        $this->actingAs($user)
+            ->get(Filament::getPanel('admin')->getUrl())
+            ->assertOk()
+            ->assertSee('EchoFactory', false);
+    }
+
+    public function test_requisitions_list_starts_echo(): void
+    {
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+
+        config()->set('filament.broadcasting.echo', [
+            'broadcaster' => 'pusher',
+            'key' => 'test-key',
+            'cluster' => 'ap1',
+            'forceTLS' => true,
+        ]);
+
+        $office = Office::factory()->create();
+        $user = User::factory()->create([
+            'role' => User::ROLE_SUPPLY_CUSTODIAN,
+            'office_id' => $office->id,
+            'email_verified_at' => now(),
+        ]);
+
+        $this->actingAs($user)
+            ->get(RequisitionResource::getUrl('index'))
+            ->assertOk()
+            ->assertSee('EchoFactory', false);
     }
 }

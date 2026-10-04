@@ -9,7 +9,6 @@ use App\Models\Acquisition;
 use App\Models\Item;
 use App\Models\ItemCategory;
 use App\Models\Office;
-use App\Models\StockOpeningBalance;
 use App\Models\User;
 use App\Services\InventoryStockService;
 use Filament\Actions\Testing\TestAction;
@@ -29,7 +28,7 @@ class SetStartingStockActionTest extends TestCase
         Filament::setCurrentPanel(Filament::getPanel('admin'));
     }
 
-    public function test_legacy_item_shows_set_starting_stock_and_records_balance(): void
+    public function test_items_list_does_not_expose_set_starting_stock_action(): void
     {
         [$office, $category, $item, $user] = $this->legacyCatalogFixture();
 
@@ -38,27 +37,12 @@ class SetStartingStockActionTest extends TestCase
 
         Livewire::withQueryParams(['category' => (string) $category->id])
             ->test(ListItems::class)
-            ->assertActionVisible(TestAction::make('setOpeningStock')->table($item))
-            ->callAction(TestAction::make('setOpeningStock')->table($item), [
-                ItemOpeningStockFields::QUANTITY_KEY => 25,
-                ItemOpeningStockFields::UNIT_COST_KEY => 12.5,
-            ])
-            ->assertHasNoActionErrors()
-            ->assertNotified();
-
-        $this->assertDatabaseHas(StockOpeningBalance::class, [
-            'item_id' => $item->id,
-            'office_id' => $office->id,
-            'quantity' => 25,
-        ]);
-        $this->assertSame(25, app(InventoryStockService::class)->getStock($item->id, $office->id));
-
-        Livewire::withQueryParams(['category' => (string) $category->id])
-            ->test(ListItems::class)
-            ->assertActionHidden(TestAction::make('setOpeningStock')->table($item->fresh()));
+            ->assertOk()
+            ->assertSee($item->name)
+            ->assertActionDoesNotExist(TestAction::make('setOpeningStock')->table($item));
     }
 
-    public function test_set_starting_stock_hidden_when_acquisition_exists_even_if_stock_zero(): void
+    public function test_can_set_starting_stock_false_when_acquisition_exists_even_if_stock_zero(): void
     {
         [$office, $category, $item, $user] = $this->legacyCatalogFixture();
 
@@ -88,16 +72,9 @@ class SetStartingStockActionTest extends TestCase
 
         $this->assertSame(0, app(InventoryStockService::class)->getStock($item->id, $office->id));
         $this->assertFalse(ItemOpeningStockFields::canSetStartingStock($item, $office->id));
-
-        $this->actingAs($user);
-        session(['active_item_category_id' => $category->id]);
-
-        Livewire::withQueryParams(['category' => (string) $category->id])
-            ->test(ListItems::class)
-            ->assertActionHidden(TestAction::make('setOpeningStock')->table($item));
     }
 
-    public function test_stock_levels_shows_eligible_row_and_sets_starting_stock(): void
+    public function test_stock_levels_does_not_inject_zero_stock_starting_stock_rows(): void
     {
         [$office, $category, $item, $user] = $this->legacyCatalogFixture();
 
@@ -105,41 +82,12 @@ class SetStartingStockActionTest extends TestCase
 
         $component = Livewire::test(StockLevels::class, ['category' => $category->id])
             ->assertOk()
-            ->assertSee($item->name)
-            ->assertSee('No stock')
-            ->assertSee('Set starting stock');
+            ->assertDontSee('Set starting stock');
 
         $rows = $component->instance()->getStockLevelsFull();
-        $this->assertTrue(
-            $rows->contains(fn (object $row): bool => (int) $row->item_id === $item->id
-                && ($row->can_set_starting_stock ?? false) === true),
-        );
-
-        $component
-            ->call('openSetStartingStock', $item->id)
-            ->assertActionMounted('setOpeningStock')
-            ->fillForm([
-                ItemOpeningStockFields::QUANTITY_KEY => 15,
-            ])
-            ->callMountedAction()
-            ->assertHasNoActionErrors()
-            ->assertNotified();
-
-        $this->assertDatabaseHas(StockOpeningBalance::class, [
-            'item_id' => $item->id,
-            'office_id' => $office->id,
-            'quantity' => 15,
-        ]);
-
-        $rowsAfter = Livewire::test(StockLevels::class, ['category' => $category->id])
-            ->instance()
-            ->getStockLevelsFull();
-
         $this->assertFalse(
-            $rowsAfter->contains(fn (object $row): bool => (int) $row->item_id === $item->id
-                && ($row->can_set_starting_stock ?? false) === true),
+            $rows->contains(fn (object $row): bool => (int) $row->item_id === $item->id),
         );
-        $this->assertSame(15, (int) $rowsAfter->firstWhere('item_id', $item->id)?->stock);
     }
 
     /**

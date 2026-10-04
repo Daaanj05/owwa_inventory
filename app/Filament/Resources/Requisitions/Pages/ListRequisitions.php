@@ -128,11 +128,23 @@ class ListRequisitions extends ListRecords
             $classes[] = 'owwa-uc-requisitions-tabs';
         }
 
+        if ($user?->isEmployee()) {
+            $classes[] = 'owwa-search-row-toolbar';
+            $classes[] = 'owwa-setup-archive-toggle';
+        }
+
         return $classes;
     }
 
     public function getSubheading(): string|\Illuminate\Contracts\Support\Htmlable|null
     {
+        /** @var User|null $user */
+        $user = Filament::auth()->user();
+
+        if ($user?->isEmployee() || $user?->isUnitConsolidator()) {
+            return null;
+        }
+
         $pending = RequisitionResource::getEloquentQuery()
             ->where('status', Requisition::STATUS_PENDING)
             ->count();
@@ -236,6 +248,10 @@ class ListRequisitions extends ListRecords
                     scopes: static::class,
                 );
             }
+        }
+
+        if ($user?->isEmployee()) {
+            $this->registerEmployeeActiveTabIcons();
         }
 
         $actionsComponent = Actions::make([
@@ -417,15 +433,19 @@ class ListRequisitions extends ListRecords
                         $data['status'] = Requisition::STATUS_DRAFT;
                     }
 
-                    $endorsementLines = array_values($data['endorsement_lines'] ?? []);
+                    $endorsementLinesByKey = is_array($data['endorsement_lines'] ?? null)
+                        ? $data['endorsement_lines']
+                        : [];
                     unset($data['endorsement_lines']);
 
                     $itemRows = array_values($data['items'] ?? []);
                     unset($data['items']);
 
                     if ($user?->isUnitConsolidator() && $sourceIds !== []) {
-                        app(RequisitionCompileService::class)->validateEndorsementLines($endorsementLines);
+                        app(RequisitionCompileService::class)->validateEndorsementLines($endorsementLinesByKey);
                     }
+
+                    $endorsementLines = array_values($endorsementLinesByKey);
 
                     $record = new $model;
                     $record->fill(Arr::except($data, ['items']));
@@ -560,7 +580,7 @@ class ListRequisitions extends ListRecords
         $components = [];
         $flexChildren = [];
 
-        if ($this->getTabs() !== []) {
+        if (! $user?->isEmployee() && $this->getTabs() !== []) {
             $flexChildren[] = $this->getTabsContentComponent();
         }
 
@@ -575,7 +595,7 @@ class ListRequisitions extends ListRecords
             /** @var mixed $flexComponent */
             $flexComponent = $flexComponent->alignBetween()->verticallyAlignCenter();
 
-            if ($user?->isUnitConsolidator()) {
+            if ($user?->isUnitConsolidator() || $user?->isEmployee()) {
                 $flexComponent = $flexComponent->extraAttributes([
                     'class' => 'owwa-uc-requisition-page-actions',
                 ]);
@@ -609,7 +629,22 @@ class ListRequisitions extends ListRecords
     {
         $user = Filament::auth()->user();
 
-        if (! $user instanceof User || ! $user->isUnitConsolidator() || ! RequisitionResource::canCreate()) {
+        if (! $user instanceof User || ! RequisitionResource::canCreate()) {
+            return [];
+        }
+
+        if ($user->isEmployee()) {
+            return [
+                [
+                    'label' => 'New Requisition',
+                    'action' => 'create',
+                    'schema' => 'content',
+                    'style' => 'primary',
+                ],
+            ];
+        }
+
+        if (! $user->isUnitConsolidator()) {
             return [];
         }
 
@@ -621,6 +656,61 @@ class ListRequisitions extends ListRecords
                 'style' => 'primary',
             ],
         ];
+    }
+
+    protected function registerEmployeeActiveTabIcons(): void
+    {
+        static $hookRegistered = false;
+
+        if ($hookRegistered) {
+            return;
+        }
+
+        $hookRegistered = true;
+
+        FilamentView::registerRenderHook(
+            TablesRenderHook::TOOLBAR_SEARCH_AFTER,
+            function (): HtmlString {
+                $livewire = Livewire::current();
+
+                if (! $livewire instanceof self) {
+                    return new HtmlString('');
+                }
+
+                $user = Filament::auth()->user();
+
+                if (! $user?->isEmployee()) {
+                    return new HtmlString('');
+                }
+
+                $activeTab = $livewire->activeTab ?? 'active';
+
+                return new HtmlString(
+                    (string) view('filament.tables.setup-active-tab-toggle', [
+                        'showingArchived' => $activeTab === 'archived',
+                        'archivedCount' => $livewire->employeeArchivedCount(),
+                    ])
+                );
+            },
+            scopes: static::class,
+        );
+    }
+
+    public function employeeArchivedCount(): int
+    {
+        /** @var User|null $user */
+        $user = Filament::auth()->user();
+
+        if (! $user instanceof User || ! $user->isEmployee()) {
+            return 0;
+        }
+
+        return (int) RequisitionResource::getEloquentQuery()
+            ->where(function (Builder $query): void {
+                $query->whereNotNull('archived_at')
+                    ->orWhere('status', Requisition::STATUS_REJECTED);
+            })
+            ->count();
     }
 
     public function ucArchivedCount(): int

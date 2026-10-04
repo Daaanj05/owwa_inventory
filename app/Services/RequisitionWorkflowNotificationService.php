@@ -168,7 +168,7 @@ class RequisitionWorkflowNotificationService
             $requested = (int) ($line['requested_quantity'] ?? 0);
             $endorsed = (int) ($line['endorsed_quantity'] ?? 0);
 
-            if ($endorsed >= $requested) {
+            if ($endorsed === $requested) {
                 continue;
             }
 
@@ -180,7 +180,7 @@ class RequisitionWorkflowNotificationService
             return;
         }
 
-        foreach ($bySource as $sourceId => $reductions) {
+        foreach ($bySource as $sourceId => $adjustments) {
             $source = Requisition::query()
                 ->with('requestedBy')
                 ->find($sourceId);
@@ -194,14 +194,14 @@ class RequisitionWorkflowNotificationService
             $ref = $source->displayTransactionNumber() ?? "#{$source->id}";
             $detailParts = [];
 
-            foreach ($reductions as $reduction) {
-                $itemName = (string) ($reduction['item_name'] ?? 'Item');
+            foreach ($adjustments as $adjustment) {
+                $itemName = (string) ($adjustment['item_name'] ?? 'Item');
                 $detailParts[] = sprintf(
                     '%s: requested %d, endorsed %d. Reason: %s',
                     $itemName,
-                    (int) ($reduction['requested_quantity'] ?? 0),
-                    (int) ($reduction['endorsed_quantity'] ?? 0),
-                    (string) ($reduction['employee_remarks'] ?? ''),
+                    (int) ($adjustment['requested_quantity'] ?? 0),
+                    (int) ($adjustment['endorsed_quantity'] ?? 0),
+                    (string) ($adjustment['employee_remarks'] ?? ''),
                 );
             }
 

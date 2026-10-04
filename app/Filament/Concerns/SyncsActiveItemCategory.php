@@ -84,19 +84,30 @@ trait SyncsActiveItemCategory
 
     protected static function resolveActiveItemCategoryId(int $categoryId): int
     {
-        if ($categoryId > 0 && ! ItemCategory::query()->whereKey($categoryId)->whereNull('archived_at')->exists()) {
-            $categoryId = 0;
+        $memoKey = 'owwa.resolved_active_item_category_id.'.$categoryId;
+        $request = request();
+
+        if ($request->attributes->has($memoKey)) {
+            return (int) $request->attributes->get($memoKey);
         }
 
-        if ($categoryId <= 0) {
-            $categoryId = (int) ItemCategory::query()->whereNull('archived_at')->orderBy('name')->value('id');
+        $resolved = $categoryId;
+
+        if ($resolved > 0 && ! ItemCategory::query()->whereKey($resolved)->whereNull('archived_at')->exists()) {
+            $resolved = 0;
         }
 
-        if ($categoryId <= 0) {
+        if ($resolved <= 0) {
+            $resolved = (int) ItemCategory::query()->whereNull('archived_at')->orderBy('name')->value('id');
+        }
+
+        if ($resolved <= 0) {
             abort(404);
         }
 
-        return $categoryId;
+        $request->attributes->set($memoKey, $resolved);
+
+        return $resolved;
     }
 
     protected static function urlWithActiveItemCategory(string $url, int|string|null $categoryId): string

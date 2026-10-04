@@ -3,8 +3,10 @@
 namespace Tests\Feature;
 
 use App\Filament\Resources\Issuances\IssuanceResource;
+use App\Filament\Resources\Requisitions\Actions\CustodianRequisitionActions;
 use App\Filament\Resources\Requisitions\Pages\ListRequisitions;
 use App\Filament\Resources\Requisitions\Schemas\RequisitionIssuanceFormSchema;
+use App\Filament\Support\OwwaFormModalDefaults;
 use App\Models\Acquisition;
 use App\Models\InventoryUnit;
 use App\Models\Issuance;
@@ -173,9 +175,92 @@ class RecordIssuanceFromRequisitionTest extends TestCase
     public function test_custodian_reject_action_was_removed(): void
     {
         $this->assertFalse(method_exists(
-            \App\Filament\Resources\Requisitions\Actions\CustodianRequisitionActions::class,
+            CustodianRequisitionActions::class,
             'rejectAction',
         ));
+    }
+
+    public function test_review_and_issue_modal_uses_wide_record_modal_shell(): void
+    {
+        foreach ([
+            CustodianRequisitionActions::reviewAndIssueAction(),
+            CustodianRequisitionActions::issueRemainderAction(),
+        ] as $action) {
+            $width = $action->getModalWidth();
+            $widthValue = $width instanceof \Filament\Support\Enums\Width
+                ? $width->value
+                : (string) $width;
+
+            $this->assertSame(OwwaFormModalDefaults::WIDTH_WIDE, $widthValue);
+            $this->assertSame(
+                \Filament\Support\Enums\Alignment::Start,
+                $action->getModalAlignment(),
+            );
+            $this->assertSame(
+                \Filament\Support\Enums\Alignment::End,
+                $action->getModalFooterActionsAlignment(),
+            );
+            $this->assertStringContainsString(
+                'owwa-record-modal',
+                (string) ($action->getExtraModalWindowAttributes()['class'] ?? ''),
+            );
+            $this->assertStringContainsString(
+                'owwa-requisition-issue-modal',
+                (string) ($action->getExtraModalWindowAttributes()['class'] ?? ''),
+            );
+        }
+    }
+
+    public function test_accept_and_issue_modal_shows_signatories_and_lines_table_fields(): void
+    {
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+
+        $office = Office::factory()->create();
+        $category = ItemCategory::factory()->create(['name' => 'Consumables']);
+        $item = Item::factory()->create(['item_category_id' => $category->id]);
+
+        DB::table('acquisitions')->insert([
+            'reference_code' => 'ACQ-FEAT-MODAL',
+            'item_id' => $item->id,
+            'office_id' => $office->id,
+            'quantity' => 50,
+            'acquisition_date' => now()->toDateString(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $uc = User::factory()->create([
+            'role' => User::ROLE_UNIT_CONSOLIDATOR,
+            'office_id' => $office->id,
+        ]);
+        $custodian = User::factory()->create([
+            'role' => User::ROLE_SUPPLY_CUSTODIAN,
+        ]);
+
+        $requisition = Requisition::query()->create([
+            'reference_code' => '2026-01-0300',
+            'office_id' => $office->id,
+            'requested_by' => $uc->id,
+            'status' => Requisition::STATUS_PENDING,
+        ]);
+
+        RequisitionItem::query()->create([
+            'requisition_id' => $requisition->id,
+            'item_id' => $item->id,
+            'quantity' => 3,
+        ]);
+
+        $this->actingAs($custodian);
+
+        Livewire::test(ListRequisitions::class)
+            ->mountTableAction('view', $requisition)
+            ->mountAction(TestAction::make('acceptAndIssue'))
+            ->assertFormFieldExists('issuance_date')
+            ->assertFormFieldExists('custodian_printed_name')
+            ->assertFormFieldExists('custodian_designation')
+            ->assertFormFieldExists('issued_to_designation')
+            ->assertFormFieldDoesNotExist('accounting_staff_printed_name')
+            ->assertFormFieldExists('lines');
     }
 
     public function test_mixed_category_requisition_issues_to_separate_category_lists(): void

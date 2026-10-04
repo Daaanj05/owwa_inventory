@@ -323,7 +323,7 @@ class RequisitionForm
                         ]),
                     ]),
                 Section::make('Review & endorse employee requests')
-                    ->description('Adjust endorsed quantities per employee line. Add remarks when endorsing less than requested.')
+                    ->description('Adjust endorsed quantities per employee line. Add remarks when the endorsed quantity is changed.')
                     ->extraAttributes(['class' => 'owwa-uc-endorse-section'])
                     ->visible(fn (string $operation, Get $get): bool => $operation === 'create'
                         && $isUnitConsolidator
@@ -481,7 +481,7 @@ class RequisitionForm
         $body = $rows
             ->map(function (array $row): string {
                 return sprintf(
-                    '<tr><td>%s</td><td>%s</td><td class="text-right">%s</td><td class="text-right">%d</td><td class="text-right">%d</td><td>%s</td></tr>',
+                    '<tr><td>%s</td><td>%s</td><td class="text-center">%s</td><td class="text-center">%d</td><td class="text-center">%d</td><td>%s</td></tr>',
                     e($row['category']),
                     e($row['item']),
                     e($row['available']),
@@ -503,9 +503,9 @@ class RequisitionForm
             .'<thead><tr>'
             .'<th class="text-left">Category</th>'
             .'<th class="text-left">Item</th>'
-            .'<th class="text-right">Available</th>'
-            .'<th class="text-right">Requested</th>'
-            .'<th class="text-right">Endorsed</th>'
+            .'<th class="text-center">Available</th>'
+            .'<th class="text-center">Requested</th>'
+            .'<th class="text-center">Endorsed</th>'
             .'<th class="text-left">Sources</th>'
             .'</tr></thead>'
             .'<tbody>'.$body.'</tbody>'
@@ -540,9 +540,9 @@ class RequisitionForm
                 TableColumn::make('Employee')->width('15%'),
                 TableColumn::make('Purpose')->width('14%'),
                 TableColumn::make('Item')->width('20%'),
-                TableColumn::make('Available')->alignment(Alignment::End)->width('4.75rem'),
-                TableColumn::make('Req.')->alignment(Alignment::End)->width('4.25rem'),
-                TableColumn::make('Endorsed')->markAsRequired()->alignment(Alignment::End)->width('5.25rem'),
+                TableColumn::make('Available')->alignment(Alignment::Center)->width('4.75rem'),
+                TableColumn::make('Req.')->alignment(Alignment::Center)->width('4.25rem'),
+                TableColumn::make('Endorsed')->markAsRequired()->alignment(Alignment::Center)->width('5.25rem'),
                 TableColumn::make('Remarks')->width('18%'),
             ])
             ->compact()
@@ -599,8 +599,8 @@ class RequisitionForm
                     ->label('Remarks')
                     ->rows(1)
                     ->hiddenLabel()
-                    ->placeholder('Required if reduced')
-                    ->required(fn (Get $get): bool => (int) ($get('endorsed_quantity') ?? 0) < (int) ($get('requested_quantity') ?? 0)),
+                    ->placeholder('Required if reduced or increased')
+                    ->required(fn (Get $get): bool => (int) ($get('endorsed_quantity') ?? 0) !== (int) ($get('requested_quantity') ?? 0)),
                 Hidden::make('requested_quantity'),
                 Hidden::make('transaction_number'),
                 Hidden::make('employee_name'),

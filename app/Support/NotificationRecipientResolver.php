@@ -22,7 +22,11 @@ class NotificationRecipientResolver
         $regionalOffice = $this->supplyOfficeResolver->resolveOffice();
 
         if ($regionalOffice instanceof Office) {
-            return $this->supplyCustodiansForOffice((int) $regionalOffice->id);
+            $custodians = $this->supplyCustodiansForOffice((int) $regionalOffice->id);
+
+            if ($custodians->isNotEmpty()) {
+                return $custodians;
+            }
         }
 
         return RequisitionNotificationRecipients::supplyCustodians();

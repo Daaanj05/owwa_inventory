@@ -17,8 +17,6 @@ use App\Support\OwwaReferenceLabels;
 use App\Support\PropertyActionRequestViewPresenter;
 use Filament\Actions\BulkAction;
 use Filament\Actions\BulkActionGroup;
-use Filament\Facades\Filament;
-use Filament\Forms\Components\Textarea;
 use Filament\Notifications\Notification;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
@@ -114,12 +112,10 @@ class PropertyActionRequestsTable
                         ->label('Compile / Send to SC')
                         ->icon('heroicon-o-rectangle-stack')
                         ->color('primary')
+                        ->requiresConfirmation()
+                        ->modalHeading('Compile selected property returns?')
+                        ->modalDescription('Eligible UC-approved employee returns will open in a compile form for review before sending to Supply Custodian.')
                         ->deselectRecordsAfterCompletion()
-                        ->schema([
-                            Textarea::make('remarks')
-                                ->label('Remarks (optional)')
-                                ->rows(2),
-                        ])
                         ->visible(function () use ($table): bool {
                             $viewer = Auth::user();
 
@@ -132,13 +128,7 @@ class PropertyActionRequestsTable
                             return $livewire instanceof ListPropertyActionRequests
                                 && ($livewire->ucTab ?? 'received') === 'received';
                         })
-                        ->action(function (Collection $records, BulkAction $action, array $data): void {
-                            $user = Filament::auth()->user();
-
-                            if (! $user instanceof User) {
-                                return;
-                            }
-
+                        ->action(function (Collection $records, BulkAction $action): void {
                             $compileService = app(PropertyActionRequestCompileService::class);
                             $eligible = $compileService->filterEligible($records);
 
@@ -152,16 +142,13 @@ class PropertyActionRequestsTable
                                 return;
                             }
 
-                            try {
-                                $batch = $compileService->createCompiledSubmission(
-                                    $user,
-                                    $eligible,
-                                    $data['remarks'] ?? null,
-                                );
-                            } catch (\InvalidArgumentException $exception) {
+                            $officeIds = $eligible->pluck('office_id')->unique()->values();
+                            $departmentIds = $eligible->pluck('department_id')->unique()->values();
+
+                            if ($officeIds->count() !== 1 || $departmentIds->count() !== 1) {
                                 Notification::make()
-                                    ->title('Unable to compile')
-                                    ->body($exception->getMessage())
+                                    ->title('Mixed office/department')
+                                    ->body('Selected returns must share the same office and department.')
                                     ->danger()
                                     ->send();
 
@@ -171,22 +158,22 @@ class PropertyActionRequestsTable
                             if ($eligible->count() !== $records->count()) {
                                 Notification::make()
                                     ->title('Some rows skipped')
-                                    ->body('Only UC-approved employee returns that are not yet compiled were included.')
+                                    ->body('Only UC-approved employee returns that are not yet compiled will be included.')
                                     ->warning()
                                     ->send();
                             }
 
-                            Notification::make()
-                                ->title('Compiled and sent to SC')
-                                ->body('Batch '.$batch->reference_code.' submitted.')
-                                ->success()
-                                ->send();
-
                             $livewire = $action->getLivewire();
 
-                            if ($livewire instanceof ListPropertyActionRequests) {
-                                $livewire->ucTab = 'sent';
+                            if (! $livewire instanceof ListPropertyActionRequests) {
+                                return;
                             }
+
+                            $livewire->replaceMountedAction('create', [
+                                'office_id' => (int) $officeIds->first(),
+                                'department_id' => (int) $departmentIds->first(),
+                                'prefillSourcePropertyActionRequestIds' => $eligible->modelKeys(),
+                            ]);
                         }),
                 ]),
             ])

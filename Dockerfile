@@ -81,6 +81,9 @@ RUN setcap -r /usr/local/bin/frankenphp \
     && if [ -d resources/owwa-templates ]; then cp -r resources/owwa-templates/. storage/app/templates/; fi \
     && chmod -R 775 bootstrap/cache storage \
     && composer dump-autoload --optimize --classmap-authoritative --no-scripts \
+    && php artisan package:discover --ansi \
+    && php artisan view:cache \
+    && php artisan filament:optimize \
     && chmod +x docker/render-entrypoint.sh \
     && chown -R www-data:www-data storage bootstrap/cache /config /data \
     && mv "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini"

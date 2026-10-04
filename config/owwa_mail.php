@@ -22,6 +22,7 @@ return [
     'header_gradient' => 'linear-gradient(135deg, #002a5c 0%, #003f8a 55%, #6b1230 100%)',
 
     'logos' => [
+        // Official form logos for Fast PDF / PhpSpreadsheet exports (and mail)
         'owwa' => 'images/owwa-form-logo.png',
         'bagong_pilipinas' => 'images/bagong-pilipinas-form-logo.png',
     ],

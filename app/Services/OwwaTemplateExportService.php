@@ -145,18 +145,12 @@ class OwwaTemplateExportService
     }
 
     /**
-     * Load template (or plain workbook), apply cell values, return an in-memory spreadsheet.
-     * Used for merging multiple exports without re-reading .xlsx (avoids ext-zip / ZipArchive on generated files).
-     *
-     * @param  array<string, string|int|float|null>  $cellValues
-     * @param  array{formCode?: string, signatures?: array<string, string|int|float|null>, useMasterSignatures?: bool}|null  $physicalCountExport
+     * Load a pristine template workbook (no cell fills) for bulk clone fills.
      */
-    public function renderFilledSpreadsheet(
+    public function loadTemplateSpreadsheet(
         string $templateFilename,
-        array $cellValues,
         int $sheetIndex = 0,
         ?string $sheetName = null,
-        ?array $physicalCountExport = null,
     ): Spreadsheet {
         $absolutePath = $this->tryResolveTemplateAbsolutePath($templateFilename);
 
@@ -174,31 +168,116 @@ class OwwaTemplateExportService
                 $this->clearAnnexA1SampleData($sheet);
             }
 
-            if ($this->isAnnexA4Template($templateFilename)) {
-                $masterSheetName = AnnexA4Layout::templateSheetName();
-                $sheet = $spreadsheet->getSheetByName($masterSheetName)
-                    ?? $spreadsheet->getSheet($sheetIndex);
-                $this->clearAnnexA4SampleData(
-                    $sheet,
-                    $this->countLedgerRowsFromCellValues('ANNEX_A4', $cellValues),
-                );
-            }
-        } else {
-            if (config('owwa_templates.strict', false)) {
-                throw new \RuntimeException(
-                    'OWWA template not found: '.$templateFilename.'. Place the file under storage/app/templates/ or run php artisan owwa:sync-templates.'
-                );
+            return $spreadsheet;
+        }
+
+        if (config('owwa_templates.strict', false)) {
+            throw new \RuntimeException(
+                'OWWA template not found: '.$templateFilename.'. Place the file under storage/app/templates/ or run php artisan owwa:sync-templates.'
+            );
+        }
+
+        Log::warning('OWWA Excel template missing; generated plain spreadsheet instead.', [
+            'expected_relative' => $templateFilename,
+            'expected_absolute' => $this->templatesPath.DIRECTORY_SEPARATOR.str_replace('/', DIRECTORY_SEPARATOR, $templateFilename),
+        ]);
+
+        $spreadsheet = new Spreadsheet;
+        $spreadsheet->getDefaultStyle()->getFont()->setName('Calibri')->setSize(11);
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->setTitle('Export');
+
+        return $spreadsheet;
+    }
+
+    /**
+     * Read template bytes once for bulk builders (avoids repeated disk path work).
+     */
+    public function readTemplateBinary(string $templateFilename): string
+    {
+        $absolutePath = $this->tryResolveTemplateAbsolutePath($templateFilename);
+        if ($absolutePath === null || ! is_readable($absolutePath)) {
+            throw new \RuntimeException('OWWA template not found: '.$templateFilename);
+        }
+
+        if (str_ends_with(strtolower($absolutePath), '.xlsx')) {
+            PhpExtensionGuard::ensureZipArchive();
+        }
+
+        $binary = file_get_contents($absolutePath);
+        if (! is_string($binary) || $binary === '') {
+            throw new \RuntimeException('OWWA template could not be read: '.$templateFilename);
+        }
+
+        return $binary;
+    }
+
+    /**
+     * Fill a spreadsheet opened from cached template bytes (one disk read per template path).
+     *
+     * @param  array<string, string|int|float|null>  $cellValues
+     */
+    public function renderFilledSpreadsheetFromBinary(
+        string $binary,
+        string $templateFilename,
+        array $cellValues,
+        int $sheetIndex = 0,
+        ?string $sheetName = null,
+    ): Spreadsheet {
+        $tmp = tempnam(sys_get_temp_dir(), 'owwa_tpl_');
+        if ($tmp === false) {
+            throw new \RuntimeException('Unable to create a temporary template file.');
+        }
+
+        try {
+            if (file_put_contents($tmp, $binary) === false) {
+                throw new \RuntimeException('Unable to materialize a temporary template file.');
             }
 
-            Log::warning('OWWA Excel template missing; generated plain spreadsheet instead.', [
-                'expected_relative' => $templateFilename,
-                'expected_absolute' => $this->templatesPath.DIRECTORY_SEPARATOR.str_replace('/', DIRECTORY_SEPARATOR, $templateFilename),
-            ]);
+            $spreadsheet = OwwaTemplateLoader::load($tmp);
+            $sheet = filled($sheetName)
+                ? ($spreadsheet->getSheetByName($sheetName) ?? $spreadsheet->getSheet($sheetIndex))
+                : $spreadsheet->getSheet($sheetIndex);
 
-            $spreadsheet = new Spreadsheet;
-            $spreadsheet->getDefaultStyle()->getFont()->setName('Calibri')->setSize(11);
-            $sheet = $spreadsheet->getActiveSheet();
-            $sheet->setTitle('Export');
+            if ($this->isAnnexA1PropertyCardTemplate($templateFilename)) {
+                $this->clearAnnexA1SampleData($sheet);
+            }
+
+            foreach ($cellValues as $cellRef => $value) {
+                $this->setExportCellValue($sheet, $cellRef, $value);
+            }
+
+            $this->finalizeExportStyling($sheet, $templateFilename, $cellValues);
+
+            return $spreadsheet;
+        } finally {
+            @unlink($tmp);
+        }
+    }
+
+    /**
+     * Load template (or plain workbook), apply cell values, return an in-memory spreadsheet.
+     * Used for merging multiple exports without re-reading .xlsx (avoids ext-zip / ZipArchive on generated files).
+     *
+     * @param  array<string, string|int|float|null>  $cellValues
+     * @param  array{formCode?: string, signatures?: array<string, string|int|float|null>, useMasterSignatures?: bool}|null  $physicalCountExport
+     */
+    public function renderFilledSpreadsheet(
+        string $templateFilename,
+        array $cellValues,
+        int $sheetIndex = 0,
+        ?string $sheetName = null,
+        ?array $physicalCountExport = null,
+    ): Spreadsheet {
+        $spreadsheet = $this->loadTemplateSpreadsheet($templateFilename, $sheetIndex, $sheetName);
+        $sheet = filled($sheetName)
+            ? ($spreadsheet->getSheetByName($sheetName) ?? $spreadsheet->getSheet($sheetIndex))
+            : $spreadsheet->getSheet($sheetIndex);
+
+        if ($this->isAnnexA4Template($templateFilename)) {
+            $masterSheetName = AnnexA4Layout::templateSheetName();
+            $sheet = $spreadsheet->getSheetByName($masterSheetName)
+                ?? $spreadsheet->getSheet($sheetIndex);
         }
 
         $formKey = $this->resolveFormKeyFromTemplate($templateFilename);
@@ -208,6 +287,13 @@ class OwwaTemplateExportService
             $this->preparePhysicalCountRowExpansion($sheet, (string) $formKey, $cellValues);
         } elseif (in_array($formKey, ['RSMI', 'PAR', 'ICS'], true)) {
             $this->prepareIssuanceDetailRowExpansion($sheet, (string) $formKey, $cellValues);
+        }
+
+        if ($this->isAnnexA4Template($templateFilename)) {
+            $this->clearAnnexA4SampleData(
+                $sheet,
+                $this->countLedgerRowsFromCellValues('ANNEX_A4', $cellValues),
+            );
         }
 
         foreach ($cellValues as $cellRef => $value) {
@@ -3968,11 +4054,6 @@ class OwwaTemplateExportService
         return $this->buildProcurementSpreadsheet($paperwork, $formSlug, $templateFilename);
     }
 
-    public function downloadAcquisitionPaperworkPr(AcquisitionPaperwork $paperwork): StreamedResponse
-    {
-        return $this->downloadAcquisitionPaperworkForm($paperwork, 'pr');
-    }
-
     public function downloadAcquisitionPaperworkPo(AcquisitionPaperwork $paperwork): StreamedResponse
     {
         return $this->downloadAcquisitionPaperworkForm($paperwork, 'po');
@@ -3981,12 +4062,6 @@ class OwwaTemplateExportService
     public function downloadAcquisitionPaperworkIar(AcquisitionPaperwork $paperwork): StreamedResponse
     {
         return $this->downloadAcquisitionPaperworkForm($paperwork, 'iar');
-    }
-
-    /** @deprecated Use downloadAcquisitionPaperworkPr() */
-    public function downloadProcurementPr(AcquisitionPaperwork $case): StreamedResponse
-    {
-        return $this->downloadAcquisitionPaperworkPr($case);
     }
 
     /** @deprecated Use downloadAcquisitionPaperworkPo() */

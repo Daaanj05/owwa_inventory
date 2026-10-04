@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\PropertyActionRequests\Pages;
 
 use App\Filament\Concerns\HasSearchRowToolbarActions;
+use App\Filament\Concerns\ListensForPropertyActionBroadcasts;
 use App\Filament\Concerns\SwitchesUcSentTab;
 use App\Filament\Resources\PropertyActionRequests\Actions\PropertyActionRequestEmployeeActions;
 use App\Filament\Resources\PropertyActionRequests\PropertyActionRequestResource;
@@ -13,6 +14,7 @@ use App\Models\Issuance;
 use App\Models\Office;
 use App\Models\PropertyActionRequest;
 use App\Models\User;
+use App\Services\PropertyActionRequestCompileService;
 use Filament\Actions\Action;
 use Filament\Facades\Filament;
 use Filament\Resources\Pages\ListRecords;
@@ -32,6 +34,7 @@ use Livewire\Livewire;
 class ListPropertyActionRequests extends ListRecords
 {
     use HasSearchRowToolbarActions;
+    use ListensForPropertyActionBroadcasts;
     use SwitchesUcSentTab;
 
     protected static string $resource = PropertyActionRequestResource::class;
@@ -53,6 +56,8 @@ class ListPropertyActionRequests extends ListRecords
 
     #[Url]
     public ?string $action_type = null;
+
+    protected bool $ucToolbarHookRegistered = false;
 
     public function mount(): void
     {
@@ -113,12 +118,47 @@ class ListPropertyActionRequests extends ListRecords
         $user = Filament::auth()->user();
 
         $createAction = OwwaFormModalDefaults::createActionForResource(PropertyActionRequestResource::class, OwwaFormModalDefaults::WIDTH_MEDIUM)
-            ->modalHeading('Property Return')
+            ->modalHeading(fn (): string => Filament::auth()->user()?->isUnitConsolidator()
+                ? 'Compile Property Returns To Supply Custodian'
+                : 'Property Return')
             ->fillForm(function (array $arguments): array {
-                $data = [];
+                $data = [
+                    'action_type' => $arguments['action_type'] ?? PropertyActionRequest::ACTION_RETURN,
+                    'lines' => [[
+                        'issuance_id' => null,
+                        'inventory_unit_id' => null,
+                        'quantity' => 1,
+                    ]],
+                    'source_property_action_request_ids' => [],
+                ];
 
                 if (filled($arguments['action_type'] ?? null)) {
                     $data['action_type'] = $arguments['action_type'];
+                }
+
+                $sourceIds = array_values(array_filter(array_map(
+                    'intval',
+                    $arguments['prefillSourcePropertyActionRequestIds'] ?? [],
+                )));
+
+                if ($sourceIds !== []) {
+                    $data['office_id'] = (int) ($arguments['office_id'] ?? 0) ?: null;
+                    $data['department_id'] = (int) ($arguments['department_id'] ?? 0) ?: null;
+                    $data['source_property_action_request_ids'] = $sourceIds;
+
+                    $sources = PropertyActionRequest::query()->whereIn('id', $sourceIds)->get();
+                    $actionTypes = $sources->pluck('action_type')->unique()->values();
+                    $reasonCodes = $sources->pluck('reason_code')->unique()->values();
+
+                    if ($actionTypes->count() === 1) {
+                        $data['action_type'] = $actionTypes->first();
+                    }
+
+                    if ($reasonCodes->count() === 1) {
+                        $data['reason_code'] = $reasonCodes->first();
+                    }
+
+                    return $data;
                 }
 
                 $issuanceId = (int) ($arguments['issuance_id'] ?? 0);
@@ -145,12 +185,47 @@ class ListPropertyActionRequests extends ListRecords
             ->mutateDataUsing(function (array $data): array {
                 $user = Filament::auth()->user();
 
+                if ($user instanceof User && $user->isUnitConsolidator()) {
+                    unset($data['lines'], $data['item_category_id']);
+
+                    return $data;
+                }
+
                 return PropertyActionRequestForm::hydrateParentFromLines(
                     $data,
                     $user instanceof User ? $user : null,
                 );
             })
             ->using(function (array $data): PropertyActionRequest {
+                $user = Filament::auth()->user();
+                $sourceIds = array_values(array_filter(array_map(
+                    'intval',
+                    $data['source_property_action_request_ids'] ?? [],
+                )));
+                unset($data['source_property_action_request_ids']);
+
+                if ($user instanceof User && $user->isUnitConsolidator()) {
+                    if ($sourceIds === []) {
+                        throw ValidationException::withMessages([
+                            'source_property_action_request_ids' => 'Select at least one employee property return to compile.',
+                        ]);
+                    }
+
+                    try {
+                        return app(PropertyActionRequestCompileService::class)->createCompiledSubmission(
+                            $user,
+                            $sourceIds,
+                            $data['reason_detail'] ?? null,
+                            $data['action_type'] ?? null,
+                            $data['reason_code'] ?? null,
+                        );
+                    } catch (\InvalidArgumentException $exception) {
+                        throw ValidationException::withMessages([
+                            'source_property_action_request_ids' => $exception->getMessage(),
+                        ]);
+                    }
+                }
+
                 $record = new PropertyActionRequest;
                 $record->fill($data);
                 $record->save();
@@ -158,22 +233,19 @@ class ListPropertyActionRequests extends ListRecords
                 return $record;
             })
             ->after(function (PropertyActionRequest $record, Action $action): void {
+                $user = Filament::auth()->user();
+
+                if ($user instanceof User && $user->isUnitConsolidator()) {
+                    $this->switchUcTabToSent();
+
+                    return;
+                }
+
                 $workflow = $action->getArguments()['workflow'] ?? null;
 
                 if ($workflow === PropertyActionRequestEmployeeActions::WORKFLOW_SUBMIT) {
                     try {
                         PropertyActionRequestEmployeeActions::submitRecord($record);
-                    } catch (ValidationException $exception) {
-                        $record->delete();
-
-                        throw $exception;
-                    }
-                }
-
-                if ($workflow === PropertyActionRequestEmployeeActions::WORKFLOW_SEND_TO_SC) {
-                    try {
-                        PropertyActionRequestEmployeeActions::sendToSupplyCustodianRecord($record);
-                        $this->switchUcTabToSent();
                     } catch (ValidationException $exception) {
                         $record->delete();
 
@@ -193,24 +265,46 @@ class ListPropertyActionRequests extends ListRecords
 
         if ($user?->isUnitConsolidator()) {
             $createAction
-                ->modalSubmitActionLabel('Save draft')
-                ->extraModalFooterActions(function (Action $createAction): array {
-                    return PropertyActionRequestEmployeeActions::createUcModalFooterActions($createAction);
-                })
+                ->modalSubmitActionLabel('Compile & send to SC')
                 ->mountUsing(function (Action $action, ?Schema $schema): void {
-                    $fill = [];
+                    $arguments = $action->getArguments();
+                    $sourceIds = array_values(array_filter(array_map(
+                        'intval',
+                        $arguments['prefillSourcePropertyActionRequestIds'] ?? [],
+                    )));
 
-                    if ($this->ucOfficeId !== null && $this->ucOfficeId > 0) {
-                        $fill['office_id'] = $this->ucOfficeId;
+                    $officeId = (int) ($arguments['office_id'] ?? 0);
+                    if ($officeId <= 0 && $this->ucOfficeId !== null && $this->ucOfficeId > 0) {
+                        $officeId = $this->ucOfficeId;
                     }
 
-                    if ($this->ucDepartmentId !== null && $this->ucDepartmentId > 0) {
-                        $fill['department_id'] = $this->ucDepartmentId;
+                    $departmentId = (int) ($arguments['department_id'] ?? 0);
+                    if ($departmentId <= 0 && $this->ucDepartmentId !== null && $this->ucDepartmentId > 0) {
+                        $departmentId = $this->ucDepartmentId;
                     }
 
-                    if ($fill !== []) {
-                        $schema?->fill($fill);
+                    $fill = [
+                        'office_id' => $officeId > 0 ? $officeId : null,
+                        'department_id' => $departmentId > 0 ? $departmentId : null,
+                        'action_type' => PropertyActionRequest::ACTION_RETURN,
+                        'source_property_action_request_ids' => $sourceIds,
+                    ];
+
+                    if ($sourceIds !== []) {
+                        $sources = PropertyActionRequest::query()->whereIn('id', $sourceIds)->get();
+                        $actionTypes = $sources->pluck('action_type')->unique()->values();
+                        $reasonCodes = $sources->pluck('reason_code')->unique()->values();
+
+                        if ($actionTypes->count() === 1) {
+                            $fill['action_type'] = $actionTypes->first();
+                        }
+
+                        if ($reasonCodes->count() === 1) {
+                            $fill['reason_code'] = $reasonCodes->first();
+                        }
                     }
+
+                    $schema?->fill($fill);
                 });
         }
 
@@ -225,7 +319,7 @@ class ListPropertyActionRequests extends ListRecords
 
         $user = Filament::auth()->user();
 
-        if ($user instanceof User && $user->isUnitConsolidator()) {
+        if ($user instanceof User && ($user->isUnitConsolidator() || $user->isEmployee())) {
             $this->cachedHeaderActions = [];
         }
     }
@@ -240,6 +334,11 @@ class ListPropertyActionRequests extends ListRecords
             $classes[] = 'owwa-uc-requisitions-tabs';
         }
 
+        if ($user?->isEmployee()) {
+            $classes[] = 'owwa-search-row-toolbar';
+            $classes[] = 'owwa-setup-archive-toggle';
+        }
+
         return $classes;
     }
 
@@ -251,10 +350,8 @@ class ListPropertyActionRequests extends ListRecords
         if ($user?->isUnitConsolidator()) {
             $this->ucTab ??= 'received';
 
-            static $hookRegistered = false;
-
-            if (! $hookRegistered) {
-                $hookRegistered = true;
+            if (! $this->ucToolbarHookRegistered) {
+                $this->ucToolbarHookRegistered = true;
 
                 FilamentView::registerRenderHook(
                     TablesRenderHook::TOOLBAR_SEARCH_AFTER,
@@ -289,7 +386,11 @@ class ListPropertyActionRequests extends ListRecords
             }
         }
 
-        if ($user?->isUnitConsolidator()) {
+        if ($user?->isEmployee()) {
+            $this->registerEmployeeActiveTabIcons();
+        }
+
+        if ($user?->isUnitConsolidator() || $user?->isEmployee()) {
             return $schema->components([
                 RenderHook::make(PanelsRenderHook::RESOURCE_PAGES_LIST_RECORDS_TABLE_BEFORE),
                 EmbeddedTable::make(),
@@ -307,17 +408,73 @@ class ListPropertyActionRequests extends ListRecords
     {
         $user = Filament::auth()->user();
 
-        if (! $user instanceof User || ! $user->isUnitConsolidator() || ! PropertyActionRequestResource::canCreate()) {
+        if (! $user instanceof User || ! PropertyActionRequestResource::canCreate()) {
             return [];
         }
 
-        return [
-            [
-                'label' => 'New Property Return',
-                'action' => 'create',
-                'style' => 'primary',
-            ],
-        ];
+        if ($user->isEmployee() || $user->isUnitConsolidator()) {
+            return [
+                [
+                    'label' => 'New Property Return',
+                    'action' => 'create',
+                    'style' => 'primary',
+                ],
+            ];
+        }
+
+        return [];
+    }
+
+    protected function registerEmployeeActiveTabIcons(): void
+    {
+        static $hookRegistered = false;
+
+        if ($hookRegistered) {
+            return;
+        }
+
+        $hookRegistered = true;
+
+        FilamentView::registerRenderHook(
+            TablesRenderHook::TOOLBAR_SEARCH_AFTER,
+            function (): HtmlString {
+                $livewire = Livewire::current();
+
+                if (! $livewire instanceof self) {
+                    return new HtmlString('');
+                }
+
+                $user = Filament::auth()->user();
+
+                if (! $user?->isEmployee()) {
+                    return new HtmlString('');
+                }
+
+                $activeTab = $livewire->activeTab ?? 'active';
+
+                return new HtmlString(
+                    (string) view('filament.tables.setup-active-tab-toggle', [
+                        'showingArchived' => $activeTab === 'archived',
+                        'archivedCount' => $livewire->employeeArchivedCount(),
+                    ])
+                );
+            },
+            scopes: static::class,
+        );
+    }
+
+    public function employeeArchivedCount(): int
+    {
+        /** @var User|null $user */
+        $user = Filament::auth()->user();
+
+        if (! $user instanceof User || ! $user->isEmployee()) {
+            return 0;
+        }
+
+        return (int) PropertyActionRequestResource::getEloquentQuery()
+            ->whereNotNull('archived_at')
+            ->count();
     }
 
     public function ucArchivedCount(): int

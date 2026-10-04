@@ -12,7 +12,9 @@ class RaiseOwwaExportMemoryLimit
     public function handle(Request $request, Closure $next): Response
     {
         $before = (string) ini_get('memory_limit');
-        $after = OwwaExportDiagnostics::raiseMemoryLimit('512M');
+        // DomPDF all-stocks batches (200–500 pages) need well above 512M once logos/tables are rendered.
+        $after = OwwaExportDiagnostics::raiseMemoryLimit('2048M');
+        @set_time_limit(300);
         OwwaExportDiagnostics::registerOomGuard($request->path());
 
         OwwaExportDiagnostics::info('memory_limit_raised', [

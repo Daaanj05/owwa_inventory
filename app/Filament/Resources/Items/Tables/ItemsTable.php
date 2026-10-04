@@ -5,7 +5,6 @@ namespace App\Filament\Resources\Items\Tables;
 use App\Filament\Concerns\SyncsActiveItemCategory;
 use App\Filament\Resources\Items\ItemResource;
 use App\Filament\Resources\Items\Schemas\ItemInfolist;
-use App\Filament\Resources\Items\Support\ItemOpeningStockFields;
 use App\Filament\Support\ConfiguresOwwaViewAction;
 use App\Filament\Support\OwwaFormModalDefaults;
 use App\Filament\Support\OwwaModalSchema;
@@ -48,14 +47,19 @@ class ItemsTable
                 ),
                 ActionGroup::make([
                     OwwaFormModalDefaults::editActionForResource(ItemResource::class, OwwaFormModalDefaults::WIDTH_COMPACT),
-                    ItemOpeningStockFields::makeSetStartingStockAction(),
                     Action::make('downloadQrLabels')
                         ->label('Download QR labels')
                         ->icon('heroicon-o-qr-code')
                         ->url(fn (Item $record): string => route('owwa.qr-labels.item', $record))
                         ->openUrlInNewTab()
                         ->visible(function (Item $record): bool {
-                            $slug = $record->category?->getTemplateSlug()
+                            $pageSlug = self::activeCategorySlug();
+                            if ($pageSlug === 'consumables') {
+                                return false;
+                            }
+
+                            $slug = $pageSlug
+                                ?? $record->category?->getTemplateSlug()
                                 ?? $record->loadMissing('category')->category?->getTemplateSlug();
 
                             if (! in_array($slug, ['ppe', 'semi_expendable'], true)) {
@@ -165,7 +169,7 @@ class ItemsTable
 
         if (self::isActiveConsumablesCategory()) {
             $columns[] = TextColumn::make('base_name')
-                ->label('Base item')
+                ->label('Item family')
                 ->searchable()
                 ->placeholder('—')
                 ->tooltip(fn (?string $state): ?string => filled($state) ? $state : null)
@@ -174,7 +178,7 @@ class ItemsTable
                 ->grow(false);
 
             $columns[] = TextColumn::make('sub_item')
-                ->label('Sub-item')
+                ->label('Variant')
                 ->searchable()
                 ->placeholder('—')
                 ->tooltip(fn (?string $state): ?string => filled($state) ? $state : null)
@@ -240,6 +244,16 @@ class ItemsTable
             return null;
         }
 
-        return ItemCategory::query()->find($categoryId)?->getTemplateSlug();
+        $memoKey = 'owwa.active_item_category_slug.'.$categoryId;
+        $request = request();
+
+        if ($request->attributes->has($memoKey)) {
+            return $request->attributes->get($memoKey);
+        }
+
+        $slug = ItemCategory::query()->find($categoryId)?->getTemplateSlug();
+        $request->attributes->set($memoKey, $slug);
+
+        return $slug;
     }
 }

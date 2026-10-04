@@ -55,42 +55,31 @@ class ItemForm
                             ->visible(fn (string $operation): bool => $operation === 'create' && ! self::isCategoryScoped())
                             ->columnSpanFull(),
 
-                        Select::make('base_name')
-                            ->label('Base item')
+                        TextInput::make('base_name')
+                            ->label('Item family')
                             ->required()
-                            ->searchable()
-                            ->options(function (Get $get): array {
-                                $options = collect(self::baseItemOptions($get('item_category_id')))
-                                    ->mapWithKeys(fn ($label, $value): array => [(string) $value => (string) $label])
-                                    ->all();
-                                $current = $get('base_name');
-                                if (filled($current) && ! array_key_exists((string) $current, $options)) {
-                                    $options[(string) $current] = (string) $current;
-                                }
+                            ->maxLength(255)
+                            ->datalist(function (Get $get): array {
+                                $categoryId = filled($get('item_category_id'))
+                                    ? (int) $get('item_category_id')
+                                    : (int) (self::activeCategoryId() ?? 0);
 
-                                return $options;
+                                return Item::familySuggestionsForCategory($categoryId);
                             })
-                            ->createOptionForm([
-                                TextInput::make('base_name')
-                                    ->label('Base item')
-                                    ->required()
-                                    ->maxLength(255),
-                            ])
-                            ->createOptionUsing(fn (array $data): string => trim((string) ($data['base_name'] ?? '')))
                             ->live(onBlur: true)
-                            ->helperText('Pick an existing base item or add a new one.'),
+                            ->helperText('Pick an existing name or type a new one (e.g. Bond Paper).'),
                         TextInput::make('sub_item')
-                            ->label('Sub-item')
+                            ->label('Variant')
                             ->maxLength(255)
                             ->live(onBlur: true)
-                            ->helperText('Optional variant (e.g. A4, Long, Blue).'),
+                            ->helperText('Optional size or kind (e.g. A4, Long, Letter).'),
                         Placeholder::make('name_preview')
-                            ->label('Item name')
+                            ->label('Catalog name')
                             ->content(fn (Get $get): string => Item::mergeDisplayName(
                                 $get('base_name'),
                                 $get('sub_item'),
                             ) ?: '—')
-                            ->helperText('Saved as the catalog name used on forms and reports.')
+                            ->helperText('Saved as the catalog name on forms and reports.')
                             ->columnSpanFull(),
                         Hidden::make('name')
                             ->dehydrated(true)
@@ -375,34 +364,6 @@ class ItemForm
                                 : null),
                     ]),
             ]);
-    }
-
-    /**
-     * @return array<string, string>
-     */
-    protected static function baseItemOptions(mixed $categoryId): array
-    {
-        $resolvedCategoryId = filled($categoryId)
-            ? (int) $categoryId
-            : self::activeCategoryId();
-
-        if (! $resolvedCategoryId) {
-            return [];
-        }
-
-        return Item::query()
-            ->active()
-            ->where('item_category_id', $resolvedCategoryId)
-            ->orderByRaw('COALESCE(base_name, name)')
-            ->get(['base_name', 'name'])
-            ->mapWithKeys(function (Item $item): array {
-                $base = filled($item->base_name) ? (string) $item->base_name : (string) $item->name;
-
-                return [$base => $base];
-            })
-            ->unique()
-            ->sortKeys()
-            ->all();
     }
 
     protected static function isConsumablesCategory(mixed $categoryId): bool

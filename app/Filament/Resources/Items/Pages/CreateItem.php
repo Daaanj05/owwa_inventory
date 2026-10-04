@@ -15,12 +15,13 @@ class CreateItem extends CreateRecord
 
     protected function mutateFormDataBeforeCreate(array $data): array
     {
-        $data['base_name'] = trim((string) ($data['base_name'] ?? ''));
+        $categoryId = (int) ($data['item_category_id'] ?? 0);
+        $data['base_name'] = Item::normalizeFamilyName((string) ($data['base_name'] ?? ''), $categoryId);
         $data['sub_item'] = filled($data['sub_item'] ?? null) ? trim((string) $data['sub_item']) : null;
         $data['name'] = Item::mergeDisplayName($data['base_name'], $data['sub_item']);
 
-        $category = filled($data['item_category_id'] ?? null)
-            ? \App\Models\ItemCategory::query()->find($data['item_category_id'])
+        $category = $categoryId > 0
+            ? \App\Models\ItemCategory::query()->find($categoryId)
             : null;
 
         if ($category?->getTemplateSlug() === 'ppe' && blank($data['ppe_type'] ?? null) && filled($data['uacs_object_code_id'] ?? null)) {

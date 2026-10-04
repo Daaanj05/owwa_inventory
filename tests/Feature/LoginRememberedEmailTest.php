@@ -95,4 +95,30 @@ class LoginRememberedEmailTest extends TestCase
         $this->assertSame('saved.user@example.com', $component->get('data.email'));
         $this->assertTrue((bool) $component->get('data.remember'));
     }
+
+    public function test_login_page_shows_remembered_email_value_on_first_paint(): void
+    {
+        $response = $this->withCookie(LoginRememberedEmail::COOKIE, 'saved.user@example.com')
+            ->get('/login');
+
+        $response->assertOk();
+        $response->assertSee('value="saved.user@example.com"', false);
+        $response->assertSee('method="post"', false);
+        $response->assertDontSee('name="data.password"', false);
+        $response->assertSee('Remember email', false);
+    }
+
+    public function test_login_page_redirects_away_from_credential_query_string(): void
+    {
+        $response = $this->get('/login?data.email=maria%40owwa.gov.ph&data.password=password&reauth=1');
+
+        $response->assertRedirect();
+        $target = $response->headers->get('Location');
+        $this->assertIsString($target);
+        $this->assertStringNotContainsString('data.email', $target);
+        $this->assertStringNotContainsString('data.password', $target);
+        $this->assertStringNotContainsString('data_email', $target);
+        $this->assertStringNotContainsString('data_password', $target);
+        $this->assertStringContainsString('reauth=1', $target);
+    }
 }

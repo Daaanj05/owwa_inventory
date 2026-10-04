@@ -38,6 +38,20 @@ class OwwaExportDownloadCookieTest extends TestCase
     }
 
     #[Test]
+    public function it_does_not_append_token_to_signed_urls(): void
+    {
+        $url = OwwaExportDownloadCookie::sameOriginDownloadUrl(
+            'https://capstoneproject.test:8443/exports/stock-cards/2/file.pdf?expires=123&signature=abc',
+            'owwaTestToken12',
+        );
+
+        $this->assertSame(
+            '/exports/stock-cards/2/file.pdf?expires=123&signature=abc',
+            $url,
+        );
+    }
+
+    #[Test]
     public function make_token_is_cookie_safe(): void
     {
         $token = OwwaExportDownloadCookie::makeToken();

@@ -25,18 +25,40 @@
                 .replace(/[^A-Za-z0-9_-]/g, '')
                 .slice(0, 32);
             let downloadUrl = url;
+            let isSigned = false;
 
             try {
                 const parsed = new URL(url, window.location.origin);
-                parsed.searchParams.set(tokenQuery || 'owwa_download_token', token);
-                downloadUrl = parsed.toString();
+                isSigned = parsed.searchParams.has('signature') || parsed.searchParams.has('expires');
+
+                if (! isSigned) {
+                    parsed.searchParams.set(tokenQuery || 'owwa_download_token', token);
+                }
+
+                // Prefer same-origin relative URL so :8080 vs APP_URL port mismatches do not break auth.
+                downloadUrl = parsed.pathname + parsed.search + parsed.hash;
             } catch (error) {
-                const joiner = url.includes('?') ? '&' : '?';
-                downloadUrl = url + joiner + encodeURIComponent(tokenQuery || 'owwa_download_token') + '=' + encodeURIComponent(token);
+                isSigned = url.includes('signature=') || url.includes('expires=');
+                if (! isSigned) {
+                    const joiner = url.includes('?') ? '&' : '?';
+                    downloadUrl = url + joiner + encodeURIComponent(tokenQuery || 'owwa_download_token') + '=' + encodeURIComponent(token);
+                }
             }
 
-            // Top-level navigation is required for reliable Content-Disposition downloads
-            // in Chromium (tab spinner + actual file save). Hidden iframes often fail silently.
+            // Signed temporary URLs: use a hidden iframe so Stock Levels is not replaced by
+            // the download/error document. Unsigned export routes keep top-level navigation
+            // for reliable Content-Disposition handling + download-done cookies.
+            if (isSigned) {
+                const iframe = document.createElement('iframe');
+                iframe.style.display = 'none';
+                iframe.setAttribute('aria-hidden', 'true');
+                iframe.src = downloadUrl;
+                document.body.appendChild(iframe);
+                setTimeout(() => iframe.remove(), 300000);
+
+                return token;
+            }
+
             window.location.assign(downloadUrl);
 
             return token;
@@ -98,6 +120,10 @@
                 tokenQuery: config.tokenQuery || 'owwa_download_token',
                 downloadTimer: null,
                 cookiePollTimer: null,
+                downloadQueue: [],
+                downloadQueueIndex: 0,
+                downloadQueueTitle: '',
+                downloadAutoClearMs: 120000,
                 aiClearTimer: null,
                 expectedToken: null,
                 suppressBusySync: false,
@@ -366,13 +392,29 @@
                     this.suppressBusySync = false;
                     this.allowUnload = false;
                     this.minimized = false;
-                    this.title = detail.title || config.defaultTitle || 'Please wait…';
+                    this.downloadQueueTitle = detail.title || config.defaultTitle || 'Please wait…';
+                    this.title = this.downloadQueueTitle;
                     this.message = detail.message || config.defaultMessage || '';
+                    this.downloadAutoClearMs = Number(detail.autoClearMs) || 120000;
+                    this.downloadQueue = Array.isArray(detail.urls)
+                        ? detail.urls.filter((url) => typeof url === 'string' && url !== '')
+                        : [];
+                    this.downloadQueueIndex = 0;
                     this.clearFilamentModalShell();
                     this.busy = true;
 
+                    if (this.downloadQueue.length > 1) {
+                        this.beginQueuedDownload();
+                        return;
+                    }
+
                     if (detail.url) {
-                        this.beginDownload(detail.url, detail.autoClearMs || 120000);
+                        this.beginDownload(detail.url, this.downloadAutoClearMs);
+                        return;
+                    }
+
+                    if (this.downloadQueue.length === 1) {
+                        this.beginDownload(this.downloadQueue[0], this.downloadAutoClearMs);
                         return;
                     }
 
@@ -388,7 +430,43 @@
                         }, 1500);
                     }
 
-                    this.watchDownloadCompletion(detail.autoClearMs || 120000);
+                    this.watchDownloadCompletion(this.downloadAutoClearMs);
+                },
+                beginQueuedDownload() {
+                    const total = this.downloadQueue.length;
+                    const index = this.downloadQueueIndex;
+                    const url = this.downloadQueue[index];
+
+                    if (! url) {
+                        this.end();
+                        return;
+                    }
+
+                    this.title = this.downloadQueueTitle || 'Preparing export…';
+                    this.message = 'Preparing file ' + (index + 1) + ' of ' + total + '…';
+                    this.beginDownload(url, this.downloadAutoClearMs, true);
+                },
+                advanceDownloadQueue() {
+                    if (this.downloadQueue.length <= 1) {
+                        this.end();
+                        return;
+                    }
+
+                    this.downloadQueueIndex += 1;
+
+                    if (this.downloadQueueIndex >= this.downloadQueue.length) {
+                        this.end();
+                        return;
+                    }
+
+                    // Brief pause so the browser can finish saving the previous attachment.
+                    setTimeout(() => {
+                        if (! this.busy) {
+                            return;
+                        }
+
+                        this.beginQueuedDownload();
+                    }, 750);
                 },
                 clearFilamentModalShell() {
                     // Filament can leave .fi-modal-close-overlay up after unmountAction + redirect,
@@ -428,9 +506,10 @@
                         clearTimeout(this.downloadTimer);
                     }
 
+                    // Fail-safe ceiling matches beginDownload (large DomPDF batches up to 5 minutes).
                     this.downloadTimer = setTimeout(() => {
                         this.end();
-                    }, Math.min(Number(autoClearMs) || 120000, 120000));
+                    }, Math.min(Number(autoClearMs) || 120000, 300000));
                 },
                 end() {
                     this.cancelAiBusyClear();
@@ -441,6 +520,9 @@
                     this.title = config.defaultTitle || 'Please wait…';
                     this.message = config.defaultMessage || '';
                     this.expectedToken = null;
+                    this.downloadQueue = [];
+                    this.downloadQueueIndex = 0;
+                    this.downloadQueueTitle = '';
 
                     if (this.downloadTimer) {
                         clearTimeout(this.downloadTimer);
@@ -465,7 +547,7 @@
                         component.call('clearExportBusy');
                     }
                 },
-                beginDownload(url, autoClearMs) {
+                beginDownload(url, autoClearMs, queued = false) {
                     this.clearCookie(this.doneCookie);
 
                     if (this.cookiePollTimer) {
@@ -475,7 +557,11 @@
                     this.cookiePollTimer = setInterval(() => {
                         const done = this.readCookie(this.doneCookie);
                         if (done && done === this.expectedToken) {
-                            this.end();
+                            if (queued) {
+                                this.advanceDownloadQueue();
+                            } else {
+                                this.end();
+                            }
                         }
                     }, 250);
 
@@ -491,10 +577,15 @@
                         clearTimeout(this.downloadTimer);
                     }
 
-                    // Fail-safe: never leave the overlay up longer than 2 minutes by default.
+                    // Fail-safe ceiling: large single-file PDFs may need up to 5 minutes.
+                    const timeoutMs = Math.min(Number(autoClearMs) || 120000, 300000);
                     this.downloadTimer = setTimeout(() => {
-                        this.end();
-                    }, Math.min(Number(autoClearMs) || 120000, 120000));
+                        if (queued) {
+                            this.advanceDownloadQueue();
+                        } else {
+                            this.end();
+                        }
+                    }, timeoutMs);
                 },
                 onBeforeUnload(event) {
                     if (this.allowMinimize || ! this.busy || this.allowUnload) {

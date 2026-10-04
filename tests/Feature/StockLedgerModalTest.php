@@ -7,6 +7,7 @@ use App\Models\Item;
 use App\Models\ItemCategory;
 use App\Models\Office;
 use App\Models\User;
+use App\Services\StockLevelExportService;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -44,13 +45,11 @@ class StockLedgerModalTest extends TestCase
 
         Livewire::actingAs($custodian)
             ->test(StockLevels::class, ['category' => $category->id])
-            ->call('openStockLedger', $item->id, $office->id, 0.0)
-            ->assertActionMounted('viewStockLedger')
-            ->assertSet('ledgerExportUrl', fn (?string $url): bool => is_string($url) && str_contains($url, 'stock-cards') && str_contains($url, 'pairs='))
-            ->assertSet('ledgerExportPdfUrl', fn (?string $url): bool => is_string($url) && str_contains($url, 'format=pdf'));
+            ->call('openStockLedger', $item->id, $office->id, null)
+            ->assertActionMounted('viewStockLedger');
     }
 
-    public function test_stock_ledger_modal_footer_export_dispatches_busy_download(): void
+    public function test_stock_ledger_footer_opens_fast_pdf_export_modal_for_open_card(): void
     {
         $office = Office::factory()->create();
         $category = ItemCategory::factory()->create(['name' => 'Consumables']);
@@ -69,52 +68,35 @@ class StockLedgerModalTest extends TestCase
             'updated_at' => now(),
         ]);
 
-        $links = app(\App\Services\StockLedgerViewService::class)->exportLinks($item, $office, 0.0);
+        $pairKey = app(StockLevelExportService::class)->encodePairKey($item->id, $office->id, null);
 
         Livewire::actingAs($custodian)
             ->test(StockLevels::class, ['category' => $category->id])
-            ->set([
-                'ledgerExportUrl' => $links['exportUrl'],
-                'ledgerExportPdfUrl' => $links['exportPdfUrl'],
-                'ledgerExportLabel' => $links['exportLabel'],
-                'ledgerExportPdfLabel' => $links['exportPdfLabel'],
-                'ledgerExportTitle' => $links['title'],
-            ])
-            ->callAction(
-                ['viewStockLedger', 'exportLedgerExcel'],
-                arguments: [
-                    'viewStockLedger' => [
-                        'itemId' => $item->id,
-                        'officeId' => $office->id,
-                        'unitCost' => 0.0,
-                    ],
-                ],
-            )
-            ->assertSet('exportBusy', true);
-
-        $html = view('filament.pages.partials.stock-ledger-modal', [
-            'ledger' => app(\App\Services\StockLedgerViewService::class)->present($item, $office, 0.0),
-        ])->render();
-
-        $this->assertStringNotContainsString('owwaBusyNavigate', $html);
-        $this->assertStringNotContainsString('data-owwa-export-url', $html);
+            ->call('openStockLedger', $item->id, $office->id, null)
+            ->assertActionMounted('viewStockLedger')
+            ->mountAction('exportLedgerFastPdf')
+            ->assertCount('mountedActions', 1)
+            ->assertSet('mountedActions.0.name', 'exportStockCardsFastSync')
+            ->assertSet('exportOverridePairKeys', [$pairKey])
+            ->assertSchemaStateSet([
+                'export_scope' => 'selected',
+            ]);
     }
 
-    public function test_open_stock_ledger_rejects_item_not_in_visible_list(): void
+    public function test_stock_ledger_footer_opens_fast_excel_export_modal_for_open_card(): void
     {
         $office = Office::factory()->create();
         $category = ItemCategory::factory()->create(['name' => 'Consumables']);
-        $visibleItem = Item::factory()->create(['item_category_id' => $category->id]);
-        $hiddenItem = Item::factory()->create(['item_category_id' => $category->id]);
+        $item = Item::factory()->create(['item_category_id' => $category->id]);
 
         /** @var User $custodian */
         $custodian = User::factory()->create(['role' => User::ROLE_SUPPLY_CUSTODIAN]);
 
         DB::table('acquisitions')->insert([
-            'reference_code' => 'ACQ-MODAL-VISIBLE',
-            'item_id' => $visibleItem->id,
+            'reference_code' => 'ACQ-MODAL-EXPORT-XLSX',
+            'item_id' => $item->id,
             'office_id' => $office->id,
-            'quantity' => 5,
+            'quantity' => 8,
             'acquisition_date' => now()->toDateString(),
             'created_at' => now(),
             'updated_at' => now(),
@@ -122,7 +104,52 @@ class StockLedgerModalTest extends TestCase
 
         Livewire::actingAs($custodian)
             ->test(StockLevels::class, ['category' => $category->id])
-            ->call('openStockLedger', $hiddenItem->id, $office->id, 0.0)
+            ->call('openStockLedger', $item->id, $office->id, null)
+            ->assertActionMounted('viewStockLedger')
+            ->mountAction('exportLedgerFastExcel')
+            ->assertCount('mountedActions', 1)
+            ->assertSet('mountedActions.0.name', 'exportStockCardsFastExcel')
+            ->assertSchemaStateSet([
+                'export_scope' => 'selected',
+                'date_mode' => 'range',
+            ]);
+    }
+
+    public function test_open_stock_ledger_rejects_item_not_in_visible_list(): void
+    {
+        $office = Office::factory()->create();
+        $category = ItemCategory::factory()->create(['name' => 'Consumables']);
+        $otherCategory = ItemCategory::factory()->create(['name' => 'PPE']);
+        $visibleItem = Item::factory()->create(['item_category_id' => $category->id]);
+        $hiddenItem = Item::factory()->create(['item_category_id' => $otherCategory->id]);
+
+        /** @var User $custodian */
+        $custodian = User::factory()->create(['role' => User::ROLE_SUPPLY_CUSTODIAN]);
+
+        DB::table('acquisitions')->insert([
+            [
+                'reference_code' => 'ACQ-MODAL-VISIBLE',
+                'item_id' => $visibleItem->id,
+                'office_id' => $office->id,
+                'quantity' => 5,
+                'acquisition_date' => now()->toDateString(),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+            [
+                'reference_code' => 'ACQ-MODAL-HIDDEN',
+                'item_id' => $hiddenItem->id,
+                'office_id' => $office->id,
+                'quantity' => 3,
+                'acquisition_date' => now()->toDateString(),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+        ]);
+
+        Livewire::actingAs($custodian)
+            ->test(StockLevels::class, ['category' => $category->id])
+            ->call('openStockLedger', $hiddenItem->id, $office->id, null)
             ->assertStatus(403);
     }
 }

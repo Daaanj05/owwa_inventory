@@ -3,7 +3,6 @@
 namespace App\Services;
 
 use App\Models\Item;
-use App\Models\ItemCategory;
 use App\Support\UnitCostKey;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -11,7 +10,15 @@ use Illuminate\Validation\ValidationException;
 
 class StockLevelExportService
 {
-    public const int MAX_PAIRS = 100;
+    public const int BATCH_SIZE = 100;
+
+    public const int SINGLE_MAX = 500;
+
+    /** Hard cap for Fast sync ZIP pack requests (multiple BATCH_SIZE files). */
+    public const int FAST_MAX = 5000;
+
+    /** @deprecated Use BATCH_SIZE */
+    public const int MAX_PAIRS = self::BATCH_SIZE;
 
     public function __construct(
         protected InventoryStockService $stockService,
@@ -79,6 +86,20 @@ class StockLevelExportService
         return [];
     }
 
+    public function exportMaxFromRequest(Request $request): int
+    {
+        $exportMax = (int) $request->query('export_max', self::BATCH_SIZE);
+        $cap = $request->boolean('fast_pack')
+            ? self::FAST_MAX
+            : self::SINGLE_MAX;
+
+        if ($exportMax <= self::BATCH_SIZE) {
+            return min(self::BATCH_SIZE, $cap);
+        }
+
+        return min($exportMax, $cap);
+    }
+
     /**
      * @return Collection<int, object>
      */
@@ -88,18 +109,10 @@ class StockLevelExportService
         string $restockFilter = 'active',
         ?int $scopedOfficeId = null,
     ): Collection {
-        $rows = $this->stockService->getStockLevelsList();
-
-        if ($scopedOfficeId !== null && $scopedOfficeId > 0) {
-            $rows = $rows->where('office_id', $scopedOfficeId)->values();
-        }
-
-        if ($categoryId !== null && $categoryId > 0) {
-            $category = ItemCategory::query()->find($categoryId);
-            if ($category !== null) {
-                $rows = $rows->where('category_name', $category->name)->values();
-            }
-        }
+        $rows = $this->stockService->listExportStockPositions(
+            ($categoryId !== null && $categoryId > 0) ? $categoryId : null,
+            ($scopedOfficeId !== null && $scopedOfficeId > 0) ? $scopedOfficeId : null,
+        );
 
         if (filled($search)) {
             $term = mb_strtolower($search);
@@ -121,7 +134,7 @@ class StockLevelExportService
      * @param  array<int, string>  $explicitPairKeys
      * @return Collection<int, array{item_id: int, office_id: int, unit_cost: float|null}>
      */
-    public function resolvePairs(
+    public function collectPairs(
         ?int $categoryId,
         ?string $search,
         string $restockFilter,
@@ -129,15 +142,53 @@ class StockLevelExportService
         array $explicitPairKeys = [],
     ): Collection {
         if ($explicitPairKeys !== []) {
-            $pairs = $this->resolveExplicitPairs($explicitPairKeys, $categoryId, $scopedOfficeId);
-        } else {
-            $pairs = $this->filterStockLevelRows($categoryId, $search, $restockFilter, $scopedOfficeId)
-                ->map(fn (object $row): array => [
-                    'item_id' => (int) $row->item_id,
-                    'office_id' => (int) $row->office_id,
-                    'unit_cost' => isset($row->unit_cost) ? (float) $row->unit_cost : null,
-                ])->values();
+            return $this->resolveExplicitPairs($explicitPairKeys, $categoryId, $scopedOfficeId);
         }
+
+        return $this->filterStockLevelRows($categoryId, $search, $restockFilter, $scopedOfficeId)
+            ->map(fn (object $row): array => [
+                'item_id' => (int) $row->item_id,
+                'office_id' => (int) $row->office_id,
+                'unit_cost' => isset($row->unit_cost) ? (float) $row->unit_cost : null,
+            ])->values();
+    }
+
+    public function countPairs(
+        ?int $categoryId,
+        ?string $search,
+        string $restockFilter,
+        ?int $scopedOfficeId,
+        array $explicitPairKeys = [],
+    ): int {
+        if ($explicitPairKeys !== []) {
+            return $this->resolveExplicitPairs($explicitPairKeys, $categoryId, $scopedOfficeId)->count();
+        }
+
+        return $this->filterStockLevelRows($categoryId, $search, $restockFilter, $scopedOfficeId)->count();
+    }
+
+    /**
+     * @param  array<int, string>  $explicitPairKeys
+     * @return Collection<int, array{item_id: int, office_id: int, unit_cost: float|null}>
+     */
+    public function resolvePairs(
+        ?int $categoryId,
+        ?string $search,
+        string $restockFilter,
+        ?int $scopedOfficeId,
+        array $explicitPairKeys = [],
+        ?int $maxPairs = null,
+    ): Collection {
+        $maxPairs = $maxPairs ?? self::BATCH_SIZE;
+        $maxPairs = max(1, min($maxPairs, self::SINGLE_MAX));
+
+        $pairs = $this->collectPairs(
+            $categoryId,
+            $search,
+            $restockFilter,
+            $scopedOfficeId,
+            $explicitPairKeys,
+        );
 
         if ($pairs->isEmpty()) {
             throw ValidationException::withMessages([
@@ -147,9 +198,9 @@ class StockLevelExportService
             ]);
         }
 
-        if ($pairs->count() > self::MAX_PAIRS) {
+        if ($pairs->count() > $maxPairs) {
             throw ValidationException::withMessages([
-                'pairs' => 'You can export at most '.self::MAX_PAIRS.' stock positions at once.',
+                'pairs' => 'You can export at most '.$maxPairs.' stock positions at once.',
             ]);
         }
 
@@ -165,10 +216,7 @@ class StockLevelExportService
         ?int $categoryId,
         ?int $scopedOfficeId,
     ): Collection {
-        $resolved = collect();
-        $category = $categoryId !== null && $categoryId > 0
-            ? ItemCategory::query()->find($categoryId)
-            : null;
+        $decodedPairs = [];
 
         foreach ($explicitPairKeys as $pairKey) {
             $decoded = $this->decodePairKey($pairKey);
@@ -180,12 +228,33 @@ class StockLevelExportService
                 continue;
             }
 
-            $item = Item::query()->with('category')->find($decoded['item_id']);
+            $decodedPairs[] = $decoded;
+        }
+
+        if ($decodedPairs === []) {
+            return collect();
+        }
+
+        $itemIds = array_values(array_unique(array_map(
+            fn (array $pair): int => $pair['item_id'],
+            $decodedPairs,
+        )));
+
+        $itemsById = Item::query()
+            ->whereIn('id', $itemIds)
+            ->get(['id', 'item_category_id'])
+            ->keyBy('id');
+
+        $categoryId = $categoryId !== null && $categoryId > 0 ? $categoryId : null;
+        $resolved = collect();
+
+        foreach ($decodedPairs as $decoded) {
+            $item = $itemsById->get($decoded['item_id']);
             if ($item === null) {
                 continue;
             }
 
-            if ($category !== null && (int) $item->item_category_id !== (int) $category->id) {
+            if ($categoryId !== null && (int) $item->item_category_id !== $categoryId) {
                 continue;
             }
 
@@ -219,7 +288,33 @@ class StockLevelExportService
             restockFilter: $restockFilter,
             scopedOfficeId: $scopedOfficeId,
             explicitPairKeys: $pairKeys,
+            maxPairs: $this->exportMaxFromRequest($request),
         );
+    }
+
+    /**
+     * @param  Collection<int, array{item_id: int, office_id: int, unit_cost: float|null}>|array<int, string>  $pairsOrKeys
+     * @return array<int, array<int, string>>
+     */
+    public function chunkPairKeys(Collection|array $pairsOrKeys, ?int $chunkSize = null): array
+    {
+        $chunkSize = $chunkSize ?? self::BATCH_SIZE;
+
+        if ($pairsOrKeys instanceof Collection) {
+            $keys = $pairsOrKeys->map(fn (array $pair): string => $this->encodePairKey(
+                $pair['item_id'],
+                $pair['office_id'],
+                $pair['unit_cost'],
+            ))->values()->all();
+        } else {
+            $keys = array_values($pairsOrKeys);
+        }
+
+        if ($keys === []) {
+            return [];
+        }
+
+        return array_values(array_chunk($keys, max(1, $chunkSize)));
     }
 
     /**
@@ -228,6 +323,6 @@ class StockLevelExportService
      */
     public function takeLimited(Collection $pairs): Collection
     {
-        return $pairs->take(self::MAX_PAIRS)->values();
+        return $pairs->take(self::BATCH_SIZE)->values();
     }
 }

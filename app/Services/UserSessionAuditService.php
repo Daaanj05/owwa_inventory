@@ -35,9 +35,15 @@ class UserSessionAuditService
 
     public function touchActivity(int $userLogId): void
     {
+        $threshold = now()->subMinute();
+
         UserLog::query()
             ->whereKey($userLogId)
             ->whereNull('logged_out_at')
+            ->where(function ($query) use ($threshold): void {
+                $query->whereNull('last_activity_at')
+                    ->orWhere('last_activity_at', '<', $threshold);
+            })
             ->update(['last_activity_at' => now()]);
     }
 

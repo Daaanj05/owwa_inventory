@@ -37,6 +37,51 @@ class Item extends Model
         return $base.' '.$sub;
     }
 
+    /**
+     * Distinct item-family labels for the category (datalist suggestions).
+     *
+     * @return list<string>
+     */
+    public static function familySuggestionsForCategory(int $categoryId): array
+    {
+        if ($categoryId <= 0) {
+            return [];
+        }
+
+        return self::query()
+            ->active()
+            ->where('item_category_id', $categoryId)
+            ->orderByRaw('COALESCE(base_name, name)')
+            ->get(['base_name', 'name'])
+            ->map(function (Item $item): string {
+                return filled($item->base_name) ? (string) $item->base_name : (string) $item->name;
+            })
+            ->unique()
+            ->sort()
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Trim and, when a same-category family matches case-insensitively, reuse that exact spelling.
+     */
+    public static function normalizeFamilyName(string $baseName, int $categoryId): string
+    {
+        $trimmed = trim($baseName);
+
+        if ($trimmed === '' || $categoryId <= 0) {
+            return $trimmed;
+        }
+
+        foreach (self::familySuggestionsForCategory($categoryId) as $existing) {
+            if (mb_strtolower($existing) === mb_strtolower($trimmed)) {
+                return $existing;
+            }
+        }
+
+        return $trimmed;
+    }
+
     public function syncMergedName(): void
     {
         $base = filled($this->base_name) ? $this->base_name : $this->name;

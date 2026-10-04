@@ -56,7 +56,7 @@ class AcquisitionPaperworkViewPresenter
                 'navigable' => $paperwork->isPrApproved()
                     || filled($paperwork->pr_number)
                     || $paperwork->pr_status === AcquisitionPaperwork::STATUS_PENDING_APPROVAL,
-                'url' => $paperwork->isPrApproved() ? route('owwa.export.acquisition-paperwork.pr', $paperwork) : null,
+                'url' => $paperwork->isPrApproved() ? route('owwa.export.acquisition-paperwork.pr-fast-xlsx', $paperwork) : null,
             ],
             [
                 'step' => 2,

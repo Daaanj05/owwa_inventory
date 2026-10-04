@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\PropertyActionRequests;
 
 use App\Filament\Concerns\HasOwwaViewModalUrl;
+use App\Filament\Concerns\HidesNavigationGroupForEmployeeAndUnitConsolidator;
 use App\Filament\Resources\PropertyActionRequests\Pages\ListPropertyActionRequests;
 use App\Filament\Resources\PropertyActionRequests\Schemas\PropertyActionRequestForm;
 use App\Filament\Resources\PropertyActionRequests\Tables\PropertyActionRequestsTable;
@@ -21,6 +22,7 @@ use UnitEnum;
 class PropertyActionRequestResource extends Resource
 {
     use HasOwwaViewModalUrl;
+    use HidesNavigationGroupForEmployeeAndUnitConsolidator;
 
     protected static ?string $model = PropertyActionRequest::class;
 

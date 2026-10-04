@@ -662,6 +662,26 @@
     color: #9ca3af;
 }
 
+.owwa-notif-row-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+}
+
+.owwa-notif-row-action {
+    display: inline-flex;
+    align-items: center;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #1d4ed8;
+    text-decoration: underline;
+}
+
+.owwa-notif-row-action:hover {
+    color: #1e40af;
+}
+
 .owwa-notif-row-dot {
     width: 0.55rem;
     height: 0.55rem;

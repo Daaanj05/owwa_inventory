@@ -342,57 +342,72 @@ class PropertyActionRequestListTest extends TestCase
             ->assertCanNotSeeTableRecords([$pending]);
     }
 
-    public function test_uc_send_to_sc_moves_draft_to_pending_sc(): void
+    public function test_uc_create_compiles_selected_employee_returns_to_sc(): void
     {
-        [$employee, $issuance, $category] = $this->seedEmployeeIssuance();
+        [$employee, $uc, $custodian, $issuance] = $this->seedPropertyContext();
 
-        $uc = User::factory()->create([
-            'role' => User::ROLE_UNIT_CONSOLIDATOR,
+        $pending = PropertyActionRequest::query()->create([
+            'reference_code' => 'PAREQ-COMPILE-CREATE',
+            'action_type' => PropertyActionRequest::ACTION_RETURN,
+            'reason_code' => 'good_condition',
+            'requested_by' => $employee->id,
+            'accountable_user_id' => $employee->id,
             'office_id' => $issuance->office_id,
             'department_id' => $issuance->department_id,
-        ]);
-        $uc->syncOfficeAssignments([
-            ['office_id' => $issuance->office_id, 'department_id' => $issuance->department_id],
+            'status' => PropertyActionRequest::STATUS_PENDING_UC,
+            'uc_approved_by' => $uc->id,
+            'uc_approved_at' => now(),
         ]);
 
-        $this->actingAs($uc);
+        PropertyActionRequestLine::query()->create([
+            'property_action_request_id' => $pending->id,
+            'issuance_id' => $issuance->id,
+            'sort_order' => 0,
+            'quantity' => 1,
+        ]);
 
-        Livewire::test(ListPropertyActionRequests::class, [
-            'ucTab' => 'received',
-            'ucOfficeId' => $issuance->office_id,
-            'ucDepartmentId' => $issuance->department_id,
-        ])
+        Livewire::actingAs($uc)
+            ->test(ListPropertyActionRequests::class, [
+                'ucTab' => 'received',
+                'ucOfficeId' => $issuance->office_id,
+                'ucDepartmentId' => $issuance->department_id,
+            ])
             ->mountAction('create')
+            ->assertFormFieldExists('source_property_action_request_ids')
+            ->assertFormFieldExists('action_type')
             ->setActionData([
                 'office_id' => $issuance->office_id,
                 'department_id' => $issuance->department_id,
-                'accountable_user_id' => $employee->id,
-                'item_category_id' => $category->id,
                 'action_type' => PropertyActionRequest::ACTION_RETURN,
                 'reason_code' => 'good_condition',
-                'lines' => [
-                    ['issuance_id' => $issuance->id],
-                ],
+                'reason_detail' => 'Compiled via create modal',
+                'source_property_action_request_ids' => [$pending->id],
             ])
-            ->callMountedAction(['workflow' => PropertyActionRequestEmployeeActions::WORKFLOW_SEND_TO_SC])
-            ->assertNotified()
+            ->callMountedAction()
+            ->assertHasNoActionErrors()
             ->assertSet('ucTab', 'sent');
 
-        $request = PropertyActionRequest::query()->latest('id')->first();
-        $this->assertNotNull($request);
-        $this->assertSame(PropertyActionRequest::STATUS_PENDING_SC, $request->status);
-        $this->assertSame($uc->id, $request->uc_approved_by);
-        $this->assertSame($employee->id, $request->accountable_user_id);
-        $this->assertNotNull($request->uc_approved_at);
+        $pending->refresh();
+        $this->assertSame(PropertyActionRequest::STATUS_PENDING_SC, $pending->status);
+        $this->assertNotNull($pending->compiled_into_property_action_request_id);
+
+        $batch = PropertyActionRequest::query()->find($pending->compiled_into_property_action_request_id);
+        $this->assertNotNull($batch);
+        $this->assertSame(PropertyActionRequest::STATUS_PENDING_SC, $batch->status);
+        $this->assertSame($uc->id, $batch->requested_by);
+        $this->assertSame($uc->id, $batch->accountable_user_id);
+        $this->assertSame($custodian->role, User::ROLE_SUPPLY_CUSTODIAN);
     }
 
-    public function test_uc_property_return_form_lists_employee_issuances_ordered_by_eul(): void
+    public function test_uc_property_return_form_uses_employee_return_picker(): void
     {
         $source = file_get_contents(app_path('Filament/Resources/PropertyActionRequests/Schemas/PropertyActionRequestForm.php'));
 
         $this->assertIsString($source);
-        $this->assertStringContainsString("->label('Employee')", $source);
-        $this->assertStringContainsString('orderByRaw(\'case when eul_expires_at is null then 1 else 0 end\')', $source);
+        $this->assertStringNotContainsString("->label('Employee')", $source);
+        $this->assertStringContainsString('Compile employee returns', $source);
+        $this->assertStringContainsString('selectEmployeePropertyReturns', $source);
+        $this->assertStringContainsString('source_property_action_request_ids', $source);
         $this->assertStringNotContainsString('Offline Approval (SC Gate)', $source);
         $this->assertStringContainsString('->selectablePlaceholder(false)', $source);
     }
@@ -439,10 +454,18 @@ class PropertyActionRequestListTest extends TestCase
                 'ucOfficeId' => $issuance->office_id,
                 'ucDepartmentId' => $issuance->department_id,
             ])
-            ->callAction(TestAction::make('ucCompileAndSend')->table($pending), [
-                'remarks' => 'Batch for SC',
+            ->callAction(TestAction::make('ucCompileAndSend')->table($pending))
+            ->assertActionMounted('create')
+            ->setActionData([
+                'office_id' => $issuance->office_id,
+                'department_id' => $issuance->department_id,
+                'action_type' => PropertyActionRequest::ACTION_RETURN,
+                'reason_code' => 'good_condition',
+                'reason_detail' => 'Batch for SC',
+                'source_property_action_request_ids' => [$pending->id],
             ])
-            ->assertNotified()
+            ->callMountedAction()
+            ->assertHasNoActionErrors()
             ->assertSet('ucTab', 'sent');
 
         $pending->refresh();

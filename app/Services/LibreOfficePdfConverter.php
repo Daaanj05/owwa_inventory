@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Process;
 use Illuminate\Support\Str;
@@ -33,14 +34,23 @@ class LibreOfficePdfConverter
             return false;
         }
 
-        return $this->probeBinary($this->resolveBinary());
+        $cacheKey = $this->availabilityCacheKey();
+        $cached = Cache::get($cacheKey);
+        if (is_bool($cached)) {
+            return $cached;
+        }
+
+        $available = $this->probeBinary($this->resolveBinary(useCache: false));
+        Cache::put($cacheKey, $available, now()->addMinutes(30));
+
+        return $available;
     }
 
     /**
      * Resolve the LibreOffice executable. On Windows, when config is bare "soffice"
      * and PATH lookup fails, try common Program Files install paths.
      */
-    public function resolveBinary(?string $configured = null): string
+    public function resolveBinary(?string $configured = null, bool $useCache = true): string
     {
         $configured = $configured ?? (string) config('services.libreoffice.binary', 'soffice');
         $configured = trim($configured);
@@ -49,7 +59,19 @@ class LibreOfficePdfConverter
             $configured = 'soffice';
         }
 
+        $cacheKey = 'libreoffice.resolved-binary:'.md5($configured);
+        if ($useCache) {
+            $cached = Cache::get($cacheKey);
+            if (is_string($cached) && $cached !== '') {
+                return $cached;
+            }
+        }
+
         if ($this->probeBinary($configured)) {
+            if ($useCache) {
+                Cache::put($cacheKey, $configured, now()->addMinutes(30));
+            }
+
             return $configured;
         }
 
@@ -59,6 +81,10 @@ class LibreOfficePdfConverter
 
         foreach ($this->windowsCandidateBinaries() as $candidate) {
             if ($this->probeBinary($candidate)) {
+                if ($useCache) {
+                    Cache::put($cacheKey, $candidate, now()->addMinutes(30));
+                }
+
                 return $candidate;
             }
         }
@@ -165,6 +191,13 @@ class LibreOfficePdfConverter
         } finally {
             $this->deleteDirectory($workDir);
         }
+    }
+
+    protected function availabilityCacheKey(): string
+    {
+        $configured = trim((string) config('services.libreoffice.binary', 'soffice'));
+
+        return 'libreoffice.available:'.md5($configured !== '' ? $configured : 'soffice');
     }
 
     protected function isWindowsOs(): bool

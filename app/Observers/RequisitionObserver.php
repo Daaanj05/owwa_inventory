@@ -7,7 +7,9 @@ use App\Models\Requisition;
 use App\Models\User;
 use App\Services\ReferenceCodeService;
 use App\Services\RequisitionWorkflowNotificationService;
-use Illuminate\Broadcasting\BroadcastException;
+use App\Support\DashboardKpiCache;
+use Illuminate\Support\Facades\DB;
+use Throwable;
 
 class RequisitionObserver
 {
@@ -40,6 +42,7 @@ class RequisitionObserver
 
     public function created(Requisition $requisition): void
     {
+        DashboardKpiCache::bump();
         $this->broadcastRequisitionChanged($requisition, 'created');
         app(RequisitionWorkflowNotificationService::class)->handleCreated($requisition);
     }
@@ -53,6 +56,7 @@ class RequisitionObserver
 
     public function updated(Requisition $requisition): void
     {
+        DashboardKpiCache::bump();
         $this->broadcastRequisitionChanged($requisition, 'updated');
         app(RequisitionWorkflowNotificationService::class)->handleUpdated(
             $requisition,
@@ -60,12 +64,32 @@ class RequisitionObserver
         );
     }
 
+    public function deleted(Requisition $requisition): void
+    {
+        DashboardKpiCache::bump();
+    }
+
+    public function restored(Requisition $requisition): void
+    {
+        DashboardKpiCache::bump();
+    }
+
     protected function broadcastRequisitionChanged(Requisition $requisition, string $action): void
     {
-        try {
-            RequisitionChanged::dispatch($requisition, $action);
-        } catch (BroadcastException $exception) {
-            report($exception);
+        $send = function () use ($requisition, $action): void {
+            try {
+                RequisitionChanged::dispatch($requisition, $action);
+            } catch (Throwable $exception) {
+                report($exception);
+            }
+        };
+
+        if (DB::transactionLevel() > 0) {
+            DB::afterCommit($send);
+
+            return;
         }
+
+        $send();
     }
 }

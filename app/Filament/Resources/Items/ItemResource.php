@@ -38,7 +38,7 @@ class ItemResource extends Resource
 
     public static function getEloquentQuery(): Builder
     {
-        $query = parent::getEloquentQuery();
+        $query = parent::getEloquentQuery()->with('category');
 
         $categoryId = SyncsActiveItemCategory::resolveCategoryIdFromContext();
         if ($categoryId > 0) {

@@ -202,6 +202,7 @@ class PurchaseOrderActions
             $url,
             'Preparing export…',
             'Building your OWWA form…',
+            300000,
         );
     }
 

@@ -15,18 +15,14 @@ use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Pagination\LengthAwarePaginator as Paginator;
 use Illuminate\Support\Collection;
-use Illuminate\Support\HtmlString;
 use Livewire\Attributes\Url;
 use Livewire\WithPagination;
-use UnitEnum;
 
 class RegionalSupplyCatalog extends Page
 {
     use WithPagination;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedBuildingStorefront;
-
-    protected static string|UnitEnum|null $navigationGroup = 'Regional supply';
 
     protected static ?string $navigationLabel = 'Regional Supply Catalog';
 
@@ -67,12 +63,7 @@ class RegionalSupplyCatalog extends Page
 
     public function getHeading(): string|Htmlable
     {
-        $dashboardUrl = route('filament.admin.pages.dashboard');
-
-        return new HtmlString(sprintf(
-            '<span class="owwa-wizard-title" role="list"><a class="owwa-wizard-step owwa-wizard-step-link" href="%s" role="listitem">Regional supply</a><span class="owwa-wizard-separator" aria-hidden="true">&gt;</span><span class="owwa-wizard-step owwa-wizard-step-current" role="listitem">Regional Supply Catalog</span></span>',
-            e($dashboardUrl),
-        ));
+        return 'Regional Supply Catalog';
     }
 
     public function getSubheading(): string|Htmlable|null
@@ -204,9 +195,7 @@ class RegionalSupplyCatalog extends Page
 
         $categoryId = filled($this->category) ? (int) $this->category : null;
 
-        $rows = app(InventoryStockService::class)->getStockLevelsList($categoryId)
-            ->where('office_id', $supplyOfficeId)
-            ->values();
+        $rows = app(InventoryStockService::class)->getStockLevelsList($categoryId, $supplyOfficeId);
 
         if (filled($this->search)) {
             $needle = mb_strtolower($this->search);

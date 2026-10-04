@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Requisitions;
 
 use App\Filament\Concerns\HasOwwaViewModalUrl;
+use App\Filament\Concerns\HidesNavigationGroupForEmployeeAndUnitConsolidator;
 use App\Filament\Resources\Requisitions\Pages\CreateRequisition;
 use App\Filament\Resources\Requisitions\Pages\EditRequisition;
 use App\Filament\Resources\Requisitions\Pages\ListRequisitions;
@@ -25,6 +26,7 @@ use UnitEnum;
 class RequisitionResource extends Resource
 {
     use HasOwwaViewModalUrl;
+    use HidesNavigationGroupForEmployeeAndUnitConsolidator;
 
     protected static ?string $model = Requisition::class;
 

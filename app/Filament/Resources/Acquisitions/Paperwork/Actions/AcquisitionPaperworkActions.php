@@ -285,7 +285,8 @@ class AcquisitionPaperworkActions
     public static function viewPrAction(): Action
     {
         return self::phaseViewAction('viewPr', 'Purchase request', AcquisitionPaperworkInfolist::prSection(), [
-            self::exportPrAction(),
+            self::exportPrFastPdfAction(),
+            self::exportPrFastExcelAction(),
             self::approvePrAction(),
         ]);
     }
@@ -293,6 +294,7 @@ class AcquisitionPaperworkActions
     public static function viewPoAction(): Action
     {
         return self::phaseViewAction('viewPo', 'Purchase order', AcquisitionPaperworkInfolist::poSection(), [
+            self::exportPoPdfAction(),
             self::exportPoAction(),
             self::approvePoAction(),
         ]);
@@ -301,49 +303,104 @@ class AcquisitionPaperworkActions
     public static function viewIarAction(): Action
     {
         return self::phaseViewAction('viewIar', 'Inspection & acceptance', AcquisitionPaperworkInfolist::iarSection(), [
+            self::exportIarPdfAction(),
             self::exportIarAction(),
             self::approveIarAction(),
         ]);
     }
 
-    public static function exportPrAction(): Action
+    public static function exportPrFastPdfAction(): Action
     {
-        return Action::make('exportPr')
-            ->label('Export Excel')
-            ->icon('heroicon-o-document-arrow-down')
-            ->visible(fn (AcquisitionPaperwork $record): bool => $record->missingPrFields() === [])
-            ->action(function (AcquisitionPaperwork $record, Action $action): void {
-                self::startOwwaExport($action, route('owwa.export.acquisition-paperwork.pr', $record));
-            });
-    }
-
-    public static function exportPrPdfAction(): Action
-    {
-        return Action::make('exportPrPdf')
+        return Action::make('exportPrFastPdf')
             ->label('Export PDF')
             ->icon('heroicon-o-document-text')
             ->visible(fn (AcquisitionPaperwork $record): bool => $record->missingPrFields() === [])
             ->action(function (AcquisitionPaperwork $record, Action $action): void {
-                self::startOwwaExport($action, route('owwa.export.acquisition-paperwork.pr-pdf', $record));
+                self::startOwwaExport(
+                    $action,
+                    route('owwa.export.acquisition-paperwork.pr-fast-pdf', $record),
+                    'Preparing PDF export…',
+                    'Building your Purchase Request…',
+                    300000,
+                );
+            });
+    }
+
+    public static function exportPrFastExcelAction(): Action
+    {
+        return Action::make('exportPrFastExcel')
+            ->label('Export Excel')
+            ->icon('heroicon-o-document-arrow-down')
+            ->visible(fn (AcquisitionPaperwork $record): bool => $record->missingPrFields() === [])
+            ->action(function (AcquisitionPaperwork $record, Action $action): void {
+                self::startOwwaExport(
+                    $action,
+                    route('owwa.export.acquisition-paperwork.pr-fast-xlsx', $record),
+                    'Preparing Excel export…',
+                    'Building your Purchase Request…',
+                    300000,
+                );
+            });
+    }
+
+    public static function exportPoPdfAction(): Action
+    {
+        return Action::make('exportPoPdf')
+            ->label('Export PDF')
+            ->icon('heroicon-o-document-text')
+            ->visible(fn (AcquisitionPaperwork $record): bool => $record->purchaseOrder !== null
+                && $record->purchaseOrder->missingFields() === [])
+            ->action(function (AcquisitionPaperwork $record, Action $action): void {
+                self::startOwwaExport(
+                    $action,
+                    route('owwa.export.purchase-order.pdf', $record->purchaseOrder),
+                    'Preparing PDF export…',
+                    'Building your Purchase Order…',
+                    300000,
+                );
             });
     }
 
     public static function exportPoAction(): Action
     {
         return Action::make('exportPo')
-            ->label('Export PO')
+            ->label('Export Excel')
             ->icon('heroicon-o-document-arrow-down')
             ->visible(fn (AcquisitionPaperwork $record): bool => $record->purchaseOrder !== null
                 && $record->purchaseOrder->missingFields() === [])
             ->action(function (AcquisitionPaperwork $record, Action $action): void {
-                self::startOwwaExport($action, route('owwa.export.purchase-order.excel', $record->purchaseOrder));
+                self::startOwwaExport(
+                    $action,
+                    route('owwa.export.purchase-order.excel', $record->purchaseOrder),
+                    'Preparing Excel export…',
+                    'Building your Purchase Order…',
+                    300000,
+                );
+            });
+    }
+
+    public static function exportIarPdfAction(): Action
+    {
+        return Action::make('exportIarPdf')
+            ->label('Export PDF')
+            ->icon('heroicon-o-document-text')
+            ->visible(fn (AcquisitionPaperwork $record): bool => $record->purchaseOrder?->inspectionAcceptanceReport !== null
+                && $record->purchaseOrder->inspectionAcceptanceReport->missingFields() === [])
+            ->action(function (AcquisitionPaperwork $record, Action $action): void {
+                self::startOwwaExport(
+                    $action,
+                    route('owwa.export.inspection-acceptance-report.pdf', $record->purchaseOrder->inspectionAcceptanceReport),
+                    'Preparing PDF export…',
+                    'Building your Inspection and Acceptance Report…',
+                    300000,
+                );
             });
     }
 
     public static function exportIarAction(): Action
     {
         return Action::make('exportIar')
-            ->label('Export IAR')
+            ->label('Export Excel')
             ->icon('heroicon-o-document-arrow-down')
             ->visible(fn (AcquisitionPaperwork $record): bool => $record->purchaseOrder?->inspectionAcceptanceReport !== null
                 && $record->purchaseOrder->inspectionAcceptanceReport->missingFields() === [])
@@ -351,18 +408,27 @@ class AcquisitionPaperworkActions
                 self::startOwwaExport(
                     $action,
                     route('owwa.export.inspection-acceptance-report.excel', $record->purchaseOrder->inspectionAcceptanceReport),
+                    'Preparing Excel export…',
+                    'Building your Inspection and Acceptance Report…',
+                    300000,
                 );
             });
     }
 
-    protected static function startOwwaExport(Action $action, string $url): void
-    {
+    protected static function startOwwaExport(
+        Action $action,
+        string $url,
+        string $title = 'Preparing Excel export…',
+        string $message = 'Building your OWWA form…',
+        int $autoClearMs = 120000,
+    ): void {
         $livewire = $action->getLivewire();
         OwwaExportBusyDispatcher::start(
             $livewire instanceof LivewireComponent ? $livewire : null,
             $url,
-            'Preparing Excel export…',
-            'Building your OWWA form…',
+            $title,
+            $message,
+            $autoClearMs,
         );
     }
 
@@ -397,8 +463,8 @@ class AcquisitionPaperworkActions
             self::archiveAction(),
             self::restoreAction(),
             ActionGroup::make([
-                self::exportPrAction(),
-                self::exportPrPdfAction(),
+                self::exportPrFastPdfAction(),
+                self::exportPrFastExcelAction(),
             ])
                 ->label('Export PR')
                 ->icon('heroicon-m-document-arrow-down')

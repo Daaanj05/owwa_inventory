@@ -21,9 +21,36 @@ trait StartsOwwaExportBusy
         string $message = 'Building your file. Large exports can take a little while.',
         int $autoClearMs = 120000,
     ): void {
-        OwwaExportDiagnostics::raiseMemoryLimit('512M');
+        $this->startOwwaExportDownloads(
+            urls: [$url],
+            title: $title,
+            message: $message,
+            autoClearMs: $autoClearMs,
+        );
+    }
 
-        if (str_contains($url, 'format=pdf') || str_contains($url, 'format%3Dpdf')) {
+    /**
+     * @param  array<int, string>  $urls
+     */
+    public function startOwwaExportDownloads(
+        array $urls,
+        string $title = 'Preparing export…',
+        string $message = 'Building your file. Large exports can take a little while.',
+        int $autoClearMs = 120000,
+    ): void {
+        $urls = array_values(array_filter($urls, fn (mixed $url): bool => is_string($url) && filled($url)));
+
+        if ($urls === []) {
+            return;
+        }
+
+        OwwaExportDiagnostics::raiseMemoryLimit('2048M');
+
+        $needsLibreOffice = collect($urls)->contains(
+            fn (string $url): bool => OwwaLibreOfficeExportGuard::urlNeedsLibreOffice($url),
+        );
+
+        if ($needsLibreOffice) {
             OwwaLibreOfficeExportGuard::warnIfUnavailable();
         }
 
@@ -35,15 +62,30 @@ trait StartsOwwaExportBusy
 
         $this->exportBusy = true;
 
-        $token = OwwaExportDownloadCookie::makeToken();
-        $downloadUrl = OwwaExportDownloadCookie::sameOriginDownloadUrl($url, $token);
+        $downloadUrls = array_map(
+            fn (string $url): string => OwwaExportDownloadCookie::sameOriginDownloadUrl($url),
+            $urls,
+        );
 
         OwwaExportDiagnostics::info('dispatching_client_download', [
             'livewire_class' => static::class,
-            'url' => $url,
-            'download_url' => $downloadUrl,
+            'url' => $urls[0],
+            'download_url' => $downloadUrls[0],
+            'batch_count' => count($downloadUrls),
             'title' => $title,
         ]);
+
+        $detail = [
+            'title' => $title,
+            'message' => $message,
+            'autoClearMs' => $autoClearMs,
+        ];
+
+        if (count($downloadUrls) === 1) {
+            $detail['url'] = $downloadUrls[0];
+        } else {
+            $detail['urls'] = $downloadUrls;
+        }
 
         // Clear leftover Filament modal backdrop, show busy overlay, then navigate.
         // Livewire redirect alone can race Alpine and leave a blank dark shell.
@@ -54,13 +96,7 @@ trait StartsOwwaExportBusy
             .'document.body.classList.remove("fi-modal-open");'
             .'document.body.style.removeProperty("overflow");'
             .'window.dispatchEvent(new CustomEvent("owwa-busy-start", { detail: '
-            .json_encode([
-                'title' => $title,
-                'message' => $message,
-                'token' => $token,
-                'url' => $downloadUrl,
-                'autoClearMs' => $autoClearMs,
-            ], JSON_UNESCAPED_SLASHES)
+            .json_encode($detail, JSON_UNESCAPED_SLASHES)
             .'}));'
             .'})();'
         );

@@ -7,6 +7,7 @@ use App\Models\AcquisitionPaperwork;
 use App\Models\InspectionAcceptanceReport;
 use App\Models\InspectionAcceptanceReportLine;
 use App\Models\PurchaseOrder;
+use App\Support\DashboardKpiCache;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -240,6 +241,8 @@ class InspectionAcceptanceReportWorkflowService
 
             $iar->update(['stock_received_at' => now()]);
             $paperwork?->update(['received_at' => now()]);
+
+            DashboardKpiCache::bump();
 
             return $created;
         });

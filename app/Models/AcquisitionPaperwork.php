@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Models\Concerns\LogsUserActivity;
 use App\Services\ReferenceCodeService;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -353,6 +354,44 @@ class AcquisitionPaperwork extends Model
     }
 
     /**
+     * Search-driven options for Create PO → Choose PR (no full lines preload).
+     *
+     * @return array<int|string, string>
+     */
+    public static function purchaseOrderPickerOptions(int $categoryId, string $search = '', int $limit = 40): array
+    {
+        $query = static::query()
+            ->with(['requestingOffice:id,name', 'office:id,name'])
+            ->withCount('lines')
+            ->withSum('lines', 'amount')
+            ->where('item_category_id', $categoryId)
+            ->where('pr_status', self::STATUS_APPROVED)
+            ->whereNull('archived_at')
+            ->whereDoesntHave('purchaseOrder')
+            ->orderByDesc('pr_completed_at')
+            ->orderByDesc('pr_date')
+            ->orderByDesc('id');
+
+        $search = trim($search);
+        if ($search !== '') {
+            $like = '%'.$search.'%';
+            $query->where(function (Builder $builder) use ($like): void {
+                $builder->where('pr_number', 'like', $like)
+                    ->orWhere('reference_code', 'like', $like)
+                    ->orWhere('purpose', 'like', $like);
+            });
+        }
+
+        return $query
+            ->limit(max(1, $limit))
+            ->get()
+            ->mapWithKeys(fn (self $pr): array => [
+                $pr->id => $pr->purchaseOrderPickerOptionHtml(),
+            ])
+            ->all();
+    }
+
+    /**
      * Rich HTML option label for the Create PO → Choose PR select.
      */
     public function purchaseOrderPickerOptionHtml(): string
@@ -368,12 +407,16 @@ class AcquisitionPaperwork extends Model
             ?? 'No office'
         ));
 
-        $lineCount = $this->relationLoaded('lines')
-            ? $this->lines->count()
-            : $this->lines()->count();
-        $total = $this->relationLoaded('lines')
-            ? (float) $this->lines->sum(fn (AcquisitionPaperworkLine $line): float => (float) ($line->amount ?? 0))
-            : $this->totalAmount();
+        $lineCount = isset($this->lines_count)
+            ? (int) $this->lines_count
+            : ($this->relationLoaded('lines')
+                ? $this->lines->count()
+                : $this->lines()->count());
+        $total = isset($this->lines_sum_amount)
+            ? (float) $this->lines_sum_amount
+            : ($this->relationLoaded('lines')
+                ? (float) $this->lines->sum(fn (AcquisitionPaperworkLine $line): float => (float) ($line->amount ?? 0))
+                : $this->totalAmount());
         $linesLabel = $lineCount === 1 ? '1 line' : "{$lineCount} lines";
         $totalLabel = $total > 0 ? '₱'.number_format($total, 2) : 'No amount';
 

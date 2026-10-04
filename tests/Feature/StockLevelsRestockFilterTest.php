@@ -77,10 +77,9 @@ class StockLevelsRestockFilterTest extends TestCase
             ->call('setRestockFilter', 'active')
             ->tap(function ($component): void {
                 $rows = $component->instance()->getStockLevelsFull();
-                $this->assertCount(2, $rows);
-                $this->assertFalse($rows->contains(
-                    fn (object $row): bool => (float) $row->unit_cost === 100.0 && ($row->is_inactive_for_restock ?? false),
-                ));
+                $this->assertCount(1, $rows);
+                $this->assertFalse((bool) ($rows->first()->is_inactive_for_restock ?? false));
+                $this->assertSame(15, (int) $rows->first()->stock);
             });
     }
 

@@ -52,6 +52,8 @@ if [ -f /tmp/owwa-template-audit.json ]; then
 fi
 
 php artisan config:cache
+php artisan event:cache
+php artisan route:cache
 
 php artisan tinker --execute="Illuminate\Support\Facades\DB::connection()->getPdo(); echo 'DB OK'.PHP_EOL;" || {
     echo "ERROR: Database connection failed. Check Render DB_* environment variables."
@@ -60,6 +62,11 @@ php artisan tinker --execute="Illuminate\Support\Facades\DB::connection()->getPd
 
 export PORT="${PORT:-10000}"
 export SERVER_NAME=":${PORT}"
+
+# Process queued mail, AI, and stock-card exports in the same container.
+# Render free tier has no separate background worker; jobs run while the web service is awake.
+echo "INFO: Starting queue worker in background..."
+php artisan queue:work --sleep=1 --tries=1 --timeout=600 --max-time=3600 &
 
 echo "INFO: Starting FrankenPHP on port ${PORT} (concurrent HTTP)..."
 exec frankenphp run --config /etc/caddy/Caddyfile --adapter caddyfile

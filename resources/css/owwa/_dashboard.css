@@ -88,7 +88,8 @@
 }
 
 /* UC lists: search and New Requisition on row 1; Received/Sent and Active/Archive icons on row 2 */
-.fi-page.owwa-uc-requisitions-tabs .owwa-uc-requisition-page-actions {
+.fi-page.owwa-uc-requisitions-tabs .owwa-uc-requisition-page-actions,
+.fi-page.owwa-search-row-toolbar .owwa-uc-requisition-page-actions {
     display: none !important;
 }
 
@@ -288,19 +289,27 @@
     line-height: 1.25;
 }
 
-.fi-page.owwa-uc-requisitions-tabs .fi-page-header-main-ctn {
-    row-gap: 0.25rem !important;
-    padding-top: 0.65rem !important;
-    padding-bottom: 0.15rem !important;
+.fi-page.owwa-uc-requisitions-tabs .fi-page-header-main-ctn,
+.fi-page.fi-resource-requisitions .fi-page-header-main-ctn {
+    row-gap: 0.15rem !important;
+    padding-top: 0.35rem !important;
+    padding-bottom: 0 !important;
 }
 
-.fi-page.owwa-uc-requisitions-tabs .fi-header {
+.fi-page.owwa-uc-requisitions-tabs .fi-header,
+.fi-page.fi-resource-requisitions .fi-header {
     margin-bottom: 0 !important;
+    padding-bottom: 0 !important;
 }
 
-.fi-page.owwa-uc-requisitions-tabs .fi-page-content {
-    gap: 0.35rem !important;
-    row-gap: 0.35rem !important;
+.fi-page.fi-resource-requisitions.owwa-setup-archive-toggle .fi-header {
+    padding-top: 0.25rem !important;
+}
+
+.fi-page.owwa-uc-requisitions-tabs .fi-page-content,
+.fi-page.fi-resource-requisitions .fi-page-content {
+    gap: 0.2rem !important;
+    row-gap: 0.2rem !important;
     padding-top: 0 !important;
 }
 

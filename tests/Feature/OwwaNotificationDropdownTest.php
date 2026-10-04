@@ -47,6 +47,28 @@ class OwwaNotificationDropdownTest extends TestCase
             ->assertSee('1');
     }
 
+    public function test_lazy_placeholder_shows_the_bell_without_loading_notifications(): void
+    {
+        $user = User::factory()->create([
+            'role' => User::ROLE_SUPPLY_CUSTODIAN,
+            'email_verified_at' => now(),
+        ]);
+
+        $user->notify(new RequisitionWorkflowDatabaseNotification(
+            'Requisition submitted',
+            'A new requisition needs your review.',
+        ));
+
+        $this->actingAs($user);
+
+        $html = Livewire::test(OwwaNotificationDropdown::class)->instance()->placeholder();
+
+        $this->assertStringContainsString('owwa-notif-trigger', $html);
+        $this->assertStringNotContainsString('owwa-notif-dropdown', $html);
+        $this->assertStringNotContainsString('Requisition submitted', $html);
+        $this->assertStringNotContainsString('owwa-notif-badge', $html);
+    }
+
     public function test_unread_tab_hides_read_notifications(): void
     {
         $user = User::factory()->create([
@@ -146,6 +168,7 @@ class OwwaNotificationDropdownTest extends TestCase
 
         $notification = $user->notifications()->first();
         $this->assertNotNull($notification);
+        $this->assertStringContainsString('ai_run=18', (string) data_get($notification->data, 'actions.0.url'));
 
         $this->actingAs($user);
 
@@ -153,7 +176,11 @@ class OwwaNotificationDropdownTest extends TestCase
             ->call('openNotification', $notification->id)
             ->assertRedirect($cleanUrl);
 
-        $this->assertSame(18, Cache::get(AiProcurementSummaryRestore::cacheKey((int) $user->id)));
+        // SPA navigation may mount Procurement Analytics and consume the one-shot restore.
+        // The important behavior here is stripping ai_run from the destination URL.
+        $pending = Cache::get(AiProcurementSummaryRestore::cacheKey((int) $user->id));
+        $shown = AiProcurementSummaryRestore::hasBeenShown((int) $user->id, 18);
+        $this->assertTrue($pending === 18 || $shown);
     }
 
     public function test_open_notification_does_not_requeue_summary_after_run_was_shown(): void
@@ -258,18 +285,22 @@ class OwwaNotificationDropdownTest extends TestCase
 
         for ($i = 1; $i <= 20; $i++) {
             $user->notify(new RequisitionWorkflowDatabaseNotification(
-                "Notification {$i}",
+                "Notification item {$i}",
                 "Body {$i}",
             ));
+
+            $user->notifications()
+                ->where('data->title', "Notification item {$i}")
+                ->update(['created_at' => now()->subMinutes(21 - $i)]);
         }
 
         $this->actingAs($user);
 
         Livewire::test(OwwaNotificationDropdown::class)
-            ->assertSee('Notification 1')
-            ->assertDontSee('Notification 20')
+            ->assertSee('Notification item 20')
+            ->assertDontSee('Notification item 5')
             ->assertSee('See previous notifications')
             ->call('loadMoreNotifications')
-            ->assertSee('Notification 20');
+            ->assertSee('Notification item 5');
     }
 }

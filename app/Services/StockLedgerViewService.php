@@ -2,14 +2,15 @@
 
 namespace App\Services;
 
+use App\Filament\Resources\Items\Support\ItemOpeningStockFields;
 use App\Models\InventoryUnit;
 use App\Models\Issuance;
 use App\Models\Item;
 use App\Models\Office;
 use App\Support\OwwaReferenceLabels;
 use App\Support\UnitCostKey;
+use Filament\Facades\Filament;
 use Illuminate\Auth\Access\AuthorizationException;
-use Illuminate\Support\Collection;
 
 class StockLedgerViewService
 {
@@ -103,31 +104,62 @@ class StockLedgerViewService
     }
 
     /**
-     * @param  Collection<int, object>  $visibleRows
+     * Cheap open gate for the Stock Card modal — avoids rebuilding the full stock list.
      */
-    public function assertVisibleInStockList(
+    public function assertCanOpenLedger(
         int $itemId,
         int $officeId,
-        Collection $visibleRows,
         ?float $unitCost = null,
+        ?int $categoryId = null,
     ): void {
-        $visible = $visibleRows->contains(
-            fn (object $row): bool => (int) ($row->item_id ?? 0) === $itemId
-                && (int) ($row->office_id ?? 0) === $officeId
-                && ($unitCost === null || UnitCostKey::equals(
-                    isset($row->avg_unit_cost)
-                        ? (float) $row->avg_unit_cost
-                        : (isset($row->unit_cost) ? (float) $row->unit_cost : null),
-                    $unitCost,
-                ) || UnitCostKey::equals(
-                    isset($row->unit_cost) ? (float) $row->unit_cost : null,
-                    $unitCost,
-                )),
-        );
-
-        if (! $visible) {
+        $user = Filament::auth()->user();
+        if ($user?->office_id && (int) $user->office_id !== $officeId) {
             throw new AuthorizationException('This item is not visible in your stock levels list.');
         }
+
+        $item = Item::query()
+            ->whereKey($itemId)
+            ->whereNull('archived_at')
+            ->first();
+
+        if ($item === null) {
+            throw new AuthorizationException('This item is not visible in your stock levels list.');
+        }
+
+        if ($categoryId !== null && (int) $item->item_category_id !== $categoryId) {
+            throw new AuthorizationException('This item is not visible in your stock levels list.');
+        }
+
+        $officeExists = Office::query()
+            ->whereKey($officeId)
+            ->whereNull('archived_at')
+            ->exists();
+
+        if (! $officeExists) {
+            throw new AuthorizationException('This item is not visible in your stock levels list.');
+        }
+
+        $keys = app(InventoryStockService::class)->getActiveStockPositionKeys([$itemId], $officeId);
+
+        if ($keys !== []) {
+            if ($unitCost === null || isset($keys[UnitCostKey::positionKey($itemId, $officeId, $unitCost)])) {
+                return;
+            }
+
+            throw new AuthorizationException('This item is not visible in your stock levels list.');
+        }
+
+        $regionalOfficeId = ItemOpeningStockFields::resolveRegionalOfficeId();
+        if (
+            $regionalOfficeId !== null
+            && $regionalOfficeId === $officeId
+            && ($unitCost === null || UnitCostKey::equals($unitCost, 0.0))
+            && ItemOpeningStockFields::canSetStartingStock($item, $officeId)
+        ) {
+            return;
+        }
+
+        throw new AuthorizationException('This item is not visible in your stock levels list.');
     }
 
     /**

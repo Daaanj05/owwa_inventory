@@ -12,7 +12,7 @@ class TopAcquiredProductsWidget extends Widget
 {
     protected static ?int $sort = 5;
 
-    protected static bool $isLazy = false;
+    protected static bool $isLazy = true;
 
     protected int|string|array $columnSpan = 'full';
 

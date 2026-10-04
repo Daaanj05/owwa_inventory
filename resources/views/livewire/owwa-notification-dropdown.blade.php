@@ -2,10 +2,12 @@
     use Filament\Support\Icons\Heroicon;
 
     $unreadCount = $this->getUnreadNotificationsCount();
+    $visibleNotifications = $this->getVisibleNotifications();
     $grouped = $this->getGroupedNotifications();
-    $hasNotifications = $this->getVisibleNotifications()->isNotEmpty();
+    $hasNotifications = $visibleNotifications->isNotEmpty();
     $hasMoreNotifications = $this->hasMoreNotifications();
     $pollingInterval = $this->getPollingInterval();
+    $broadcastChannel = $this->getBroadcastChannel();
 @endphp
 
 <div
@@ -16,19 +18,10 @@
         wire:poll.{{ $pollingInterval }}
     @endif
 >
-    <button
-        type="button"
-        class="owwa-notif-trigger fi-topbar-item-btn"
-        x-on:click="open = ! open"
-        aria-label="Notifications"
-        aria-haspopup="true"
-        :aria-expanded="open"
-    >
-        <x-filament::icon :icon="Heroicon::OutlinedBell" class="owwa-notif-trigger-icon" />
-        @if ($unreadCount > 0)
-            <span class="owwa-notif-badge">{{ $unreadCount > 99 ? '99+' : $unreadCount }}</span>
-        @endif
-    </button>
+    @include('livewire.partials.owwa-notification-bell', [
+        'interactive' => true,
+        'unreadCount' => $unreadCount,
+    ])
 
     <div
         x-show="open"
@@ -95,28 +88,73 @@
                                     $payload = $this->getFilamentNotification($notification);
                                     $icon = $notification->data['icon'] ?? Heroicon::OutlinedBell->value;
                                     $isUnread = $notification->unread();
+                                    $actions = collect($notification->data['actions'] ?? [])
+                                        ->filter(fn (mixed $action): bool => is_array($action) && filled($action['url'] ?? null))
+                                        ->values();
+                                    $hasExportActions = $actions->count() > 1
+                                        || $actions->contains(fn (array $action): bool => in_array(
+                                            strtolower((string) ($action['label'] ?? '')),
+                                            ['preview', 'download', 'download export'],
+                                            true,
+                                        ));
                                 @endphp
 
-                                <button
-                                    type="button"
-                                    class="owwa-notif-row {{ $isUnread ? 'owwa-notif-row--unread' : '' }}"
-                                    wire:click="openNotification('{{ $notification->id }}')"
-                                    wire:key="owwa-notif-{{ $notification->id }}"
-                                >
-                                    <div class="owwa-notif-row-icon">
-                                        <x-filament::icon :icon="$icon" class="owwa-notif-row-icon-svg" />
-                                    </div>
-                                    <div class="owwa-notif-row-body">
-                                        <p class="owwa-notif-row-title">{{ $payload->getTitle() }}</p>
-                                        @if (filled($payload->getBody()))
-                                            <p class="owwa-notif-row-text">{{ $payload->getBody() }}</p>
+                                @if ($hasExportActions)
+                                    <div
+                                        class="owwa-notif-row {{ $isUnread ? 'owwa-notif-row--unread' : '' }}"
+                                        wire:key="owwa-notif-{{ $notification->id }}"
+                                    >
+                                        <div class="owwa-notif-row-icon">
+                                            <x-filament::icon :icon="$icon" class="owwa-notif-row-icon-svg" />
+                                        </div>
+                                        <div class="owwa-notif-row-body">
+                                            <p class="owwa-notif-row-title">{{ $payload->getTitle() }}</p>
+                                            @if (filled($payload->getBody()))
+                                                <p class="owwa-notif-row-text">{{ $payload->getBody() }}</p>
+                                            @endif
+                                            <p class="owwa-notif-row-time">{{ $notification->created_at?->diffForHumans(short: true) }}</p>
+                                            <div class="owwa-notif-row-actions">
+                                                @foreach ($actions as $action)
+                                                    @php
+                                                        $label = (string) ($action['label'] ?? 'Open');
+                                                        $url = (string) $action['url'];
+                                                        $isPreview = strtolower($label) === 'preview';
+                                                    @endphp
+                                                    <a
+                                                        href="{{ $url }}"
+                                                        class="owwa-notif-row-action"
+                                                        @if ($isPreview) target="_blank" rel="noopener noreferrer" @endif
+                                                        wire:click.stop="markNotificationRead('{{ $notification->id }}')"
+                                                    >{{ $label }}</a>
+                                                @endforeach
+                                            </div>
+                                        </div>
+                                        @if ($isUnread)
+                                            <span class="owwa-notif-row-dot" aria-hidden="true"></span>
                                         @endif
-                                        <p class="owwa-notif-row-time">{{ $notification->created_at?->diffForHumans(short: true) }}</p>
                                     </div>
-                                    @if ($isUnread)
-                                        <span class="owwa-notif-row-dot" aria-hidden="true"></span>
-                                    @endif
-                                </button>
+                                @else
+                                    <button
+                                        type="button"
+                                        class="owwa-notif-row {{ $isUnread ? 'owwa-notif-row--unread' : '' }}"
+                                        wire:click="openNotification('{{ $notification->id }}')"
+                                        wire:key="owwa-notif-{{ $notification->id }}"
+                                    >
+                                        <div class="owwa-notif-row-icon">
+                                            <x-filament::icon :icon="$icon" class="owwa-notif-row-icon-svg" />
+                                        </div>
+                                        <div class="owwa-notif-row-body">
+                                            <p class="owwa-notif-row-title">{{ $payload->getTitle() }}</p>
+                                            @if (filled($payload->getBody()))
+                                                <p class="owwa-notif-row-text">{{ $payload->getBody() }}</p>
+                                            @endif
+                                            <p class="owwa-notif-row-time">{{ $notification->created_at?->diffForHumans(short: true) }}</p>
+                                        </div>
+                                        @if ($isUnread)
+                                            <span class="owwa-notif-row-dot" aria-hidden="true"></span>
+                                        @endif
+                                    </button>
+                                @endif
                             @endforeach
                         </div>
                     @endif
@@ -136,4 +174,26 @@
             </div>
         @endif
     </div>
+
+    @if (filled($broadcastChannel) && blank($pollingInterval))
+        @script
+            <script>
+                window.addEventListener('EchoLoaded', () => {
+                    window.Echo.private(@js($broadcastChannel)).listen(
+                        '.database-notifications.sent',
+                        () => {
+                            setTimeout(
+                                () => $wire.call('$refresh'),
+                                500,
+                            )
+                        },
+                    )
+                })
+
+                if (window.Echo) {
+                    window.dispatchEvent(new CustomEvent('EchoLoaded'))
+                }
+            </script>
+        @endscript
+    @endif
 </div>

@@ -5,15 +5,13 @@ namespace App\Events;
 use App\Models\Issuance;
 use Illuminate\Broadcasting\InteractsWithSockets;
 use Illuminate\Broadcasting\PrivateChannel;
-use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
+use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
 
-class IssuanceChanged implements ShouldBroadcast
+class IssuanceChanged implements ShouldBroadcastNow
 {
     use Dispatchable, InteractsWithSockets, SerializesModels;
-
-    public bool $afterCommit = true;
 
     public function __construct(
         public Issuance $issuance,

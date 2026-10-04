@@ -8,8 +8,8 @@ use App\Services\InventoryStockService;
 use App\Services\RequisitionFulfillmentService;
 use App\Support\OfficeSignatoryDefaults;
 use App\Support\RequisitionLineDisplay;
+use Carbon\Carbon;
 use Closure;
-use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Repeater;
@@ -17,6 +17,8 @@ use Filament\Forms\Components\Repeater\TableColumn;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Get;
+use Filament\Support\Enums\Alignment;
+use Filament\Support\Enums\VerticalAlignment;
 
 class RequisitionIssuanceFormSchema
 {
@@ -107,45 +109,45 @@ class RequisitionIssuanceFormSchema
     protected static function consolidatedIssueModalFields(Requisition $record, bool $remainderOnly): array
     {
         $tableColumns = [
-            TableColumn::make('Category'),
-            TableColumn::make('Item'),
-            TableColumn::make('Identifier'),
-            TableColumn::make('Requested'),
+            self::textTableColumn('Category', '12%'),
+            self::textTableColumn('Item', '18%'),
+            self::textTableColumn('Identifier', '12%'),
         ];
 
         if ($remainderOnly) {
-            $tableColumns[] = TableColumn::make('Issued');
+            $tableColumns[] = self::numericTableColumn('Issued', '5rem');
         }
 
         $tableColumns = [
             ...$tableColumns,
-            TableColumn::make('Remaining'),
-            TableColumn::make('Stock'),
-            TableColumn::make('Qty to issue'),
-            TableColumn::make('Issue remarks'),
+            self::numericTableColumn('Stock', '5rem'),
+            self::numericTableColumn('Requested', '5.5rem'),
+            self::numericTableColumn('Qty to issue', '6rem'),
+            self::numericTableColumn('Remaining', '5.5rem'),
+            self::textTableColumn('Issue remarks', '16%'),
         ];
 
         $lineSchema = [
             Hidden::make('requisition_item_id')->required(),
             Hidden::make('stock_at_request'),
             Hidden::make('is_backordered'),
-            TextInput::make('category_label')->disabled()->dehydrated(),
-            TextInput::make('item_label')->disabled()->dehydrated(),
-            TextInput::make('identifier_value')->disabled()->dehydrated(),
-            TextInput::make('quantity_requested')->disabled()->dehydrated(),
+            TextInput::make('category_label')->hiddenLabel()->disabled()->dehydrated(),
+            TextInput::make('item_label')->hiddenLabel()->disabled()->dehydrated(),
+            TextInput::make('identifier_value')->hiddenLabel()->disabled()->dehydrated(),
         ];
 
         if ($remainderOnly) {
-            $lineSchema[] = TextInput::make('quantity_issued')->disabled()->dehydrated();
+            $lineSchema[] = TextInput::make('quantity_issued')->hiddenLabel()->disabled()->dehydrated();
         } else {
             $lineSchema[] = Hidden::make('quantity_issued');
         }
 
         $lineSchema = [
             ...$lineSchema,
-            TextInput::make('quantity_remaining')->disabled()->dehydrated(),
-            TextInput::make('stock_available')->disabled()->dehydrated(),
+            TextInput::make('stock_available')->hiddenLabel()->disabled()->dehydrated(),
+            TextInput::make('quantity_requested')->hiddenLabel()->disabled()->dehydrated(),
             TextInput::make('quantity_to_issue')
+                ->hiddenLabel()
                 ->numeric()
                 ->minValue(0)
                 ->maxValue(fn (Get $get): int => max(0, min(
@@ -175,11 +177,11 @@ class RequisitionIssuanceFormSchema
                 ->required()
                 ->default(0)
                 ->live(),
+            TextInput::make('quantity_remaining')->hiddenLabel()->disabled()->dehydrated(),
             TextInput::make('issue_remarks')
-                ->required(fn (Get $get): bool => self::quantityWasChanged($get))
-                ->helperText(fn (Get $get): ?string => self::quantityWasChanged($get)
-                    ? 'Required when the quantity to issue differs from the requested quantity.'
-                    : null),
+                ->hiddenLabel()
+                ->placeholder('Required if qty differs')
+                ->required(fn (Get $get): bool => self::quantityWasChanged($get)),
         ];
 
         return self::wrapIssueModal($record, $remainderOnly, $tableColumns, $lineSchema);
@@ -191,45 +193,45 @@ class RequisitionIssuanceFormSchema
     protected static function endorsementIssueModalFields(Requisition $record, bool $remainderOnly): array
     {
         $tableColumns = [
-            TableColumn::make('Employee'),
-            TableColumn::make('Request'),
-            TableColumn::make('Category'),
-            TableColumn::make('Item'),
-            TableColumn::make('Endorsed'),
+            self::textTableColumn('Employee', '12%'),
+            self::textTableColumn('Request', '10%'),
+            self::textTableColumn('Category', '10%'),
+            self::textTableColumn('Item', '14%'),
         ];
 
         if ($remainderOnly) {
-            $tableColumns[] = TableColumn::make('Issued');
+            $tableColumns[] = self::numericTableColumn('Issued', '5rem');
         }
 
         $tableColumns = [
             ...$tableColumns,
-            TableColumn::make('Remaining'),
-            TableColumn::make('Stock'),
-            TableColumn::make('Qty to issue'),
-            TableColumn::make('Issue remarks'),
+            self::numericTableColumn('Stock', '5rem'),
+            self::numericTableColumn('Endorsed', '5.5rem'),
+            self::numericTableColumn('Qty to issue', '6rem'),
+            self::numericTableColumn('Remaining', '5.5rem'),
+            self::textTableColumn('Issue remarks', '14%'),
         ];
 
         $lineSchema = [
             Hidden::make('source_endorsement_id')->required(),
-            TextInput::make('employee_name')->disabled()->dehydrated(),
-            TextInput::make('transaction_number')->disabled()->dehydrated(),
-            TextInput::make('category_label')->disabled()->dehydrated(),
-            TextInput::make('item_label')->disabled()->dehydrated(),
-            TextInput::make('quantity_endorsed')->disabled()->dehydrated(),
+            TextInput::make('employee_name')->hiddenLabel()->disabled()->dehydrated(),
+            TextInput::make('transaction_number')->hiddenLabel()->disabled()->dehydrated(),
+            TextInput::make('category_label')->hiddenLabel()->disabled()->dehydrated(),
+            TextInput::make('item_label')->hiddenLabel()->disabled()->dehydrated(),
         ];
 
         if ($remainderOnly) {
-            $lineSchema[] = TextInput::make('quantity_issued')->disabled()->dehydrated();
+            $lineSchema[] = TextInput::make('quantity_issued')->hiddenLabel()->disabled()->dehydrated();
         } else {
             $lineSchema[] = Hidden::make('quantity_issued');
         }
 
         $lineSchema = [
             ...$lineSchema,
-            TextInput::make('quantity_remaining')->disabled()->dehydrated(),
-            TextInput::make('stock_available')->disabled()->dehydrated(),
+            TextInput::make('stock_available')->hiddenLabel()->disabled()->dehydrated(),
+            TextInput::make('quantity_endorsed')->hiddenLabel()->disabled()->dehydrated(),
             TextInput::make('quantity_to_issue')
+                ->hiddenLabel()
                 ->numeric()
                 ->minValue(0)
                 ->maxValue(fn (Get $get): int => max(0, min(
@@ -259,11 +261,11 @@ class RequisitionIssuanceFormSchema
                 ->required()
                 ->default(0)
                 ->live(),
+            TextInput::make('quantity_remaining')->hiddenLabel()->disabled()->dehydrated(),
             TextInput::make('issue_remarks')
-                ->required(fn (Get $get): bool => self::endorsementQuantityWasChanged($get))
-                ->helperText(fn (Get $get): ?string => self::endorsementQuantityWasChanged($get)
-                    ? 'Required when the quantity to issue differs from the remaining endorsed quantity.'
-                    : null),
+                ->hiddenLabel()
+                ->placeholder('Required if qty differs')
+                ->required(fn (Get $get): bool => self::endorsementQuantityWasChanged($get)),
         ];
 
         return self::wrapIssueModal($record, $remainderOnly, $tableColumns, $lineSchema, true);
@@ -287,12 +289,14 @@ class RequisitionIssuanceFormSchema
             : self::defaultLines($record, $remainderOnly);
 
         $fields = [
-            DatePicker::make('issuance_date')
-                ->label('Issuance date')
-                ->required()
+            Hidden::make('issuance_date')
                 ->default(now()->toDateString())
-                ->disabled()
                 ->dehydrated(),
+            Placeholder::make('issuance_date_display')
+                ->label('Issuance date')
+                ->content(fn (Get $get): string => filled($get('issuance_date'))
+                    ? Carbon::parse((string) $get('issuance_date'))->format('M d, Y')
+                    : now()->format('M d, Y')),
         ];
 
         if ($usesEndorsements) {
@@ -317,15 +321,13 @@ class RequisitionIssuanceFormSchema
                     ->label('Recipient designation')
                     ->maxLength(255)
                     ->helperText('Printed on PAR/ICS as received-by designation (Unit Consolidator on consolidated RIS).'),
-                TextInput::make('accounting_staff_printed_name')
-                    ->label('Accounting staff (RSMI)')
-                    ->maxLength(255),
             ])
             ->columns(2)
             ->columnSpanFull();
 
         $fields[] = Repeater::make('lines')
             ->label($usesEndorsements ? 'Issue per employee' : 'Items to issue')
+            ->extraAttributes(['class' => 'owwa-requisition-issue-lines-repeater'])
             ->table($tableColumns)
             ->compact()
             ->schema($lineSchema)
@@ -336,6 +338,22 @@ class RequisitionIssuanceFormSchema
             ->columnSpanFull();
 
         return $fields;
+    }
+
+    protected static function textTableColumn(string $label, string $width): TableColumn
+    {
+        return TableColumn::make($label)
+            ->alignment(Alignment::Start)
+            ->verticalAlignment(VerticalAlignment::Center)
+            ->width($width);
+    }
+
+    protected static function numericTableColumn(string $label, string $width): TableColumn
+    {
+        return TableColumn::make($label)
+            ->alignment(Alignment::Center)
+            ->verticalAlignment(VerticalAlignment::Center)
+            ->width($width);
     }
 
     protected static function quantityWasChanged(Get $get): bool

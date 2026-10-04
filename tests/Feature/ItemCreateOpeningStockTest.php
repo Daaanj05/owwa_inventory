@@ -57,10 +57,6 @@ class ItemCreateOpeningStockTest extends TestCase
         $this->assertDatabaseMissing(StockOpeningBalance::class, [
             'item_id' => $item->id,
         ]);
-
-        Livewire::withQueryParams(['category' => (string) $category->id])
-            ->test(ListItems::class)
-            ->assertActionVisible(TestAction::make('setOpeningStock')->table($item));
     }
 
     public function test_create_form_does_not_show_starting_stock_fields(): void

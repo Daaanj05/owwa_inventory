@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Filament\Resources\Acquisitions\Concerns\AcquisitionProcurementExportAction;
 use App\Filament\Resources\Acquisitions\InspectionAcceptanceReports\Actions\InspectionAcceptanceReportActions;
 use App\Filament\Resources\Acquisitions\Pages\ListAcquisitions;
 use App\Filament\Resources\Acquisitions\Paperwork\Actions\AcquisitionPaperworkActions;
@@ -17,6 +18,7 @@ use App\Services\AcquisitionPaperworkCompletionService;
 use App\Services\InspectionAcceptanceReportWorkflowService;
 use App\Services\PurchaseOrderWorkflowService;
 use Filament\Facades\Filament;
+use Filament\Forms\Components\DatePicker;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Validation\ValidationException;
 use Livewire\Livewire;
@@ -57,8 +59,8 @@ class AcquisitionProcurementUxTest extends TestCase
         ]);
 
         $this->assertNotEmpty($paperwork->missingPrFields());
-        $this->assertFalse($this->actionVisible(AcquisitionPaperworkActions::exportPrAction(), $paperwork));
-        $this->assertFalse($this->actionVisible(AcquisitionPaperworkActions::exportPrPdfAction(), $paperwork));
+        $this->assertFalse($this->actionVisible(AcquisitionPaperworkActions::exportPrFastPdfAction(), $paperwork));
+        $this->assertFalse($this->actionVisible(AcquisitionPaperworkActions::exportPrFastExcelAction(), $paperwork));
 
         $item = Item::factory()->create(['item_category_id' => $category->id]);
         $paperwork->update([
@@ -73,8 +75,33 @@ class AcquisitionProcurementUxTest extends TestCase
         ]);
 
         $this->assertSame([], $paperwork->fresh()->missingPrFields());
-        $this->assertTrue($this->actionVisible(AcquisitionPaperworkActions::exportPrAction(), $paperwork->fresh()));
-        $this->assertTrue($this->actionVisible(AcquisitionPaperworkActions::exportPrPdfAction(), $paperwork->fresh()));
+        $this->assertTrue($this->actionVisible(AcquisitionPaperworkActions::exportPrFastPdfAction(), $paperwork->fresh()));
+        $this->assertTrue($this->actionVisible(AcquisitionPaperworkActions::exportPrFastExcelAction(), $paperwork->fresh()));
+        $this->assertSame('Export PDF', AcquisitionPaperworkActions::exportPrFastPdfAction()->getLabel());
+        $this->assertSame('Export Excel', AcquisitionPaperworkActions::exportPrFastExcelAction()->getLabel());
+    }
+
+    /**
+     * @return array<string, array{0: string}>
+     */
+    public static function exportPrFastPdfCategoryProvider(): array
+    {
+        return [
+            'consumables' => ['Consumables'],
+            'ppe' => ['PPE'],
+            'semi_expendable' => ['Semi-Expendable'],
+        ];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('exportPrFastPdfCategoryProvider')]
+    public function test_export_pr_fast_pdf_visible_for_each_category_when_fields_complete(string $categoryName): void
+    {
+        $office = Office::factory()->create(['is_regional_supply' => true]);
+        $category = ItemCategory::factory()->create(['name' => $categoryName]);
+        $paperwork = $this->createPrDraft($office, $category);
+
+        $this->assertSame([], $paperwork->missingPrFields());
+        $this->assertTrue($this->actionVisible(AcquisitionPaperworkActions::exportPrFastPdfAction(), $paperwork));
     }
 
     public function test_receive_blocked_when_receive_date_is_in_the_future(): void
@@ -300,43 +327,24 @@ class AcquisitionProcurementUxTest extends TestCase
         unset($second);
     }
 
-    public function test_bulk_po_pdf_export_includes_technical_specification_sheet(): void
+    public function test_bulk_po_pdf_export_returns_fast_lookalike_pdf(): void
     {
-        $this->skipUnlessLibreOfficeAvailable();
-
-        if (! $this->acquisitionPaperworkTemplatesExist()) {
-            $this->markTestSkipped('OWWA acquisition paperwork templates are not installed.');
-        }
-
         Filament::setCurrentPanel(Filament::getPanel('admin'));
 
         $po = $this->createDraftPo();
-        $uniqueSpecs = 'BULK-PO-TECH-SPECS-'.uniqid();
         $po->update([
+            'number' => 'PO-2026-0099',
             'supplier_name' => 'Supplier Co.',
             'supplier_address' => '123 Main St',
             'mode_of_procurement' => 'Shopping',
             'place_of_delivery' => 'OWWA RO',
             'date_of_delivery' => now()->addDays(7)->toDateString(),
             'payment_term' => '30 days',
-            'technical_specifications' => $uniqueSpecs,
+            'technical_specifications' => 'N/A',
             'po_date' => now()->toDateString(),
         ]);
         $po->lines()->update(['is_ordered' => true, 'unit_cost' => 10, 'amount' => 50]);
         app(PurchaseOrderWorkflowService::class)->submit($po->fresh(['lines']));
-
-        $spreadsheet = app(\App\Services\AcquisitionPaperworkPdfExportService::class)
-            ->purchaseOrderFilledSpreadsheet($po->fresh(['orderedLines.item', 'purchaseRequest.itemCategory']));
-
-        $this->assertGreaterThanOrEqual(2, $spreadsheet->getSheetCount());
-        $foundTechSpec = false;
-        foreach ($spreadsheet->getAllSheets() as $sheet) {
-            if (str_contains((string) $sheet->getCell('A1')->getValue(), 'TECHNICAL SPECIFICATION')) {
-                $foundTechSpec = true;
-                $this->assertStringContainsString($uniqueSpecs, (string) $sheet->getCell('A3')->getValue());
-            }
-        }
-        $this->assertTrue($foundTechSpec, 'PO spreadsheet must include Technical Specification sheet.');
 
         $user = User::factory()->create([
             'role' => User::ROLE_SUPPLY_CUSTODIAN,
@@ -354,67 +362,15 @@ class AcquisitionProcurementUxTest extends TestCase
 
         $response->assertOk()
             ->assertHeader('content-type', 'application/pdf');
-        $pdf = $response->getContent();
-        $this->assertStringStartsWith('%PDF', $pdf);
-        $this->assertTrue(
-            (bool) preg_match('/\/Type\s*\/Pages\b.*?\/Count\s+(\d+)/s', $pdf, $pageCountMatch)
-            && (int) $pageCountMatch[1] >= 2,
-            'Bulk PO PDF must include the form and Technical Specification pages.',
-        );
-
-        // LibreOffice PDFs often use CID/glyph encodings, so page count + spreadsheet
-        // sheet coverage is the gate when text is not directly extractable.
-        if (str_contains($pdf, '/Producer (DomPdf') || str_contains($pdf, '/Producer (Dompdf')) {
-            $this->fail('PDF export must use LibreOffice, not Dompdf.');
-        }
+        $this->assertStringStartsWith('%PDF', $response->getContent());
     }
 
-    protected function pdfBinaryContainsText(string $pdf, string $needle): bool
+    public function test_export_po_and_iar_actions_use_excel_pdf_labels(): void
     {
-        $candidates = array_values(array_unique(array_filter([
-            $needle,
-            // LibreOffice often stores literal strings as UTF-16BE.
-            "\xFE\xFF".$this->utf16Be($needle),
-            $this->utf16Be($needle),
-        ], fn (string $value): bool => $value !== '')));
-
-        foreach ($candidates as $candidate) {
-            if (str_contains($pdf, $candidate)) {
-                return true;
-            }
-        }
-
-        if (! preg_match_all('/stream\r?\n(.*?)\r?\nendstream/s', $pdf, $matches)) {
-            return false;
-        }
-
-        foreach ($matches[1] as $stream) {
-            foreach ([
-                static fn (string $data): string|false => @gzuncompress($data),
-                static fn (string $data): string|false => @gzinflate($data),
-                static fn (string $data): string|false => @gzinflate(substr($data, 2)),
-            ] as $decoder) {
-                $decoded = $decoder($stream);
-                if (! is_string($decoded) || $decoded === '') {
-                    continue;
-                }
-
-                foreach ($candidates as $candidate) {
-                    if (str_contains($decoded, $candidate)) {
-                        return true;
-                    }
-                }
-            }
-        }
-
-        return false;
-    }
-
-    protected function utf16Be(string $value): string
-    {
-        $encoded = @iconv('UTF-8', 'UTF-16BE//IGNORE', $value);
-
-        return is_string($encoded) ? $encoded : '';
+        $this->assertSame('Export PDF', AcquisitionPaperworkActions::exportPoPdfAction()->getLabel());
+        $this->assertSame('Export Excel', AcquisitionPaperworkActions::exportPoAction()->getLabel());
+        $this->assertSame('Export PDF', AcquisitionPaperworkActions::exportIarPdfAction()->getLabel());
+        $this->assertSame('Export Excel', AcquisitionPaperworkActions::exportIarAction()->getLabel());
     }
 
     public function test_export_action_resolves_category_from_livewire_property(): void
@@ -440,6 +396,69 @@ class AcquisitionProcurementUxTest extends TestCase
                 'date_to' => now()->toDateString(),
             ])
             ->assertSuccessful();
+    }
+
+    public function test_export_report_defaults_date_range_to_current_year(): void
+    {
+        $action = AcquisitionProcurementExportAction::make('pr');
+        $reflection = new \ReflectionObject($action);
+        $property = $reflection->getProperty('schema');
+        $property->setAccessible(true);
+        /** @var array<int, mixed> $schema */
+        $schema = $property->getValue($action);
+
+        $defaults = $this->collectDatePickerDefaults($schema);
+
+        $this->assertSame(now()->startOfYear()->toDateString(), $defaults['date_from'] ?? null);
+        $this->assertSame(now()->endOfYear()->toDateString(), $defaults['date_to'] ?? null);
+    }
+
+    /**
+     * @param  array<int, mixed>  $components
+     * @return array<string, string>
+     */
+    protected function collectDatePickerDefaults(array $components): array
+    {
+        $defaults = [];
+
+        foreach ($components as $key => $component) {
+            if (is_array($component)) {
+                $defaults = array_merge($defaults, $this->collectDatePickerDefaults($component));
+
+                continue;
+            }
+
+            if ($component instanceof DatePicker) {
+                $defaultReflection = new \ReflectionObject($component);
+                $defaultProperty = $defaultReflection->getProperty('defaultState');
+                $defaultProperty->setAccessible(true);
+                $default = $defaultProperty->getValue($component);
+                if (is_callable($default)) {
+                    $default = $default();
+                }
+                $defaults[$component->getName()] = (string) $default;
+
+                continue;
+            }
+
+            if (! is_object($component)) {
+                continue;
+            }
+
+            $childReflection = new \ReflectionObject($component);
+            if (! $childReflection->hasProperty('childComponents')) {
+                continue;
+            }
+
+            $childProperty = $childReflection->getProperty('childComponents');
+            $childProperty->setAccessible(true);
+            $children = $childProperty->getValue($component);
+            if (is_array($children)) {
+                $defaults = array_merge($defaults, $this->collectDatePickerDefaults($children));
+            }
+        }
+
+        return $defaults;
     }
 
     public function test_approve_po_and_iar_hidden_until_submitted(): void

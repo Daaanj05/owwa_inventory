@@ -18,13 +18,14 @@ use App\Support\ConsumableInventoryType;
 use App\Support\IssuanceDistributionVisibility;
 use App\Support\ItemPropertyClass;
 use App\Support\OwwaCellMapping;
-use App\Support\OwwaExportDiagnostics;
 use App\Support\OwwaExportFilename;
 use App\Support\PhysicalCountPageLayout;
 use App\Support\PhysicalCountPropertyClassResolver;
 use App\Support\PpePropertyType;
 use App\Support\PropertyCardLayout;
+use App\Support\StockCardLedgerDateRange;
 use App\Support\UnitCostKey;
+use Carbon\CarbonInterface;
 use Illuminate\Http\Response;
 use Illuminate\Support\Collection;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
@@ -87,13 +88,25 @@ class OwwaItemReportService
             default => array_values(array_unique(array_filter($officeIds, fn (int $id): bool => $id > 0))),
         };
 
-        $itemsById ??= Item::query()->whereIn('id', $itemIds)->get()->keyBy('id');
+        $itemsById ??= Item::query()
+            ->with('category:id,name')
+            ->whereIn('id', $itemIds)
+            ->get()
+            ->keyBy('id');
 
         /** @var array<int, array<int, array<string, mixed>>> $rowsByItem */
         $rowsByItem = array_fill_keys($itemIds, []);
 
+        $needsPropertyHolderLabels = $itemsById->contains(
+            fn (Item $item): bool => in_array(
+                $item->category?->getTemplateSlug() ?? 'consumables',
+                ['ppe', 'semi_expendable'],
+                true,
+            ),
+        );
+
         Acquisition::query()
-            ->with('office')
+            ->with(['office:id,name'])
             ->whereIn('item_id', $itemIds)
             ->when($normalizedOfficeIds !== [], fn ($q) => $q->whereIn('office_id', $normalizedOfficeIds))
             ->orderBy('acquisition_date')
@@ -125,19 +138,43 @@ class OwwaItemReportService
                 ];
             });
 
+        $issuanceRelations = [
+            'office:id,name',
+            'issuedTo:id,name,role',
+            'batch:id,reference_code',
+        ];
+
+        if ($needsPropertyHolderLabels) {
+            $issuanceRelations = [
+                ...$issuanceRelations,
+                'requisition:id,requested_by',
+                'requisition.requestedBy:id,name,role',
+                'consolidatedRequisition:id,requested_by',
+                'consolidatedRequisition.requestedBy:id,name,role',
+                'batch.lines:id,issuance_batch_id,item_id,requisition_id,quantity,consolidated_requisition_id',
+            ];
+        }
+
         Issuance::query()
-            ->with(['office', 'issuedTo'])
+            ->with($issuanceRelations)
             ->whereIn('item_id', $itemIds)
             ->when($normalizedOfficeIds !== [], fn ($q) => $q->whereIn('office_id', $normalizedOfficeIds))
             ->orderBy('issuance_date')
             ->get()
-            ->each(function (Issuance $issuance) use (&$rowsByItem, $unitCost): void {
+            ->each(function (Issuance $issuance) use (&$rowsByItem, $itemsById, $unitCost): void {
                 if ($unitCost !== null && ! UnitCostKey::equals(
                     $issuance->unit_cost !== null ? (float) $issuance->unit_cost : null,
                     $unitCost,
                 )) {
                     return;
                 }
+
+                $slug = $itemsById->get($issuance->item_id)?->category?->getTemplateSlug() ?? 'consumables';
+                $officeOfficer = in_array($slug, ['ppe', 'semi_expendable'], true)
+                    ? (IssuanceDistributionVisibility::holderLabelForIssuance($issuance)
+                        ?? $issuance->issuedTo?->name
+                        ?? $issuance->office?->name)
+                    : ($issuance->issuedTo?->name ?? $issuance->office?->name);
 
                 $rowsByItem[$issuance->item_id][] = [
                     'office_id' => $issuance->office_id,
@@ -148,9 +185,7 @@ class OwwaItemReportService
                     'receipt_qty' => null,
                     'issue_qty' => $issuance->quantity,
                     'issue_office' => $issuance->office?->name,
-                    'office_officer' => IssuanceDistributionVisibility::holderLabelForIssuance($issuance)
-                        ?? $issuance->issuedTo?->name
-                        ?? $issuance->office?->name,
+                    'office_officer' => $officeOfficer,
                     'remarks' => $issuance->remarks,
                     'property_number' => $issuance->property_number,
                     'unit_cost' => $issuance->unit_cost,
@@ -158,7 +193,7 @@ class OwwaItemReportService
             });
 
         Transfer::query()
-            ->with(['fromOffice', 'toOffice'])
+            ->with(['fromOffice:id,name', 'toOffice:id,name'])
             ->whereIn('item_id', $itemIds)
             ->when($normalizedOfficeIds !== [], fn ($q) => $q->whereIn('to_office_id', $normalizedOfficeIds))
             ->orderBy('transfer_date')
@@ -192,7 +227,7 @@ class OwwaItemReportService
             });
 
         Transfer::query()
-            ->with(['fromOffice', 'toOffice'])
+            ->with(['fromOffice:id,name', 'toOffice:id,name'])
             ->whereIn('item_id', $itemIds)
             ->when($normalizedOfficeIds !== [], fn ($q) => $q->whereIn('from_office_id', $normalizedOfficeIds))
             ->orderBy('transfer_date')
@@ -228,7 +263,7 @@ class OwwaItemReportService
             });
 
         Disposal::query()
-            ->with('office')
+            ->with(['office:id,name'])
             ->whereIn('item_id', $itemIds)
             ->when($normalizedOfficeIds !== [], fn ($q) => $q->whereIn('office_id', $normalizedOfficeIds))
             ->orderBy('disposal_date')
@@ -586,9 +621,12 @@ class OwwaItemReportService
             ->values();
     }
 
-    public function downloadStockCardBulk(Collection $pairs): StreamedResponse
-    {
-        $merged = $this->buildStockCardBulkSpreadsheet($pairs);
+    public function downloadStockCardBulk(
+        Collection $pairs,
+        ?CarbonInterface $dateFrom = null,
+        ?CarbonInterface $dateTo = null,
+    ): StreamedResponse {
+        $merged = $this->buildStockCardBulkSpreadsheet($pairs, $dateFrom, $dateTo);
         $writer = new Xlsx($merged);
         $downloadName = OwwaExportFilename::batch('SC');
 
@@ -599,10 +637,13 @@ class OwwaItemReportService
         ]);
     }
 
-    public function downloadStockCardBulkPdf(Collection $pairs): Response
-    {
+    public function downloadStockCardBulkPdf(
+        Collection $pairs,
+        ?CarbonInterface $dateFrom = null,
+        ?CarbonInterface $dateTo = null,
+    ): Response {
         return $this->templateExport->pdfDownloadResponse(
-            $this->buildStockCardBulkSpreadsheet($pairs),
+            $this->buildStockCardBulkSpreadsheet($pairs, $dateFrom, $dateTo),
             OwwaExportFilename::batch('SC', ext: 'pdf'),
         );
     }
@@ -610,44 +651,75 @@ class OwwaItemReportService
     /**
      * @param  Collection<int, array{item_id: int, office_id: int, unit_cost: float|null}>  $pairs
      */
-    protected function buildStockCardBulkSpreadsheet(Collection $pairs): Spreadsheet
-    {
+    public function buildStockCardBulkSpreadsheet(
+        Collection $pairs,
+        ?CarbonInterface $dateFrom = null,
+        ?CarbonInterface $dateTo = null,
+    ): Spreadsheet {
+
+        $resolved = $this->resolveConsumableBulkPairs($pairs);
+        if ($resolved->isEmpty()) {
+            abort(404, 'No matching stock cards could be built for the selected positions.');
+        }
+
+        $itemIds = $resolved->pluck('item_id')->unique()->values()->all();
+        $officeIds = $resolved->pluck('office_id')->unique()->values()->all();
+        $itemsById = $resolved->pluck('item', 'item_id');
+
+        $historiesByCostKey = [];
+        foreach ($resolved->groupBy(fn (array $pair): string => UnitCostKey::normalize($pair['unit_cost'])) as $costKey => $group) {
+            $unitCost = $group->first()['unit_cost'] ?? null;
+            $historiesByCostKey[$costKey] = $this->buildTransactionHistoriesForItems(
+                $itemIds,
+                $officeIds,
+                true,
+                $itemsById,
+                $unitCost,
+            );
+        }
+
         $merged = new Spreadsheet;
         $removedDefaultSheet = false;
         $usedSheetTitles = [];
+        /** @var array<string, string> $templateBinaryByPath */
+        $templateBinaryByPath = [];
 
-        foreach ($pairs as $pair) {
-            $itemId = (int) ($pair['item_id'] ?? 0);
-            $officeId = (int) ($pair['office_id'] ?? 0);
-            $unitCost = isset($pair['unit_cost']) ? (float) $pair['unit_cost'] : null;
+        foreach ($resolved as $index => $pair) {
+            $item = $pair['item'];
+            $office = $pair['office'];
+            $unitCost = $pair['unit_cost'];
+            $costKey = UnitCostKey::normalize($unitCost);
+            $itemHistory = $historiesByCostKey[$costKey][$item->id] ?? [];
+            $transactions = array_values(array_filter(
+                $itemHistory,
+                fn (array $txn): bool => (int) ($txn['office_id'] ?? 0) === (int) $pair['office_id'],
+            ));
 
-            if ($itemId <= 0 || $officeId <= 0) {
-                continue;
+            if ($dateFrom !== null && $dateTo !== null) {
+                $transactions = StockCardLedgerDateRange::applyApproachB(
+                    $transactions,
+                    $dateFrom,
+                    $dateTo,
+                    newestFirst: true,
+                );
             }
 
-            $item = Item::query()->with('category')->find($itemId);
-            if ($item === null || $item->category?->getTemplateSlug() !== 'consumables') {
-                continue;
-            }
-
-            $office = Office::query()->find($officeId);
-            if ($office === null) {
-                continue;
-            }
-
-            OwwaExportDiagnostics::info('stock_card_sheet_start', [
-                'item_id' => $itemId,
-                'office_id' => $officeId,
-                'unit_cost' => $unitCost,
-                'item_code' => $item->item_code,
-            ]);
-
-            $source = $this->stockCardFilledSpreadsheet($item, $office, $officeId, $unitCost);
-            $sheet = $source->getSheet(0);
+            $templatePath = $this->resolveItemReportTemplate($item, 'sc');
+            $sheetMeta = $this->resolveItemReportSheet($item, 'sc');
+            $templateBinaryByPath[$templatePath] ??= $this->templateExport->readTemplateBinary($templatePath);
+            $source = $this->templateExport->renderFilledSpreadsheetFromBinary(
+                $templateBinaryByPath[$templatePath],
+                $templatePath,
+                $this->cellValuesForSc($item, $office, $pair['office_id'], $unitCost, $transactions),
+                $sheetMeta['sheetIndex'],
+                $sheetMeta['sheetName'],
+            );
+            $sheet = filled($sheetMeta['sheetName'])
+                ? ($source->getSheetByName($sheetMeta['sheetName']) ?? $source->getSheet($sheetMeta['sheetIndex']))
+                : $source->getSheet($sheetMeta['sheetIndex']);
 
             $titleBase = filled($item->item_code) ? (string) $item->item_code : 'item_'.$item->id;
             $sheet->setTitle($this->uniqueExcelSheetTitle($titleBase, $usedSheetTitles));
-
             $merged->addExternalSheet($sheet);
 
             if (! $removedDefaultSheet) {
@@ -657,21 +729,80 @@ class OwwaItemReportService
 
             $source->disconnectWorksheets();
             unset($source, $sheet);
-            gc_collect_cycles();
 
-            OwwaExportDiagnostics::info('stock_card_sheet_done', [
-                'item_id' => $itemId,
-                'office_id' => $officeId,
-            ]);
-        }
-
-        if (! $removedDefaultSheet) {
-            abort(404, 'No matching stock cards could be built for the selected positions.');
+            if (($index + 1) % 25 === 0) {
+                gc_collect_cycles();
+            }
         }
 
         $merged->setActiveSheetIndex(0);
 
         return $merged;
+    }
+
+    /**
+     * @param  Collection<int, array{item_id: int, office_id: int, unit_cost: float|null}>  $pairs
+     * @return Collection<int, array{item_id: int, office_id: int, unit_cost: float|null, item: Item, office: Office}>
+     */
+    protected function resolveConsumableBulkPairs(Collection $pairs): Collection
+    {
+        $normalized = $pairs
+            ->map(fn (array $pair): ?array => $this->normalizeBulkPair($pair))
+            ->filter()
+            ->values();
+
+        if ($normalized->isEmpty()) {
+            return collect();
+        }
+
+        $itemsById = Item::query()
+            ->with('category')
+            ->whereIn('id', $normalized->pluck('item_id')->unique()->all())
+            ->get()
+            ->keyBy('id');
+
+        $officesById = Office::query()
+            ->whereIn('id', $normalized->pluck('office_id')->unique()->all())
+            ->get()
+            ->keyBy('id');
+
+        return $normalized
+            ->map(function (array $pair) use ($itemsById, $officesById): ?array {
+                $item = $itemsById->get($pair['item_id']);
+                $office = $officesById->get($pair['office_id']);
+                if ($item === null || $office === null || $item->category?->getTemplateSlug() !== 'consumables') {
+                    return null;
+                }
+
+                return [
+                    ...$pair,
+                    'item' => $item,
+                    'office' => $office,
+                ];
+            })
+            ->filter()
+            ->values();
+    }
+
+    /**
+     * @param  array{item_id?: int, office_id?: int, unit_cost?: float|null}  $pair
+     * @return array{item_id: int, office_id: int, unit_cost: float|null}|null
+     */
+    protected function normalizeBulkPair(array $pair): ?array
+    {
+        $itemId = (int) ($pair['item_id'] ?? 0);
+        $officeId = (int) ($pair['office_id'] ?? 0);
+        if ($itemId <= 0 || $officeId <= 0) {
+            return null;
+        }
+
+        return [
+            'item_id' => $itemId,
+            'office_id' => $officeId,
+            'unit_cost' => array_key_exists('unit_cost', $pair) && $pair['unit_cost'] !== null
+                ? (float) $pair['unit_cost']
+                : null,
+        ];
     }
 
     public function downloadPropertyCardBulk(Collection $pairs): StreamedResponse
@@ -698,37 +829,92 @@ class OwwaItemReportService
     /**
      * @param  Collection<int, array{item_id: int, office_id: int, unit_cost?: float|null}>  $pairs
      */
-    protected function buildPropertyCardBulkSpreadsheet(Collection $pairs): Spreadsheet
+    public function buildPropertyCardBulkSpreadsheet(Collection $pairs): Spreadsheet
     {
+        $normalized = $pairs
+            ->map(fn (array $pair): ?array => $this->normalizeBulkPair($pair))
+            ->filter()
+            ->values();
+
+        if ($normalized->isEmpty()) {
+            abort(404, 'No matching property cards could be built for the selected positions.');
+        }
+
+        $itemsById = Item::query()
+            ->with('category')
+            ->whereIn('id', $normalized->pluck('item_id')->unique()->all())
+            ->get()
+            ->keyBy('id');
+
+        $officesById = Office::query()
+            ->whereIn('id', $normalized->pluck('office_id')->unique()->all())
+            ->get()
+            ->keyBy('id');
+
+        $resolved = $normalized
+            ->map(function (array $pair) use ($itemsById, $officesById): ?array {
+                $item = $itemsById->get($pair['item_id']);
+                $office = $officesById->get($pair['office_id']);
+                if ($item === null || $office === null || $item->category?->getTemplateSlug() !== 'ppe') {
+                    return null;
+                }
+
+                return [
+                    ...$pair,
+                    'item' => $item,
+                    'office' => $office,
+                ];
+            })
+            ->filter()
+            ->values();
+
+        if ($resolved->isEmpty()) {
+            abort(404, 'No matching property cards could be built for the selected positions.');
+        }
+
+        $itemIds = $resolved->pluck('item_id')->unique()->values()->all();
+        $officeIds = $resolved->pluck('office_id')->unique()->values()->all();
+        $itemsForHistory = $resolved->pluck('item', 'item_id');
+
+        $historiesByCostKey = [];
+        foreach ($resolved->groupBy(fn (array $pair): string => UnitCostKey::normalize($pair['unit_cost'])) as $costKey => $group) {
+            $unitCost = $group->first()['unit_cost'] ?? null;
+            $historiesByCostKey[$costKey] = $this->buildTransactionHistoriesForItems(
+                $itemIds,
+                $officeIds,
+                true,
+                $itemsForHistory,
+                $unitCost,
+            );
+        }
+
+        $templatePath = PropertyCardLayout::templatePath();
+        $templateBinary = $this->templateExport->readTemplateBinary($templatePath);
+
         $merged = new Spreadsheet;
         $removedDefaultSheet = false;
         $usedSheetTitles = [];
 
-        foreach ($pairs as $pair) {
-            $itemId = (int) ($pair['item_id'] ?? 0);
-            $officeId = (int) ($pair['office_id'] ?? 0);
-            $unitCost = isset($pair['unit_cost']) ? (float) $pair['unit_cost'] : null;
+        foreach ($resolved as $index => $pair) {
+            $item = $pair['item'];
+            $office = $pair['office'];
+            $unitCost = $pair['unit_cost'];
+            $costKey = UnitCostKey::normalize($unitCost);
+            $itemHistory = $historiesByCostKey[$costKey][$item->id] ?? [];
+            $transactions = array_values(array_filter(
+                $itemHistory,
+                fn (array $txn): bool => (int) ($txn['office_id'] ?? 0) === (int) $pair['office_id'],
+            ));
 
-            if ($itemId <= 0 || $officeId <= 0) {
-                continue;
-            }
-
-            $item = Item::query()->with('category')->find($itemId);
-            if ($item === null || $item->category?->getTemplateSlug() !== 'ppe') {
-                continue;
-            }
-
-            $office = Office::query()->find($officeId);
-            if ($office === null) {
-                continue;
-            }
-
-            $source = $this->propertyCardFilledSpreadsheet($item, $office, $officeId, $unitCost);
+            $source = $this->templateExport->renderFilledSpreadsheetFromBinary(
+                $templateBinary,
+                $templatePath,
+                $this->cellValuesForPropertyCard($item, $office, $pair['office_id'], $unitCost, $transactions),
+            );
             $sheet = $source->getSheet(0);
 
             $titleBase = filled($item->item_code) ? (string) $item->item_code : 'item_'.$item->id;
             $sheet->setTitle($this->uniqueExcelSheetTitle($titleBase, $usedSheetTitles));
-
             $merged->addExternalSheet($sheet);
 
             if (! $removedDefaultSheet) {
@@ -738,11 +924,10 @@ class OwwaItemReportService
 
             $source->disconnectWorksheets();
             unset($source, $sheet);
-            gc_collect_cycles();
-        }
 
-        if (! $removedDefaultSheet) {
-            abort(404, 'No matching property cards could be built for the selected positions.');
+            if (($index + 1) % 25 === 0) {
+                gc_collect_cycles();
+            }
         }
 
         $merged->setActiveSheetIndex(0);
@@ -799,7 +984,7 @@ class OwwaItemReportService
      * @param  Collection<int, array{item_id: int, office_id: int, unit_cost?: float|null}>  $pairs
      * @return array<int, array{sheetName: string, blocks?: array<int, array{header: array<string, string|null>, transactions: array<int, array<string, mixed>>}>}>
      */
-    protected function buildAnnexA1BulkTabs(Collection $pairs): array
+    public function buildAnnexA1BulkTabs(Collection $pairs): array
     {
         $resolvedPairs = $this->resolveSemiExpendableBulkPairs($pairs);
 
@@ -1282,8 +1467,17 @@ class OwwaItemReportService
     /**
      * @return array<string, string|int|float|null>
      */
-    protected function cellValuesForSc(Item $item, ?Office $office, ?int $officeId, ?float $unitCost = null): array
-    {
+    /**
+     * @param  array<int, array<string, mixed>>|null  $transactions
+     * @return array<string, string|int|float|null>
+     */
+    protected function cellValuesForSc(
+        Item $item,
+        ?Office $office,
+        ?int $officeId,
+        ?float $unitCost = null,
+        ?array $transactions = null,
+    ): array {
         $values = [
             'A6' => 'Entity Name: '.($office?->name ?? ''),
             'F6' => '',
@@ -1296,7 +1490,8 @@ class OwwaItemReportService
 
         $startRow = 13;
         $row = $startRow;
-        foreach ($this->buildTransactionHistory($item, $officeId, newestFirst: true, unitCost: $unitCost) as $txn) {
+        $transactions ??= $this->buildTransactionHistory($item, $officeId, newestFirst: true, unitCost: $unitCost);
+        foreach ($transactions as $txn) {
             if ($row > $startRow + 49) {
                 break;
             }
@@ -1440,11 +1635,20 @@ class OwwaItemReportService
     /**
      * @return array<string, string|int|float|null>
      */
-    public function cellValuesForPropertyCard(Item $item, ?Office $office, ?int $officeId, ?float $unitCost = null): array
-    {
+    /**
+     * @param  array<int, array<string, mixed>>|null  $transactions
+     * @return array<string, string|int|float|null>
+     */
+    public function cellValuesForPropertyCard(
+        Item $item,
+        ?Office $office,
+        ?int $officeId,
+        ?float $unitCost = null,
+        ?array $transactions = null,
+    ): array {
         $transactions = array_map(
             fn (array $txn): array => PropertyCardLayout::normalizeTransactionRow($txn),
-            $this->buildTransactionHistory($item, $officeId, newestFirst: true, unitCost: $unitCost),
+            $transactions ?? $this->buildTransactionHistory($item, $officeId, newestFirst: true, unitCost: $unitCost),
         );
 
         return PropertyCardLayout::buildFromItem($item, $office, $officeId, $transactions);

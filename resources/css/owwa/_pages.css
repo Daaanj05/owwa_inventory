@@ -1864,9 +1864,9 @@ select.owwa-search-bar {
     border-bottom: none;
 }
 
-.owwa-consolidated-totals-summary table td.text-right,
-.owwa-consolidated-totals-summary table th.text-right {
-    text-align: right;
+.owwa-consolidated-totals-summary table td.text-center,
+.owwa-consolidated-totals-summary table th.text-center {
+    text-align: center;
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
 }
@@ -1930,14 +1930,14 @@ select.owwa-search-bar {
 
 .fi-modal-window.owwa-record-modal.owwa-requisition-uc-modal .owwa-uc-endorsement-repeater.fi-fo-table-repeater > table > thead > tr > th,
 .fi-modal-window.owwa-record-modal.owwa-requisition-uc-modal .owwa-uc-endorsement-repeater.fi-fo-table-repeater > table > tbody > tr > td {
-    vertical-align: top;
+    vertical-align: middle;
     padding-block: 0.4rem;
 }
 
 .fi-modal-window.owwa-record-modal.owwa-requisition-uc-modal .owwa-uc-endorsement-repeater .owwa-uc-endorsed-qty,
 .fi-modal-window.owwa-record-modal.owwa-requisition-uc-modal .owwa-uc-endorsement-repeater .owwa-uc-endorsed-qty .fi-input-wrp {
     max-width: 5rem;
-    margin-left: auto;
+    margin-inline: auto;
 }
 
 .fi-modal-window.owwa-record-modal.owwa-requisition-uc-modal .owwa-uc-endorsement-repeater textarea.fi-input {
@@ -1980,6 +1980,61 @@ select.owwa-search-bar {
 .fi-modal-window.owwa-record-modal.owwa-requisition-uc-modal .owwa-uc-endorse-section .fi-section-content,
 .fi-modal-window.owwa-record-modal.owwa-requisition-uc-modal .owwa-uc-purpose-section .fi-section-content {
     width: 100%;
+}
+
+/* Custodian Review & Issue / Issue Remainder: wide table lines */
+.fi-modal-window.owwa-record-modal.owwa-requisition-issue-modal .owwa-requisition-issue-lines-repeater.fi-fo-table-repeater,
+.fi-modal-window.owwa-record-modal.owwa-requisition-issue-modal .owwa-requisition-issue-lines-repeater.fi-fo-table-repeater > table {
+    width: 100% !important;
+    max-width: 100% !important;
+}
+
+.fi-modal-window.owwa-record-modal.owwa-requisition-issue-modal .owwa-requisition-issue-lines-repeater.fi-fo-table-repeater {
+    overflow-x: auto;
+}
+
+.fi-modal-window.owwa-record-modal.owwa-requisition-issue-modal .owwa-requisition-issue-lines-repeater.fi-fo-table-repeater > table {
+    table-layout: fixed;
+    min-width: 56rem;
+}
+
+.fi-modal-window.owwa-record-modal.owwa-requisition-issue-modal .owwa-requisition-issue-lines-repeater.fi-fo-table-repeater > table > thead > tr > th,
+.fi-modal-window.owwa-record-modal.owwa-requisition-issue-modal .owwa-requisition-issue-lines-repeater.fi-fo-table-repeater > table > tbody > tr > td {
+    vertical-align: middle;
+    padding-block: 0.15rem;
+    padding-inline: 0.35rem;
+}
+
+.fi-modal-window.owwa-record-modal.owwa-requisition-issue-modal .owwa-requisition-issue-lines-repeater > table > tbody > tr > td .fi-input-wrp {
+    max-width: 100%;
+}
+
+.fi-modal-window.owwa-record-modal.owwa-requisition-issue-modal .owwa-requisition-issue-lines-repeater > table > tbody > tr > td .fi-input[type="number"] {
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+}
+
+.fi-modal-window.owwa-record-modal.owwa-requisition-issue-modal .fi-modal-footer.fi-align-center,
+.fi-modal-window.owwa-record-modal.owwa-requisition-issue-modal .fi-modal-footer {
+    display: flex;
+    justify-content: flex-end;
+}
+
+.fi-modal-window.owwa-record-modal.owwa-requisition-issue-modal .fi-modal-footer-actions {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 0.5rem;
+    width: auto;
+    max-width: 100%;
+}
+
+.fi-modal-window.owwa-record-modal.owwa-requisition-issue-modal .fi-modal-footer-actions .fi-btn {
+    width: auto;
+    min-width: unset;
+    flex: 0 0 auto;
 }
 
 .fi-resource-list-records-page .fi-ta-header-toolbar > .fi-ta-actions {

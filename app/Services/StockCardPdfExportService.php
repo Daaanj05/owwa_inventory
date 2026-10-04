@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use Carbon\CarbonInterface;
 use Illuminate\Http\Response;
 use Illuminate\Support\Collection;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -17,12 +18,16 @@ class StockCardPdfExportService
      *
      * @param  Collection<int, array{item_id: int, office_id: int, unit_cost: float|null}>  $pairs
      */
-    public function downloadMerged(Collection $pairs, string $categorySlug): Response|StreamedResponse
-    {
+    public function downloadMerged(
+        Collection $pairs,
+        string $categorySlug,
+        ?CarbonInterface $dateFrom = null,
+        ?CarbonInterface $dateTo = null,
+    ): Response|StreamedResponse {
         return match ($categorySlug) {
             'semi_expendable' => $this->itemReport->downloadAnnexA1BulkPdf($pairs),
             'ppe' => $this->itemReport->downloadPropertyCardBulkPdf($pairs),
-            default => $this->itemReport->downloadStockCardBulkPdf($pairs),
+            default => $this->itemReport->downloadStockCardBulkPdf($pairs, $dateFrom, $dateTo),
         };
     }
 }

@@ -73,13 +73,21 @@ class IssuanceViewActions
 
     protected static function startExport(Issuance $record, Action $action, bool $asPdf): void
     {
-        $url = route('owwa.export.issuance', $record).($asPdf ? '?format=pdf' : '');
+        $record->loadMissing('item.category');
+        $isConsumableRsmiPdf = $asPdf
+            && $record->item?->category?->getTemplateSlug() === 'consumables';
+
+        $url = $isConsumableRsmiPdf
+            ? route('owwa.export.issuance.rsmi-fast-pdf', $record)
+            : route('owwa.export.issuance', $record).($asPdf ? '?format=pdf' : '');
+
         $livewire = $action->getLivewire();
         OwwaExportBusyDispatcher::start(
             $livewire instanceof LivewireComponent ? $livewire : null,
             $url,
             $asPdf ? 'Preparing PDF export…' : 'Preparing Excel export…',
             $asPdf ? 'Building your OWWA PDF…' : 'Building your OWWA form…',
+            $asPdf ? 300000 : 120000,
         );
     }
 }

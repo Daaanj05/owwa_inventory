@@ -263,15 +263,6 @@
                                             </x-slot>
 
                                             <x-filament::dropdown.list>
-                                                @if($row->can_set_starting_stock ?? false)
-                                                    <x-filament::dropdown.list.item
-                                                        icon="heroicon-o-archive-box-arrow-down"
-                                                        wire:click="openSetStartingStock({{ (int) $row->item_id }})"
-                                                    >
-                                                        Set starting stock
-                                                    </x-filament::dropdown.list.item>
-                                                @endif
-
                                                 @if($this->canCreateTransfer())
                                                     @if($row->stock > 0)
                                                         <x-filament::dropdown.list.item

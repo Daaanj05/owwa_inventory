@@ -132,4 +132,81 @@ class ItemSubItemNameTest extends TestCase
             'name' => 'Bond Paper Long',
         ]);
     }
+
+    public function test_create_normalizes_family_name_case_insensitively(): void
+    {
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+
+        $office = Office::factory()->create();
+        $custodian = User::factory()->create([
+            'role' => User::ROLE_SUPPLY_CUSTODIAN,
+            'office_id' => $office->id,
+        ]);
+
+        $category = ItemCategory::factory()->create(['name' => 'Consumables']);
+        session(['active_item_category_id' => $category->id]);
+
+        Item::factory()->create([
+            'item_category_id' => $category->id,
+            'base_name' => 'Bond Paper',
+            'sub_item' => 'A4',
+            'name' => 'Bond Paper A4',
+            'unit' => 'ream',
+        ]);
+
+        Livewire::actingAs($custodian)
+            ->test(CreateItem::class)
+            ->fillForm([
+                'item_category_id' => $category->id,
+                'base_name' => 'bond paper',
+                'sub_item' => 'Letter',
+                'unit' => 'ream',
+                'reorder_level' => 10,
+                'inventory_type' => 'office_supplies',
+            ])
+            ->call('create')
+            ->assertHasNoFormErrors()
+            ->assertNotified();
+
+        $this->assertDatabaseHas(Item::class, [
+            'base_name' => 'Bond Paper',
+            'sub_item' => 'Letter',
+            'name' => 'Bond Paper Letter',
+        ]);
+        $this->assertSame(0, Item::query()->where('base_name', 'bond paper')->count());
+    }
+
+    public function test_create_accepts_brand_new_family_typed_without_select_option(): void
+    {
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+
+        $office = Office::factory()->create();
+        $custodian = User::factory()->create([
+            'role' => User::ROLE_SUPPLY_CUSTODIAN,
+            'office_id' => $office->id,
+        ]);
+
+        $category = ItemCategory::factory()->create(['name' => 'Consumables']);
+        session(['active_item_category_id' => $category->id]);
+
+        Livewire::actingAs($custodian)
+            ->test(CreateItem::class)
+            ->fillForm([
+                'item_category_id' => $category->id,
+                'base_name' => 'Tissue',
+                'sub_item' => null,
+                'unit' => 'box',
+                'reorder_level' => 3,
+                'inventory_type' => 'office_supplies',
+            ])
+            ->call('create')
+            ->assertHasNoFormErrors()
+            ->assertNotified();
+
+        $this->assertDatabaseHas(Item::class, [
+            'base_name' => 'Tissue',
+            'sub_item' => null,
+            'name' => 'Tissue',
+        ]);
+    }
 }

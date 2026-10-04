@@ -12,6 +12,8 @@ use Filament\Forms\Components\Checkbox;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Components\Component;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
+use Illuminate\Http\Exceptions\HttpResponseException;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Session;
 use Illuminate\Support\Str;
@@ -27,6 +29,8 @@ class Login extends BaseLogin
 
     public function mount(): void
     {
+        $this->redirectAwayFromCredentialQueryString();
+
         parent::mount();
 
         $rememberedEmail = LoginRememberedEmail::read();
@@ -43,6 +47,37 @@ class Login extends BaseLogin
             'email' => $rememberedEmail,
             'remember' => true,
         ]);
+    }
+
+    protected function redirectAwayFromCredentialQueryString(): void
+    {
+        $query = request()->query();
+
+        // Browsers/PHP may expose "data.email" as "data_email" after a native GET submit.
+        $hasCredentialQuery = array_key_exists('data.email', $query)
+            || array_key_exists('data.password', $query)
+            || array_key_exists('data_email', $query)
+            || array_key_exists('data_password', $query)
+            || (is_array($query['data'] ?? null) && (
+                array_key_exists('email', $query['data'])
+                || array_key_exists('password', $query['data'])
+            ));
+
+        if (! $hasCredentialQuery) {
+            return;
+        }
+
+        $loginUrl = Filament::getCurrentOrDefaultPanel()?->getLoginUrl() ?? url('/login');
+        $safeQuery = array_filter([
+            'reauth' => $query['reauth'] ?? null,
+            'logged_out' => $query['logged_out'] ?? null,
+        ], fn (mixed $value): bool => $value !== null && $value !== '');
+
+        $target = $safeQuery === []
+            ? $loginUrl
+            : $loginUrl.'?'.http_build_query($safeQuery);
+
+        throw new HttpResponseException(new RedirectResponse($target));
     }
 
     public function authenticate(): ?LoginResponse

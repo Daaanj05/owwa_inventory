@@ -271,17 +271,34 @@ class OpeningBalanceBatchesTable
         $officeId = ItemOpeningStockFields::resolveRegionalOfficeId();
         $includeItemIds = array_values(array_unique(array_filter($includeItemIds)));
 
-        return Item::query()
+        if ($officeId === null || $officeId < 1) {
+            return Item::query()
+                ->where('item_category_id', $categoryId)
+                ->whereNull('archived_at')
+                ->whereIn('id', $includeItemIds)
+                ->orderBy('name')
+                ->pluck('name', 'id')
+                ->all();
+        }
+
+        $items = Item::query()
             ->where('item_category_id', $categoryId)
             ->whereNull('archived_at')
             ->orderBy('name')
-            ->get()
-            ->filter(function (Item $item) use ($officeId, $includeItemIds): bool {
+            ->get(['id', 'name']);
+
+        $blocked = ItemOpeningStockFields::itemIdsBlockedFromStartingStock(
+            $items->pluck('id')->map(fn (mixed $id): int => (int) $id)->all(),
+            $officeId,
+        );
+
+        return $items
+            ->filter(function (Item $item) use ($includeItemIds, $blocked): bool {
                 if (in_array((int) $item->id, $includeItemIds, true)) {
                     return true;
                 }
 
-                return ItemOpeningStockFields::canSetStartingStock($item, $officeId);
+                return ! isset($blocked[$item->id]);
             })
             ->pluck('name', 'id')
             ->all();

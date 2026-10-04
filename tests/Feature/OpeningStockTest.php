@@ -33,7 +33,7 @@ class OpeningStockTest extends TestCase
     {
         [$office, $item, $user] = $this->createConsumableFixtures();
 
-        $result = app(OpeningBalanceService::class)->setOpeningStock(
+        $result = $this->postOpeningStock(
             item: $item,
             officeId: $office->id,
             quantity: 100,
@@ -55,7 +55,7 @@ class OpeningStockTest extends TestCase
     {
         [$office, $item, $user] = $this->createConsumableFixtures();
 
-        app(OpeningBalanceService::class)->setOpeningStock(
+        $this->postOpeningStock(
             item: $item,
             officeId: $office->id,
             quantity: 100,
@@ -111,7 +111,7 @@ class OpeningStockTest extends TestCase
     {
         [$office, $item, $user] = $this->createPpeFixtures();
 
-        $result = app(OpeningBalanceService::class)->setOpeningStock(
+        $result = $this->postOpeningStock(
             item: $item,
             officeId: $office->id,
             quantity: 3,
@@ -130,7 +130,7 @@ class OpeningStockTest extends TestCase
     {
         [$office, $item, $user] = $this->createConsumableFixtures();
 
-        app(OpeningBalanceService::class)->setOpeningStock(
+        $this->postOpeningStock(
             item: $item,
             officeId: $office->id,
             quantity: 10,
@@ -140,7 +140,7 @@ class OpeningStockTest extends TestCase
 
         $this->expectException(\Illuminate\Validation\ValidationException::class);
 
-        app(OpeningBalanceService::class)->setOpeningStock(
+        $this->postOpeningStock(
             item: $item,
             officeId: $office->id,
             quantity: 5,
@@ -153,7 +153,7 @@ class OpeningStockTest extends TestCase
     {
         [$office, $item, $user] = $this->createPpeFixtures();
 
-        $result = app(OpeningBalanceService::class)->setOpeningStock(
+        $result = $this->postOpeningStock(
             item: $item,
             officeId: $office->id,
             quantity: 2,
@@ -179,7 +179,7 @@ class OpeningStockTest extends TestCase
     {
         [$office, $item, $user] = $this->createPpeFixtures();
 
-        $result = app(OpeningBalanceService::class)->setOpeningStock(
+        $result = $this->postOpeningStock(
             item: $item,
             officeId: $office->id,
             quantity: 2,
@@ -224,7 +224,7 @@ class OpeningStockTest extends TestCase
             ->get(route('owwa.qr-labels.item', $item))
             ->assertNotFound();
 
-        app(OpeningBalanceService::class)->setOpeningStock(
+        $this->postOpeningStock(
             item: $item,
             officeId: $office->id,
             quantity: 1,
@@ -252,7 +252,7 @@ class OpeningStockTest extends TestCase
     {
         [$office, $item, $user] = $this->createPpeFixtures();
 
-        $result = app(OpeningBalanceService::class)->setOpeningStock(
+        $result = $this->postOpeningStock(
             item: $item,
             officeId: $office->id,
             quantity: 1,
@@ -276,6 +276,33 @@ class OpeningStockTest extends TestCase
 
         $scan = app(PhysicalCountScanService::class)->resolve($session, $legacy);
         $this->assertSame(PhysicalCountScanOutcome::Found, $scan->outcome);
+    }
+
+    /**
+     * @return array{opening: StockOpeningBalance, units: array<int, InventoryUnit>}
+     */
+    protected function postOpeningStock(
+        Item $item,
+        int $officeId,
+        int $quantity,
+        ?float $unitCost,
+        ?User $recordedBy = null,
+    ): array {
+        $service = app(OpeningBalanceService::class);
+        $draft = $service->createDraftLine(
+            item: $item,
+            officeId: $officeId,
+            quantity: $quantity,
+            unitCost: $unitCost,
+            recordedBy: $recordedBy,
+        );
+        $units = $service->mintUnitsForConfirmedLine($draft['opening']);
+        app(InventoryStockService::class)->forgetMovementTotalsCache();
+
+        return [
+            'opening' => $draft['opening'],
+            'units' => $units,
+        ];
     }
 
     /**

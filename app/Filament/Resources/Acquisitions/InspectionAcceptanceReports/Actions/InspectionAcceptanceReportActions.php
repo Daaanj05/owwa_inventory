@@ -210,6 +210,7 @@ class InspectionAcceptanceReportActions
             $url,
             'Preparing export…',
             'Building your OWWA form…',
+            300000,
         );
     }
 

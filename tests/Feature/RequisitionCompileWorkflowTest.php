@@ -252,15 +252,79 @@ class RequisitionCompileWorkflowTest extends TestCase
 
     public function test_endorsed_quantity_less_than_requested_requires_employee_remarks(): void
     {
-        $this->expectException(\Illuminate\Validation\ValidationException::class);
+        try {
+            app(RequisitionCompileService::class)->validateEndorsementLines([
+                [
+                    'requested_quantity' => 10,
+                    'endorsed_quantity' => 8,
+                    'employee_remarks' => null,
+                ],
+            ]);
+            $this->fail('Expected ValidationException was not thrown.');
+        } catch (\Illuminate\Validation\ValidationException $exception) {
+            $this->assertArrayHasKey('endorsement_lines.0.employee_remarks', $exception->errors());
+        }
+    }
 
+    public function test_endorsed_quantity_greater_than_requested_requires_employee_remarks(): void
+    {
+        try {
+            app(RequisitionCompileService::class)->validateEndorsementLines([
+                [
+                    'requested_quantity' => 10,
+                    'endorsed_quantity' => 12,
+                    'employee_remarks' => null,
+                ],
+            ]);
+            $this->fail('Expected ValidationException was not thrown.');
+        } catch (\Illuminate\Validation\ValidationException $exception) {
+            $this->assertArrayHasKey('endorsement_lines.0.employee_remarks', $exception->errors());
+        }
+    }
+
+    public function test_validate_endorsement_lines_preserves_non_numeric_keys(): void
+    {
+        $uuid = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
+
+        try {
+            app(RequisitionCompileService::class)->validateEndorsementLines([
+                $uuid => [
+                    'requested_quantity' => 5,
+                    'endorsed_quantity' => 3,
+                    'employee_remarks' => null,
+                ],
+            ]);
+            $this->fail('Expected ValidationException was not thrown.');
+        } catch (\Illuminate\Validation\ValidationException $exception) {
+            $this->assertArrayHasKey("endorsement_lines.{$uuid}.employee_remarks", $exception->errors());
+            $this->assertArrayNotHasKey('endorsement_lines.0.employee_remarks', $exception->errors());
+        }
+    }
+
+    public function test_endorsed_quantity_equal_to_requested_allows_empty_remarks(): void
+    {
         app(RequisitionCompileService::class)->validateEndorsementLines([
             [
                 'requested_quantity' => 10,
-                'endorsed_quantity' => 8,
+                'endorsed_quantity' => 10,
                 'employee_remarks' => null,
             ],
         ]);
+
+        $this->assertTrue(true);
+    }
+
+    public function test_endorsed_quantity_may_exceed_requested_when_remarks_present(): void
+    {
+        app(RequisitionCompileService::class)->validateEndorsementLines([
+            [
+                'requested_quantity' => 10,
+                'endorsed_quantity' => 15,
+                'employee_remarks' => 'Added for contingency',
+            ],
+        ]);
+
+        $this->assertTrue(true);
     }
 
     public function test_source_endorsements_persist_with_employee_attribution(): void
@@ -548,6 +612,233 @@ class RequisitionCompileWorkflowTest extends TestCase
             RequisitionWorkflowDatabaseNotification::class,
             fn (RequisitionWorkflowDatabaseNotification $notification): bool => str_contains($notification->body, 'endorsed 8')
                 && str_contains($notification->body, 'Over budget'),
+        );
+    }
+
+    public function test_create_requires_remarks_when_endorsed_quantity_is_reduced_using_uuid_keys(): void
+    {
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+
+        $office = Office::factory()->create();
+        $department = Department::query()->create([
+            'office_id' => $office->id,
+            'name' => 'Operations Division',
+            'code' => 'OPS',
+        ]);
+        $item = Item::factory()->create();
+
+        $employee = User::factory()->create([
+            'role' => User::ROLE_EMPLOYEE,
+            'office_id' => $office->id,
+            'department_id' => $department->id,
+        ]);
+        $uc = User::factory()->create([
+            'role' => User::ROLE_UNIT_CONSOLIDATOR,
+            'office_id' => $office->id,
+            'department_id' => $department->id,
+        ]);
+        $uc->syncOfficeAssignments([
+            ['office_id' => $office->id, 'department_id' => $department->id],
+        ]);
+
+        $employeeRequisition = Requisition::query()->create([
+            'office_id' => $office->id,
+            'department_id' => $department->id,
+            'requested_by' => $employee->id,
+            'status' => Requisition::STATUS_ACCEPTED,
+            'purpose' => 'Employee supplies',
+        ]);
+        RequisitionItem::query()->create([
+            'requisition_id' => $employeeRequisition->id,
+            'item_id' => $item->id,
+            'quantity' => 10,
+        ]);
+
+        $this->actingAs($uc);
+
+        $test = Livewire::test(ListRequisitions::class)
+            ->mountAction(TestAction::make('create')->schemaComponent(true, 'content'), [
+                'office_id' => $office->id,
+                'department_id' => $department->id,
+                'prefillSourceRequisitionIds' => [$employeeRequisition->id],
+            ]);
+
+        $lines = $test->get('mountedActions.0.data.endorsement_lines');
+        $this->assertIsArray($lines);
+        $uuid = (string) array_key_first($lines);
+        $this->assertNotSame('', $uuid);
+        $this->assertFalse(is_numeric($uuid));
+
+        $test->fillForm([
+            'purpose' => 'Compiled office supplies',
+            'endorsement_lines' => [
+                $uuid => [
+                    ...$lines[$uuid],
+                    'endorsed_quantity' => 6,
+                    'employee_remarks' => null,
+                ],
+            ],
+        ])
+            ->callMountedAction()
+            ->assertHasFormErrors(["endorsement_lines.{$uuid}.employee_remarks"])
+            ->assertNotNotified();
+
+        $this->assertDatabaseMissing(Requisition::class, [
+            'requested_by' => $uc->id,
+        ]);
+    }
+
+    public function test_create_requires_remarks_when_endorsed_quantity_is_increased_using_uuid_keys(): void
+    {
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+
+        $office = Office::factory()->create();
+        $department = Department::query()->create([
+            'office_id' => $office->id,
+            'name' => 'Operations Division',
+            'code' => 'OPS',
+        ]);
+        $item = Item::factory()->create();
+
+        $employee = User::factory()->create([
+            'role' => User::ROLE_EMPLOYEE,
+            'office_id' => $office->id,
+            'department_id' => $department->id,
+        ]);
+        $uc = User::factory()->create([
+            'role' => User::ROLE_UNIT_CONSOLIDATOR,
+            'office_id' => $office->id,
+            'department_id' => $department->id,
+        ]);
+        $uc->syncOfficeAssignments([
+            ['office_id' => $office->id, 'department_id' => $department->id],
+        ]);
+
+        $employeeRequisition = Requisition::query()->create([
+            'office_id' => $office->id,
+            'department_id' => $department->id,
+            'requested_by' => $employee->id,
+            'status' => Requisition::STATUS_ACCEPTED,
+            'purpose' => 'Employee supplies',
+        ]);
+        RequisitionItem::query()->create([
+            'requisition_id' => $employeeRequisition->id,
+            'item_id' => $item->id,
+            'quantity' => 10,
+        ]);
+
+        $this->actingAs($uc);
+
+        $test = Livewire::test(ListRequisitions::class)
+            ->mountAction(TestAction::make('create')->schemaComponent(true, 'content'), [
+                'office_id' => $office->id,
+                'department_id' => $department->id,
+                'prefillSourceRequisitionIds' => [$employeeRequisition->id],
+            ]);
+
+        $lines = $test->get('mountedActions.0.data.endorsement_lines');
+        $this->assertIsArray($lines);
+        $uuid = (string) array_key_first($lines);
+        $this->assertFalse(is_numeric($uuid));
+
+        $test->fillForm([
+            'purpose' => 'Compiled office supplies',
+            'endorsement_lines' => [
+                $uuid => [
+                    ...$lines[$uuid],
+                    'endorsed_quantity' => 14,
+                    'employee_remarks' => null,
+                ],
+            ],
+        ])
+            ->callMountedAction()
+            ->assertHasFormErrors(["endorsement_lines.{$uuid}.employee_remarks"])
+            ->assertNotNotified();
+
+        $this->assertDatabaseMissing(Requisition::class, [
+            'requested_by' => $uc->id,
+        ]);
+    }
+
+    public function test_notification_sent_when_endorsed_quantity_is_increased(): void
+    {
+        Notification::fake();
+
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+
+        $office = Office::factory()->create();
+        $department = Department::query()->create([
+            'office_id' => $office->id,
+            'name' => 'Operations Division',
+            'code' => 'OPS',
+        ]);
+        $item = Item::factory()->create();
+
+        $employee = User::factory()->create([
+            'role' => User::ROLE_EMPLOYEE,
+            'office_id' => $office->id,
+            'department_id' => $department->id,
+        ]);
+        $uc = User::factory()->create([
+            'role' => User::ROLE_UNIT_CONSOLIDATOR,
+            'office_id' => $office->id,
+            'department_id' => $department->id,
+        ]);
+        $uc->syncOfficeAssignments([
+            ['office_id' => $office->id, 'department_id' => $department->id],
+        ]);
+
+        $employeeRequisition = Requisition::query()->create([
+            'office_id' => $office->id,
+            'department_id' => $department->id,
+            'requested_by' => $employee->id,
+            'status' => Requisition::STATUS_ACCEPTED,
+            'transaction_number' => 'REQ-2026-0102',
+            'purpose' => 'Supplies',
+        ]);
+        $line = RequisitionItem::query()->create([
+            'requisition_id' => $employeeRequisition->id,
+            'item_id' => $item->id,
+            'quantity' => 10,
+        ]);
+
+        $this->actingAs($uc);
+
+        Livewire::test(ListRequisitions::class)
+            ->callAction(
+                TestAction::make('create')->schemaComponent(true, 'content'),
+                data: [
+                    'office_id' => $office->id,
+                    'department_id' => $department->id,
+                    'purpose' => 'Batch purpose',
+                    'source_requisition_ids' => [$employeeRequisition->id],
+                    'endorsement_lines' => [
+                        [
+                            'source_requisition_id' => $employeeRequisition->id,
+                            'requisition_item_id' => $line->id,
+                            'item_id' => $item->id,
+                            'requested_quantity' => 10,
+                            'endorsed_quantity' => 12,
+                            'employee_remarks' => 'Added spare units',
+                            'item_name' => $item->name,
+                        ],
+                    ],
+                    'items' => [
+                        [
+                            'item_category_id' => $item->item_category_id,
+                            'item_id' => $item->id,
+                            'quantity' => 12,
+                        ],
+                    ],
+                ],
+            )
+            ->assertNotified();
+
+        Notification::assertSentTo(
+            $employee,
+            RequisitionWorkflowDatabaseNotification::class,
+            fn (RequisitionWorkflowDatabaseNotification $notification): bool => str_contains($notification->body, 'endorsed 12')
+                && str_contains($notification->body, 'Added spare units'),
         );
     }
 

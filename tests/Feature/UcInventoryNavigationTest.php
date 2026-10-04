@@ -2,6 +2,10 @@
 
 namespace Tests\Feature;
 
+use App\Filament\Pages\MyInventory;
+use App\Filament\Pages\RegionalSupplyCatalog;
+use App\Filament\Resources\PropertyActionRequests\PropertyActionRequestResource;
+use App\Filament\Resources\Requisitions\RequisitionResource;
 use App\Models\ItemCategory;
 use App\Models\Office;
 use App\Models\User;
@@ -57,9 +61,36 @@ class UcInventoryNavigationTest extends TestCase
             ->values()
             ->all();
 
-        $this->assertContains('Office', $groups);
+        $this->assertNotContains('Office', $groups);
         $this->assertNotContains('Inventory', $groups);
         $this->assertNotContains('Regional supply', $groups);
+    }
+
+    public function test_employee_and_uc_requisition_nav_items_have_no_group(): void
+    {
+        $employee = User::factory()->create(['role' => User::ROLE_EMPLOYEE]);
+        $this->actingAs($employee);
+
+        $this->assertNull(RequisitionResource::getNavigationGroup());
+        $this->assertNull(PropertyActionRequestResource::getNavigationGroup());
+        $this->assertNull(MyInventory::getNavigationGroup());
+        $this->assertNull(RegionalSupplyCatalog::getNavigationGroup());
+
+        $uc = User::factory()->create(['role' => User::ROLE_UNIT_CONSOLIDATOR]);
+        $this->actingAs($uc);
+
+        $this->assertNull(RequisitionResource::getNavigationGroup());
+        $this->assertNull(PropertyActionRequestResource::getNavigationGroup());
+        $this->assertNull(RegionalSupplyCatalog::getNavigationGroup());
+    }
+
+    public function test_supply_custodian_keeps_requisitions_navigation_group(): void
+    {
+        $custodian = User::factory()->create(['role' => User::ROLE_SUPPLY_CUSTODIAN]);
+        $this->actingAs($custodian);
+
+        $this->assertSame('Requisitions', RequisitionResource::getNavigationGroup());
+        $this->assertSame('Requisitions', PropertyActionRequestResource::getNavigationGroup());
     }
 
     public function test_supply_custodian_still_sees_category_navigation_items(): void

@@ -14,6 +14,7 @@ use App\Http\Middleware\PreventLoginPageCaching;
 use App\Http\Middleware\TouchUserSessionActivity;
 use App\Http\Middleware\VerifyCsrfToken;
 use App\Livewire\OwwaNotificationDropdown;
+use App\Support\FilamentEchoShouldStart;
 use App\Support\FilamentSessionAudit;
 use App\Support\OwwaFilamentTheme;
 use Filament\Actions\Action;
@@ -57,13 +58,19 @@ class SystemAdminPanelProvider extends PanelProvider
                 'primary' => Color::Indigo,
             ])
             ->defaultThemeMode(ThemeMode::Light)
-            ->darkMode(false);
-
-        if (Schema::hasTable('notifications')) {
-            $panel = $panel
-                ->databaseNotifications(livewireComponent: OwwaNotificationDropdown::class, isLazy: false)
-                ->databaseNotificationsPolling('30s');
-        }
+            ->darkMode(false)
+            ->spa()
+            ->spaUrlExceptions([
+                '*/reports/*',
+                '*/ai-procurement-runs/*',
+            ])
+            ->databaseNotifications(
+                condition: fn (): bool => Filament::auth()->check() && Schema::hasTable('notifications'),
+                livewireComponent: OwwaNotificationDropdown::class,
+                isLazy: true,
+            )
+            ->databaseNotificationsPolling('30s')
+            ->broadcasting(fn (): bool => FilamentEchoShouldStart::forCurrentRequest());
 
         return $panel
             ->renderHook(PanelsRenderHook::STYLES_AFTER, function (): string {

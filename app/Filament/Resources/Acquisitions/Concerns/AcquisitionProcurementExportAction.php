@@ -51,9 +51,11 @@ final class AcquisitionProcurementExportAction
                             ->selectablePlaceholder(false),
                         DatePicker::make('date_from')
                             ->label('From')
+                            ->default(fn (): string => now()->startOfYear()->toDateString())
                             ->required(),
                         DatePicker::make('date_to')
                             ->label('Until')
+                            ->default(fn (): string => now()->endOfYear()->toDateString())
                             ->required()
                             ->afterOrEqual('date_from'),
                     ]),
@@ -83,7 +85,7 @@ final class AcquisitionProcurementExportAction
                     'document_type' => $documentType,
                     'date_from' => $dateFrom,
                     'date_to' => $dateTo,
-                    'format' => $format === 'pdf' ? 'pdf' : null,
+                    'format' => $format === 'xlsx' ? null : $format,
                     'category' => $categoryId > 0 ? $categoryId : null,
                     'back_url' => url()->previous(),
                 ]));
@@ -94,12 +96,14 @@ final class AcquisitionProcurementExportAction
                     default => 'purchase requests',
                 };
                 $formatLabel = $format === 'pdf' ? 'PDF' : 'Excel';
+                $autoClearMs = 300000;
 
                 OwwaExportBusyDispatcher::start(
                     $livewire instanceof LivewireComponent ? $livewire : null,
                     $url,
                     'Preparing '.$formatLabel.' export…',
                     'Building '.$label.' for the selected date range…',
+                    $autoClearMs,
                 );
             });
     }

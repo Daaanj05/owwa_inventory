@@ -9,14 +9,15 @@ use App\Models\ItemCategory;
 use App\Models\Office;
 use App\Models\PropertyActionRequest;
 use App\Models\User;
-use App\Services\EmployeeDistributionInventoryService;
 use App\Services\OfficePropertyRegisterService;
+use App\Services\PropertyActionRequestCompileService;
 use App\Support\InventoryCategoryOptions;
 use App\Support\OwwaReferenceLabels;
 use App\Support\SemiExpendableUsefulLife;
 use Closure;
 use Filament\Actions\Action;
 use Filament\Facades\Filament;
+use Filament\Forms\Components\CheckboxList;
 use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Repeater;
@@ -24,13 +25,16 @@ use Filament\Forms\Components\Repeater\TableColumn;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
+use Filament\Schemas\Components\Actions as SchemaActions;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
 use Filament\Support\Enums\Alignment;
+use Filament\Support\Enums\GridDirection;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Validation\ValidationException;
+use Illuminate\Support\HtmlString;
+use Illuminate\Support\Str;
 
 class PropertyActionRequestForm
 {
@@ -81,7 +85,7 @@ class PropertyActionRequestForm
                             ->live()
                             ->visible(fn (): bool => $isUnitConsolidator)
                             ->afterStateUpdated(function (Set $set, Get $get) use ($user): void {
-                                $set('accountable_user_id', null);
+                                $set('source_property_action_request_ids', []);
                                 $set('lines', [
                                     ['issuance_id' => null, 'inventory_unit_id' => null, 'quantity' => 1],
                                 ]);
@@ -149,80 +153,56 @@ class PropertyActionRequestForm
                             ->live()
                             ->visible(fn (): bool => $isUnitConsolidator)
                             ->afterStateUpdated(function (Set $set): void {
-                                $set('accountable_user_id', null);
+                                $set('source_property_action_request_ids', []);
                                 $set('lines', [
                                     ['issuance_id' => null, 'inventory_unit_id' => null, 'quantity' => 1],
                                 ]);
                             }),
-                        Select::make('accountable_user_id')
-                            ->label('Employee')
-                            ->options(function (Get $get) use ($user): array {
-                                if (! $user instanceof User) {
-                                    return [];
-                                }
-
-                                return app(EmployeeDistributionInventoryService::class)
-                                    ->employeesForOfficeDepartment(
-                                        $user,
-                                        self::intOrNull($get('office_id')),
-                                        self::intOrNull($get('department_id')),
-                                    );
-                            })
-                            ->required(fn (): bool => $isUnitConsolidator)
-                            ->searchable()
-                            ->preload()
-                            ->selectablePlaceholder(false)
-                            ->dehydrated()
-                            ->live()
-                            ->visible(fn (): bool => $isUnitConsolidator)
-                            ->disabled(fn (Get $get): bool => blank($get('office_id')) || blank($get('department_id')))
-                            ->afterStateUpdated(fn (Set $set): mixed => $set('lines', [
-                                ['issuance_id' => null, 'inventory_unit_id' => null, 'quantity' => 1],
-                            ])),
                         Select::make('item_category_id')
                             ->label('Category')
                             ->options(fn (): array => InventoryCategoryOptions::propertyCategoryOptions())
-                            ->required(fn (string $operation): bool => $operation === 'create')
+                            ->required(fn (string $operation): bool => $operation === 'create' && $isEmployee)
                             ->searchable()
                             ->live()
                             ->dehydrated(false)
-                            ->visible(fn (string $operation): bool => $operation === 'create')
+                            ->visible(fn (string $operation): bool => $operation === 'create' && $isEmployee)
                             ->afterStateUpdated(fn (callable $set): mixed => $set('lines', [
                                 ['issuance_id' => null, 'inventory_unit_id' => null, 'quantity' => 1],
                             ])),
-                        Hidden::make('action_type')
-                            ->default(PropertyActionRequest::ACTION_RETURN)
-                            ->dehydrated()
-                            ->visible(fn (): bool => $isEmployee),
-                        Placeholder::make('action_type_display')
-                            ->label('Action Type')
-                            ->content('Return')
-                            ->visible(fn (): bool => $isEmployee),
-                        Select::make('action_type')
-                            ->label('Action Type')
-                            ->options([
-                                PropertyActionRequest::ACTION_RETURN => 'Return',
-                                PropertyActionRequest::ACTION_REPLACEMENT => 'Replacement',
-                                PropertyActionRequest::ACTION_DISPOSAL => 'Disposal',
-                            ])
-                            ->required()
-                            ->live()
-                            ->visible(fn (): bool => ! $isEmployee)
-                            ->dehydrated(fn (): bool => ! $isEmployee)
-                            ->disabled(fn (?PropertyActionRequest $record): bool => $record !== null && $record->status !== PropertyActionRequest::STATUS_DRAFT),
+                        ...($isEmployee ? [
+                            Hidden::make('action_type')
+                                ->default(PropertyActionRequest::ACTION_RETURN)
+                                ->dehydrated(),
+                        ] : []),
+                        ...($isUnitConsolidator ? [
+                            Select::make('action_type')
+                                ->label('Action Type')
+                                ->options([
+                                    PropertyActionRequest::ACTION_RETURN => 'Return',
+                                    PropertyActionRequest::ACTION_REPLACEMENT => 'Replacement',
+                                    PropertyActionRequest::ACTION_DISPOSAL => 'Disposal',
+                                ])
+                                ->default(PropertyActionRequest::ACTION_RETURN)
+                                ->required()
+                                ->live()
+                                ->dehydrated()
+                                ->disabled(fn (?PropertyActionRequest $record): bool => $record !== null && $record->status !== PropertyActionRequest::STATUS_DRAFT),
+                        ] : []),
                         Select::make('reason_code')
                             ->label('Reason')
                             ->options(fn (Get $get): array => config(
-                                'property_action_reasons.'.($isEmployee ? PropertyActionRequest::ACTION_RETURN : $get('action_type')),
+                                'property_action_reasons.'.($isEmployee
+                                    ? PropertyActionRequest::ACTION_RETURN
+                                    : ($get('action_type') ?: PropertyActionRequest::ACTION_RETURN)),
                                 [],
                             ))
                             ->markAsRequired()
                             ->searchable()
-                            ->visible(fn (Get $get): bool => $isEmployee || filled($get('action_type'))),
+                            ->visible(fn (Get $get): bool => $isEmployee
+                                || ($isUnitConsolidator && filled($get('action_type')))),
                         Repeater::make('lines')
                             ->relationship('lines')
-                            ->label('Items')
-                            ->hiddenLabel()
+                            ->label('Line items')
                             ->table(fn (Get $get): array => [
                                 TableColumn::make('Item')
                                     ->markAsRequired()
@@ -248,10 +228,13 @@ class PropertyActionRequestForm
                             ->extraAttributes(['class' => 'owwa-property-action-lines-repeater'])
                             ->minItems(1)
                             ->defaultItems(1)
+                            ->default([
+                                ['issuance_id' => null, 'inventory_unit_id' => null, 'quantity' => 1],
+                            ])
                             ->addActionLabel('Add Item')
                             ->reorderable(false)
                             ->deleteAction(self::repeaterDeleteVisibleExceptFirst())
-                            ->visible(fn (string $operation): bool => $operation === 'create')
+                            ->visible(fn (string $operation): bool => $operation === 'create' && $isEmployee)
                             ->schema([
                                 Select::make('issuance_id')
                                     ->label('Item')
@@ -259,28 +242,15 @@ class PropertyActionRequestForm
                                     ->options(fn (Get $get): array => self::issuanceOptions(
                                         $user,
                                         self::intOrNull($get('../../item_category_id')),
-                                        self::intOrNull($get('../../accountable_user_id')),
-                                        self::intOrNull($get('../../office_id')),
-                                        self::intOrNull($get('../../department_id')),
                                     ))
-                                    ->placeholder(function (Get $get) use ($isUnitConsolidator): string {
-                                        if ($isUnitConsolidator && blank($get('../../accountable_user_id'))) {
-                                            return 'Select an employee first';
-                                        }
-
+                                    ->placeholder(function (Get $get): string {
                                         if (blank($get('../../item_category_id'))) {
                                             return 'Select a category first';
                                         }
 
                                         return 'Select an item';
                                     })
-                                    ->disabled(function (Get $get) use ($isUnitConsolidator): bool {
-                                        if (blank($get('../../item_category_id'))) {
-                                            return true;
-                                        }
-
-                                        return $isUnitConsolidator && blank($get('../../accountable_user_id'));
-                                    })
+                                    ->disabled(fn (Get $get): bool => blank($get('../../item_category_id')))
                                     ->required()
                                     ->searchable()
                                     ->selectablePlaceholder(false)
@@ -343,14 +313,8 @@ class PropertyActionRequestForm
                                 Hidden::make('inventory_unit_id'),
                             ])
                             ->rules([
-                                function (Get $get) use ($isUnitConsolidator): \Closure {
-                                    return function (string $attribute, mixed $value, \Closure $fail) use ($get, $isUnitConsolidator): void {
-                                        if ($isUnitConsolidator && blank($get('accountable_user_id'))) {
-                                            $fail('Select an employee before choosing properties.');
-
-                                            return;
-                                        }
-
+                                function (Get $get): \Closure {
+                                    return function (string $attribute, mixed $value, \Closure $fail) use ($get): void {
                                         if (blank($get('item_category_id'))) {
                                             $fail('Select a category before choosing properties.');
 
@@ -374,15 +338,185 @@ class PropertyActionRequestForm
                             Hidden::make('office_id'),
                             Hidden::make('department_id'),
                             Hidden::make('accountable_user_id'),
-                        ] : []),
+                        ] : [
+                            Hidden::make('accountable_user_id'),
+                        ]),
                         Hidden::make('requested_by')
                             ->default(fn (): ?int => $user?->id),
                         Textarea::make('reason_detail')
                             ->label('Details')
                             ->rows(3)
-                            ->columnSpanFull(),
+                            ->columnSpanFull()
+                            ->helperText(fn (): ?string => $isUnitConsolidator
+                                ? 'Optional remarks included with the compiled batch sent to Supply Custodian.'
+                                : null),
+                    ]),
+                Section::make('Compile employee returns')
+                    ->description('Select UC-approved employee property returns. Names appear on each return — you do not pick an employee separately.')
+                    ->visible(fn (string $operation, Get $get): bool => $operation === 'create'
+                        && $isUnitConsolidator
+                        && filled($get('office_id'))
+                        && filled($get('department_id')))
+                    ->columnSpanFull()
+                    ->schema([
+                        Hidden::make('source_property_action_request_ids')
+                            ->default([])
+                            ->dehydrated(),
+                        Placeholder::make('source_property_returns_summary')
+                            ->label('Employee returns to include')
+                            ->content(function (Get $get): HtmlString {
+                                return self::selectedEmployeePropertyReturnsSummaryHtml(
+                                    $get('source_property_action_request_ids') ?? [],
+                                );
+                            })
+                            ->helperText(function (Get $get): string {
+                                $officeId = filled($get('office_id')) ? (int) $get('office_id') : null;
+                                $departmentId = filled($get('department_id')) ? (int) $get('department_id') : null;
+
+                                $officeName = $officeId ? Office::query()->find($officeId)?->name : null;
+                                $departmentName = $departmentId ? Department::query()->find($departmentId)?->name : null;
+
+                                if ($officeName && $departmentName) {
+                                    return "Use Select returns to choose approved employee requests for {$officeName} / {$departmentName} only.";
+                                }
+
+                                return 'Use Select returns to choose approved employee property returns that have not yet been sent to the Supply Custodian.';
+                            }),
+                        SchemaActions::make([
+                            Action::make('selectEmployeePropertyReturns')
+                                ->label(fn (Get $get): string => filled($get('source_property_action_request_ids'))
+                                    ? 'Change selection'
+                                    : 'Select returns')
+                                ->icon('heroicon-o-queue-list')
+                                ->color('primary')
+                                ->modalHeading('Select employee property returns')
+                                ->modalDescription('Pick UC-approved employee returns for the selected office and department.')
+                                ->modalWidth('3xl')
+                                ->modalSubmitActionLabel('Apply selection')
+                                ->fillForm(fn (Get $get): array => [
+                                    'picked_source_property_action_request_ids' => collect($get('source_property_action_request_ids') ?? [])
+                                        ->map(fn ($id): int => (int) $id)
+                                        ->filter(fn (int $id): bool => $id > 0)
+                                        ->values()
+                                        ->all(),
+                                    'picker_office_id' => $get('office_id'),
+                                    'picker_department_id' => $get('department_id'),
+                                ])
+                                ->schema([
+                                    Hidden::make('picker_office_id'),
+                                    Hidden::make('picker_department_id'),
+                                    CheckboxList::make('picked_source_property_action_request_ids')
+                                        ->hiddenLabel()
+                                        ->searchable()
+                                        ->bulkToggleable()
+                                        ->columns(1)
+                                        ->gridDirection(GridDirection::Row)
+                                        ->extraAttributes([
+                                            'class' => 'owwa-uc-employee-requisition-picker-list',
+                                        ])
+                                        ->options(function (Get $get) use ($user): array {
+                                            if (! $user instanceof User) {
+                                                return [];
+                                            }
+
+                                            $officeId = filled($get('picker_office_id')) ? (int) $get('picker_office_id') : null;
+                                            $departmentId = filled($get('picker_department_id')) ? (int) $get('picker_department_id') : null;
+
+                                            return app(PropertyActionRequestCompileService::class)->eligibleEmployeePropertyReturnOptions(
+                                                $user,
+                                                $officeId,
+                                                $departmentId,
+                                            );
+                                        }),
+                                ])
+                                ->action(function (array $data, Set $schemaSet): void {
+                                    $selectedIds = collect($data['picked_source_property_action_request_ids'] ?? [])
+                                        ->map(fn ($id): int => (int) $id)
+                                        ->filter(fn (int $id): bool => $id > 0)
+                                        ->unique()
+                                        ->values()
+                                        ->all();
+
+                                    self::applySelectedSourcePropertyReturns($schemaSet, $selectedIds);
+                                }),
+                        ]),
                     ]),
             ]);
+    }
+
+    /**
+     * @param  list<int|string>|array<int, int|string>  $selectedIds
+     */
+    public static function applySelectedSourcePropertyReturns(Set $set, array $selectedIds): void
+    {
+        $selectedIds = collect($selectedIds)
+            ->map(fn ($id): int => (int) $id)
+            ->filter(fn (int $id): bool => $id > 0)
+            ->unique()
+            ->values()
+            ->all();
+
+        $set('source_property_action_request_ids', $selectedIds);
+
+        if ($selectedIds === []) {
+            return;
+        }
+
+        $sources = PropertyActionRequest::query()
+            ->whereIn('id', $selectedIds)
+            ->get();
+
+        $actionTypes = $sources->pluck('action_type')->unique()->values();
+        $reasonCodes = $sources->pluck('reason_code')->unique()->values();
+
+        if ($actionTypes->count() === 1) {
+            $set('action_type', $actionTypes->first());
+        }
+
+        if ($reasonCodes->count() === 1) {
+            $set('reason_code', $reasonCodes->first());
+        }
+    }
+
+    /**
+     * @param  array<int|string, mixed>  $selectedIds
+     */
+    private static function selectedEmployeePropertyReturnsSummaryHtml(array $selectedIds): HtmlString
+    {
+        $ids = collect($selectedIds)
+            ->map(fn ($id): int => (int) $id)
+            ->filter(fn (int $id): bool => $id > 0)
+            ->unique()
+            ->values();
+
+        if ($ids->isEmpty()) {
+            return new HtmlString(
+                '<p class="text-sm text-gray-500 dark:text-gray-400">No returns selected yet. Use <strong>Select returns</strong> to choose approved employee property returns.</p>'
+            );
+        }
+
+        $compileService = app(PropertyActionRequestCompileService::class);
+        $labels = PropertyActionRequest::query()
+            ->whereIn('id', $ids->all())
+            ->with(['requestedBy'])
+            ->withCount('lines')
+            ->get()
+            ->sortBy(fn (PropertyActionRequest $request): int => (int) array_search($request->id, $ids->all(), true))
+            ->map(fn (PropertyActionRequest $request): string => e(
+                $compileService->employeePropertyReturnOptionLabel($request)
+            ))
+            ->values();
+
+        $count = $labels->count();
+        $list = $labels
+            ->map(fn (string $label): string => '<li>'.$label.'</li>')
+            ->implode('');
+
+        return new HtmlString(
+            '<p class="mb-2 text-sm text-gray-700 dark:text-gray-200"><strong>'.$count.'</strong> '
+            .e(Str::plural('return', $count)).' selected:</p>'
+            .'<ul class="list-disc space-y-1 ps-5 text-sm text-gray-600 dark:text-gray-300">'.$list.'</ul>'
+        );
     }
 
     /**
@@ -618,18 +752,8 @@ class PropertyActionRequestForm
             }
         }
 
-        if ($user instanceof User && $user->isUnitConsolidator()) {
-            if (empty($data['accountable_user_id'])) {
-                throw ValidationException::withMessages([
-                    'accountable_user_id' => 'Select the employee accountable for this property return.',
-                ]);
-            }
-
-            if (empty($data['office_id']) || empty($data['department_id'])) {
-                throw ValidationException::withMessages([
-                    'office_id' => 'Select the office and department for this property return.',
-                ]);
-            }
+        if ($user instanceof User && $user->isEmployee()) {
+            $data['action_type'] = PropertyActionRequest::ACTION_RETURN;
         }
 
         if ($user instanceof User && empty($data['office_id']) && $user->office_id) {

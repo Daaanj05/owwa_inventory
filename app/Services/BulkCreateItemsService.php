@@ -82,13 +82,24 @@ class BulkCreateItemsService
         $normalized = [];
         $seenNames = [];
         $errors = [];
+        /** @var array<string, string> $canonicalFamilies lowercased family => stored spelling */
+        $canonicalFamilies = [];
 
         foreach (array_values($rows) as $index => $row) {
             if (! is_array($row)) {
                 continue;
             }
 
-            $baseName = trim((string) ($row['base_name'] ?? ''));
+            $rawFamily = trim((string) ($row['base_name'] ?? ''));
+            $familyKey = mb_strtolower($rawFamily);
+            if ($rawFamily !== '' && isset($canonicalFamilies[$familyKey])) {
+                $baseName = $canonicalFamilies[$familyKey];
+            } else {
+                $baseName = Item::normalizeFamilyName($rawFamily, (int) $category->id);
+                if ($baseName !== '') {
+                    $canonicalFamilies[mb_strtolower($baseName)] = $baseName;
+                }
+            }
             $subItem = filled($row['sub_item'] ?? null) ? trim((string) $row['sub_item']) : null;
             $unit = trim((string) ($row['unit'] ?? ''));
             $description = filled($row['description'] ?? null) ? trim((string) $row['description']) : null;
@@ -113,7 +124,7 @@ class BulkCreateItemsService
             $nameKey = mb_strtolower($name);
 
             if ($baseName === '') {
-                $errors["items.{$index}.base_name"] = 'Base item is required.';
+                $errors["items.{$index}.base_name"] = 'Item family is required.';
             }
 
             if ($unit === '') {

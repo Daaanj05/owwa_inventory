@@ -9,14 +9,12 @@ use App\Models\User;
 use App\Support\PpeValueCategory;
 use App\Support\SemiExpendableValueCategory;
 use App\Support\UnitCostKey;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 class OpeningBalanceService
 {
     public function __construct(
         protected AcquisitionUnitService $unitService,
-        protected InventoryStockService $stockService,
     ) {}
 
     /**
@@ -104,41 +102,5 @@ class OpeningBalanceService
             unitCost: $opening->unit_cost !== null ? (float) $opening->unit_cost : null,
             acquisitionId: null,
         );
-    }
-
-    /**
-     * @return array{opening: StockOpeningBalance, units: array<int, InventoryUnit>}
-     *
-     * @throws ValidationException
-     */
-    public function setOpeningStock(
-        Item $item,
-        int $officeId,
-        int $quantity,
-        ?float $unitCost,
-        ?User $recordedBy = null,
-        ?int $batchId = null,
-    ): array {
-        $result = DB::transaction(function () use ($item, $officeId, $quantity, $unitCost, $recordedBy, $batchId): array {
-            $draft = $this->createDraftLine(
-                item: $item,
-                officeId: $officeId,
-                quantity: $quantity,
-                unitCost: $unitCost,
-                recordedBy: $recordedBy,
-                batchId: $batchId,
-            );
-
-            $units = $this->mintUnitsForConfirmedLine($draft['opening']);
-
-            return [
-                'opening' => $draft['opening'],
-                'units' => $units,
-            ];
-        });
-
-        $this->stockService->forgetMovementTotalsCache();
-
-        return $result;
     }
 }

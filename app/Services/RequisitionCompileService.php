@@ -169,16 +169,20 @@ class RequisitionCompileService
     {
         $errors = [];
 
-        foreach (array_values($endorsementLines) as $index => $line) {
+        foreach ($endorsementLines as $key => $line) {
+            if (! is_array($line)) {
+                continue;
+            }
+
             $requested = (int) ($line['requested_quantity'] ?? 0);
             $endorsed = (int) ($line['endorsed_quantity'] ?? 0);
 
-            if ($endorsed < 0 || $endorsed > $requested) {
-                $errors["endorsement_lines.{$index}.endorsed_quantity"] = 'Endorsed quantity must be between 0 and the requested quantity.';
+            if ($endorsed < 0) {
+                $errors["endorsement_lines.{$key}.endorsed_quantity"] = 'Endorsed quantity must be 0 or greater.';
             }
 
-            if ($endorsed < $requested && blank($line['employee_remarks'] ?? null)) {
-                $errors["endorsement_lines.{$index}.employee_remarks"] = 'Add a remark to the employee when endorsing less than requested.';
+            if ($endorsed !== $requested && blank($line['employee_remarks'] ?? null)) {
+                $errors["endorsement_lines.{$key}.employee_remarks"] = 'Add a remark to the employee when the endorsed quantity is reduced or increased.';
             }
         }
 

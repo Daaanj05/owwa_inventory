@@ -15,6 +15,14 @@ use Illuminate\Http\Request;
  */
 class VerifyCsrfToken extends Middleware
 {
+    /**
+     * @var array<int, string>
+     */
+    protected $except = [
+        'api/stock-card-exports',
+        'api/stock-card-exports/*',
+    ];
+
     protected function tokensMatch($request): bool
     {
         $sessionToken = $request->session()->token();

@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\LogsUserActivity;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -130,6 +131,50 @@ class PurchaseOrder extends Model
         return trim("{$number} — PR {$prNumber}");
     }
 
+    /**
+     * Search-driven options for Create IAR → Choose PO (no full lines preload).
+     *
+     * @return array<int|string, string>
+     */
+    public static function inspectionAcceptancePickerOptions(int $categoryId, string $search = '', int $limit = 40): array
+    {
+        $orderedLines = fn ($query) => $query->where('is_ordered', true)->where('po_quantity', '>', 0);
+
+        $query = static::query()
+            ->with(['purchaseRequest:id,pr_number,reference_code,purpose,office_id,requesting_office_id'])
+            ->withCount(['lines as ordered_lines_count' => $orderedLines])
+            ->withSum(['lines as ordered_lines_sum_amount' => $orderedLines], 'amount')
+            ->where('status', self::STATUS_APPROVED)
+            ->whereNull('archived_at')
+            ->whereDoesntHave('inspectionAcceptanceReport')
+            ->whereHas('purchaseRequest', fn (Builder $builder) => $builder->where('item_category_id', $categoryId))
+            ->orderByDesc('approved_at')
+            ->orderByDesc('po_date')
+            ->orderByDesc('id');
+
+        $search = trim($search);
+        if ($search !== '') {
+            $like = '%'.$search.'%';
+            $query->where(function (Builder $builder) use ($like): void {
+                $builder->where('number', 'like', $like)
+                    ->orWhere('supplier_name', 'like', $like)
+                    ->orWhereHas('purchaseRequest', function (Builder $pr) use ($like): void {
+                        $pr->where('pr_number', 'like', $like)
+                            ->orWhere('reference_code', 'like', $like)
+                            ->orWhere('purpose', 'like', $like);
+                    });
+            });
+        }
+
+        return $query
+            ->limit(max(1, $limit))
+            ->get()
+            ->mapWithKeys(fn (self $po): array => [
+                $po->id => $po->inspectionAcceptancePickerOptionHtml(),
+            ])
+            ->all();
+    }
+
     public function inspectionAcceptancePickerOptionHtml(): string
     {
         $number = e((string) ($this->number ?: 'PO'));
@@ -141,15 +186,19 @@ class PurchaseOrder extends Model
         $date = e($this->po_date?->format('M d, Y') ?? $this->approved_at?->format('M d, Y') ?? 'No date');
         $supplier = e((string) ($this->supplier_name ?: 'No supplier'));
 
-        $lineCount = $this->relationLoaded('lines')
-            ? $this->lines->where('is_ordered', true)->where('po_quantity', '>', 0)->count()
-            : $this->orderedLines()->count();
-        $total = $this->relationLoaded('lines')
-            ? (float) $this->lines
-                ->where('is_ordered', true)
-                ->where('po_quantity', '>', 0)
-                ->sum(fn ($line): float => (float) ($line->amount ?? 0))
-            : $this->totalAmount();
+        $lineCount = isset($this->ordered_lines_count)
+            ? (int) $this->ordered_lines_count
+            : ($this->relationLoaded('lines')
+                ? $this->lines->where('is_ordered', true)->where('po_quantity', '>', 0)->count()
+                : $this->orderedLines()->count());
+        $total = isset($this->ordered_lines_sum_amount)
+            ? (float) $this->ordered_lines_sum_amount
+            : ($this->relationLoaded('lines')
+                ? (float) $this->lines
+                    ->where('is_ordered', true)
+                    ->where('po_quantity', '>', 0)
+                    ->sum(fn ($line): float => (float) ($line->amount ?? 0))
+                : $this->totalAmount());
         $linesLabel = $lineCount === 1 ? '1 line' : "{$lineCount} lines";
         $totalLabel = $total > 0 ? '₱'.number_format($total, 2) : 'No amount';
 

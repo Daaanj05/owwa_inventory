@@ -39,13 +39,12 @@ class EditItem extends EditRecord
             $data['item_category_id'],
         );
 
-        $data['base_name'] = trim((string) ($data['base_name'] ?? ''));
+        $categoryId = (int) ($this->getRecord()?->item_category_id ?? 0);
+        $data['base_name'] = Item::normalizeFamilyName((string) ($data['base_name'] ?? ''), $categoryId);
         $data['sub_item'] = filled($data['sub_item'] ?? null) ? trim((string) $data['sub_item']) : null;
         $data['name'] = Item::mergeDisplayName($data['base_name'], $data['sub_item']);
 
-        $category = filled($data['item_category_id'] ?? null)
-            ? \App\Models\ItemCategory::query()->find($data['item_category_id'])
-            : $this->getRecord()?->category;
+        $category = $this->getRecord()?->category;
 
         if ($category?->getTemplateSlug() === 'ppe' && blank($data['ppe_type'] ?? null) && filled($data['uacs_object_code_id'] ?? null)) {
             $ppeType = \App\Models\UacsObjectCode::query()

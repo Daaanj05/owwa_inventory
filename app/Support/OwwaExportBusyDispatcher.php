@@ -23,7 +23,7 @@ final class OwwaExportBusyDispatcher
             return;
         }
 
-        if (str_contains($url, 'format=pdf') || str_contains($url, 'format%3Dpdf')) {
+        if (OwwaLibreOfficeExportGuard::urlNeedsLibreOffice($url)) {
             OwwaLibreOfficeExportGuard::warnIfUnavailable();
         }
 

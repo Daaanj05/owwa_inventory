@@ -2,14 +2,13 @@
 
 namespace App\Filament\Resources\PropertyActionRequests\Actions;
 
-use App\Filament\Concerns\SwitchesUcSentTab;
 use App\Filament\Resources\Disposals\DisposalResource;
+use App\Filament\Resources\PropertyActionRequests\Pages\ListPropertyActionRequests;
 use App\Filament\Resources\PropertyActionRequests\PropertyActionRequestResource;
 use App\Filament\Resources\Transfers\TransferResource;
 use App\Filament\Support\OwwaFormModalDefaults;
 use App\Models\PropertyActionRequest;
 use App\Models\User;
-use App\Services\PropertyActionRequestCompileService;
 use App\Services\PropertyActionRequestWorkflowService;
 use Filament\Actions\Action;
 use Filament\Facades\Filament;
@@ -105,41 +104,21 @@ class PropertyActionRequestTableActions
             ->label('Compile & send to SC')
             ->icon('heroicon-o-paper-airplane')
             ->color('primary')
-            ->requiresConfirmation()
-            ->modalHeading('Compile & send to Supply Custodian')
-            ->modalDescription('This creates one UC property-return batch from this approved employee return and submits it to SC.')
-            ->schema([
-                Textarea::make('remarks')
-                    ->label('Remarks (optional)')
-                    ->rows(2),
-            ])
             ->visible(fn (PropertyActionRequest $record): bool => ($user = Filament::auth()->user()) instanceof User
                 && $user->isUnitConsolidator()
                 && $record->isUcApprovedForCompile())
-            ->action(function (PropertyActionRequest $record, Action $action, array $data): void {
-                $user = Filament::auth()->user();
-                if (! $user instanceof User) {
+            ->action(function (PropertyActionRequest $record, Action $action): void {
+                $livewire = $action->getLivewire();
+
+                if (! $livewire instanceof ListPropertyActionRequests) {
                     return;
                 }
 
-                try {
-                    app(PropertyActionRequestCompileService::class)->createCompiledSubmission(
-                        $user,
-                        [$record],
-                        $data['remarks'] ?? null,
-                    );
-                } catch (\InvalidArgumentException $exception) {
-                    Notification::make()
-                        ->title('Unable to compile')
-                        ->body($exception->getMessage())
-                        ->danger()
-                        ->send();
-
-                    return;
-                }
-
-                Notification::make()->title('Compiled and sent to SC')->success()->send();
-                SwitchesUcSentTab::switchLivewireUcTabToSent($action->getLivewire());
+                $livewire->replaceMountedAction('create', [
+                    'office_id' => (int) $record->office_id,
+                    'department_id' => (int) $record->department_id,
+                    'prefillSourcePropertyActionRequestIds' => [$record->id],
+                ]);
             });
     }
 
@@ -178,41 +157,27 @@ class PropertyActionRequestTableActions
             ->label('Compile & send to SC')
             ->icon('heroicon-o-paper-airplane')
             ->color('primary')
-            ->requiresConfirmation()
-            ->modalHeading('Compile & send to Supply Custodian')
-            ->modalDescription('This creates one UC property-return batch and submits it to SC.')
-            ->schema([
-                Textarea::make('remarks')
-                    ->label('Remarks (optional)')
-                    ->rows(2),
-            ])
             ->visible(fn (PropertyActionRequest $record): bool => ($user = Filament::auth()->user()) instanceof User
                 && $user->isUnitConsolidator()
                 && $record->isUcApprovedForCompile())
-            ->action(function (PropertyActionRequest $record, Action $action, array $data): void {
-                $user = Filament::auth()->user();
-                if (! $user instanceof User) {
-                    return;
-                }
+            ->action(function (PropertyActionRequest $record, Action $action): void {
+                $livewire = $action->getLivewire();
 
-                try {
-                    app(PropertyActionRequestCompileService::class)->createCompiledSubmission(
-                        $user,
-                        [$record],
-                        $data['remarks'] ?? null,
-                    );
-                } catch (\InvalidArgumentException $exception) {
-                    Notification::make()
-                        ->title('Unable to compile')
-                        ->body($exception->getMessage())
-                        ->danger()
-                        ->send();
+                if ($livewire instanceof ListPropertyActionRequests) {
+                    $livewire->replaceMountedAction('create', [
+                        'office_id' => (int) $record->office_id,
+                        'department_id' => (int) $record->department_id,
+                        'prefillSourcePropertyActionRequestIds' => [$record->id],
+                    ]);
 
                     return;
                 }
 
-                Notification::make()->title('Compiled and sent to SC')->success()->send();
-                SwitchesUcSentTab::switchLivewireUcTabToSent($action->getLivewire());
+                Notification::make()
+                    ->title('Open Property Returns to compile')
+                    ->body('Compile this return from the Property Returns list.')
+                    ->warning()
+                    ->send();
             });
     }
 

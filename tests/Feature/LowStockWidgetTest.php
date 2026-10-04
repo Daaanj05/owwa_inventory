@@ -9,9 +9,13 @@ use App\Models\InspectionAcceptanceReport;
 use App\Models\Item;
 use App\Models\ItemCategory;
 use App\Models\Office;
+use App\Models\PropertyActionRequest;
 use App\Models\PurchaseOrder;
+use App\Models\Requisition;
+use App\Models\RequisitionItem;
 use App\Models\User;
 use App\Services\AcquisitionUnitService;
+use App\Support\DashboardKpiCache;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
@@ -265,5 +269,139 @@ class LowStockWidgetTest extends TestCase
         $this->assertStringContainsString('Regional Low Item', $html);
         $this->assertStringNotContainsString('Satellite Low Item', $html);
         $this->assertStringContainsString('1 low-stock item', $html);
+    }
+
+    public function test_supply_custodian_pending_kpi_uses_sql_counts_matching_modal_rows(): void
+    {
+        $office = Office::factory()->create(['is_regional_supply' => true]);
+        $category = ItemCategory::factory()->create(['name' => 'Consumables']);
+        $item = Item::factory()->create(['item_category_id' => $category->id]);
+
+        $custodian = User::factory()->create([
+            'role' => User::ROLE_SUPPLY_CUSTODIAN,
+            'office_id' => $office->id,
+            'email_verified_at' => now(),
+        ]);
+        $consolidator = User::factory()->create([
+            'role' => User::ROLE_UNIT_CONSOLIDATOR,
+            'office_id' => $office->id,
+            'email_verified_at' => now(),
+        ]);
+
+        $pending = Requisition::query()->create([
+            'office_id' => $office->id,
+            'requested_by' => $consolidator->id,
+            'status' => Requisition::STATUS_PENDING,
+            'reference_code' => 'REQ-PENDING-KPI',
+            'transaction_number' => '2026-01-0001',
+        ]);
+        RequisitionItem::query()->create([
+            'requisition_id' => $pending->id,
+            'item_id' => $item->id,
+            'quantity' => 5,
+            'quantity_issued' => 0,
+        ]);
+
+        $remainder = Requisition::query()->create([
+            'office_id' => $office->id,
+            'requested_by' => $consolidator->id,
+            'status' => Requisition::STATUS_ACCEPTED,
+            'reference_code' => 'REQ-REMAINDER-KPI',
+            'transaction_number' => '2026-01-0002',
+        ]);
+        RequisitionItem::query()->create([
+            'requisition_id' => $remainder->id,
+            'item_id' => $item->id,
+            'quantity' => 8,
+            'quantity_issued' => 3,
+        ]);
+
+        $fullyIssued = Requisition::query()->create([
+            'office_id' => $office->id,
+            'requested_by' => $consolidator->id,
+            'status' => Requisition::STATUS_ACCEPTED,
+            'reference_code' => 'REQ-FULL-KPI',
+            'transaction_number' => '2026-01-0003',
+        ]);
+        RequisitionItem::query()->create([
+            'requisition_id' => $fullyIssued->id,
+            'item_id' => $item->id,
+            'quantity' => 4,
+            'quantity_issued' => 4,
+        ]);
+
+        PropertyActionRequest::query()->create([
+            'action_type' => PropertyActionRequest::ACTION_RETURN,
+            'reason_code' => 'good_condition',
+            'requested_by' => $consolidator->id,
+            'accountable_user_id' => $consolidator->id,
+            'office_id' => $office->id,
+            'status' => PropertyActionRequest::STATUS_PENDING_SC,
+            'reference_code' => 'PAR-PENDING-KPI',
+        ]);
+
+        $this->actingAs($custodian);
+
+        $component = Livewire::test(LowStockWidget::class)
+            ->assertOk()
+            ->assertSee('Pending requests & returns')
+            ->assertSee('3')
+            ->mountAction('viewPendingRequisitions')
+            ->assertActionMounted('viewPendingRequisitions');
+
+        $html = html_entity_decode((string) $component->instance()->getMountedAction()?->getModalContent());
+        $this->assertStringContainsString('3 pending requests & returns', $html);
+        $this->assertStringContainsString('REQ-PENDING-KPI', $html);
+        $this->assertStringContainsString('REQ-REMAINDER-KPI', $html);
+        $this->assertStringContainsString('PAR-PENDING-KPI', $html);
+        $this->assertStringNotContainsString('REQ-FULL-KPI', $html);
+    }
+
+    public function test_pending_kpi_cache_refreshes_when_requisition_is_created(): void
+    {
+        $office = Office::factory()->create(['is_regional_supply' => true]);
+        $category = ItemCategory::factory()->create(['name' => 'Consumables']);
+        $item = Item::factory()->create(['item_category_id' => $category->id]);
+
+        $custodian = User::factory()->create([
+            'role' => User::ROLE_SUPPLY_CUSTODIAN,
+            'office_id' => $office->id,
+            'email_verified_at' => now(),
+        ]);
+        $consolidator = User::factory()->create([
+            'role' => User::ROLE_UNIT_CONSOLIDATOR,
+            'office_id' => $office->id,
+            'email_verified_at' => now(),
+        ]);
+
+        $this->actingAs($custodian);
+
+        Livewire::test(LowStockWidget::class)
+            ->assertOk()
+            ->assertSee('Nothing awaiting action');
+
+        $versionBefore = DashboardKpiCache::version();
+
+        $pending = Requisition::query()->create([
+            'office_id' => $office->id,
+            'requested_by' => $consolidator->id,
+            'status' => Requisition::STATUS_PENDING,
+            'reference_code' => 'REQ-CACHE-NEW',
+            'transaction_number' => '2026-02-0001',
+        ]);
+        RequisitionItem::query()->create([
+            'requisition_id' => $pending->id,
+            'item_id' => $item->id,
+            'quantity' => 2,
+            'quantity_issued' => 0,
+        ]);
+
+        $this->assertGreaterThan($versionBefore, DashboardKpiCache::version());
+
+        Livewire::test(LowStockWidget::class)
+            ->assertOk()
+            ->assertSee('Pending requests & returns')
+            ->assertSee('1')
+            ->assertSee('Requests & returns awaiting your action');
     }
 }

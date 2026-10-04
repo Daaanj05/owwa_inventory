@@ -17,11 +17,17 @@ use App\Models\PurchaseOrder;
 use App\Models\Requisition;
 use App\Models\Transfer;
 use App\Models\User;
-use App\Services\AcquisitionPaperworkPdfExportService;
 use App\Services\EmployeeDistributionExportService;
 use App\Services\EmployeeDistributionInventoryService;
+use App\Services\InspectionAcceptanceReportFastExcelExportService;
+use App\Services\InspectionAcceptanceReportFastPdfExportService;
 use App\Services\OwwaItemReportService;
 use App\Services\OwwaTemplateExportService;
+use App\Services\PurchaseOrderFastExcelExportService;
+use App\Services\PurchaseOrderFastPdfExportService;
+use App\Services\PurchaseRequestFastExcelExportService;
+use App\Services\PurchaseRequestFastPdfExportService;
+use App\Services\RsmiFastPdfExportService;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -36,7 +42,13 @@ class OwwaExportController extends Controller
     public function __construct(
         protected OwwaTemplateExportService $owwaExport,
         protected OwwaItemReportService $itemReport,
-        protected AcquisitionPaperworkPdfExportService $acquisitionPdfExport,
+        protected PurchaseRequestFastPdfExportService $purchaseRequestFastPdfExport,
+        protected PurchaseRequestFastExcelExportService $purchaseRequestFastExcelExport,
+        protected PurchaseOrderFastPdfExportService $purchaseOrderFastPdfExport,
+        protected PurchaseOrderFastExcelExportService $purchaseOrderFastExcelExport,
+        protected InspectionAcceptanceReportFastPdfExportService $inspectionAcceptanceReportFastPdfExport,
+        protected InspectionAcceptanceReportFastExcelExportService $inspectionAcceptanceReportFastExcelExport,
+        protected RsmiFastPdfExportService $rsmiFastPdfExport,
         protected EmployeeDistributionExportService $employeeDistributionExport,
     ) {}
 
@@ -92,10 +104,34 @@ class OwwaExportController extends Controller
         );
 
         if ($asPdf) {
+            if ($formLabel === 'RSMI' && $issuance->item?->category?->getTemplateSlug() === 'consumables') {
+                return $this->rsmiFastPdfExport->download($issuance);
+            }
+
             return $this->owwaExport->downloadIssuancePdf($issuance, null, $formSlug);
         }
 
         return $this->owwaExport->downloadIssuance($issuance, null, $formSlug);
+    }
+
+    public function issuanceRsmiFastPdf(Issuance $issuance): Response
+    {
+        $this->authorizeIssuanceExport($issuance);
+        $issuance->loadMissing(['item.category', 'office', 'department', 'issuedBy', 'issuedTo', 'batch']);
+
+        abort_unless(
+            $issuance->item?->category?->getTemplateSlug() === 'consumables',
+            422,
+            'Fast RSMI PDF is only available for consumable issuances.',
+        );
+
+        $this->logExportActivity(
+            'Exported RSMI PDF for issuance '.$issuance->reference_code,
+            $issuance,
+            ['form' => null, 'format' => 'pdf', 'mode' => 'fast'],
+        );
+
+        return $this->rsmiFastPdfExport->download($issuance);
     }
 
     public function transfer(Request $request, Transfer $transfer): StreamedResponse|Response
@@ -282,20 +318,7 @@ class OwwaExportController extends Controller
         );
     }
 
-    public function acquisitionPaperworkPr(AcquisitionPaperwork $acquisitionPaperwork): StreamedResponse
-    {
-        $this->authorizeAcquisitionPaperworkExport($acquisitionPaperwork);
-        $acquisitionPaperwork->load(['office', 'department', 'itemCategory', 'lines.item']);
-
-        $this->logExportActivity(
-            'Exported acquisition paperwork PR '.$acquisitionPaperwork->pr_number,
-            $acquisitionPaperwork,
-        );
-
-        return $this->owwaExport->downloadAcquisitionPaperworkPr($acquisitionPaperwork);
-    }
-
-    public function acquisitionPaperworkPrPdf(AcquisitionPaperwork $acquisitionPaperwork): Response
+    public function acquisitionPaperworkPrFastPdf(AcquisitionPaperwork $acquisitionPaperwork): Response
     {
         $this->authorizeAcquisitionPaperworkExport($acquisitionPaperwork);
 
@@ -304,7 +327,19 @@ class OwwaExportController extends Controller
             $acquisitionPaperwork,
         );
 
-        return $this->acquisitionPdfExport->downloadPrPdf($acquisitionPaperwork);
+        return $this->purchaseRequestFastPdfExport->download($acquisitionPaperwork);
+    }
+
+    public function acquisitionPaperworkPrFastExcel(AcquisitionPaperwork $acquisitionPaperwork): StreamedResponse
+    {
+        $this->authorizeAcquisitionPaperworkExport($acquisitionPaperwork);
+
+        $this->logExportActivity(
+            'Exported acquisition paperwork PR Excel '.$acquisitionPaperwork->pr_number,
+            $acquisitionPaperwork,
+        );
+
+        return $this->purchaseRequestFastExcelExport->download($acquisitionPaperwork);
     }
 
     public function acquisitionPaperworkPo(AcquisitionPaperwork $acquisitionPaperwork): StreamedResponse
@@ -318,7 +353,7 @@ class OwwaExportController extends Controller
                 $acquisitionPaperwork->purchaseOrder,
             );
 
-            return $this->acquisitionPdfExport->downloadPoExcel($acquisitionPaperwork->purchaseOrder);
+            return $this->purchaseOrderFastExcelExport->download($acquisitionPaperwork->purchaseOrder);
         }
 
         $this->logExportActivity(
@@ -344,7 +379,7 @@ class OwwaExportController extends Controller
             $iar = $acquisitionPaperwork->purchaseOrder->inspectionAcceptanceReport;
             $this->logExportActivity('Exported IAR '.$iar->number, $iar);
 
-            return $this->acquisitionPdfExport->downloadIarExcel($iar);
+            return $this->inspectionAcceptanceReportFastExcelExport->download($iar);
         }
 
         $this->logExportActivity(
@@ -360,7 +395,7 @@ class OwwaExportController extends Controller
         $this->authorizePurchaseOrderExport($purchaseOrder);
         $this->logExportActivity('Exported purchase order Excel '.$purchaseOrder->number, $purchaseOrder);
 
-        return $this->acquisitionPdfExport->downloadPoExcel($purchaseOrder);
+        return $this->purchaseOrderFastExcelExport->download($purchaseOrder);
     }
 
     public function purchaseOrderPdf(PurchaseOrder $purchaseOrder): Response
@@ -368,7 +403,7 @@ class OwwaExportController extends Controller
         $this->authorizePurchaseOrderExport($purchaseOrder);
         $this->logExportActivity('Exported purchase order PDF '.$purchaseOrder->number, $purchaseOrder);
 
-        return $this->acquisitionPdfExport->downloadPoPdf($purchaseOrder);
+        return $this->purchaseOrderFastPdfExport->download($purchaseOrder);
     }
 
     public function inspectionAcceptanceReportExcel(InspectionAcceptanceReport $inspectionAcceptanceReport): StreamedResponse
@@ -379,7 +414,7 @@ class OwwaExportController extends Controller
             $inspectionAcceptanceReport,
         );
 
-        return $this->acquisitionPdfExport->downloadIarExcel($inspectionAcceptanceReport);
+        return $this->inspectionAcceptanceReportFastExcelExport->download($inspectionAcceptanceReport);
     }
 
     public function inspectionAcceptanceReportPdf(InspectionAcceptanceReport $inspectionAcceptanceReport): Response
@@ -390,13 +425,7 @@ class OwwaExportController extends Controller
             $inspectionAcceptanceReport,
         );
 
-        return $this->acquisitionPdfExport->downloadIarPdf($inspectionAcceptanceReport);
-    }
-
-    /** @deprecated */
-    public function procurementPr(AcquisitionPaperwork $acquisitionPaperwork): StreamedResponse
-    {
-        return $this->acquisitionPaperworkPr($acquisitionPaperwork);
+        return $this->inspectionAcceptanceReportFastPdfExport->download($inspectionAcceptanceReport);
     }
 
     /** @deprecated */

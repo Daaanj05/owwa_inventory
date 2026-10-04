@@ -44,10 +44,10 @@ class ItemInfolist
             ->columns(2)
             ->schema([
                 TextEntry::make('base_name')
-                    ->label('Base item')
+                    ->label('Item family')
                     ->placeholder('—'),
                 TextEntry::make('sub_item')
-                    ->label('Sub-item')
+                    ->label('Variant')
                     ->placeholder('—'),
                 TextEntry::make('days_to_consume')
                     ->label('Days to consume')

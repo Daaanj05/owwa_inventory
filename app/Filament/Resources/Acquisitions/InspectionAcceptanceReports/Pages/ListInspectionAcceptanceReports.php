@@ -121,8 +121,6 @@ class ListInspectionAcceptanceReports extends ListRecordsWithoutFilterUrl
 
     public function createIarAction(): Action
     {
-        $categoryId = $this->activeItemCategoryId();
-
         return OwwaFormModalDefaults::apply(
             Action::make('createIar')
                 ->label('Create IAR')
@@ -138,30 +136,35 @@ class ListInspectionAcceptanceReports extends ListRecordsWithoutFilterUrl
                         ->required()
                         ->searchable()
                         ->allowHtml()
-                        ->optionsLimit(200)
+                        ->optionsLimit(40)
+                        ->searchDebounce(400)
+                        ->searchPrompt('Search PO number, supplier, or PR…')
                         ->extraAttributes(['class' => 'owwa-doc-picker-select'])
-                        ->options(function () use ($categoryId): array {
-                            return PurchaseOrder::query()
-                                ->with(['purchaseRequest', 'lines'])
-                                ->where('status', PurchaseOrder::STATUS_APPROVED)
-                                ->whereNull('archived_at')
-                                ->whereDoesntHave('inspectionAcceptanceReport')
-                                ->whereHas('purchaseRequest', fn (Builder $query) => $query->where('item_category_id', $categoryId))
-                                ->orderByDesc('approved_at')
-                                ->get()
-                                ->mapWithKeys(fn (PurchaseOrder $po): array => [
-                                    $po->id => $po->inspectionAcceptancePickerOptionHtml(),
-                                ])
-                                ->all();
-                        })
+                        // Preload on open: Filament restores originalOptions for empty search
+                        // and does not call getSearchResultsUsing until the user types.
+                        ->options(fn (): array => PurchaseOrder::inspectionAcceptancePickerOptions(
+                            $this->activeItemCategoryId(),
+                            '',
+                            40,
+                        ))
+                        ->getSearchResultsUsing(fn (string $search): array => PurchaseOrder::inspectionAcceptancePickerOptions(
+                            $this->activeItemCategoryId(),
+                            $search,
+                            40,
+                        ))
                         ->getOptionLabelUsing(function ($value): ?string {
                             if (blank($value)) {
                                 return null;
                             }
 
-                            $po = PurchaseOrder::query()->with('purchaseRequest')->find($value);
+                            $orderedLines = fn ($query) => $query->where('is_ordered', true)->where('po_quantity', '>', 0);
+                            $po = PurchaseOrder::query()
+                                ->with(['purchaseRequest:id,pr_number,reference_code,purpose'])
+                                ->withCount(['lines as ordered_lines_count' => $orderedLines])
+                                ->withSum(['lines as ordered_lines_sum_amount' => $orderedLines], 'amount')
+                                ->find($value);
 
-                            return $po?->inspectionAcceptancePickerSummary();
+                            return $po?->inspectionAcceptancePickerOptionHtml();
                         }),
                 ])
                 ->action(function (array $data): void {

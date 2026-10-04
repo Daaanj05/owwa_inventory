@@ -20,15 +20,12 @@ use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Support\HtmlString;
 use Livewire\Attributes\Url;
 use Livewire\WithPagination;
-use UnitEnum;
 
 class MyInventory extends Page
 {
     use WithPagination;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedClipboardDocumentList;
-
-    protected static string|UnitEnum|null $navigationGroup = 'My items';
 
     protected static ?string $navigationLabel = 'My Inventory';
 

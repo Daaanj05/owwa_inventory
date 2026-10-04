@@ -8,10 +8,12 @@ use App\Filament\Resources\Acquisitions\PurchaseOrders\PurchaseOrderResource;
 use App\Filament\Resources\Requisitions\RequisitionResource;
 use App\Models\Issuance;
 use App\Models\ItemCategory;
+use App\Models\PropertyActionRequest;
 use App\Models\PurchaseOrder;
 use App\Models\Requisition;
 use App\Models\User;
 use App\Services\InventoryStockService;
+use App\Support\DashboardKpiCache;
 use App\Support\InventoryCategoryOptions;
 use Filament\Actions\Action;
 use Filament\Actions\Concerns\InteractsWithActions;
@@ -146,8 +148,16 @@ class LowStockWidget extends StatsOverviewWidget implements HasActions
      */
     protected function buildSupplyCustodianStats(int $lowStockCount, string $scopeLabel): array
     {
-        $pendingCount = $this->pendingActionRows()->count();
-        $ordersToInspectCount = $this->ordersToInspectQuery()->count();
+        /** @var array{pending: int, orders_to_inspect: int} $kpiCounts */
+        $kpiCounts = DashboardKpiCache::remember('supply_custodian', function (): array {
+            return [
+                'pending' => $this->computePendingActionsCount(),
+                'orders_to_inspect' => $this->ordersToInspectQuery()->count(),
+            ];
+        });
+
+        $pendingCount = $kpiCounts['pending'];
+        $ordersToInspectCount = $kpiCounts['orders_to_inspect'];
 
         return [
             Stat::make('Items running low', $lowStockCount)
@@ -313,11 +323,12 @@ class LowStockWidget extends StatsOverviewWidget implements HasActions
     {
         $user = Filament::auth()->user();
         $officeIds = $this->stockOfficeIds($user instanceof User ? $user : null);
+        $officeId = ($officeIds !== null && count($officeIds) === 1) ? $officeIds[0] : null;
 
         return app(InventoryStockService::class)
-            ->getStockLevelsList($categoryId)
+            ->getStockLevelsList($categoryId, $officeId)
             ->when(
-                $officeIds !== null,
+                $officeIds !== null && $officeId === null,
                 fn (Collection $rows): Collection => $rows->filter(
                     fn (object $row): bool => in_array((int) $row->office_id, $officeIds, true),
                 ),
@@ -382,6 +393,21 @@ class LowStockWidget extends StatsOverviewWidget implements HasActions
     }
 
     /**
+     * KPI badge count without loading full row payloads (modal still uses {@see pendingActionRows()}).
+     */
+    protected function pendingActionsCount(): int
+    {
+        return $this->computePendingActionsCount();
+    }
+
+    protected function computePendingActionsCount(): int
+    {
+        return $this->pendingRequisitionsQuery()->count()
+            + $this->remainderRequisitionsQuery()->count()
+            + $this->pendingPropertyReturnsQuery()->count();
+    }
+
+    /**
      * @return Collection<int, array{reference: string, transaction_type: string, office: ?string, requested_by: ?string, created: ?string, record_url: string}>
      */
     protected function pendingActionRows(): Collection
@@ -406,15 +432,10 @@ class LowStockWidget extends StatsOverviewWidget implements HasActions
             ]);
         }
 
-        $remainderRequisitions = Requisition::query()
-            ->where('status', Requisition::STATUS_ACCEPTED)
-            ->whereHas('requestedBy', function (Builder $q): void {
-                $q->where('role', User::ROLE_UNIT_CONSOLIDATOR);
-            })
-            ->with(['requestedBy', 'office', 'items'])
+        $remainderRequisitions = $this->remainderRequisitionsQuery()
+            ->with(['requestedBy', 'office'])
             ->latest('created_at')
-            ->get()
-            ->filter(fn (Requisition $requisition): bool => $requisition->hasRemainingToIssue());
+            ->get();
 
         foreach ($remainderRequisitions as $requisition) {
             $rows->push([
@@ -429,8 +450,7 @@ class LowStockWidget extends StatsOverviewWidget implements HasActions
             ]);
         }
 
-        $propertyReturns = \App\Models\PropertyActionRequest::query()
-            ->where('status', \App\Models\PropertyActionRequest::STATUS_PENDING_SC)
+        $propertyReturns = $this->pendingPropertyReturnsQuery()
             ->with(['requestedBy', 'office'])
             ->latest('created_at')
             ->get();
@@ -463,6 +483,32 @@ class LowStockWidget extends StatsOverviewWidget implements HasActions
             ->whereHas('requestedBy', function (Builder $q): void {
                 $q->where('role', User::ROLE_UNIT_CONSOLIDATOR);
             });
+    }
+
+    /**
+     * Accepted UC requisitions with at least one line still to issue.
+     *
+     * @return Builder<Requisition>
+     */
+    protected function remainderRequisitionsQuery(): Builder
+    {
+        return Requisition::query()
+            ->where('status', Requisition::STATUS_ACCEPTED)
+            ->whereHas('requestedBy', function (Builder $q): void {
+                $q->where('role', User::ROLE_UNIT_CONSOLIDATOR);
+            })
+            ->whereHas('items', function (Builder $q): void {
+                $q->whereRaw('quantity > COALESCE(quantity_issued, 0)');
+            });
+    }
+
+    /**
+     * @return Builder<PropertyActionRequest>
+     */
+    protected function pendingPropertyReturnsQuery(): Builder
+    {
+        return PropertyActionRequest::query()
+            ->where('status', PropertyActionRequest::STATUS_PENDING_SC);
     }
 
     /**

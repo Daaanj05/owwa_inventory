@@ -136,31 +136,34 @@ class ListPurchaseOrders extends ListRecordsWithoutFilterUrl
                         ->required()
                         ->searchable()
                         ->allowHtml()
-                        ->optionsLimit(200)
+                        ->optionsLimit(40)
+                        ->searchDebounce(400)
+                        ->searchPrompt('Search PR number or purpose…')
                         ->extraAttributes(['class' => 'owwa-doc-picker-select'])
-                        ->options(function (): array {
-                            return AcquisitionPaperwork::query()
-                                ->with(['requestingOffice', 'office', 'lines'])
-                                ->where('item_category_id', $this->activeItemCategoryId())
-                                ->where('pr_status', AcquisitionPaperwork::STATUS_APPROVED)
-                                ->whereNull('archived_at')
-                                ->whereDoesntHave('purchaseOrder')
-                                ->orderByDesc('pr_completed_at')
-                                ->orderByDesc('pr_date')
-                                ->get()
-                                ->mapWithKeys(fn (AcquisitionPaperwork $pr): array => [
-                                    $pr->id => $pr->purchaseOrderPickerOptionHtml(),
-                                ])
-                                ->all();
-                        })
+                        // Preload on open: Filament restores originalOptions for empty search
+                        // and does not call getSearchResultsUsing until the user types.
+                        ->options(fn (): array => AcquisitionPaperwork::purchaseOrderPickerOptions(
+                            $this->activeItemCategoryId(),
+                            '',
+                            40,
+                        ))
+                        ->getSearchResultsUsing(fn (string $search): array => AcquisitionPaperwork::purchaseOrderPickerOptions(
+                            $this->activeItemCategoryId(),
+                            $search,
+                            40,
+                        ))
                         ->getOptionLabelUsing(function ($value): ?string {
                             if (blank($value)) {
                                 return null;
                             }
 
-                            $pr = AcquisitionPaperwork::query()->find($value);
+                            $pr = AcquisitionPaperwork::query()
+                                ->with(['requestingOffice:id,name', 'office:id,name'])
+                                ->withCount('lines')
+                                ->withSum('lines', 'amount')
+                                ->find($value);
 
-                            return $pr?->purchaseOrderPickerSummary();
+                            return $pr?->purchaseOrderPickerOptionHtml();
                         }),
                 ])
                 ->action(function (array $data): void {

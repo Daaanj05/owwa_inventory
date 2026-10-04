@@ -164,8 +164,8 @@ class ItemBulkCreateAction
     {
         return [
             [
-                TableColumn::make('Base Item')->markAsRequired()->width('14%'),
-                TableColumn::make('Sub-Item')->width('10%'),
+                TableColumn::make('Item family')->markAsRequired()->width('14%'),
+                TableColumn::make('Variant')->width('10%'),
                 TableColumn::make('Unit')->markAsRequired()->width('7rem'),
                 TableColumn::make('Reorder Point')->markAsRequired()->width('7rem'),
                 TableColumn::make('Inventory Type')->markAsRequired()->width('12%'),
@@ -199,8 +199,8 @@ class ItemBulkCreateAction
     {
         return [
             [
-                TableColumn::make('Base Item')->markAsRequired()->width('12%'),
-                TableColumn::make('Sub-Item')->width('8%'),
+                TableColumn::make('Item family')->markAsRequired()->width('12%'),
+                TableColumn::make('Variant')->width('8%'),
                 TableColumn::make('Unit')->markAsRequired()->width('6.5rem'),
                 TableColumn::make('Reorder Point')->markAsRequired()->width('6.5rem'),
                 TableColumn::make('Property Class')->markAsRequired()->width('11%'),
@@ -249,8 +249,8 @@ class ItemBulkCreateAction
     {
         return [
             [
-                TableColumn::make('Base Item')->markAsRequired()->width('13%'),
-                TableColumn::make('Sub-Item')->width('8%'),
+                TableColumn::make('Item family')->markAsRequired()->width('13%'),
+                TableColumn::make('Variant')->width('8%'),
                 TableColumn::make('Unit')->markAsRequired()->width('6.5rem'),
                 TableColumn::make('Reorder Point')->markAsRequired()->width('6.5rem'),
                 TableColumn::make('Type of PPE')->markAsRequired()->width('13%'),
@@ -283,27 +283,10 @@ class ItemBulkCreateAction
     protected static function commonLeadingFields(int $categoryId): array
     {
         return [
-            Select::make('base_name')
+            TextInput::make('base_name')
                 ->hiddenLabel()
-                ->searchable()
-                ->options(function (Get $get) use ($categoryId): array {
-                    $options = collect(self::baseItemSuggestions($categoryId))
-                        ->mapWithKeys(fn (string $baseName): array => [$baseName => $baseName])
-                        ->all();
-                    $current = $get('base_name');
-                    if (filled($current) && ! array_key_exists((string) $current, $options)) {
-                        $options[(string) $current] = (string) $current;
-                    }
-
-                    return $options;
-                })
-                ->createOptionForm([
-                    TextInput::make('base_name')
-                        ->label('Base item')
-                        ->required()
-                        ->maxLength(255),
-                ])
-                ->createOptionUsing(fn (array $data): string => trim((string) ($data['base_name'] ?? ''))),
+                ->maxLength(255)
+                ->datalist(fn (): array => Item::familySuggestionsForCategory($categoryId)),
             TextInput::make('sub_item')
                 ->hiddenLabel()
                 ->maxLength(255),
@@ -335,29 +318,6 @@ class ItemBulkCreateAction
             ->mapWithKeys(fn (UacsObjectCode $code): array => [
                 $code->id => $code->optionLabel(),
             ])
-            ->all();
-    }
-
-    /**
-     * @return array<int, string>
-     */
-    protected static function baseItemSuggestions(int $categoryId): array
-    {
-        if ($categoryId <= 0) {
-            return [];
-        }
-
-        return Item::query()
-            ->active()
-            ->where('item_category_id', $categoryId)
-            ->orderByRaw('COALESCE(base_name, name)')
-            ->get(['base_name', 'name'])
-            ->map(function (Item $item): string {
-                return filled($item->base_name) ? (string) $item->base_name : (string) $item->name;
-            })
-            ->unique()
-            ->sort()
-            ->values()
             ->all();
     }
 }

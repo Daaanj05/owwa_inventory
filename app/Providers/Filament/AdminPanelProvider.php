@@ -29,6 +29,8 @@ use App\Http\Middleware\TouchUserSessionActivity;
 use App\Http\Middleware\VerifyCsrfToken;
 use App\Livewire\OwwaNotificationDropdown;
 use App\Models\ItemCategory;
+use App\Models\User;
+use App\Support\FilamentEchoShouldStart;
 use App\Support\FilamentSessionAudit;
 use App\Support\OwwaFilamentTheme;
 use Filament\Actions\Action;
@@ -53,6 +55,8 @@ use Illuminate\View\Middleware\ShareErrorsFromSession;
 
 class AdminPanelProvider extends PanelProvider
 {
+    private bool $adminNavigationReady = false;
+
     public function panel(Panel $panel): Panel
     {
         $panel = $panel
@@ -90,17 +94,58 @@ class AdminPanelProvider extends PanelProvider
             ])
             ->defaultThemeMode(ThemeMode::Light)
             ->darkMode(false)
-            ->breadcrumbs(false);
+            ->breadcrumbs(false)
+            ->spa()
+            ->spaUrlExceptions([
+                '*/reports/*',
+                '*/ai-procurement-runs/*',
+            ])
+            ->databaseNotifications(
+                condition: fn (): bool => Filament::auth()->check() && Schema::hasTable('notifications'),
+                livewireComponent: OwwaNotificationDropdown::class,
+                isLazy: true,
+            )
+            ->databaseNotificationsPolling('30s')
+            ->broadcasting(fn (): bool => FilamentEchoShouldStart::forCurrentRequest());
 
-        if (Schema::hasTable('notifications')) {
-            $panel = $panel
-                ->databaseNotifications(livewireComponent: OwwaNotificationDropdown::class, isLazy: false)
-                ->databaseNotificationsPolling('30s');
-        }
+        Filament::serving(function () use ($panel): void {
+            if ($this->adminNavigationReady || $panel->getId() !== Filament::getCurrentPanel()?->getId() || ! Filament::auth()->check()) {
+                return;
+            }
+
+            $panel->navigationItems($this->getNavigationItems());
+            $this->adminNavigationReady = true;
+        });
 
         return $panel
             ->renderHook(PanelsRenderHook::STYLES_AFTER, function (): string {
                 return OwwaFilamentTheme::stylesheetLinkTag();
+            })
+            ->renderHook(PanelsRenderHook::SIDEBAR_NAV_START, function (): string {
+                $user = Filament::auth()->user();
+
+                if (! $user instanceof User) {
+                    return '';
+                }
+
+                if (! $user->isEmployee() && ! $user->isUnitConsolidator()) {
+                    return '';
+                }
+
+                return '<span class="owwa-sidebar-spaced" hidden aria-hidden="true"></span>';
+            })
+            ->renderHook(PanelsRenderHook::SIDEBAR_FOOTER, function (): string {
+                $user = Filament::auth()->user();
+
+                if (! $user instanceof User) {
+                    return '';
+                }
+
+                if (! $user->isEmployee() && ! $user->isUnitConsolidator()) {
+                    return '';
+                }
+
+                return view('filament.partials.owwa-sidebar-sign-out')->render();
             })
             ->renderHook(PanelsRenderHook::BODY_END, function (): string {
                 // Guest auth pages (login, etc.): do not inject 419 handlers or Livewire chips.
@@ -136,7 +181,6 @@ class AdminPanelProvider extends PanelProvider
                 NavigationGroup::make('Analytics'),
                 NavigationGroup::make('Setup'),
             ])
-            ->navigationItems($this->getNavigationItems())
             ->discoverResources(in: app_path('Filament/Resources'), for: 'App\Filament\Resources')
             ->discoverPages(in: app_path('Filament/Pages'), for: 'App\Filament\Pages')
             ->pages([
@@ -224,7 +268,6 @@ class AdminPanelProvider extends PanelProvider
             ->isActiveWhen(fn (): bool => request()->routeIs('filament.admin.resources.incident-reports.*'));
 
         $ucRegistryNav = NavigationItem::make('Office Property Registry')
-            ->group('Office')
             ->icon(Heroicon::OutlinedClipboardDocumentList)
             ->sort(10)
             ->url(fn (): string => OfficePropertyRegister::getUrl())
@@ -233,7 +276,6 @@ class AdminPanelProvider extends PanelProvider
             ->isActiveWhen(fn (): bool => request()->routeIs('filament.admin.pages.office-property-register'));
 
         $ucEmployeeCustodyNav = NavigationItem::make('Employee Custody')
-            ->group('Office')
             ->icon(Heroicon::OutlinedUsers)
             ->sort(11)
             ->url(fn (): string => EmployeeCustody::getUrl())
