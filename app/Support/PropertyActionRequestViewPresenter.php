@@ -34,15 +34,24 @@ class PropertyActionRequestViewPresenter
      */
     protected static function heroMeta(PropertyActionRequest $record): array
     {
-        return [
+        $meta = [
             ['label' => 'Action', 'value' => $record->actionTypeLabel()],
             ['label' => 'Reason', 'value' => $record->reasonLabel()],
             ['label' => 'Requested by', 'value' => $record->requestedBy?->name ?? '—'],
-            ['label' => 'Accountable UC', 'value' => $record->accountableUser?->name ?? '—'],
-            ['label' => 'Office', 'value' => $record->office?->name ?? '—'],
-            ['label' => 'Department', 'value' => $record->department?->name ?? '—'],
-            ['label' => 'Date filed', 'value' => $record->created_at?->format('M j, Y') ?? '—'],
         ];
+
+        $sameAccountableEmployee = $record->isEmployeeRequest()
+            && (int) $record->accountable_user_id === (int) $record->requested_by;
+
+        if (! $sameAccountableEmployee) {
+            $meta[] = ['label' => 'Accountable UC', 'value' => $record->accountableUser?->name ?? '—'];
+        }
+
+        $meta[] = ['label' => 'Office', 'value' => $record->office?->name ?? '—'];
+        $meta[] = ['label' => 'Department', 'value' => $record->department?->name ?? '—'];
+        $meta[] = ['label' => 'Date filed', 'value' => $record->created_at?->format('M j, Y') ?? '—'];
+
+        return $meta;
     }
 
     public static function workflowSteps(PropertyActionRequest $record): array

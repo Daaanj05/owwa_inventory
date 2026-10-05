@@ -43,20 +43,74 @@ class EmployeeCustodyTest extends TestCase
             ->assertDontSee('Distinct items')
             ->assertDontSee('Total on hand');
 
-        $html = Livewire::actingAs($uc)
-            ->test(EmployeeCustody::class)
-            ->html();
+        $component = Livewire::actingAs($uc)->test(EmployeeCustody::class);
+        $html = $component->html();
 
-        $categoryAt = strpos($html, 'aria-label="Item category"');
+        $officeAt = strpos($html, 'aria-label="Office"');
+        $departmentAt = strpos($html, 'aria-label="Department"');
         $employeeAt = strpos($html, 'aria-label="Employee"');
+        $categoryAt = strpos($html, 'aria-label="Item category"');
         $searchAt = strpos($html, 'Search items');
 
-        $this->assertNotFalse($categoryAt);
+        $this->assertNotFalse($officeAt);
+        $this->assertNotFalse($departmentAt);
         $this->assertNotFalse($employeeAt);
+        $this->assertNotFalse($categoryAt);
         $this->assertNotFalse($searchAt);
-        $this->assertLessThan($employeeAt, $categoryAt);
-        $this->assertLessThan($searchAt, $employeeAt);
-        $this->assertMatchesRegularExpression('/<option[^>]*disabled[^>]*>\s*Select employee/u', $html);
+        $this->assertLessThan($departmentAt, $officeAt);
+        $this->assertLessThan($employeeAt, $departmentAt);
+        $this->assertLessThan($categoryAt, $employeeAt);
+        $this->assertLessThan($searchAt, $categoryAt);
+        $this->assertMatchesRegularExpression('/Select office and department first|Select employee/u', $html);
+        $component
+            ->assertSet('fromDate', now()->startOfYear()->toDateString())
+            ->assertSet('toDate', now()->endOfYear()->toDateString());
+    }
+
+    public function test_uc_employee_list_follows_selected_department_assignment(): void
+    {
+        $office = Office::factory()->create();
+        $administrative = Department::query()->create([
+            'office_id' => $office->id,
+            'name' => 'Administrative Division',
+            'code' => 'ADM-CUST',
+        ]);
+        $finance = Department::query()->create([
+            'office_id' => $office->id,
+            'name' => 'Finance Division',
+            'code' => 'FIN-CUST',
+        ]);
+
+        $uc = User::factory()->create([
+            'role' => User::ROLE_UNIT_CONSOLIDATOR,
+            'office_id' => $office->id,
+            'department_id' => $administrative->id,
+        ]);
+        $uc->syncOfficeAssignments([
+            ['office_id' => $office->id, 'department_id' => $administrative->id],
+            ['office_id' => $office->id, 'department_id' => $finance->id],
+        ]);
+
+        User::factory()->create([
+            'role' => User::ROLE_EMPLOYEE,
+            'name' => 'Admin Employee',
+            'office_id' => $office->id,
+            'department_id' => $administrative->id,
+        ]);
+        User::factory()->create([
+            'role' => User::ROLE_EMPLOYEE,
+            'name' => 'Finance Employee',
+            'office_id' => $office->id,
+            'department_id' => $finance->id,
+        ]);
+
+        Livewire::actingAs($uc)
+            ->test(EmployeeCustody::class)
+            ->assertSet('ucOfficeId', $office->id)
+            ->assertSet('ucDepartmentId', null)
+            ->set('ucDepartmentId', $finance->id)
+            ->assertSee('Finance Employee')
+            ->assertDontSee('Admin Employee');
     }
 
     public function test_employee_custody_shows_export_all_item_and_period_filters_below_employee(): void

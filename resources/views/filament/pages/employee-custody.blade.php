@@ -6,34 +6,48 @@
     $sortBy = $this->sortBy;
     $sortDir = $this->sortDir;
     $categoryOptions = EmployeeDistributionInventoryService::categoryOptions();
+    $officeOptions = $this->getUcOfficeOptions();
+    $departmentOptions = $this->getUcDepartmentOptions();
     $employeeOptions = $this->getEmployeeOptions();
     $propertyView = $this->usesPropertyIssuanceView();
-    $hasEmployee = filled($this->employee);
+    $scopeComplete = $this->ucListScopeIsComplete();
+    $hasEmployee = filled($this->employee) && $scopeComplete;
     $custodyTab = $this->custodyTab;
 @endphp
 
 <x-filament-panels::page>
     <div class="owwa-inventory-layout">
         <div class="owwa-search-wrap" style="display:flex;gap:0.75rem;flex-wrap:wrap;align-items:center;">
+            <select wire:model.live="ucOfficeId" class="owwa-search-bar" style="max-width:16rem;" aria-label="Office">
+                <option value="" @selected(blank($this->ucOfficeId))>Select office…</option>
+                @foreach ($officeOptions as $value => $label)
+                    <option value="{{ $value }}">{{ $label }}</option>
+                @endforeach
+            </select>
+
+            <select wire:model.live="ucDepartmentId" class="owwa-search-bar" style="max-width:14rem;" aria-label="Department" @disabled(blank($this->ucOfficeId))>
+                <option value="" @selected(blank($this->ucDepartmentId))>
+                    {{ filled($this->ucOfficeId) ? 'Select department…' : 'Select office first…' }}
+                </option>
+                @foreach ($departmentOptions as $value => $label)
+                    <option value="{{ $value }}">{{ $label }}</option>
+                @endforeach
+            </select>
+
+            <select wire:model.live="employee" class="owwa-search-bar" style="max-width:16rem;" aria-label="Employee" @disabled(! $scopeComplete)>
+                <option value="" @selected(blank($this->employee))>
+                    {{ $scopeComplete ? 'Select employee…' : 'Select office and department first…' }}
+                </option>
+                @foreach ($employeeOptions as $value => $label)
+                    <option value="{{ $value }}">{{ $label }}</option>
+                @endforeach
+            </select>
+
             <select wire:model.live="category" class="owwa-search-bar" style="max-width:14rem;" aria-label="Item category" @disabled(! $hasEmployee)>
                 @foreach ($categoryOptions as $value => $label)
                     <option value="{{ $value }}">{{ $label }}</option>
                 @endforeach
             </select>
-            <select wire:model.live="employee" class="owwa-search-bar" style="max-width:16rem;" aria-label="Employee">
-                <option value="" disabled @selected(blank($this->employee))>Select employee…</option>
-                @foreach ($employeeOptions as $value => $label)
-                    <option value="{{ $value }}">{{ $label }}</option>
-                @endforeach
-            </select>
-            <input
-                type="text"
-                wire:model.live.debounce.300ms="search"
-                placeholder="Search items…"
-                class="owwa-search-bar"
-                style="width: 18rem; max-width: 100%;"
-                @disabled(! $hasEmployee)
-            />
         </div>
 
         <div class="owwa-search-wrap owwa-employee-custody-period-row" style="display:flex;gap:0.75rem;flex-wrap:wrap;align-items:center;justify-content:space-between;margin-top:0.75rem;">
@@ -56,6 +70,14 @@
                     class="owwa-search-bar"
                     style="max-width:11rem;"
                     aria-label="To date"
+                    @disabled(! $hasEmployee)
+                />
+                <input
+                    type="text"
+                    wire:model.live.debounce.300ms="search"
+                    placeholder="Search items…"
+                    class="owwa-search-bar"
+                    style="width: 18rem; max-width: 100%;"
                     @disabled(! $hasEmployee)
                 />
             </div>
@@ -95,10 +117,15 @@
 
         <div class="owwa-data-panel">
             <div class="owwa-data-panel-body">
-                @if (! $hasEmployee)
+                @if (! $scopeComplete)
+                    <div class="owwa-empty" style="padding: 2rem 1rem;">
+                        <p class="owwa-empty-title">Choose office and department</p>
+                        <p class="owwa-empty-desc">Pick an office and department above, then select an employee to view their custody.</p>
+                    </div>
+                @elseif (! $hasEmployee)
                     <div class="owwa-empty" style="padding: 2rem 1rem;">
                         <p class="owwa-empty-title">Select an employee</p>
-                        <p class="owwa-empty-desc">Choose an employee to view their distributed and issued items.</p>
+                        <p class="owwa-empty-desc">Choose an employee from the list above to view their distributed and issued items.</p>
                     </div>
                 @else
                     <div class="owwa-table-wrap">

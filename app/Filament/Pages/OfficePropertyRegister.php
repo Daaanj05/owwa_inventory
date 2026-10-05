@@ -3,7 +3,9 @@
 namespace App\Filament\Pages;
 
 use App\Filament\Resources\PropertyActionRequests\PropertyActionRequestResource;
+use App\Models\Department;
 use App\Models\ItemCategory;
+use App\Models\Office;
 use App\Models\PropertyActionRequest;
 use App\Models\User;
 use App\Services\OfficePropertyRegisterService;
@@ -66,6 +68,12 @@ class OfficePropertyRegister extends Page
     #[Url]
     public string $search = '';
 
+    #[Url(as: 'uc_office')]
+    public ?int $ucOfficeId = null;
+
+    #[Url(as: 'uc_dept')]
+    public ?int $ucDepartmentId = null;
+
     public int $ledgerPage = 1;
 
     public static function canAccess(): bool
@@ -88,6 +96,31 @@ class OfficePropertyRegister extends Page
         if (! in_array($this->direction, ['all', 'incoming', 'outgoing'], true)) {
             $this->direction = 'all';
         }
+
+        $this->initializeUcListScope();
+    }
+
+    public function updatedUcOfficeId(): void
+    {
+        /** @var User|null $user */
+        $user = Filament::auth()->user();
+
+        if ($user instanceof User
+            && $this->ucOfficeId !== null
+            && $this->ucOfficeId > 0
+            && $user->hasSingleDepartmentAssignmentForOffice($this->ucOfficeId)) {
+            $departmentIds = $user->assignedDepartmentIdsForOffice($this->ucOfficeId);
+            $this->ucDepartmentId = $departmentIds[0] ?? null;
+        } else {
+            $this->ucDepartmentId = null;
+        }
+
+        $this->resetPage();
+    }
+
+    public function updatedUcDepartmentId(): void
+    {
+        $this->resetPage();
     }
 
     public function getTitle(): string|Htmlable
@@ -201,7 +234,7 @@ class OfficePropertyRegister extends Page
     {
         $user = Filament::auth()->user();
 
-        if (! $user instanceof User) {
+        if (! $user instanceof User || ! $this->ucListScopeIsComplete()) {
             return new \Illuminate\Pagination\LengthAwarePaginator([], 0, 10, 1);
         }
 
@@ -211,6 +244,9 @@ class OfficePropertyRegister extends Page
             filled($this->search) ? $this->search : null,
             $this->sortBy,
             $this->sortDir,
+            10,
+            $this->ucOfficeId,
+            $this->ucDepartmentId,
         );
     }
 
@@ -276,7 +312,12 @@ class OfficePropertyRegister extends Page
         }
 
         try {
-            app(OfficePropertyRegisterService::class)->assertOfficeHasItem($user, $itemId);
+            app(OfficePropertyRegisterService::class)->assertOfficeHasItem(
+                $user,
+                $itemId,
+                $this->ucOfficeId,
+                $this->ucDepartmentId,
+            );
         } catch (AuthorizationException) {
             abort(403);
         }
@@ -360,7 +401,103 @@ class OfficePropertyRegister extends Page
             $user,
             $itemId,
             max(1, $this->ledgerPage),
+            10,
+            $this->ucOfficeId,
+            $this->ucDepartmentId,
         );
+    }
+
+    public function ucListScopeIsComplete(): bool
+    {
+        return $this->ucOfficeId !== null
+            && $this->ucOfficeId > 0
+            && $this->ucDepartmentId !== null
+            && $this->ucDepartmentId > 0;
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    public function getUcOfficeOptions(): array
+    {
+        /** @var User|null $user */
+        $user = Filament::auth()->user();
+
+        if (! $user instanceof User) {
+            return [];
+        }
+
+        $officeIds = $user->assignedOfficeIds();
+
+        if ($officeIds === []) {
+            return $user->office_id
+                ? Office::query()->active()->whereKey((int) $user->office_id)->orderBy('name')->pluck('name', 'id')->all()
+                : [];
+        }
+
+        return Office::query()
+            ->active()
+            ->whereIn('id', $officeIds)
+            ->orderBy('name')
+            ->pluck('name', 'id')
+            ->all();
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    public function getUcDepartmentOptions(): array
+    {
+        /** @var User|null $user */
+        $user = Filament::auth()->user();
+
+        if (! $user instanceof User || $this->ucOfficeId === null || $this->ucOfficeId <= 0) {
+            return [];
+        }
+
+        $departmentIds = $user->assignedDepartmentIdsForOffice($this->ucOfficeId);
+
+        if ($departmentIds === []) {
+            return $user->department_id
+                ? Department::query()
+                    ->active()
+                    ->where('office_id', $this->ucOfficeId)
+                    ->whereKey((int) $user->department_id)
+                    ->orderBy('name')
+                    ->pluck('name', 'id')
+                    ->all()
+                : [];
+        }
+
+        return Department::query()
+            ->active()
+            ->where('office_id', $this->ucOfficeId)
+            ->whereIn('id', $departmentIds)
+            ->orderBy('name')
+            ->pluck('name', 'id')
+            ->all();
+    }
+
+    protected function initializeUcListScope(): void
+    {
+        /** @var User|null $user */
+        $user = Filament::auth()->user();
+
+        if (! $user instanceof User || ! $user->isUnitConsolidator()) {
+            return;
+        }
+
+        if ($user->hasSingleOfficeAssignment() || ($user->assignedOfficeIds() === [] && $user->office_id)) {
+            $this->ucOfficeId ??= $user->assignedOfficeIds()[0] ?? (int) $user->office_id;
+        }
+
+        if ($this->ucOfficeId !== null
+            && $this->ucOfficeId > 0
+            && ($user->hasSingleDepartmentAssignmentForOffice($this->ucOfficeId)
+                || ($user->assignedDepartmentIdsForOffice($this->ucOfficeId) === [] && $user->department_id))) {
+            $departmentIds = $user->assignedDepartmentIdsForOffice($this->ucOfficeId);
+            $this->ucDepartmentId ??= $departmentIds[0] ?? (int) $user->department_id;
+        }
     }
 
     /**

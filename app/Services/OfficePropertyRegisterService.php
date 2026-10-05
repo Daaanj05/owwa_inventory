@@ -23,8 +23,12 @@ class OfficePropertyRegisterService
     /**
      * @return Builder<Issuance>
      */
-    public function queryForUser(User $user, ?int $categoryId = null): Builder
-    {
+    public function queryForUser(
+        User $user,
+        ?int $categoryId = null,
+        ?int $officeId = null,
+        ?int $departmentId = null,
+    ): Builder {
         $query = Issuance::query()
             ->with(['item.category', 'office', 'department', 'issuedTo'])
             ->whereHas('item.category', function (Builder $categoryQuery): void {
@@ -35,7 +39,7 @@ class OfficePropertyRegisterService
             $query->whereHas('item', fn (Builder $itemQuery): Builder => $itemQuery->where('item_category_id', $categoryId));
         }
 
-        $this->applyOfficeScope($query, $user);
+        $this->applyOfficeScope($query, $user, $officeId, $departmentId);
 
         return $query;
     }
@@ -47,27 +51,33 @@ class OfficePropertyRegisterService
         string $sortBy = 'item_name',
         string $sortDir = 'asc',
         int $perPage = 10,
+        ?int $officeId = null,
+        ?int $departmentId = null,
     ): LengthAwarePaginator {
-        $officeId = (int) ($user->office_id ?? 0);
+        [$resolvedOfficeId, $resolvedDepartmentId] = $this->resolveScope($user, $officeId, $departmentId);
 
-        if ($officeId <= 0) {
+        if ($resolvedOfficeId <= 0) {
             return new Paginator([], 0, $perPage, 1);
         }
 
         $issuanceItemIds = Issuance::query()
-            ->where('office_id', $officeId)
-            ->when($user->department_id, fn (Builder $query): Builder => $query->where('department_id', $user->department_id))
+            ->where('office_id', $resolvedOfficeId)
+            ->when($resolvedDepartmentId, fn (Builder $query): Builder => $query->where('department_id', $resolvedDepartmentId))
             ->whereHas('item', fn (Builder $itemQuery): Builder => $itemQuery->where('item_category_id', $categoryId))
             ->distinct()
             ->pluck('item_id');
 
-        $transferItemIds = Transfer::query()
-            ->where('to_office_id', $officeId)
-            ->whereHas('item', fn (Builder $itemQuery): Builder => $itemQuery->where('item_category_id', $categoryId))
-            ->distinct()
-            ->pluck('item_id');
+        $itemIds = $issuanceItemIds;
 
-        $itemIds = $issuanceItemIds->merge($transferItemIds)->unique()->values();
+        if ($resolvedDepartmentId === null) {
+            $transferItemIds = Transfer::query()
+                ->where('to_office_id', $resolvedOfficeId)
+                ->whereHas('item', fn (Builder $itemQuery): Builder => $itemQuery->where('item_category_id', $categoryId))
+                ->distinct()
+                ->pluck('item_id');
+
+            $itemIds = $issuanceItemIds->merge($transferItemIds)->unique()->values();
+        }
 
         if ($itemIds->isEmpty()) {
             return new Paginator([], 0, $perPage, 1);
@@ -86,16 +96,8 @@ class OfficePropertyRegisterService
             });
         }
 
-        $incomingByItem = Transfer::query()
-            ->where('to_office_id', $officeId)
-            ->whereIn('item_id', $itemIds)
-            ->selectRaw('item_id, SUM(quantity) as total')
-            ->groupBy('item_id')
-            ->pluck('total', 'item_id');
-
-        $items = $query->get()->map(function (Item $item) use ($officeId, $incomingByItem): object {
-            $received = $this->balanceService->issuedQuantity((int) $item->id, $officeId)
-                + (int) ($incomingByItem[$item->id] ?? 0);
+        $items = $query->get()->map(function (Item $item) use ($resolvedOfficeId, $resolvedDepartmentId): object {
+            $received = $this->receivedQuantity((int) $item->id, $resolvedOfficeId, $resolvedDepartmentId);
 
             return (object) [
                 'item_id' => $item->id,
@@ -131,24 +133,29 @@ class OfficePropertyRegisterService
     /**
      * @throws AuthorizationException
      */
-    public function assertOfficeHasItem(User $user, int $itemId): void
-    {
-        $officeId = (int) ($user->office_id ?? 0);
+    public function assertOfficeHasItem(
+        User $user,
+        int $itemId,
+        ?int $officeId = null,
+        ?int $departmentId = null,
+    ): void {
+        [$resolvedOfficeId, $resolvedDepartmentId] = $this->resolveScope($user, $officeId, $departmentId);
 
-        if ($officeId <= 0) {
+        if ($resolvedOfficeId <= 0) {
             throw new AuthorizationException('Office scope is required.');
         }
 
         $hasIssuance = Issuance::query()
-            ->where('office_id', $officeId)
-            ->when($user->department_id, fn (Builder $query): Builder => $query->where('department_id', $user->department_id))
+            ->where('office_id', $resolvedOfficeId)
+            ->when($resolvedDepartmentId, fn (Builder $query): Builder => $query->where('department_id', $resolvedDepartmentId))
             ->where('item_id', $itemId)
             ->exists();
 
-        $hasTransfer = Transfer::query()
-            ->where('item_id', $itemId)
-            ->where('to_office_id', $officeId)
-            ->exists();
+        $hasTransfer = $resolvedDepartmentId === null
+            && Transfer::query()
+                ->where('item_id', $itemId)
+                ->where('to_office_id', $resolvedOfficeId)
+                ->exists();
 
         if (! $hasIssuance && ! $hasTransfer) {
             throw new AuthorizationException('This item is not in your office registry.');
@@ -164,18 +171,22 @@ class OfficePropertyRegisterService
      *     show_property_units: bool
      * }
      */
-    public function presentOfficeStockLedger(User $user, int $itemId): array
-    {
-        $this->assertOfficeHasItem($user, $itemId);
+    public function presentOfficeStockLedger(
+        User $user,
+        int $itemId,
+        ?int $officeId = null,
+        ?int $departmentId = null,
+    ): array {
+        $this->assertOfficeHasItem($user, $itemId, $officeId, $departmentId);
 
-        $officeId = (int) $user->office_id;
+        [$resolvedOfficeId, $resolvedDepartmentId] = $this->resolveScope($user, $officeId, $departmentId);
         $item = Item::query()->with('category')->findOrFail($itemId);
         $slug = $item->category?->getTemplateSlug() ?? 'consumables';
 
         $issuances = Issuance::query()
             ->with(['requisition'])
-            ->where('office_id', $officeId)
-            ->when($user->department_id, fn (Builder $query): Builder => $query->where('department_id', $user->department_id))
+            ->where('office_id', $resolvedOfficeId)
+            ->when($resolvedDepartmentId, fn (Builder $query): Builder => $query->where('department_id', $resolvedDepartmentId))
             ->where('item_id', $itemId)
             ->orderBy('issuance_date')
             ->orderBy('id')
@@ -248,7 +259,7 @@ class OfficePropertyRegisterService
             'header' => [
                 'item_name' => $item->name,
                 'category_name' => $item->category?->name ?? '—',
-                'total_on_hand' => (string) $this->receivedQuantity($itemId, $officeId, $user->department_id),
+                'total_on_hand' => (string) $this->receivedQuantity($itemId, $resolvedOfficeId, $resolvedDepartmentId),
             ],
             'columns' => [
                 'date' => 'Date',
@@ -260,7 +271,7 @@ class OfficePropertyRegisterService
             ],
             'rows' => $rows,
             'property_units' => InventoryCategoryOptions::isPropertyCategorySlug($slug)
-                ? $this->presentPropertyUnitsForItem($user, $itemId)
+                ? $this->presentPropertyUnitsForItem($user, $itemId, $resolvedOfficeId, $resolvedDepartmentId)
                 : [],
             'show_property_units' => InventoryCategoryOptions::isPropertyCategorySlug($slug),
         ];
@@ -276,9 +287,15 @@ class OfficePropertyRegisterService
      *     paginator: LengthAwarePaginator
      * }
      */
-    public function presentOfficeStockLedgerPaginated(User $user, int $itemId, int $page = 1, int $perPage = 10): array
-    {
-        $ledger = $this->presentOfficeStockLedger($user, $itemId);
+    public function presentOfficeStockLedgerPaginated(
+        User $user,
+        int $itemId,
+        int $page = 1,
+        int $perPage = 10,
+        ?int $officeId = null,
+        ?int $departmentId = null,
+    ): array {
+        $ledger = $this->presentOfficeStockLedger($user, $itemId, $officeId, $departmentId);
         $allRows = $ledger['rows'];
         $total = count($allRows);
         $page = max(1, $page);
@@ -303,9 +320,13 @@ class OfficePropertyRegisterService
     /**
      * @return array<int, array<string, mixed>>
      */
-    public function presentPropertyUnitsForItem(User $user, int $itemId): array
-    {
-        return $this->queryForUser($user)
+    public function presentPropertyUnitsForItem(
+        User $user,
+        int $itemId,
+        ?int $officeId = null,
+        ?int $departmentId = null,
+    ): array {
+        return $this->queryForUser($user, null, $officeId, $departmentId)
             ->where('item_id', $itemId)
             ->orderByDesc('issuance_date')
             ->get()
@@ -510,29 +531,54 @@ class OfficePropertyRegisterService
             ->when($departmentId, fn (Builder $query): Builder => $query->where('department_id', $departmentId))
             ->sum('quantity');
 
-        $incoming = (int) Transfer::query()
-            ->where('item_id', $itemId)
-            ->where('to_office_id', $officeId)
-            ->sum('quantity');
+        // Incoming transfers are office-level; only include them when no department filter is active.
+        if ($departmentId === null) {
+            $issued += (int) Transfer::query()
+                ->where('item_id', $itemId)
+                ->where('to_office_id', $officeId)
+                ->sum('quantity');
+        }
 
-        return $issued + $incoming;
+        return $issued;
     }
 
-    protected function applyOfficeScope(Builder $query, User $user): void
+    /**
+     * @return array{0: int, 1: int|null}
+     */
+    protected function resolveScope(User $user, ?int $officeId = null, ?int $departmentId = null): array
     {
+        $resolvedOfficeId = $officeId !== null && $officeId > 0
+            ? $officeId
+            : (int) ($user->office_id ?? 0);
+
+        $resolvedDepartmentId = $departmentId !== null && $departmentId > 0
+            ? $departmentId
+            : ($user->department_id ? (int) $user->department_id : null);
+
+        return [$resolvedOfficeId, $resolvedDepartmentId];
+    }
+
+    protected function applyOfficeScope(
+        Builder $query,
+        User $user,
+        ?int $officeId = null,
+        ?int $departmentId = null,
+    ): void {
         if (! $user->isUnitConsolidator()) {
             return;
         }
 
-        $query->where(function (Builder $scope) use ($user): void {
+        [$resolvedOfficeId, $resolvedDepartmentId] = $this->resolveScope($user, $officeId, $departmentId);
+
+        $query->where(function (Builder $scope) use ($user, $resolvedOfficeId, $resolvedDepartmentId): void {
             $scope->where('issued_to', $user->id);
 
-            if ($user->office_id) {
-                $scope->orWhere(function (Builder $officeScope) use ($user): void {
-                    $officeScope->where('office_id', $user->office_id);
+            if ($resolvedOfficeId > 0) {
+                $scope->orWhere(function (Builder $officeScope) use ($resolvedOfficeId, $resolvedDepartmentId): void {
+                    $officeScope->where('office_id', $resolvedOfficeId);
 
-                    if ($user->department_id) {
-                        $officeScope->where('department_id', $user->department_id);
+                    if ($resolvedDepartmentId !== null) {
+                        $officeScope->where('department_id', $resolvedDepartmentId);
                     }
                 });
             }

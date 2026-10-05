@@ -2,6 +2,9 @@
 
 namespace Tests\Feature;
 
+use App\Filament\Resources\Requisitions\Pages\ListRequisitions;
+use App\Filament\Resources\Requisitions\RequisitionResource;
+use App\Models\Department;
 use App\Models\Issuance;
 use App\Models\Item;
 use App\Models\ItemCategory;
@@ -11,9 +14,11 @@ use App\Models\RequisitionItem;
 use App\Models\User;
 use App\Notifications\RequisitionWorkflowDatabaseNotification;
 use App\Services\RequisitionFulfillmentService;
+use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
+use Livewire\Livewire;
 use Tests\TestCase;
 
 class RequisitionWorkflowNotificationTest extends TestCase
@@ -171,5 +176,71 @@ class RequisitionWorkflowNotificationTest extends TestCase
         $this->assertSame(0, (int) $line->fresh()->stock_available);
 
         Notification::assertSentTo($uc, RequisitionWorkflowDatabaseNotification::class);
+    }
+
+    public function test_fulfilled_uc_requisition_notification_opens_the_sent_tab_for_that_department(): void
+    {
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+
+        $office = Office::factory()->create();
+        $administrative = Department::query()->create([
+            'office_id' => $office->id,
+            'name' => 'Administrative Division',
+            'code' => 'ADM-NOTIF',
+        ]);
+        $finance = Department::query()->create([
+            'office_id' => $office->id,
+            'name' => 'Finance Division',
+            'code' => 'FIN-NOTIF',
+        ]);
+
+        $uc = User::factory()->create([
+            'role' => User::ROLE_UNIT_CONSOLIDATOR,
+            'office_id' => $office->id,
+            'department_id' => $administrative->id,
+            'email_verified_at' => now(),
+        ]);
+        $uc->syncOfficeAssignments([
+            ['office_id' => $office->id, 'department_id' => $administrative->id],
+            ['office_id' => $office->id, 'department_id' => $finance->id],
+        ]);
+
+        $requisition = Requisition::query()->create([
+            'reference_code' => '2026-10-0203',
+            'transaction_number' => '2026-10-0203',
+            'office_id' => $office->id,
+            'department_id' => $finance->id,
+            'requested_by' => $uc->id,
+            'status' => Requisition::STATUS_ACCEPTED,
+        ]);
+
+        $notification = new RequisitionWorkflowDatabaseNotification(
+            'Requisition fulfilled by Supply Custodian',
+            '2026-10-0203 — '.$office->name,
+            $requisition->id,
+        );
+        $actionUrl = $notification->toDatabase($uc)['actions'][0]['url'] ?? '';
+
+        $this->assertStringContainsString('uc=sent', $actionUrl);
+        $this->assertStringContainsString('uc_office='.$office->id, $actionUrl);
+        $this->assertStringContainsString('uc_dept='.$finance->id, $actionUrl);
+        $this->assertSame(
+            RequisitionResource::viewModalUrl($requisition, [
+                'uc' => 'sent',
+                'uc_office' => $office->id,
+                'uc_dept' => $finance->id,
+            ]),
+            $actionUrl,
+        );
+
+        $this->actingAs($uc);
+
+        Livewire::withQueryParams([
+            'tableAction' => 'view',
+            'tableActionRecord' => $requisition->id,
+        ])->test(ListRequisitions::class)
+            ->assertSet('ucTab', 'sent')
+            ->assertSet('ucOfficeId', $office->id)
+            ->assertSet('ucDepartmentId', $finance->id);
     }
 }

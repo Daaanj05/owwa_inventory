@@ -4,7 +4,9 @@ namespace App\Filament\Pages;
 
 use App\Filament\Concerns\StartsOwwaExportBusy;
 use App\Filament\Resources\PropertyActionRequests\PropertyActionRequestResource;
+use App\Models\Department;
 use App\Models\Issuance;
+use App\Models\Office;
 use App\Models\PropertyActionRequest;
 use App\Models\User;
 use App\Services\EmployeeDistributionInventoryService;
@@ -32,6 +34,12 @@ class EmployeeCustody extends Page
 
     #[Url]
     public int|string|null $employee = null;
+
+    #[Url(as: 'uc_office')]
+    public ?int $ucOfficeId = null;
+
+    #[Url(as: 'uc_dept')]
+    public ?int $ucDepartmentId = null;
 
     #[Url]
     public string $sortBy = 'distribution_date';
@@ -68,6 +76,38 @@ class EmployeeCustody extends Page
         if (! EmployeeDistributionInventoryService::isValidCategory($this->category)) {
             $this->category = EmployeeDistributionInventoryService::CATEGORY_CONSUMABLES;
         }
+
+        $this->initializeUcListScope();
+
+        if (blank($this->fromDate) && blank($this->toDate)) {
+            $this->fromDate = now()->startOfYear()->toDateString();
+            $this->toDate = now()->endOfYear()->toDateString();
+        }
+    }
+
+    public function updatedUcOfficeId(): void
+    {
+        /** @var User|null $user */
+        $user = Filament::auth()->user();
+
+        if ($user instanceof User
+            && $this->ucOfficeId !== null
+            && $this->ucOfficeId > 0
+            && $user->hasSingleDepartmentAssignmentForOffice($this->ucOfficeId)) {
+            $departmentIds = $user->assignedDepartmentIdsForOffice($this->ucOfficeId);
+            $this->ucDepartmentId = $departmentIds[0] ?? null;
+        } else {
+            $this->ucDepartmentId = null;
+        }
+
+        $this->clearEmployeeIfOutOfScope();
+        $this->resetPage();
+    }
+
+    public function updatedUcDepartmentId(): void
+    {
+        $this->clearEmployeeIfOutOfScope();
+        $this->resetPage();
     }
 
     public function updatedEmployee(): void
@@ -136,11 +176,86 @@ class EmployeeCustody extends Page
     {
         $user = Filament::auth()->user();
 
+        if (! $user instanceof User || ! $this->ucListScopeIsComplete()) {
+            return [];
+        }
+
+        return app(EmployeeDistributionInventoryService::class)->employeesForOfficeDepartment(
+            $user,
+            $this->ucOfficeId,
+            $this->ucDepartmentId,
+        );
+    }
+
+    public function ucListScopeIsComplete(): bool
+    {
+        return $this->ucOfficeId !== null
+            && $this->ucOfficeId > 0
+            && $this->ucDepartmentId !== null
+            && $this->ucDepartmentId > 0;
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    public function getUcOfficeOptions(): array
+    {
+        /** @var User|null $user */
+        $user = Filament::auth()->user();
+
         if (! $user instanceof User) {
             return [];
         }
 
-        return app(EmployeeDistributionInventoryService::class)->employeesInScopeForUnitConsolidator($user);
+        $officeIds = $user->assignedOfficeIds();
+
+        if ($officeIds === []) {
+            return $user->office_id
+                ? Office::query()->active()->whereKey((int) $user->office_id)->orderBy('name')->pluck('name', 'id')->all()
+                : [];
+        }
+
+        return Office::query()
+            ->active()
+            ->whereIn('id', $officeIds)
+            ->orderBy('name')
+            ->pluck('name', 'id')
+            ->all();
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    public function getUcDepartmentOptions(): array
+    {
+        /** @var User|null $user */
+        $user = Filament::auth()->user();
+
+        if (! $user instanceof User || $this->ucOfficeId === null || $this->ucOfficeId <= 0) {
+            return [];
+        }
+
+        $departmentIds = $user->assignedDepartmentIdsForOffice($this->ucOfficeId);
+
+        if ($departmentIds === []) {
+            return $user->department_id
+                ? Department::query()
+                    ->active()
+                    ->where('office_id', $this->ucOfficeId)
+                    ->whereKey((int) $user->department_id)
+                    ->orderBy('name')
+                    ->pluck('name', 'id')
+                    ->all()
+                : [];
+        }
+
+        return Department::query()
+            ->active()
+            ->where('office_id', $this->ucOfficeId)
+            ->whereIn('id', $departmentIds)
+            ->orderBy('name')
+            ->pluck('name', 'id')
+            ->all();
     }
 
     /** @return array{totalItems: int, totalQuantity: int, totalQuantityThisYear: int} */
@@ -398,13 +513,18 @@ class EmployeeCustody extends Page
     {
         $uc = Filament::auth()->user();
 
-        if (! $uc instanceof User || blank($this->employee)) {
+        if (! $uc instanceof User || blank($this->employee) || ! $this->ucListScopeIsComplete()) {
             return null;
         }
 
         $employee = User::query()->find((int) $this->employee);
 
         if (! $employee instanceof User) {
+            return null;
+        }
+
+        if ((int) $employee->office_id !== (int) $this->ucOfficeId
+            || (int) $employee->department_id !== (int) $this->ucDepartmentId) {
             return null;
         }
 
@@ -415,6 +535,42 @@ class EmployeeCustody extends Page
         }
 
         return $employee;
+    }
+
+    protected function initializeUcListScope(): void
+    {
+        /** @var User|null $user */
+        $user = Filament::auth()->user();
+
+        if (! $user instanceof User || ! $user->isUnitConsolidator()) {
+            return;
+        }
+
+        if ($user->hasSingleOfficeAssignment() || ($user->assignedOfficeIds() === [] && $user->office_id)) {
+            $this->ucOfficeId ??= $user->assignedOfficeIds()[0] ?? (int) $user->office_id;
+        }
+
+        if ($this->ucOfficeId !== null
+            && $this->ucOfficeId > 0
+            && ($user->hasSingleDepartmentAssignmentForOffice($this->ucOfficeId)
+                || ($user->assignedDepartmentIdsForOffice($this->ucOfficeId) === [] && $user->department_id))) {
+            $departmentIds = $user->assignedDepartmentIdsForOffice($this->ucOfficeId);
+            $this->ucDepartmentId ??= $departmentIds[0] ?? (int) $user->department_id;
+        }
+    }
+
+    protected function clearEmployeeIfOutOfScope(): void
+    {
+        if (blank($this->employee)) {
+            return;
+        }
+
+        $options = $this->getEmployeeOptions();
+
+        if (! array_key_exists((int) $this->employee, $options)
+            && ! array_key_exists((string) $this->employee, $options)) {
+            $this->employee = null;
+        }
     }
 
     /**

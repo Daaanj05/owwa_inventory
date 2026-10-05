@@ -1214,11 +1214,24 @@ class EmployeeDistributionInventoryService
             throw new AuthorizationException('Selected user is not an employee.');
         }
 
-        if ($uc->office_id && (int) $employee->office_id !== (int) $uc->office_id) {
+        $employeeOfficeId = (int) ($employee->office_id ?? 0);
+        $employeeDepartmentId = (int) ($employee->department_id ?? 0);
+
+        if ($uc->assignments()->exists()) {
+            if ($employeeOfficeId <= 0
+                || $employeeDepartmentId <= 0
+                || ! $uc->coversOfficeDepartment($employeeOfficeId, $employeeDepartmentId)) {
+                throw new AuthorizationException('This employee is outside your assignment scope.');
+            }
+
+            return;
+        }
+
+        if ($uc->office_id && $employeeOfficeId !== (int) $uc->office_id) {
             throw new AuthorizationException('This employee is outside your office scope.');
         }
 
-        if ($uc->department_id && (int) $employee->department_id !== (int) $uc->department_id) {
+        if ($uc->department_id && $employeeDepartmentId !== (int) $uc->department_id) {
             throw new AuthorizationException('This employee is outside your department scope.');
         }
     }
@@ -1260,7 +1273,15 @@ class EmployeeDistributionInventoryService
             return [];
         }
 
-        if (! $uc->coversOfficeDepartment($officeId, $departmentId)) {
+        $hasAssignments = $uc->assignments()->exists();
+
+        if ($hasAssignments && ! $uc->coversOfficeDepartment($officeId, $departmentId)) {
+            return [];
+        }
+
+        if (! $hasAssignments
+            && ((int) ($uc->office_id ?? 0) !== $officeId
+                || (int) ($uc->department_id ?? 0) !== $departmentId)) {
             return [];
         }
 

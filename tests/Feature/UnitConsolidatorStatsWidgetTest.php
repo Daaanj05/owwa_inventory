@@ -4,7 +4,7 @@ namespace Tests\Feature;
 
 use App\Filament\Widgets\LowStockWidget;
 use App\Filament\Widgets\UnitConsolidatorStatsWidget;
-use App\Models\Distribution;
+use App\Models\Department;
 use App\Models\Issuance;
 use App\Models\Item;
 use App\Models\ItemCategory;
@@ -57,11 +57,21 @@ class UnitConsolidatorStatsWidgetTest extends TestCase
             'name' => 'Office Chair',
         ]);
 
+        $department = Department::query()->create([
+            'office_id' => $office->id,
+            'name' => 'Administrative Division',
+            'code' => 'ADM',
+        ]);
+
         /** @var User $uc */
         $uc = User::factory()->create([
             'role' => User::ROLE_UNIT_CONSOLIDATOR,
             'office_id' => $office->id,
+            'department_id' => $department->id,
             'name' => 'Unit Consolidator',
+        ]);
+        $uc->syncOfficeAssignments([
+            ['office_id' => $office->id, 'department_id' => $department->id],
         ]);
 
         /** @var User $employee */
@@ -104,13 +114,18 @@ class UnitConsolidatorStatsWidgetTest extends TestCase
             'property_number' => 'SEMI-001',
         ]);
 
-        Distribution::factory()->create([
+        Issuance::query()->create([
+            'requisition_id' => $requisitionForIssuance->id,
+            'consolidated_requisition_id' => $requisitionForIssuance->id,
+            'reference_code' => 'RIS-BOND-1',
             'office_id' => $office->id,
+            'department_id' => $department->id,
             'item_id' => $bondPaper->id,
-            'distributed_to' => $employee->id,
-            'distributed_by' => $uc->id,
+            'issued_to' => $employee->id,
+            'issued_by' => $uc->id,
             'quantity' => 8,
-            'distribution_date' => now()->startOfYear()->addMonths(1)->toDateString(),
+            'unit_cost' => 185,
+            'issuance_date' => now()->startOfYear()->addMonths(1)->toDateString(),
         ]);
 
         $this->actingAs($uc);
@@ -118,7 +133,7 @@ class UnitConsolidatorStatsWidgetTest extends TestCase
         $component = Livewire::test(UnitConsolidatorStatsWidget::class)
             ->assertSee('Pending employee requests')
             ->assertSee('Property nearing EUL')
-            ->assertSee('Items distributed')
+            ->assertSee('Items issued')
             ->assertDontSee('Low stock')
             ->assertDontSee('Issued this month')
             ->mountAction('viewPendingEmployeeRequests')
@@ -144,5 +159,60 @@ class UnitConsolidatorStatsWidgetTest extends TestCase
         $distributedHtml = (string) $component->instance()->getMountedAction()?->getModalContent();
         $this->assertStringContainsString('Bond Paper A4', $distributedHtml);
         $this->assertStringContainsString('Juan Employee', $distributedHtml);
+    }
+
+    public function test_pending_employee_requests_include_every_assigned_department(): void
+    {
+        $office = Office::factory()->create();
+        $administrative = Department::query()->create([
+            'office_id' => $office->id,
+            'name' => 'Administrative Division',
+            'code' => 'ADM',
+        ]);
+        $finance = Department::query()->create([
+            'office_id' => $office->id,
+            'name' => 'Finance Division',
+            'code' => 'FIN',
+        ]);
+
+        /** @var User $uc */
+        $uc = User::factory()->create([
+            'role' => User::ROLE_UNIT_CONSOLIDATOR,
+            'office_id' => $office->id,
+            'department_id' => $administrative->id,
+            'name' => 'Danjediael Pelicano Caranay',
+        ]);
+        $uc->syncOfficeAssignments([
+            ['office_id' => $office->id, 'department_id' => $administrative->id],
+            ['office_id' => $office->id, 'department_id' => $finance->id],
+        ]);
+
+        /** @var User $employee */
+        $employee = User::factory()->create([
+            'role' => User::ROLE_EMPLOYEE,
+            'office_id' => $office->id,
+            'department_id' => $finance->id,
+            'name' => 'Jennilyn Buenavente Pataueg',
+        ]);
+
+        Requisition::query()->create([
+            'transaction_number' => '2026-FIN-PEND',
+            'office_id' => $office->id,
+            'department_id' => $finance->id,
+            'requested_by' => $employee->id,
+            'status' => Requisition::STATUS_PENDING,
+            'purpose' => 'For the October liquidation and payroll document set.',
+            'created_at' => now(),
+        ]);
+
+        $this->actingAs($uc);
+
+        $component = Livewire::test(UnitConsolidatorStatsWidget::class)
+            ->assertSee('Pending employee requests')
+            ->mountAction('viewPendingEmployeeRequests');
+
+        $pendingHtml = (string) $component->instance()->getMountedAction()?->getModalContent();
+        $this->assertStringContainsString('2026-FIN-PEND', $pendingHtml);
+        $this->assertStringContainsString('Jennilyn Buenavente Pataueg', $pendingHtml);
     }
 }

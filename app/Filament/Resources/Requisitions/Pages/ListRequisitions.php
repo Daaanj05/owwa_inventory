@@ -72,6 +72,8 @@ class ListRequisitions extends ListRecords
 
     public function mount(): void
     {
+        $this->alignUcScopeFromNotificationRecord();
+
         parent::mount();
 
         $this->initializeUcListScope();
@@ -802,6 +804,50 @@ class ListRequisitions extends ListRecords
         }
 
         return $query;
+    }
+
+    protected function alignUcScopeFromNotificationRecord(): void
+    {
+        /** @var User|null $user */
+        $user = Filament::auth()->user();
+
+        if (! $user instanceof User || ! $user->isUnitConsolidator()) {
+            return;
+        }
+
+        if (request()->query('tableAction') !== 'view') {
+            return;
+        }
+
+        $recordId = (int) request()->query('tableActionRecord', 0);
+
+        if ($recordId <= 0) {
+            return;
+        }
+
+        $requisition = Requisition::query()->find($recordId);
+
+        if (! $requisition instanceof Requisition) {
+            return;
+        }
+
+        $officeId = (int) $requisition->office_id;
+        $departmentId = (int) $requisition->department_id;
+        $isOwnSentRequisition = (int) $requisition->requested_by === (int) $user->id;
+
+        if (! $isOwnSentRequisition && ! $user->coversOfficeDepartment($officeId, $departmentId)) {
+            return;
+        }
+
+        $this->ucTab = $isOwnSentRequisition ? 'sent' : 'received';
+
+        if ($officeId > 0) {
+            $this->ucOfficeId = $officeId;
+        }
+
+        if ($departmentId > 0) {
+            $this->ucDepartmentId = $departmentId;
+        }
     }
 
     protected function initializeUcListScope(): void

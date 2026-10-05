@@ -139,6 +139,94 @@ class OfficePropertyRegisterTest extends TestCase
             ->assertForbidden();
     }
 
+    public function test_register_stock_cards_follow_selected_department_assignment(): void
+    {
+        $office = Office::factory()->create();
+        $administrative = Department::query()->create([
+            'office_id' => $office->id,
+            'name' => 'Administrative Division',
+            'code' => 'ADM-REG',
+        ]);
+        $finance = Department::query()->create([
+            'office_id' => $office->id,
+            'name' => 'Finance Division',
+            'code' => 'FIN-REG',
+        ]);
+
+        $uc = User::factory()->create([
+            'role' => User::ROLE_UNIT_CONSOLIDATOR,
+            'office_id' => $office->id,
+            'department_id' => $administrative->id,
+        ]);
+        $uc->syncOfficeAssignments([
+            ['office_id' => $office->id, 'department_id' => $administrative->id],
+            ['office_id' => $office->id, 'department_id' => $finance->id],
+        ]);
+
+        $category = ItemCategory::factory()->create(['name' => 'Consumables']);
+        $adminItem = Item::factory()->create([
+            'item_category_id' => $category->id,
+            'name' => 'Admin Bond Paper',
+        ]);
+        $financeItem = Item::factory()->create([
+            'item_category_id' => $category->id,
+            'name' => 'Finance Folder Long',
+        ]);
+
+        $adminReq = Requisition::query()->create([
+            'reference_code' => '2026-10-ADM',
+            'office_id' => $office->id,
+            'department_id' => $administrative->id,
+            'requested_by' => $uc->id,
+            'status' => Requisition::STATUS_ACCEPTED,
+        ]);
+        $financeReq = Requisition::query()->create([
+            'reference_code' => '2026-10-FIN',
+            'office_id' => $office->id,
+            'department_id' => $finance->id,
+            'requested_by' => $uc->id,
+            'status' => Requisition::STATUS_ACCEPTED,
+        ]);
+
+        Issuance::query()->create([
+            'requisition_id' => $adminReq->id,
+            'reference_code' => '2026-10-ADM-I',
+            'office_id' => $office->id,
+            'department_id' => $administrative->id,
+            'item_id' => $adminItem->id,
+            'quantity' => 12,
+            'unit_cost' => 185,
+            'issuance_date' => Carbon::parse('2026-10-01'),
+            'issued_by' => $uc->id,
+            'issued_to' => $uc->id,
+        ]);
+        Issuance::query()->create([
+            'requisition_id' => $financeReq->id,
+            'reference_code' => '2026-10-FIN-I',
+            'office_id' => $office->id,
+            'department_id' => $finance->id,
+            'item_id' => $financeItem->id,
+            'quantity' => 15,
+            'unit_cost' => 12,
+            'issuance_date' => Carbon::parse('2026-10-02'),
+            'issued_by' => $uc->id,
+            'issued_to' => $uc->id,
+        ]);
+
+        Livewire::actingAs($uc)
+            ->test(OfficePropertyRegister::class, ['category' => $category->id])
+            ->assertSet('ucOfficeId', $office->id)
+            ->assertSet('ucDepartmentId', null)
+            ->assertDontSee('Admin Bond Paper')
+            ->assertDontSee('Finance Folder Long')
+            ->set('ucDepartmentId', $administrative->id)
+            ->assertSee('Admin Bond Paper')
+            ->assertDontSee('Finance Folder Long')
+            ->set('ucDepartmentId', $finance->id)
+            ->assertSee('Finance Folder Long')
+            ->assertDontSee('Admin Bond Paper');
+    }
+
     /**
      * @return array{0: User, 1: Item}
      */

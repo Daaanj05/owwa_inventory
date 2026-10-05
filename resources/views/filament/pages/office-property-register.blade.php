@@ -2,10 +2,13 @@
     $tab = $this->tab;
     $categoryOptions = $this->getCategoryOptions();
     $isTransfersTab = $tab === \App\Filament\Pages\OfficePropertyRegister::TAB_TRANSFERS;
+    $scopeComplete = $this->ucListScopeIsComplete();
     $rows = $isTransfersTab ? $this->getTransferRows() : $this->getStockCardRows();
     $sortBy = $this->sortBy;
     $sortDir = $this->sortDir;
     $highlight = $this->highlight;
+    $officeOptions = $this->getUcOfficeOptions();
+    $departmentOptions = $this->getUcDepartmentOptions();
 @endphp
 
 <x-filament-panels::page>
@@ -30,7 +33,23 @@
         </div>
 
         <div class="owwa-search-wrap" style="display:flex;gap:0.75rem;flex-wrap:wrap;align-items:center;margin-top:0.75rem;">
-            <select wire:model.live="category" class="owwa-search-bar" style="max-width:16rem;" aria-label="Item category">
+            <select wire:model.live="ucOfficeId" class="owwa-search-bar" style="max-width:16rem;" aria-label="Office">
+                <option value="" @selected(blank($this->ucOfficeId))>Select office…</option>
+                @foreach ($officeOptions as $value => $label)
+                    <option value="{{ $value }}">{{ $label }}</option>
+                @endforeach
+            </select>
+
+            <select wire:model.live="ucDepartmentId" class="owwa-search-bar" style="max-width:14rem;" aria-label="Department" @disabled(blank($this->ucOfficeId))>
+                <option value="" @selected(blank($this->ucDepartmentId))>
+                    {{ filled($this->ucOfficeId) ? 'Select department…' : 'Select office first…' }}
+                </option>
+                @foreach ($departmentOptions as $value => $label)
+                    <option value="{{ $value }}">{{ $label }}</option>
+                @endforeach
+            </select>
+
+            <select wire:model.live="category" class="owwa-search-bar" style="max-width:16rem;" aria-label="Item category" @disabled(! $isTransfersTab && ! $scopeComplete)>
                 @foreach ($categoryOptions as $value => $label)
                     <option value="{{ $value }}">{{ $label }}</option>
                 @endforeach
@@ -50,6 +69,7 @@
                 placeholder="{{ $isTransfersTab ? 'Search PTR, item, or office…' : 'Search item or category…' }}"
                 class="owwa-search-bar"
                 style="width: 18rem; max-width: 100%;"
+                @disabled(! $isTransfersTab && ! $scopeComplete)
             />
         </div>
 
@@ -152,8 +172,13 @@
                                     <tr>
                                         <td colspan="3">
                                             <div class="owwa-empty">
-                                                <p class="owwa-empty-title">No stock on record</p>
-                                                <p class="owwa-empty-desc">Items received by your office will appear here.</p>
+                                                @if (! $scopeComplete)
+                                                    <p class="owwa-empty-title">Choose office and department</p>
+                                                    <p class="owwa-empty-desc">Pick an office and department above to view received stock for that unit.</p>
+                                                @else
+                                                    <p class="owwa-empty-title">No stock on record</p>
+                                                    <p class="owwa-empty-desc">Items received by this office and department will appear here.</p>
+                                                @endif
                                             </div>
                                         </td>
                                     </tr>

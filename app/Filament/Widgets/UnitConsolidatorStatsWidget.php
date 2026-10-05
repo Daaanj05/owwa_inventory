@@ -322,11 +322,11 @@ class UnitConsolidatorStatsWidget extends StatsOverviewWidget implements HasActi
      */
     protected function pendingEmployeeRequestsQuery(User $user): Builder
     {
-        return Requisition::query()
-            ->where('status', Requisition::STATUS_PENDING)
-            ->whereHas('requestedBy', fn (Builder $q) => $q->where('role', User::ROLE_EMPLOYEE))
-            ->when($user->office_id, fn ($q) => $q->where('office_id', $user->office_id))
-            ->when($user->department_id, fn ($q) => $q->where('department_id', $user->department_id));
+        return $user->applyUnitConsolidatorRequisitionScope(
+            Requisition::query()
+                ->where('status', Requisition::STATUS_PENDING)
+                ->whereHas('requestedBy', fn (Builder $q) => $q->where('role', User::ROLE_EMPLOYEE)),
+        );
     }
 
     /**
