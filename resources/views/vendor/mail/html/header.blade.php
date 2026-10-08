@@ -1,8 +1,8 @@
-@props(['url'])
+@props(['url', 'logoMessage' => null])
 @php
     $logoHeight = (int) config('owwa_mail.logo_height', 64);
-    $owwaLogo = \Illuminate\Support\Facades\URL::to(config('owwa_mail.logos.owwa'));
-    $bagongLogo = \Illuminate\Support\Facades\URL::to(config('owwa_mail.logos.bagong_pilipinas'));
+    $owwaLogo = \App\Support\OwwaMailLogo::src($logoMessage, 'owwa');
+    $bagongLogo = \App\Support\OwwaMailLogo::src($logoMessage, 'bagong_pilipinas');
     $navyBright = config('owwa_mail.colors.navy_bright');
     $crimson = config('owwa_mail.colors.crimson');
     $gradient = config('owwa_mail.header_gradient');

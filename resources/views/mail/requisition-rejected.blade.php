@@ -1,4 +1,4 @@
-<x-mail::message>
+<x-mail::message :logo-message="$message ?? null">
 # {{ $requisition->reference_code ?? 'Requisition' }} rejected
 
 Hello {{ $recipient->name }},

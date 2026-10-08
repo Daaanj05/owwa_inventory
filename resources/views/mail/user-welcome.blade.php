@@ -1,4 +1,4 @@
-<x-mail::message>
+<x-mail::message :logo-message="$message ?? null">
 # Welcome, {{ $user->name }}
 
 Your account for the **OWWA Region IV-A Inventory System** has been created.

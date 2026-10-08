@@ -1,4 +1,4 @@
-<x-mail::message>
+<x-mail::message :logo-message="$message ?? null">
 # Sign-in email changed
 
 Hello {{ $userName }},

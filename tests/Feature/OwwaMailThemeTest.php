@@ -4,8 +4,11 @@ namespace Tests\Feature;
 
 use App\Models\User;
 use App\Notifications\UserWelcomeNotification;
+use App\Support\OwwaMailLogo;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Mail\Message;
 use Illuminate\Support\Facades\URL;
+use Symfony\Component\Mime\Email;
 use Tests\TestCase;
 
 class OwwaMailThemeTest extends TestCase
@@ -34,11 +37,21 @@ class OwwaMailThemeTest extends TestCase
 
         $this->assertStringContainsString(config('owwa_mail.brand_name'), $html);
         $this->assertStringContainsString(config('owwa_mail.tagline'), $html);
-        $this->assertStringContainsString(URL::to(config('owwa_mail.logos.owwa')), $html);
-        $this->assertStringContainsString(URL::to(config('owwa_mail.logos.bagong_pilipinas')), $html);
+        $this->assertStringContainsString('data:image/', $html);
+        $this->assertStringNotContainsString(URL::to(config('owwa_mail.logos.owwa')), $html);
+        $this->assertStringNotContainsString(URL::to(config('owwa_mail.logos.bagong_pilipinas')), $html);
         $this->assertStringContainsString($verificationUrl, $html);
         $this->assertStringContainsString('TempPass1!', $html);
         $this->assertStringContainsString('Verify email address', $html);
         $this->assertStringContainsString('#003f8a', $html);
+    }
+
+    public function test_sent_mail_embeds_logos_instead_of_remote_urls(): void
+    {
+        $message = new Message(new Email);
+        $src = OwwaMailLogo::src($message, 'owwa');
+
+        $this->assertStringStartsWith('cid:', $src);
+        $this->assertNotEmpty($message->getSymfonyMessage()->getAttachments());
     }
 }
