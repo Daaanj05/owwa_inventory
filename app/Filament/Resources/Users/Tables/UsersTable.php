@@ -8,6 +8,7 @@ use App\Filament\Support\ConfiguresOwwaViewAction;
 use App\Filament\Support\OwwaFormModalDefaults;
 use App\Filament\Support\OwwaModalSchema;
 use App\Filament\Support\UserAssignmentActionHooks;
+use App\Filament\Support\UserIdentityChangeHooks;
 use App\Models\User;
 use App\Services\PasswordResetRequestService;
 use App\Support\FriendlyMessages;
@@ -17,6 +18,7 @@ use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
+use Filament\Actions\EditAction;
 use Filament\Auth\Notifications\VerifyEmail as FilamentVerifyEmail;
 use Filament\Facades\Filament;
 use Filament\Notifications\Notification;
@@ -45,12 +47,6 @@ class UsersTable
                     ->state(fn (User $record): string => $record->hasVerifiedEmail() ? 'Verified' : 'Pending')
                     ->color(fn (User $record): string => $record->hasVerifiedEmail() ? 'success' : 'warning')
                     ->sortable(),
-                TextColumn::make('pendingPasswordResetRequest.requested_at')
-                    ->label('Password reset')
-                    ->badge()
-                    ->state(fn (User $record): ?string => $record->pendingPasswordResetRequest !== null ? 'Reset requested' : null)
-                    ->color('warning')
-                    ->placeholder('—'),
                 TextColumn::make('role')
                     ->badge()
                     ->formatStateUsing(function (string $state): string {
@@ -78,13 +74,6 @@ class UsersTable
                     ->placeholder('—')
                     ->limit(40)
                     ->tooltip(fn (User $record): ?string => $record->assignmentOfficesSummary()),
-                TextColumn::make('department.name')
-                    ->label('Department')
-                    ->state(fn (User $record): ?string => $record->assignmentDepartmentsSummary())
-                    ->sortable()
-                    ->placeholder('—')
-                    ->limit(40)
-                    ->tooltip(fn (User $record): ?string => $record->assignmentDepartmentsSummary()),
             ])
             ->defaultSort('name')
             ->filters([
@@ -141,29 +130,7 @@ class UsersTable
                         UserInfolist::modalDetailSections(),
                     ),
                     [
-                        OwwaFormModalDefaults::editActionForResource(UserResource::class, OwwaFormModalDefaults::WIDTH_MEDIUM)
-                            ->modalWidth(fn (User $record): string => $record->isUnitConsolidator()
-                                ? OwwaFormModalDefaults::WIDTH_WIDE
-                                : OwwaFormModalDefaults::WIDTH_MEDIUM)
-                            ->extraModalWindowAttributes(['class' => OwwaFormModalDefaults::MODAL_WINDOW_CLASS.' owwa-user-form-modal'])
-                            ->mutateRecordDataUsing(fn (array $data, User $record): array => UserAssignmentActionHooks::fillAssignments($data, $record))
-                            ->mutateDataUsing(function (array $data, User $record): array {
-                                $data = UserAssignmentActionHooks::prepareSaveData($data, $record);
-                                $data['_pending_assignments'] = $data['_assignments'] ?? [];
-                                unset($data['_assignments']);
-
-                                return $data;
-                            })
-                            ->after(function (User $record, array $data): void {
-                                if (! $record->isUnitConsolidator()) {
-                                    return;
-                                }
-
-                                $assignments = $data['_pending_assignments'] ?? [];
-                                if ($assignments !== []) {
-                                    $record->syncOfficeAssignments($assignments);
-                                }
-                            }),
+                        self::editUserAction(),
                         Action::make('resendVerification')
                             ->label('Resend verification email')
                             ->icon('heroicon-o-envelope')
@@ -245,29 +212,7 @@ class UsersTable
                     modelLabel: UserResource::getModelLabel(),
                 ),
                 ActionGroup::make([
-                    OwwaFormModalDefaults::editActionForResource(UserResource::class, OwwaFormModalDefaults::WIDTH_MEDIUM)
-                        ->modalWidth(fn (User $record): string => $record->isUnitConsolidator()
-                            ? OwwaFormModalDefaults::WIDTH_WIDE
-                            : OwwaFormModalDefaults::WIDTH_MEDIUM)
-                        ->extraModalWindowAttributes(['class' => OwwaFormModalDefaults::MODAL_WINDOW_CLASS.' owwa-user-form-modal'])
-                        ->mutateRecordDataUsing(fn (array $data, User $record): array => UserAssignmentActionHooks::fillAssignments($data, $record))
-                        ->mutateDataUsing(function (array $data, User $record): array {
-                            $data = UserAssignmentActionHooks::prepareSaveData($data, $record);
-                            $data['_pending_assignments'] = $data['_assignments'] ?? [];
-                            unset($data['_assignments']);
-
-                            return $data;
-                        })
-                        ->after(function (User $record, array $data): void {
-                            if (! $record->isUnitConsolidator()) {
-                                return;
-                            }
-
-                            $assignments = $data['_pending_assignments'] ?? [];
-                            if ($assignments !== []) {
-                                $record->syncOfficeAssignments($assignments);
-                            }
-                        }),
+                    self::editUserAction(),
                 ])
                     ->label('Actions')
                     ->icon('heroicon-m-ellipsis-vertical')
@@ -280,6 +225,36 @@ class UsersTable
                     DeleteBulkAction::make(),
                 ]),
             ]);
+    }
+
+    protected static function editUserAction(): EditAction
+    {
+        return OwwaFormModalDefaults::editActionForResource(UserResource::class, OwwaFormModalDefaults::WIDTH_MEDIUM)
+            ->modalWidth(fn (User $record): string => $record->isUnitConsolidator()
+                ? OwwaFormModalDefaults::WIDTH_WIDE
+                : OwwaFormModalDefaults::WIDTH_MEDIUM)
+            ->extraModalWindowAttributes(['class' => OwwaFormModalDefaults::MODAL_WINDOW_CLASS.' owwa-user-form-modal'])
+            ->mutateRecordDataUsing(fn (array $data, User $record): array => UserAssignmentActionHooks::fillAssignments($data, $record))
+            ->mutateDataUsing(function (array $data, User $record): array {
+                $data = UserIdentityChangeHooks::prepareSaveData($data, $record);
+                $data = UserAssignmentActionHooks::prepareSaveData($data, $record);
+                $data['_pending_assignments'] = $data['_assignments'] ?? [];
+                unset($data['_assignments']);
+
+                return $data;
+            })
+            ->after(function (User $record, array $data): void {
+                UserIdentityChangeHooks::afterSave($record, $data);
+
+                if (! $record->isUnitConsolidator()) {
+                    return;
+                }
+
+                $assignments = $data['_pending_assignments'] ?? [];
+                if ($assignments !== []) {
+                    $record->syncOfficeAssignments($assignments);
+                }
+            });
     }
 
     protected static function notifyPasswordResetEmailResult(string $email, \App\Support\MailDeliveryResult $result): void

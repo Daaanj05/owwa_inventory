@@ -17,35 +17,17 @@ class UserInfolist
     public static function modalDetailSections(): array
     {
         return [
-            TextEntry::make('name')
-                ->label('Name'),
-            TextEntry::make('email')
-                ->label('Email'),
             TextEntry::make('email_verified_at')
                 ->label('Verification')
                 ->badge()
                 ->state(fn (User $record): string => $record->hasVerifiedEmail() ? 'Verified' : 'Pending')
                 ->color(fn (User $record): string => $record->hasVerifiedEmail() ? 'success' : 'warning'),
-            TextEntry::make('role')
-                ->label('Role')
-                ->formatStateUsing(fn (string $state): string => match ($state) {
-                    User::ROLE_SYSTEM_ADMIN => 'System Admin',
-                    User::ROLE_SUPPLY_CUSTODIAN => 'Supply Custodian',
-                    User::ROLE_UNIT_CONSOLIDATOR => 'Unit Consolidator',
-                    User::ROLE_EMPLOYEE => 'Employee',
-                    default => $state,
-                })
+            TextEntry::make('pendingPasswordResetRequest.requested_at')
+                ->label('Password reset')
                 ->badge()
-                ->color(fn (string $state): string => match ($state) {
-                    User::ROLE_SYSTEM_ADMIN => 'danger',
-                    User::ROLE_SUPPLY_CUSTODIAN => 'primary',
-                    User::ROLE_UNIT_CONSOLIDATOR => 'info',
-                    default => 'gray',
-                }),
-            TextEntry::make('office.name')
-                ->label('Office')
-                ->placeholder('—')
-                ->visible(fn (User $record): bool => ! $record->isUnitConsolidator()),
+                ->state(fn (User $record): string => 'Reset requested')
+                ->color('warning')
+                ->visible(fn (User $record): bool => $record->pendingPasswordResetRequest !== null),
             TextEntry::make('department.name')
                 ->label('Sub-Office/Department')
                 ->placeholder('—')

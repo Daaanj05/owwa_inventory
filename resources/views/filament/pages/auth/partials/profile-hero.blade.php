@@ -5,7 +5,7 @@
 <div class="owwa-account-shell">
     <div class="owwa-profile-hero">
         <div class="owwa-profile-hero-avatar" aria-hidden="true">
-            {{ $this->profileInitials() }}
+            <img src="{{ $this->profileAvatarUrl() }}" alt="">
         </div>
         <div class="owwa-profile-hero-body">
             <div class="owwa-profile-hero-top">

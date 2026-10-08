@@ -27,6 +27,7 @@ use App\Services\PurchaseOrderFastExcelExportService;
 use App\Services\PurchaseOrderFastPdfExportService;
 use App\Services\PurchaseRequestFastExcelExportService;
 use App\Services\PurchaseRequestFastPdfExportService;
+use App\Services\RpciFastPdfExportService;
 use App\Services\RsmiFastPdfExportService;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\Request;
@@ -49,6 +50,7 @@ class OwwaExportController extends Controller
         protected InspectionAcceptanceReportFastPdfExportService $inspectionAcceptanceReportFastPdfExport,
         protected InspectionAcceptanceReportFastExcelExportService $inspectionAcceptanceReportFastExcelExport,
         protected RsmiFastPdfExportService $rsmiFastPdfExport,
+        protected RpciFastPdfExportService $rpciFastPdfExport,
         protected EmployeeDistributionExportService $employeeDistributionExport,
     ) {}
 
@@ -250,10 +252,33 @@ class OwwaExportController extends Controller
         );
 
         if ($asPdf) {
+            if ($physicalCountSession->count_type === PhysicalCountSession::TYPE_RPCI) {
+                return $this->rpciFastPdfExport->download($physicalCountSession);
+            }
+
             return $this->itemReport->downloadPhysicalCountPdf($physicalCountSession);
         }
 
         return $this->itemReport->downloadPhysicalCount($physicalCountSession);
+    }
+
+    public function physicalCountRpciFastPdf(PhysicalCountSession $physicalCountSession): Response
+    {
+        $this->authorizePhysicalCountExport($physicalCountSession);
+
+        abort_unless(
+            $physicalCountSession->count_type === PhysicalCountSession::TYPE_RPCI,
+            422,
+            'Fast RPCI PDF is only available for consumable physical count sessions.',
+        );
+
+        $this->logExportActivity(
+            'Exported RPCI PDF for physical count '.$physicalCountSession->reference_code,
+            $physicalCountSession,
+            ['format' => 'pdf', 'mode' => 'fast'],
+        );
+
+        return $this->rpciFastPdfExport->download($physicalCountSession);
     }
 
     public function distribution(Request $request, Distribution $distribution): StreamedResponse|Response

@@ -2,6 +2,7 @@
 
 namespace App\Providers\Filament;
 
+use App\Filament\AvatarProviders\LocalGenderAvatarProvider;
 use App\Filament\Pages\Auth\AccountSettings;
 use App\Filament\Pages\Auth\EditProfile;
 use App\Filament\Pages\Auth\Login;
@@ -23,6 +24,7 @@ use Filament\Facades\Filament;
 use Filament\Http\Middleware\AuthenticateSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
 use Filament\Http\Middleware\DispatchServingFilamentEvent;
+use Filament\Navigation\NavigationGroup;
 use Filament\Panel;
 use Filament\PanelProvider;
 use Filament\Support\Colors\Color;
@@ -46,6 +48,7 @@ class SystemAdminPanelProvider extends PanelProvider
             ->favicon('/images/owwa-4a_logo_transparent.png')
             ->login(Login::class)
             ->emailVerification()
+            ->defaultAvatarProvider(LocalGenderAvatarProvider::class)
             ->profile(EditProfile::class, isSimple: false)
             ->userMenuItems([
                 'profile' => fn (Action $action): Action => $action->label('Profile'),
@@ -84,6 +87,10 @@ class SystemAdminPanelProvider extends PanelProvider
                 return view('filament.partials.livewire-page-expired')->render()
                     .FilamentSessionAudit::idleLogoutMonitorHtml();
             })
+            ->navigationGroups([
+                NavigationGroup::make('Setup'),
+                NavigationGroup::make('Monitoring'),
+            ])
             ->discoverResources(in: app_path('Filament/Resources'), for: 'App\Filament\Resources')
             ->discoverPages(in: app_path('Filament/Pages'), for: 'App\Filament\Pages')
             ->pages([

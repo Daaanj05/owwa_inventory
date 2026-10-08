@@ -71,6 +71,7 @@ Route::middleware(['auth', 'web'])->group(function () {
         Route::get('reports/owwa/requisition/{requisition}', [OwwaExportController::class, 'requisition'])->name('owwa.export.requisition');
         Route::get('reports/owwa/item/{item}', [OwwaExportController::class, 'item'])->name('owwa.export.item');
         Route::get('reports/owwa/physical-count/{physicalCountSession}', [OwwaExportController::class, 'physicalCount'])->name('owwa.export.physical-count');
+        Route::get('reports/owwa/physical-count/{physicalCountSession}/rpci-fast-pdf', [OwwaExportController::class, 'physicalCountRpciFastPdf'])->name('owwa.export.physical-count.rpci-fast-pdf');
         Route::get('reports/owwa/acquisition-paperwork/{acquisitionPaperwork}/pr-fast-pdf', [OwwaExportController::class, 'acquisitionPaperworkPrFastPdf'])->name('owwa.export.acquisition-paperwork.pr-fast-pdf');
         Route::get('reports/owwa/acquisition-paperwork/{acquisitionPaperwork}/pr-fast-xlsx', [OwwaExportController::class, 'acquisitionPaperworkPrFastExcel'])->name('owwa.export.acquisition-paperwork.pr-fast-xlsx');
         Route::get('reports/owwa/acquisition-paperwork/{acquisitionPaperwork}/po', [OwwaExportController::class, 'acquisitionPaperworkPo'])->name('owwa.export.acquisition-paperwork.po');

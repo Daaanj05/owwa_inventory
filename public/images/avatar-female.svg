@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="Female profile">
+  <rect width="128" height="128" fill="#0f5c6e"/>
+  <path d="M34 62c3 26 10 42 16 50 3-12 4-24 4-34 0-8-2-16-6-22-5-6-11-4-14 6z" fill="#3b2a22"/>
+  <path d="M94 62c-3 26-10 42-16 50-3-12-4-24-4-34 0-8 2-16 6-22 5-6 11-4 14 6z" fill="#3b2a22"/>
+  <ellipse cx="64" cy="124" rx="46" ry="36" fill="#f6d5e3"/>
+  <rect x="52" y="76" width="24" height="16" rx="8" fill="#e8c4a2"/>
+  <circle cx="64" cy="56" r="26" fill="#e8c4a2"/>
+  <path d="M36 60c2-20 13-34 28-34s26 14 28 34c-2 5-8 9-14 10-4-10-9-14-14-14s-10 4-14 14c-6-1-12-5-14-10z" fill="#3b2a22"/>
+</svg>

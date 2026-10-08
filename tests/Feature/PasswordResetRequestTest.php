@@ -185,7 +185,7 @@ class PasswordResetRequestTest extends TestCase
         $this->assertDatabaseHas('password_reset_requests', ['id' => $recentRequest->id]);
     }
 
-    public function test_users_table_shows_reset_requested_badge(): void
+    public function test_users_table_filters_reset_requested_and_view_shows_badge(): void
     {
         Filament::setCurrentPanel(Filament::getPanel('system-admin'));
 
@@ -193,12 +193,16 @@ class PasswordResetRequestTest extends TestCase
             'role' => User::ROLE_SYSTEM_ADMIN,
             'email_verified_at' => now(),
         ]);
-        $employee = User::factory()->create([
+        $employeeWithRequest = User::factory()->create([
+            'role' => User::ROLE_EMPLOYEE,
+            'email_verified_at' => now(),
+        ]);
+        $employeeWithoutRequest = User::factory()->create([
             'role' => User::ROLE_EMPLOYEE,
             'email_verified_at' => now(),
         ]);
         PasswordResetRequest::query()->create([
-            'user_id' => $employee->id,
+            'user_id' => $employeeWithRequest->id,
             'status' => PasswordResetRequest::STATUS_PENDING,
             'requested_at' => now(),
         ]);
@@ -206,7 +210,18 @@ class PasswordResetRequestTest extends TestCase
         $this->actingAs($admin);
 
         Livewire::test(ListUsers::class)
-            ->assertCanSeeTableRecords([$employee])
-            ->assertTableColumnStateSet('pendingPasswordResetRequest.requested_at', 'Reset requested', $employee);
+            ->assertCanSeeTableRecords([$employeeWithRequest, $employeeWithoutRequest])
+            ->assertTableColumnDoesNotExist('pendingPasswordResetRequest.requested_at')
+            ->filterTable('password_reset_status', 'pending')
+            ->assertCanSeeTableRecords([$employeeWithRequest])
+            ->assertCanNotSeeTableRecords([$employeeWithoutRequest]);
+
+        $detailKeys = collect(\App\Filament\Resources\Users\Schemas\UserInfolist::modalDetailSections())
+            ->map(fn ($component) => method_exists($component, 'getName') ? $component->getName() : null)
+            ->filter()
+            ->values()
+            ->all();
+
+        $this->assertContains('pendingPasswordResetRequest.requested_at', $detailKeys);
     }
 }

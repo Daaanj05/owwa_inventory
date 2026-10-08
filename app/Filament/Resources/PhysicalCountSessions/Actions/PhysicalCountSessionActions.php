@@ -11,7 +11,6 @@ use App\Services\PhysicalCountPreloadService;
 use App\Support\OwwaExportBusyDispatcher;
 use App\Support\PhysicalCountPropertyClassResolver;
 use Filament\Actions\Action;
-use Filament\Actions\ActionGroup;
 use Filament\Actions\EditAction;
 use Filament\Notifications\Notification;
 use Livewire\Component as LivewireComponent;
@@ -150,12 +149,19 @@ class PhysicalCountSessionActions
 
     protected static function startExport(PhysicalCountSession $record, Action $action, bool $asPdf): void
     {
+        $isRpciFastPdf = $asPdf && $record->count_type === PhysicalCountSession::TYPE_RPCI;
+
+        $url = $isRpciFastPdf
+            ? route('owwa.export.physical-count.rpci-fast-pdf', $record)
+            : route('owwa.export.physical-count', $record).($asPdf ? '?format=pdf' : '');
+
         $livewire = $action->getLivewire();
         OwwaExportBusyDispatcher::start(
             $livewire instanceof LivewireComponent ? $livewire : null,
-            route('owwa.export.physical-count', $record).($asPdf ? '?format=pdf' : ''),
+            $url,
             $asPdf ? 'Preparing PDF export…' : 'Preparing Excel export…',
             $asPdf ? 'Building your OWWA PDF…' : 'Building your OWWA form…',
+            $asPdf ? 300000 : 120000,
         );
     }
 
@@ -169,7 +175,7 @@ class PhysicalCountSessionActions
     }
 
     /**
-     * @return array<int, Action|ActionGroup>
+     * @return array<int, Action>
      */
     public static function modalFooterActions(): array
     {
@@ -179,15 +185,9 @@ class PhysicalCountSessionActions
             self::preloadStockLinesAction(),
             self::markCompleteAction(),
             self::editAction(),
-            ActionGroup::make([
-                self::printQrLabelsAction(),
-                self::exportOwwaAction(),
-                self::exportPdfAction(),
-            ])
-                ->label('More')
-                ->icon('heroicon-m-ellipsis-horizontal')
-                ->color('gray')
-                ->visible(fn (PhysicalCountSession $record): bool => $record->supportsUnitQrScanning() || $record->isComplete()),
+            self::printQrLabelsAction(),
+            self::exportOwwaAction(),
+            self::exportPdfAction(),
         ];
     }
 }

@@ -115,16 +115,28 @@ class EditProfileTest extends TestCase
 
         Livewire::test(EditProfile::class)
             ->assertSee('Edit')
-            ->assertFormFieldDisabled('first_name')
-            ->assertFormFieldDisabled('middle_name')
-            ->assertFormFieldDisabled('last_name')
-            ->assertFormFieldDisabled('email')
+            ->assertSee('Jane')
+            ->assertSee('Public')
+            ->assertSee('jane.public@example.com')
+            ->assertSee('—')
+            ->assertFormFieldDoesNotExist('first_name')
+            ->assertFormFieldDoesNotExist('middle_name')
+            ->assertFormFieldDoesNotExist('last_name')
+            ->assertFormFieldDoesNotExist('gender')
+            ->assertFormFieldDoesNotExist('email')
             ->assertDontSee('Save changes')
             ->call('startEditingProfile')
+            ->assertFormSet([
+                'first_name' => 'Jane',
+                'middle_name' => 'Q',
+                'last_name' => 'Public',
+                'gender' => null,
+            ])
             ->assertFormFieldEnabled('first_name')
             ->assertFormFieldEnabled('middle_name')
             ->assertFormFieldEnabled('last_name')
-            ->assertFormFieldDisabled('email')
+            ->assertFormFieldEnabled('gender')
+            ->assertFormFieldDoesNotExist('email')
             ->assertSee('Save changes')
             ->assertSee('Cancel');
     }
@@ -156,7 +168,8 @@ class EditProfileTest extends TestCase
             ->assertHasNoFormErrors()
             ->assertNotified()
             ->assertSet('isEditingProfile', false)
-            ->assertFormFieldDisabled('first_name');
+            ->assertSee('Janet')
+            ->assertFormFieldDoesNotExist('first_name');
 
         $user->refresh();
 
@@ -189,12 +202,10 @@ class EditProfileTest extends TestCase
             ])
             ->call('cancelEditingProfile')
             ->assertSet('isEditingProfile', false)
-            ->assertFormFieldDisabled('first_name')
-            ->assertFormSet([
-                'first_name' => 'Jane',
-                'middle_name' => 'Q',
-                'last_name' => 'Public',
-            ]);
+            ->assertSee('Jane')
+            ->assertSee('Public')
+            ->assertFormFieldDoesNotExist('first_name')
+            ->assertDontSee('Save changes');
 
         $user->refresh();
 
@@ -218,5 +229,73 @@ class EditProfileTest extends TestCase
         Livewire::test(EditProfile::class)
             ->assertSee('Supply Custodian')
             ->assertSee('OWWA Central');
+    }
+
+    public function test_gender_saves_and_can_be_cleared(): void
+    {
+        $user = User::factory()->create([
+            'role' => User::ROLE_EMPLOYEE,
+            'first_name' => 'Jane',
+            'middle_name' => 'Q',
+            'last_name' => 'Public',
+            'email' => 'jane.public@example.com',
+            'email_verified_at' => now(),
+        ]);
+
+        $this->actingAs($user);
+
+        Livewire::test(EditProfile::class)
+            ->call('startEditingProfile')
+            ->fillForm([
+                'first_name' => 'Jane',
+                'middle_name' => 'Q',
+                'last_name' => 'Public',
+                'gender' => User::GENDER_FEMALE,
+            ])
+            ->call('save')
+            ->assertHasNoFormErrors()
+            ->assertSet('isEditingProfile', false)
+            ->assertSee('Female')
+            ->assertSee('avatar-female.svg')
+            ->assertDontSee('ui-avatars.com');
+
+        $this->assertSame(User::GENDER_FEMALE, $user->refresh()->gender);
+
+        Livewire::test(EditProfile::class)
+            ->call('startEditingProfile')
+            ->fillForm([
+                'first_name' => 'Jane',
+                'middle_name' => 'Q',
+                'last_name' => 'Public',
+                'gender' => null,
+            ])
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        $this->assertNull($user->refresh()->gender);
+    }
+
+    public function test_gender_rejects_values_outside_male_and_female(): void
+    {
+        $user = User::factory()->create([
+            'role' => User::ROLE_EMPLOYEE,
+            'first_name' => 'Jane',
+            'last_name' => 'Public',
+            'email_verified_at' => now(),
+        ]);
+
+        $this->actingAs($user);
+
+        Livewire::test(EditProfile::class)
+            ->call('startEditingProfile')
+            ->fillForm([
+                'first_name' => 'Jane',
+                'last_name' => 'Public',
+            ])
+            ->set('data.gender', 'other')
+            ->call('save')
+            ->assertHasFormErrors(['gender']);
+
+        $this->assertNull($user->refresh()->gender);
     }
 }

@@ -39,7 +39,7 @@ class AuditSessionController extends Controller
         }
 
         return redirect()
-            ->to($this->defaultLoginUrl())
+            ->to($this->loginUrlForRequest($request))
             ->with(
                 'auth_signed_out',
                 $reason === UserLog::LOGOUT_IDLE_TIMEOUT ? 'idle' : 'expired',
@@ -73,9 +73,24 @@ class AuditSessionController extends Controller
         };
     }
 
+    protected function loginUrlForRequest(Request $request): string
+    {
+        $panelId = $request->query('panel');
+
+        if (is_string($panelId) && $panelId !== '') {
+            $panel = Filament::getPanel($panelId, isStrict: false);
+
+            if ($panel !== null) {
+                return $panel->getLoginUrl();
+            }
+        }
+
+        return $this->defaultLoginUrl();
+    }
+
     protected function defaultLoginUrl(): string
     {
-        return Filament::getPanel('admin')?->getLoginUrl()
+        return Filament::getPanel('admin', isStrict: false)?->getLoginUrl()
             ?? Filament::getCurrentOrDefaultPanel()?->getLoginUrl()
             ?? url('/login');
     }
@@ -83,7 +98,7 @@ class AuditSessionController extends Controller
     protected function safeRedirectUrl(Request $request): string
     {
         $candidate = $request->input('redirect', $request->query('redirect'));
-        $fallback = $this->defaultLoginUrl();
+        $fallback = $this->loginUrlForRequest($request);
 
         if (! is_string($candidate) || blank($candidate)) {
             return $fallback;

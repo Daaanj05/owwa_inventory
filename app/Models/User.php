@@ -27,6 +27,10 @@ class User extends Authenticatable implements FilamentUser, MustVerifyEmail
 
     public const ROLE_EMPLOYEE = 'employee';
 
+    public const GENDER_MALE = 'male';
+
+    public const GENDER_FEMALE = 'female';
+
     /** @use HasFactory<\Database\Factories\UserFactory> */
     use HasFactory, LogsUserActivity, Notifiable;
 
@@ -40,6 +44,7 @@ class User extends Authenticatable implements FilamentUser, MustVerifyEmail
         'first_name',
         'middle_name',
         'last_name',
+        'gender',
         'email',
         'password',
         'must_change_password',
@@ -70,6 +75,26 @@ class User extends Authenticatable implements FilamentUser, MustVerifyEmail
             'password' => 'hashed',
             'must_change_password' => 'boolean',
         ];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public static function genderOptions(): array
+    {
+        return [
+            self::GENDER_MALE => 'Male',
+            self::GENDER_FEMALE => 'Female',
+        ];
+    }
+
+    public function genderLabel(): string
+    {
+        if (! is_string($this->gender)) {
+            return '—';
+        }
+
+        return self::genderOptions()[$this->gender] ?? '—';
     }
 
     protected static function booted(): void

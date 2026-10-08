@@ -148,6 +148,30 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Login rate limiting
+    |--------------------------------------------------------------------------
+    */
+
+    'login_max_attempts' => (int) env('LOGIN_MAX_ATTEMPTS', 5),
+
+    'login_decay_seconds' => (int) env('LOGIN_DECAY_SECONDS', 60),
+
+    /*
+    |--------------------------------------------------------------------------
+    | System health & capacity
+    |--------------------------------------------------------------------------
+    */
+
+    'health_active_session_minutes' => (int) env('HEALTH_ACTIVE_SESSION_MINUTES', 15),
+
+    'health_snapshot_retention_days' => (int) env('HEALTH_SNAPSHOT_RETENTION_DAYS', 7),
+
+    'health_snapshot_stale_minutes' => (int) env('HEALTH_SNAPSHOT_STALE_MINUTES', 45),
+
+    'load_test_enabled' => (bool) env('LOAD_TEST_ENABLED', false),
+
+    /*
+    |--------------------------------------------------------------------------
     | QR public asset lookup
     |--------------------------------------------------------------------------
     */

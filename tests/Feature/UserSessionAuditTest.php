@@ -231,6 +231,21 @@ class UserSessionAuditTest extends TestCase
         $this->assertNotNull($log->logged_out_at);
     }
 
+    public function test_session_recover_respects_system_admin_panel(): void
+    {
+        $user = User::factory()->create(['role' => User::ROLE_SYSTEM_ADMIN]);
+
+        $this->withSession([]);
+        Auth::login($user);
+
+        $this->actingAs($user)
+            ->get(route('session.recover', ['panel' => 'system-admin']))
+            ->assertRedirect(url('/system-admin/login'))
+            ->assertSessionHas('auth_signed_out', 'expired');
+
+        $this->assertGuest();
+    }
+
     public function test_session_recover_idle_reason_is_recorded(): void
     {
         $user = User::factory()->create(['role' => User::ROLE_SYSTEM_ADMIN]);
@@ -241,7 +256,7 @@ class UserSessionAuditTest extends TestCase
         $logId = (int) session('audit_user_log_id');
 
         $this->actingAs($user)
-            ->get(route('session.recover', ['reason' => 'idle_timeout']))
+            ->get(route('session.recover', ['reason' => 'idle_timeout', 'panel' => 'admin']))
             ->assertRedirect(url('/login'))
             ->assertSessionHas('auth_signed_out', 'idle');
 
@@ -253,6 +268,13 @@ class UserSessionAuditTest extends TestCase
     {
         $this->get(route('session.recover'))
             ->assertRedirect(url('/login'))
+            ->assertSessionHas('auth_signed_out', 'expired');
+    }
+
+    public function test_session_recover_redirects_guests_to_system_admin_login_when_panel_set(): void
+    {
+        $this->get(route('session.recover', ['panel' => 'system-admin']))
+            ->assertRedirect(url('/system-admin/login'))
             ->assertSessionHas('auth_signed_out', 'expired');
     }
 }

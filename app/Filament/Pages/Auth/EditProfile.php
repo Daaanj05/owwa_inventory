@@ -4,9 +4,11 @@ namespace App\Filament\Pages\Auth;
 
 use App\Filament\Concerns\InteractsWithAccountNavigation;
 use App\Filament\Concerns\InteractsWithProfileUser;
+use App\Models\User;
 use Filament\Actions\Action;
 use Filament\Auth\Pages\EditProfile as BaseEditProfile;
 use Filament\Forms\Components\Placeholder;
+use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\View;
@@ -17,6 +19,7 @@ use Filament\Support\Icons\Heroicon;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Arr;
+use Illuminate\Validation\Rule;
 
 class EditProfile extends BaseEditProfile
 {
@@ -37,6 +40,7 @@ class EditProfile extends BaseEditProfile
     public function startEditingProfile(): void
     {
         $this->isEditingProfile = true;
+        $this->fillForm();
     }
 
     public function cancelEditingProfile(): void
@@ -79,7 +83,7 @@ class EditProfile extends BaseEditProfile
 
     public function getSubheading(): string|Htmlable|null
     {
-        return 'View your profile details. Use Edit to update your name. Organization details are managed by your System Admin.';
+        return 'View your profile details. Use Edit to update your name and gender. Organization details are managed by your System Admin.';
     }
 
     public function content(Schema $schema): Schema
@@ -107,7 +111,7 @@ class EditProfile extends BaseEditProfile
         return $schema
             ->components([
                 Section::make('Profile information')
-                    ->description('Your display name and login email.')
+                    ->description('Your display name, gender, and login email.')
                     ->columns(2)
                     ->extraAttributes(['class' => 'owwa-account-section'])
                     ->afterHeader([
@@ -118,27 +122,45 @@ class EditProfile extends BaseEditProfile
                             ->action('startEditingProfile'),
                     ])
                     ->schema([
+                        $this->profilePlainText('first_name', 'First name'),
+                        $this->profilePlainText('middle_name', 'Middle name'),
+                        $this->profilePlainText('last_name', 'Last name'),
+                        $this->profilePlainText(
+                            'gender',
+                            'Gender',
+                            fn (): string => $this->profileUser()->genderLabel(),
+                        ),
+                        $this->profilePlainText(
+                            'email',
+                            'Email',
+                            fn (): string => (string) $this->profileUser()->email,
+                            onlyWhenViewing: false,
+                            span: 'full',
+                        ),
                         TextInput::make('first_name')
                             ->label('First name')
                             ->required()
                             ->maxLength(255)
                             ->autofocus()
-                            ->disabled(fn (): bool => ! $this->isEditingProfile)
+                            ->visible(fn (): bool => $this->isEditingProfile)
                             ->columnSpan(1),
                         TextInput::make('middle_name')
                             ->label('Middle name')
                             ->maxLength(255)
-                            ->disabled(fn (): bool => ! $this->isEditingProfile)
+                            ->visible(fn (): bool => $this->isEditingProfile)
                             ->columnSpan(1),
                         TextInput::make('last_name')
                             ->label('Last name')
                             ->required()
                             ->maxLength(255)
-                            ->disabled(fn (): bool => ! $this->isEditingProfile)
+                            ->visible(fn (): bool => $this->isEditingProfile)
                             ->columnSpan(1),
-                        $this->getEmailFormComponent()
-                            ->disabled()
-                            ->dehydrated(false)
+                        Select::make('gender')
+                            ->label('Gender')
+                            ->options(User::genderOptions())
+                            ->placeholder('Not set')
+                            ->rules(['nullable', Rule::in([User::GENDER_MALE, User::GENDER_FEMALE])])
+                            ->visible(fn (): bool => $this->isEditingProfile)
                             ->columnSpan(1),
                     ]),
                 Section::make('Organization')
@@ -220,11 +242,45 @@ class EditProfile extends BaseEditProfile
      */
     protected function mutateFormDataBeforeSave(array $data): array
     {
-        return Arr::only($data, [
+        $data = Arr::only($data, [
             'first_name',
             'middle_name',
             'last_name',
+            'gender',
         ]);
+
+        if (array_key_exists('gender', $data) && blank($data['gender'])) {
+            $data['gender'] = null;
+        }
+
+        return $data;
+    }
+
+    protected function profilePlainText(
+        string $attribute,
+        string $label,
+        ?\Closure $content = null,
+        bool $onlyWhenViewing = true,
+        int|string $span = 1,
+    ): Placeholder {
+        $field = Placeholder::make($attribute.'_display')
+            ->label($label)
+            ->content($content ?? function () use ($attribute): string {
+                $value = $this->profileUser()->getAttribute($attribute);
+
+                return filled($value) ? (string) $value : '—';
+            })
+            ->extraAttributes(['class' => 'owwa-account-detail-field']);
+
+        if ($onlyWhenViewing) {
+            $field->visible(fn (): bool => ! $this->isEditingProfile);
+        }
+
+        if ($span === 'full') {
+            $field->columnSpanFull();
+        }
+
+        return $field;
     }
 
     /**

@@ -2,6 +2,7 @@
 
 namespace App\Providers\Filament;
 
+use App\Filament\AvatarProviders\LocalGenderAvatarProvider;
 use App\Filament\Pages\Auth\AccountSettings;
 use App\Filament\Pages\Auth\EditProfile;
 use App\Filament\Pages\Auth\Login;
@@ -68,6 +69,7 @@ class AdminPanelProvider extends PanelProvider
             ->login(Login::class)
             ->emailVerification()
             ->passwordReset(requestAction: RequestPasswordReset::class, resetAction: ResetPassword::class)
+            ->defaultAvatarProvider(LocalGenderAvatarProvider::class)
             ->profile(EditProfile::class, isSimple: false)
             ->userMenuItems([
                 'profile' => fn (Action $action): Action => $action->label('Profile'),

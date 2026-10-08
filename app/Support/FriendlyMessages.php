@@ -69,7 +69,36 @@ final class FriendlyMessages
 
     public static function passwordResetEmailFailed(): string
     {
-        return 'We could not send the password reset email right now. The website may be online, but outbound email is unavailable. Ask your administrator to start the mail worker or reset the password manually.';
+        return 'We could not send the password reset email right now. The website may be online, but outbound email is unavailable. Ask your administrator to start the mail worker or try again later.';
+    }
+
+    public static function adminEmailChangeVerificationSent(string $email): string
+    {
+        return sprintf(
+            'A verification link was sent to %s. The account cannot sign in until that address is verified.',
+            $email,
+        );
+    }
+
+    public static function adminEmailChangeVerificationQueued(string $email): string
+    {
+        return sprintf(
+            'A verification email is queued for %s. The account cannot sign in until that address is verified.',
+            $email,
+        );
+    }
+
+    public static function adminEmailChangeVerificationFailed(string $email): string
+    {
+        return sprintf(
+            'The sign-in email is now %s, but we could not send the verification email. Use Resend verification email when outbound mail is available.',
+            $email,
+        );
+    }
+
+    public static function adminEmailEditHelper(): string
+    {
+        return 'This is the sign-in email. It must be verified before login. Changing it requires a new verification link and signs the person out of existing sessions.';
     }
 
     public static function passwordResetRequestDismissed(string $email): string

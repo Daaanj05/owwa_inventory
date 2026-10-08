@@ -5,6 +5,7 @@ namespace App\Filament\Resources\Users\Schemas;
 use App\Models\Department;
 use App\Models\Office;
 use App\Models\User;
+use App\Support\FriendlyMessages;
 use App\Support\SupplyOfficeResolver;
 use Closure;
 use Filament\Actions\Action;
@@ -40,8 +41,6 @@ class UserForm
                     ->visible(fn (?string $operation = null, ?string $schemaOperation = null): bool => self::showsCreateOrEditFields($operation, $schemaOperation)),
                 self::roleField($isUnitConsolidator)
                     ->visible(fn (?string $operation = null, ?string $schemaOperation = null): bool => self::showsCreateOrEditFields($operation, $schemaOperation)),
-                self::passwordField()
-                    ->visible(fn (?string $operation = null, ?string $schemaOperation = null): bool => self::isEditOperation(self::resolvedOperation($operation, $schemaOperation))),
                 self::officeField($isUnitConsolidator, $user)
                     ->visible(fn (?string $operation, ?string $schemaOperation, Get $get): bool => self::showsCreateOrEditFields($operation, $schemaOperation)
                         && ! self::isUnitConsolidatorRole($get)),
@@ -86,22 +85,10 @@ class UserForm
             ->required()
             ->unique(ignoreRecord: true)
             ->maxLength(255)
+            ->helperText(FriendlyMessages::adminEmailEditHelper())
             ->validationMessages([
                 'unique' => 'An account with this email address already exists.',
             ]);
-    }
-
-    protected static function passwordField(): TextInput
-    {
-        return TextInput::make('password')
-            ->password()
-            ->label('New password')
-            ->helperText('Leave blank to keep the current password. A new password will be hashed on save.')
-            ->dehydrated(fn ($state) => filled($state))
-            ->minLength(8)
-            ->maxLength(255)
-            ->visible(fn (?string $operation = null, ?string $schemaOperation = null): bool => self::isEditOperation(self::resolvedOperation($operation, $schemaOperation)))
-            ->columnSpanFull();
     }
 
     protected static function roleField(bool $isUnitConsolidator): Select

@@ -1,6 +1,7 @@
 {{-- On Livewire HTTP 419: show a banner. Never injected on guest/login pages. --}}
 @php
-    $recoverUrl = route('session.recover');
+    $panelId = \Filament\Facades\Filament::getCurrentPanel()?->getId() ?? 'admin';
+    $recoverUrl = route('session.recover', ['panel' => $panelId]);
 @endphp
 <script>
     (function () {

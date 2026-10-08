@@ -20,7 +20,7 @@ class FilamentSessionAudit
         }
 
         return View::make('filament.partials.idle-logout-monitor', [
-            'loginUrl' => $panel->getLoginUrl(),
+            'panelId' => $panel->getId(),
         ])->render();
     }
 }

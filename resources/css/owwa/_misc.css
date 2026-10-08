@@ -146,19 +146,21 @@
 }
 
 .fi-page.owwa-account-page .owwa-profile-hero-avatar {
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    display: block;
     width: 4.25rem;
     height: 4.25rem;
     border-radius: 9999px;
-    background: linear-gradient(145deg, #dbeafe 0%, #bfdbfe 100%);
-    color: #1d4ed8;
-    font-size: 1.25rem;
-    font-weight: 700;
-    letter-spacing: 0.04em;
+    overflow: hidden;
     flex-shrink: 0;
-    box-shadow: inset 0 0 0 1px rgba(29, 78, 216, 0.12);
+    background: #e2e8f0;
+    box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.08);
+}
+
+.fi-page.owwa-account-page .owwa-profile-hero-avatar img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
 }
 
 .fi-page.owwa-account-page .owwa-profile-hero-body {
@@ -258,14 +260,14 @@
     color: #334155 !important;
 }
 
-.fi-page.owwa-account-page .owwa-account-org-section .fi-fo-placeholder {
+.fi-page.owwa-account-page .owwa-account-section .fi-fo-placeholder {
     padding: 0.85rem 1rem;
     border-radius: 0.75rem;
     background: #f8fafc;
     border: 1px solid #e2e8f0;
 }
 
-.fi-page.owwa-account-page .owwa-account-org-section .fi-fo-placeholder .fi-fo-placeholder-label {
+.fi-page.owwa-account-page .owwa-account-section .fi-fo-placeholder .fi-fo-placeholder-label {
     display: block;
     font-size: 0.6875rem;
     font-weight: 700;
@@ -274,7 +276,7 @@
     color: #64748b;
 }
 
-.fi-page.owwa-account-page .owwa-account-org-section .fi-fo-placeholder .fi-fo-placeholder-content {
+.fi-page.owwa-account-page .owwa-account-section .fi-fo-placeholder .fi-fo-placeholder-content {
     display: block;
     margin-top: 0.35rem;
     font-size: 0.9375rem;
@@ -833,4 +835,461 @@
 .dark .owwa-styled-datalist-option:focus {
     background: #1e3a8a;
     color: #eff6ff;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   SYSTEM HEALTH PAGE
+═══════════════════════════════════════════════════════════ */
+.fi-page.owwa-system-health-page .fi-page-header-main-ctn {
+    row-gap: 0.2rem !important;
+    padding-top: 0.35rem !important;
+    padding-bottom: 0.1rem !important;
+}
+
+.fi-page.owwa-system-health-page .fi-header {
+    padding-left: 0.75rem !important;
+    padding-right: 0.75rem !important;
+    padding-top: 0.05rem !important;
+    padding-bottom: 0.05rem !important;
+    margin-bottom: 0 !important;
+}
+
+.fi-page.owwa-system-health-page .fi-header-heading {
+    display: flex !important;
+    align-items: center !important;
+    gap: 0.625rem;
+}
+
+.fi-page.owwa-system-health-page .fi-header-subheading {
+    color: #64748b !important;
+    font-size: 0.8125rem !important;
+    line-height: 1.3 !important;
+    max-width: 40rem;
+}
+
+.fi-page.owwa-system-health-page .fi-page-content {
+    gap: 0.5rem !important;
+    padding-top: 0.15rem !important;
+}
+
+.owwa-wizard-step-icon--health {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke-width='1.5' stroke='%232563eb'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12Z' /%3E%3C/svg%3E");
+}
+
+.owwa-health-shell {
+    display: flex;
+    flex-direction: column;
+    gap: 0.625rem;
+}
+
+.owwa-health-summary {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: flex-start;
+    gap: 0.75rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.625rem;
+    background: #fff;
+    padding: 0.85rem 1rem;
+    border-left: 4px solid #94a3b8;
+    width: 100%;
+    text-align: left;
+    font: inherit;
+    cursor: default;
+}
+
+.owwa-health-summary--ok { border-left-color: #059669; background: #f0fdf4; border-color: #bbf7d0; }
+.owwa-health-summary--warn { border-left-color: #d97706; background: #fffbeb; border-color: #fde68a; }
+.owwa-health-summary--fail { border-left-color: #dc2626; background: #fef2f2; border-color: #fecaca; }
+
+.owwa-health-summary-badge {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 3.25rem;
+    padding: 0.3rem 0.55rem;
+    border-radius: 999px;
+    font-size: 0.6875rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    line-height: 1;
+    color: #fff;
+    background: #64748b;
+}
+
+.owwa-health-summary--ok .owwa-health-summary-badge { background: #059669; }
+.owwa-health-summary--warn .owwa-health-summary-badge { background: #d97706; }
+.owwa-health-summary--fail .owwa-health-summary-badge { background: #dc2626; }
+
+.owwa-health-summary-copy {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    min-width: 0;
+}
+
+.owwa-health-summary-label {
+    font-size: 1rem;
+    font-weight: 700;
+    color: #0f172a;
+    line-height: 1.25;
+}
+
+.owwa-health-summary-note {
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: #475569;
+    line-height: 1.4;
+}
+
+.owwa-health-summary--ok .owwa-health-summary-note { color: #166534; }
+.owwa-health-summary--warn .owwa-health-summary-note { color: #92400e; }
+.owwa-health-summary--fail .owwa-health-summary-note { color: #991b1b; }
+
+.owwa-health-layout {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0.625rem;
+}
+
+@media (min-width: 1100px) {
+    .owwa-health-layout {
+        grid-template-columns: minmax(0, 1.45fr) minmax(16rem, 0.9fr);
+        align-items: start;
+    }
+}
+
+.owwa-health-section-header {
+    margin-bottom: 0.4rem;
+}
+
+.owwa-health-section-title {
+    margin: 0;
+    font-size: 0.875rem;
+    font-weight: 700;
+    color: #0f172a;
+}
+
+.owwa-health-section-note {
+    margin: 0.15rem 0 0;
+    font-size: 0.75rem;
+    color: #64748b;
+}
+
+.owwa-health-check-list {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0.5rem;
+}
+
+@media (min-width: 900px) {
+    .owwa-health-check-list {
+        grid-template-columns: 1fr 1fr;
+    }
+}
+
+.owwa-health-check {
+    border: 1px solid #e2e8f0;
+    border-radius: 0.625rem;
+    background: #fff;
+    padding: 0.7rem 0.8rem;
+    border-left: 3px solid #94a3b8;
+}
+
+.owwa-health-check--ok { border-left-color: #059669; }
+.owwa-health-check--warn { border-left-color: #d97706; }
+.owwa-health-check--fail { border-left-color: #dc2626; }
+
+.owwa-health-check-top {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.65rem;
+}
+
+.owwa-health-check-identity {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.5rem;
+    min-width: 0;
+}
+
+.owwa-health-pip {
+    width: 0.55rem;
+    height: 0.55rem;
+    margin-top: 0.35rem;
+    border-radius: 9999px;
+    background: #94a3b8;
+    flex-shrink: 0;
+}
+
+.owwa-health-check--ok .owwa-health-pip { background: #059669; }
+.owwa-health-check--warn .owwa-health-pip { background: #d97706; }
+.owwa-health-check--fail .owwa-health-pip { background: #dc2626; }
+
+.owwa-health-check-title {
+    margin: 0;
+    font-size: 0.875rem;
+    font-weight: 650;
+    color: #0f172a;
+    line-height: 1.25;
+}
+
+.owwa-health-check-detail {
+    margin: 0.2rem 0 0;
+    font-size: 0.75rem;
+    line-height: 1.35;
+    color: #64748b;
+}
+
+.owwa-health-check-aside {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0.3rem;
+    flex-shrink: 0;
+}
+
+.owwa-health-evidence {
+    display: inline-block;
+    max-width: 13rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    border-radius: 0.35rem;
+    background: #f1f5f9;
+    color: #334155;
+    font-size: 0.6875rem;
+    font-weight: 500;
+    padding: 0.15rem 0.4rem;
+}
+
+.owwa-health-badge {
+    display: inline-flex;
+    align-items: center;
+    border-radius: 9999px;
+    padding: 0.1rem 0.45rem;
+    font-size: 0.625rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+}
+
+.owwa-health-badge--ok { background: #d1fae5; color: #065f46; }
+.owwa-health-badge--warn { background: #fef3c7; color: #92400e; }
+.owwa-health-badge--fail { background: #fee2e2; color: #991b1b; }
+
+.owwa-health-inline-action {
+    margin-top: 0.3rem;
+    border: 0;
+    background: transparent;
+    color: #1d4ed8;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    padding: 0;
+    cursor: pointer;
+    text-align: left;
+}
+
+.owwa-health-inline-action:hover {
+    text-decoration: underline;
+}
+
+.owwa-health-aside {
+    display: flex;
+    flex-direction: column;
+    gap: 0.55rem;
+}
+
+.owwa-health-aside-block {
+    margin: 0;
+}
+
+.owwa-health-metric-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.35rem;
+}
+
+.owwa-health-metric-grid--aside .owwa-health-metric--span2 {
+    grid-column: span 2;
+}
+
+.owwa-health-metric {
+    border: 1px solid #eef2f7;
+    border-radius: 0.5rem;
+    background: #f8fafc;
+    padding: 0.55rem 0.65rem;
+    border-left: 3px solid #e2e8f0;
+    text-decoration: none;
+    color: inherit;
+    display: block;
+    width: 100%;
+    text-align: left;
+    font: inherit;
+    cursor: default;
+    box-shadow: none;
+}
+
+button.owwa-health-metric--link {
+    cursor: pointer;
+    background: #fff;
+    border-color: #bfdbfe;
+    border-left-color: #1e40af;
+}
+
+button.owwa-health-metric--link:hover {
+    border-color: #93c5fd;
+    background: #eff6ff;
+}
+
+.owwa-health-metric--primary { border-left-color: #1e40af; }
+.owwa-health-metric--ok { border-left-color: #059669; }
+.owwa-health-metric--danger { border-left-color: #dc2626; }
+
+.owwa-health-metric-value {
+    font-size: 1.15rem;
+    font-weight: 700;
+    line-height: 1.1;
+    color: #0f172a;
+    letter-spacing: -0.02em;
+}
+
+.owwa-health-metric--ok .owwa-health-metric-value { color: #059669; }
+.owwa-health-metric--danger .owwa-health-metric-value { color: #dc2626; }
+
+.owwa-health-metric-value--text {
+    font-size: 0.875rem;
+    font-weight: 650;
+}
+
+.owwa-health-metric-label {
+    margin-top: 0.1rem;
+    font-size: 0.625rem;
+    font-weight: 500;
+    color: #64748b;
+}
+
+.owwa-health-metric-cue {
+    margin-top: 0.25rem;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    color: #1d4ed8;
+}
+
+.owwa-health-status-modal-lead {
+    margin: 0 0 0.75rem;
+    font-size: 0.875rem;
+    color: #334155;
+    line-height: 1.4;
+}
+
+.owwa-health-status-modal-stats {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.75rem;
+    margin-bottom: 0.5rem;
+}
+
+.owwa-health-status-modal-stat-value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #0f172a;
+    line-height: 1.1;
+}
+
+.owwa-health-status-modal-stat-label {
+    font-size: 0.75rem;
+    color: #64748b;
+    margin-top: 0.15rem;
+}
+
+.owwa-health-status-modal-help {
+    margin: 0 0 0.75rem;
+    font-size: 0.75rem;
+    color: #64748b;
+    line-height: 1.4;
+}
+
+.owwa-health-status-modal-breakdown {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.75rem;
+    margin: 0 0 0.85rem;
+}
+
+@media (max-width: 640px) {
+    .owwa-health-status-modal-breakdown {
+        grid-template-columns: 1fr;
+    }
+}
+
+.owwa-health-status-modal-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    margin: 0 0 0.25rem;
+    margin-bottom: 0.85rem;
+}
+
+.owwa-health-status-chip {
+    display: inline-flex;
+    border-radius: 9999px;
+    background: #eff6ff;
+    color: #1e40af;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    padding: 0.2rem 0.55rem;
+}
+
+.owwa-health-status-chip--portal {
+    background: #f1f5f9;
+    color: #334155;
+}
+
+.owwa-health-status-modal-heading {
+    margin: 0 0 0.4rem;
+    font-size: 0.8125rem;
+    font-weight: 700;
+    color: #0f172a;
+}
+
+.owwa-health-status-modal-empty {
+    margin: 0 0 0.75rem;
+    font-size: 0.8125rem;
+    color: #64748b;
+}
+
+.owwa-health-status-table-wrap {
+    overflow-x: auto;
+    margin-bottom: 0.85rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.5rem;
+}
+
+.owwa-health-status-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.8125rem;
+}
+
+.owwa-health-status-table th,
+.owwa-health-status-table td {
+    padding: 0.5rem 0.65rem;
+    text-align: left;
+    border-bottom: 1px solid #f1f5f9;
+}
+
+.owwa-health-status-table th {
+    background: #f8fafc;
+    color: #64748b;
+    font-size: 0.6875rem;
+    font-weight: 650;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+}
+
+.owwa-health-status-table tr:last-child td {
+    border-bottom: 0;
 }

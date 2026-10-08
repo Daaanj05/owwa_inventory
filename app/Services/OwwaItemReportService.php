@@ -1689,6 +1689,58 @@ class OwwaItemReportService
     }
 
     /**
+     * Structured page data for Appendix 66 RPCI Fast PDF (Blade + DomPDF).
+     *
+     * @return array{
+     *     inventory_type: string,
+     *     count_date: string,
+     *     fund_cluster: string,
+     *     accountable_officer_clause: string,
+     *     lines: list<array<string, string|int|float|null>>,
+     *     certified_by: string,
+     *     approved_by: string,
+     *     verified_by: string,
+     *     min_detail_rows: int
+     * }
+     */
+    public function buildRpciFastPage(PhysicalCountSession $session): array
+    {
+        $session->loadMissing(['office', 'lines.item']);
+
+        $header = $this->physicalCountHeaderData($session);
+        $lines = [];
+
+        foreach ($session->lines as $line) {
+            $shortageQty = $line->shortageOverageQuantity();
+            $unitValue = $this->resolvePhysicalCountLineUnitValue($line, $session);
+            $shortageValue = $unitValue !== null ? round($shortageQty * $unitValue, 2) : null;
+
+            $lines[] = $this->physicalCountLineFieldValues(
+                $line,
+                $session,
+                $unitValue,
+                $shortageQty,
+                $shortageValue,
+            );
+        }
+
+        $minRows = PhysicalCountPageLayout::templateDetailRows('RPCI');
+        $signatures = $this->physicalCountSignaturePairs($session);
+
+        return [
+            'inventory_type' => (string) ($header['inventory_type'] ?? ''),
+            'count_date' => (string) ($header['count_date'] ?? ''),
+            'fund_cluster' => (string) ($header['fund_cluster'] ?? ''),
+            'accountable_officer_clause' => (string) ($header['accountable_officer'] ?? ''),
+            'lines' => $lines,
+            'certified_by' => $signatures['certified_by'],
+            'approved_by' => $signatures['approved_by'],
+            'verified_by' => $signatures['verified_by'],
+            'min_detail_rows' => max($minRows, count($lines)),
+        ];
+    }
+
+    /**
      * @param  Collection<int, PhysicalCountLine>  $lines
      * @return array<string, string|int|float|null>
      */

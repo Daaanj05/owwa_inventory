@@ -23,10 +23,6 @@ class Login extends BaseLogin
 {
     protected string $view = 'filament.pages.auth.login';
 
-    private const int MAX_LOGIN_ATTEMPTS = 5;
-
-    private const int LOGIN_DECAY_SECONDS = 60;
-
     public function mount(): void
     {
         $this->redirectAwayFromCredentialQueryString();
@@ -106,7 +102,7 @@ class Login extends BaseLogin
         try {
             $response = parent::authenticate();
         } catch (ValidationException $exception) {
-            RateLimiter::hit($this->throttleKey(), self::LOGIN_DECAY_SECONDS);
+            RateLimiter::hit($this->throttleKey(), $this->loginDecaySeconds());
 
             throw $exception;
         }
@@ -141,7 +137,7 @@ class Login extends BaseLogin
 
     protected function ensureIsNotRateLimited(): void
     {
-        if (! RateLimiter::tooManyAttempts($this->throttleKey(), self::MAX_LOGIN_ATTEMPTS)) {
+        if (! RateLimiter::tooManyAttempts($this->throttleKey(), $this->loginMaxAttempts())) {
             return;
         }
 
@@ -153,6 +149,16 @@ class Login extends BaseLogin
                 'minutes' => (int) ceil($seconds / 60),
             ]),
         ]);
+    }
+
+    protected function loginMaxAttempts(): int
+    {
+        return max(1, (int) config('inventory.login_max_attempts', 5));
+    }
+
+    protected function loginDecaySeconds(): int
+    {
+        return max(1, (int) config('inventory.login_decay_seconds', 60));
     }
 
     protected function throttleKey(): string

@@ -5,7 +5,10 @@
         $warningMinutes = min($warningMinutes, max(0, $idleMinutes - 1));
         $idleMs = $idleMinutes * 60 * 1000;
         $warningMs = $warningMinutes * 60 * 1000;
-        $recoverUrl = route('session.recover', ['reason' => 'idle_timeout']);
+        $recoverUrl = route('session.recover', [
+            'reason' => 'idle_timeout',
+            'panel' => $panelId ?? 'admin',
+        ]);
     @endphp
 
     <div

@@ -101,17 +101,9 @@ trait InteractsWithProfileUser
         ])->filter(fn (?string $part): bool => filled($part))->implode(' ')) ?: ($user->name ?? $user->email);
     }
 
-    public function profileInitials(): string
+    public function profileAvatarUrl(): string
     {
-        $user = $this->profileUser();
-        $first = strtoupper(substr(trim((string) ($user->first_name ?: $user->name)), 0, 1));
-        $last = strtoupper(substr(trim((string) ($user->last_name ?: '')), 0, 1));
-
-        if ($first === '' && $last === '') {
-            return strtoupper(substr((string) $user->email, 0, 2));
-        }
-
-        return $first.($last !== '' ? $last : '');
+        return Filament::getUserAvatarUrl($this->profileUser());
     }
 
     public function roleBadgeClass(): string

@@ -26,6 +26,8 @@ Thumbs.db
 /.cursor/
 /vendor/
 /node_modules/
+/loadtests/.credentials.json
+
 /.env
 .env.*
 !.env.example

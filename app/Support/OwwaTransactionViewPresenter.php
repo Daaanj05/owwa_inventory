@@ -222,6 +222,10 @@ class OwwaTransactionViewPresenter
                 statusClass: 'owwa-pc-status-badge--progress',
                 meta: [
                     ['label' => 'Email', 'value' => $record->email ?? '—'],
+                    [
+                        'label' => 'Verification',
+                        'value' => $record->hasVerifiedEmail() ? 'Verified' : 'Pending',
+                    ],
                     ['label' => 'Handled coverage', 'value' => $coverage],
                 ],
             );
@@ -241,8 +245,11 @@ class OwwaTransactionViewPresenter
             statusClass: 'owwa-pc-status-badge--progress',
             meta: [
                 ['label' => 'Email', 'value' => $record->email ?? '—'],
+                [
+                    'label' => 'Verification',
+                    'value' => $record->hasVerifiedEmail() ? 'Verified' : 'Pending',
+                ],
                 ['label' => 'Office', 'value' => $record->office?->name ?? '—'],
-                ['label' => 'Department', 'value' => $record->department?->name ?? '—'],
             ],
         );
         $hero['referenceLabel'] = 'User';
