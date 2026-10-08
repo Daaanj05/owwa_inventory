@@ -15,7 +15,9 @@ class UserWelcomeNotification extends Notification implements ShouldQueue
         public string $temporaryPassword,
         public string $panelLoginUrl,
         public string $verificationUrl,
-    ) {}
+    ) {
+        $this->onQueue('mail');
+    }
 
     /**
      * @return array<int, string>

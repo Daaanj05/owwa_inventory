@@ -76,6 +76,7 @@ class PasswordResetRequestService
         $token = Password::broker(Filament::getAuthPasswordBroker())->createToken($user);
 
         $notification = app(FilamentResetPassword::class, ['token' => $token]);
+        $notification->onQueue('mail');
         $notification->url = Filament::getResetPasswordUrl($token, $user);
 
         $result = MailDelivery::notify($user, $notification);

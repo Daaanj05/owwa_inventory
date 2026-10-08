@@ -137,6 +137,7 @@ class UsersTable
                             ->visible(fn (User $record): bool => ! $record->hasVerifiedEmail())
                             ->action(function (User $record): void {
                                 $notification = app(FilamentVerifyEmail::class);
+                                $notification->onQueue('mail');
                                 $notification->url = User::guestEmailVerificationUrlFor($record);
 
                                 $result = MailDelivery::notify($record, $notification);

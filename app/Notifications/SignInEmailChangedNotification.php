@@ -14,7 +14,9 @@ class SignInEmailChangedNotification extends Notification implements ShouldQueue
     public function __construct(
         public string $newEmail,
         public string $userName,
-    ) {}
+    ) {
+        $this->onQueue('mail');
+    }
 
     /**
      * @return array<int, string>

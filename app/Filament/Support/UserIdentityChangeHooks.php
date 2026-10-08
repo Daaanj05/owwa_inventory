@@ -59,6 +59,7 @@ class UserIdentityChangeHooks
         DB::table('sessions')->where('user_id', $record->id)->delete();
 
         $verifyNotification = app(FilamentVerifyEmail::class);
+        $verifyNotification->onQueue('mail');
         $verifyNotification->url = User::guestEmailVerificationUrlFor($record);
         $verifyResult = MailDelivery::notify($record, $verifyNotification);
 

@@ -35,7 +35,7 @@ $Profiles = @{
         Description = 'UAT mail worker (Render website + Neon + queue:work on laptop)'
         NextSteps   = @(
             'Website stays on Render - share the Render URL with testers'
-            'Run: php artisan queue:work --verbose'
+            'Run: php artisan queue:work --queue=mail --verbose'
             'Keep this terminal open while testers need email delivery'
         )
     }

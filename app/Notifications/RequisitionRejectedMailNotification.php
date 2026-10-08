@@ -15,7 +15,9 @@ class RequisitionRejectedMailNotification extends Notification implements Should
     public function __construct(
         public Requisition $requisition,
         public string $title,
-    ) {}
+    ) {
+        $this->onQueue('mail');
+    }
 
     /**
      * @return array<int, string>
