@@ -50,8 +50,10 @@ class OwwaMailThemeTest extends TestCase
     {
         $message = new Message(new Email);
         $src = OwwaMailLogo::src($message, 'owwa');
+        $part = $message->getSymfonyMessage()->getAttachments()[0];
 
-        $this->assertStringStartsWith('cid:', $src);
-        $this->assertNotEmpty($message->getSymfonyMessage()->getAttachments());
+        $this->assertSame('cid:owwa@owwa.mail', $src);
+        $this->assertSame('inline', $part->getDisposition());
+        $this->assertNull($part->getFilename());
     }
 }

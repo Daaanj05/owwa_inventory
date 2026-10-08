@@ -4,6 +4,7 @@ namespace App\Support;
 
 use Illuminate\Mail\Message;
 use Illuminate\Support\Facades\URL;
+use Symfony\Component\Mime\Part\DataPart;
 
 class OwwaMailLogo
 {
@@ -20,11 +21,16 @@ class OwwaMailLogo
             return URL::to($relative);
         }
 
-        if ($message instanceof Message) {
-            return $message->embed($path);
-        }
-
         $mime = mime_content_type($path) ?: 'image/png';
+
+        if ($message instanceof Message) {
+            $cid = $key.'@owwa.mail';
+            $part = (new DataPart((string) file_get_contents($path), null, $mime))->asInline();
+            $part->setContentId($cid);
+            $message->getSymfonyMessage()->addPart($part);
+
+            return 'cid:'.$cid;
+        }
 
         return 'data:'.$mime.';base64,'.base64_encode((string) file_get_contents($path));
     }
