@@ -3,6 +3,9 @@
 namespace App\Models;
 
 use App\Models\Concerns\LogsUserActivity;
+use App\Support\ConsumableInventoryType;
+use App\Support\ItemPropertyClass;
+use App\Support\PpePropertyType;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 
@@ -70,10 +73,86 @@ class ItemAttributeOption extends Model
     {
         $options = static::optionsForKind($kind);
         if (filled($current) && ! array_key_exists((string) $current, $options)) {
-            $options[(string) $current] = (string) $current;
+            $options[(string) $current] = static::labelFor($kind, (string) $current);
         }
 
         return $options;
+    }
+
+    /**
+     * Official keys stay valid. Any other value must be an active attribute-list row.
+     */
+    public static function resolveStoredValue(string $kind, mixed $value): ?string
+    {
+        if (blank($value)) {
+            return null;
+        }
+
+        $raw = trim((string) $value);
+        if ($raw === '') {
+            return null;
+        }
+
+        $official = match ($kind) {
+            self::KIND_PROPERTY_CLASS => self::officialKey(ItemPropertyClass::resolve($raw), ItemPropertyClass::options()),
+            self::KIND_PPE_TYPE => self::officialKey(PpePropertyType::resolve($raw), PpePropertyType::options()),
+            self::KIND_INVENTORY_TYPE => self::officialKey(ConsumableInventoryType::resolve($raw), ConsumableInventoryType::options()),
+            default => null,
+        };
+
+        if ($official !== null) {
+            return $official;
+        }
+
+        $listed = static::optionsForKind($kind);
+        if (array_key_exists($raw, $listed)) {
+            return $raw;
+        }
+
+        foreach ($listed as $stored => $label) {
+            if (strcasecmp(trim($label), $raw) === 0) {
+                return (string) $stored;
+            }
+        }
+
+        return null;
+    }
+
+    public static function labelFor(string $kind, ?string $value): string
+    {
+        if (blank($value)) {
+            return '';
+        }
+
+        $label = static::query()
+            ->ofKind($kind)
+            ->where('value', $value)
+            ->value('label');
+
+        if (is_string($label) && $label !== '') {
+            return $label;
+        }
+
+        return match ($kind) {
+            self::KIND_PROPERTY_CLASS => ItemPropertyClass::label($value) ?? $value,
+            self::KIND_PPE_TYPE => PpePropertyType::label($value) ?? $value,
+            self::KIND_INVENTORY_TYPE => ($inventoryLabel = ConsumableInventoryType::label($value)) !== ''
+                ? $inventoryLabel
+                : $value,
+            default => $value,
+        };
+    }
+
+    /**
+     * @param  array<string, string>  $officialOptions
+     */
+    protected static function officialKey(?string $resolved, array $officialOptions): ?string
+    {
+        if ($resolved === null || ! array_key_exists($resolved, $officialOptions)) {
+            return null;
+        }
+
+        return $resolved;
     }
 
     /**

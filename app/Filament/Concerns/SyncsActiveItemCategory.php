@@ -2,21 +2,15 @@
 
 namespace App\Filament\Concerns;
 
-use App\Filament\Pages\InventoryCategoryDashboard;
 use App\Models\ItemCategory;
 
 trait SyncsActiveItemCategory
 {
     /**
-     * Resolve the active inventory category from URL/Livewire state, persist to session,
-     * and optionally send first-time visitors to the dashboard.
+     * Resolve the active inventory category from URL/Livewire state and persist it to the session.
      */
-    protected function syncActiveItemCategoryFromRequest(bool $redirectWhenMissing = true): int
+    protected function syncActiveItemCategoryFromRequest(): int
     {
-        $hadSession = session()->has('active_item_category_id');
-        $fromQuery = filled(request()->query('category'))
-            || (property_exists($this, 'category') && filled($this->category));
-
         $categoryId = self::resolveCategoryIdFromContext(
             property_exists($this, 'category') && filled($this->category)
                 ? (int) $this->category
@@ -28,10 +22,6 @@ trait SyncsActiveItemCategory
         }
 
         session()->put('active_item_category_id', $categoryId);
-
-        if ($redirectWhenMissing && ! $fromQuery && ! $hadSession) {
-            $this->redirect(InventoryCategoryDashboard::getUrl(['category' => $categoryId]));
-        }
 
         return $categoryId;
     }

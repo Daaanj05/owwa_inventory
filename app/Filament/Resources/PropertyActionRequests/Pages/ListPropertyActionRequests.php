@@ -155,7 +155,9 @@ class ListPropertyActionRequests extends ListRecords
                     }
 
                     if ($reasonCodes->count() === 1) {
-                        $data['reason_code'] = $reasonCodes->first();
+                        $data['reason_code'] = $reasonCodes->first() === 'good_condition'
+                            ? 'needs_repair'
+                            : $reasonCodes->first();
                     }
 
                     return $data;
@@ -300,7 +302,9 @@ class ListPropertyActionRequests extends ListRecords
                         }
 
                         if ($reasonCodes->count() === 1) {
-                            $fill['reason_code'] = $reasonCodes->first();
+                            $fill['reason_code'] = $reasonCodes->first() === 'good_condition'
+                                ? 'needs_repair'
+                                : $reasonCodes->first();
                         }
                     }
 

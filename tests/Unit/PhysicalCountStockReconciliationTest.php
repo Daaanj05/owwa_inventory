@@ -73,8 +73,8 @@ class PhysicalCountStockReconciliationTest extends TestCase
         $report = app(PhysicalCountStockReconciliationService::class)->reconcile($office->id, $category->id);
         $lines = $session->fresh()->lines;
 
-        $this->assertSame(1, $lines->count());
-        $this->assertSame(2, (int) $lines->first()->balance_per_card);
+        $this->assertSame(2, $lines->count());
+        $this->assertTrue($lines->every(fn ($line): bool => (int) $line->balance_per_card === 1));
         $this->assertSame($report['accountable_unit_count'], $lines->sum('balance_per_card'));
     }
 
@@ -173,8 +173,8 @@ class PhysicalCountStockReconciliationTest extends TestCase
 
         $lines = $session->fresh()->lines;
 
-        $this->assertSame(1, $lines->count());
-        $this->assertSame(2, (int) $lines->first()->balance_per_card);
+        $this->assertSame(2, $lines->count());
+        $this->assertTrue($lines->every(fn ($line): bool => (int) $line->balance_per_card === 1));
     }
 
     public function test_preload_excludes_units_at_satellite_office(): void

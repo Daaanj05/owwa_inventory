@@ -8,8 +8,11 @@ use App\Models\InventoryUnit;
 use App\Models\Issuance;
 use App\Models\Item;
 use App\Models\PhysicalCountSession;
+use App\Models\StockOpeningBalance;
+use App\Models\StockOpeningBalanceBatch;
 use App\Support\InventoryUnitQrPayload;
 use App\Support\OwwaReferenceLabels;
+use App\Support\UnitCostKey;
 use chillerlan\QRCode\QRCode;
 use chillerlan\QRCode\QROptions;
 use Illuminate\Support\Collection;
@@ -156,6 +159,69 @@ class InventoryQrLabelService
                 dateAcquired: null,
             ),
         ]);
+    }
+
+    public function supportsOpeningBalanceQrLabels(StockOpeningBalanceBatch $batch): bool
+    {
+        if (! $batch->isConfirmed()) {
+            return false;
+        }
+
+        $batch->loadMissing('itemCategory');
+
+        return in_array($batch->itemCategory?->getTemplateSlug(), ['ppe', 'semi_expendable'], true);
+    }
+
+    /**
+     * QR labels for units minted when a confirmed opening balance was posted.
+     *
+     * @return Collection<int, array<string, string|null>>
+     */
+    public function labelsForOpeningBalanceBatch(StockOpeningBalanceBatch $batch): Collection
+    {
+        if (! $this->supportsOpeningBalanceQrLabels($batch)) {
+            return collect();
+        }
+
+        $batch->loadMissing(['office', 'lines.item.category']);
+
+        $labels = collect();
+
+        foreach ($batch->lines as $line) {
+            $labels = $labels->concat($this->labelsForOpeningBalanceLine($line, $batch->office?->name ?? ''));
+        }
+
+        return $labels->values();
+    }
+
+    /**
+     * @return Collection<int, array<string, string|null>>
+     */
+    protected function labelsForOpeningBalanceLine(StockOpeningBalance $line, string $officeName): Collection
+    {
+        $quantity = max(0, (int) $line->quantity);
+        if ($quantity < 1) {
+            return collect();
+        }
+
+        $slug = $line->item?->category?->getTemplateSlug();
+        if (! in_array($slug, ['ppe', 'semi_expendable'], true)) {
+            return collect();
+        }
+
+        $units = InventoryUnit::query()
+            ->with(['item.category', 'acquisition', 'issuance.issuedTo', 'issuance.department'])
+            ->where('item_id', $line->item_id)
+            ->where('office_id', $line->office_id)
+            ->whereNull('acquisition_id')
+            ->where('unit_cost', UnitCostKey::normalize($line->unit_cost !== null ? (float) $line->unit_cost : null))
+            ->orderBy('id')
+            ->limit($quantity)
+            ->get();
+
+        return $units
+            ->map(fn (InventoryUnit $unit) => $this->labelRowFromUnit($unit, $officeName))
+            ->values();
     }
 
     /**

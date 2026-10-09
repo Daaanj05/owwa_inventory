@@ -3,7 +3,6 @@
 namespace App\Filament\Resources\PhysicalCountSessions\Concerns;
 
 use App\Filament\Concerns\SyncsActiveItemCategory;
-use App\Filament\Pages\InventoryCategoryDashboard;
 use App\Filament\Resources\PhysicalCountSessions\PhysicalCountSessionResource;
 use App\Models\ItemCategory;
 use App\Models\PhysicalCountSession;
@@ -37,17 +36,6 @@ trait HasPhysicalCountWizardBreadcrumbs
     protected function activeCategoryIcon(): string
     {
         return CategoryWizardBreadcrumb::iconKeyFromTemplateSlug($this->activeCategoryTemplateSlug());
-    }
-
-    protected function categoryDashboardUrl(): string
-    {
-        $categoryId = $this->activeCategoryId();
-
-        if ($categoryId <= 0) {
-            return InventoryCategoryDashboard::getUrl();
-        }
-
-        return InventoryCategoryDashboard::getUrl(['category' => $categoryId]);
     }
 
     protected function physicalCountListUrl(): string
@@ -126,7 +114,6 @@ trait HasPhysicalCountWizardBreadcrumbs
             [
                 'label' => $this->activeCategoryName(),
                 'icon' => $this->activeCategoryIcon(),
-                'url' => $this->categoryDashboardUrl(),
             ],
             [
                 'label' => 'Physical counts',
@@ -151,7 +138,6 @@ trait HasPhysicalCountWizardBreadcrumbs
             [
                 'label' => $this->activeCategoryName(),
                 'icon' => $this->activeCategoryIcon(),
-                'url' => $this->categoryDashboardUrl(),
             ],
             [
                 'label' => 'Physical counts',

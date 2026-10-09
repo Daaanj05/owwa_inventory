@@ -1708,9 +1708,72 @@ class OwwaItemReportService
         $session->loadMissing(['office', 'lines.item']);
 
         $header = $this->physicalCountHeaderData($session);
+        $lines = $this->physicalCountFastLines($session, $session->lines);
+        $minRows = PhysicalCountPageLayout::templateDetailRows('RPCI');
+        $signatures = $this->physicalCountSignaturePairs($session);
+
+        return $this->physicalCountFastPage($header, $lines, $signatures, $minRows);
+    }
+
+    /**
+     * Structured page data for Appendix 73 RPCPPE Fast PDF (Blade + DomPDF).
+     *
+     * @return array<string, mixed>
+     */
+    public function buildRpcppeFastPage(PhysicalCountSession $session): array
+    {
+        $session->loadMissing(['office', 'lines.item']);
+
+        $header = $this->physicalCountHeaderData($session, $session->ppe_type);
+        $lines = $this->physicalCountFastLines($session, $session->lines);
+        $minRows = PhysicalCountPageLayout::templateDetailRows('RPCPPE');
+
+        return $this->physicalCountFastPage(
+            $header,
+            $lines,
+            $this->physicalCountSignaturePairs($session),
+            $minRows,
+        );
+    }
+
+    /**
+     * One page per RPCSP property-class sheet.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function buildRpcspFastPages(PhysicalCountSession $session): array
+    {
+        $session->loadMissing(['office', 'lines.item']);
+
+        $signatures = $this->physicalCountSignaturePairs($session);
+        $minRows = PhysicalCountPageLayout::templateDetailRows('RPCSP');
+        $pages = [];
+
+        foreach ($this->buildRpcspPhysicalCountTabs($session) as $tab) {
+            $header = $this->physicalCountHeaderData($session, $tab['propertyClass'] ?? null);
+            $lines = $this->physicalCountFastLines($session, $tab['lines']);
+
+            $pages[] = $this->physicalCountFastPage(
+                $header,
+                $lines,
+                $signatures,
+                $minRows,
+                $lines === [],
+            );
+        }
+
+        return $pages;
+    }
+
+    /**
+     * @param  iterable<int, PhysicalCountLine>  $sourceLines
+     * @return list<array<string, string|int|float|null>>
+     */
+    protected function physicalCountFastLines(PhysicalCountSession $session, iterable $sourceLines): array
+    {
         $lines = [];
 
-        foreach ($session->lines as $line) {
+        foreach ($sourceLines as $line) {
             $shortageQty = $line->shortageOverageQuantity();
             $unitValue = $this->resolvePhysicalCountLineUnitValue($line, $session);
             $shortageValue = $unitValue !== null ? round($shortageQty * $unitValue, 2) : null;
@@ -1724,9 +1787,22 @@ class OwwaItemReportService
             );
         }
 
-        $minRows = PhysicalCountPageLayout::templateDetailRows('RPCI');
-        $signatures = $this->physicalCountSignaturePairs($session);
+        return $lines;
+    }
 
+    /**
+     * @param  array<string, string|null>  $header
+     * @param  list<array<string, string|int|float|null>>  $lines
+     * @param  array<string, string>  $signatures
+     * @return array<string, mixed>
+     */
+    protected function physicalCountFastPage(
+        array $header,
+        array $lines,
+        array $signatures,
+        int $minRows,
+        bool $nothingToReport = false,
+    ): array {
         return [
             'inventory_type' => (string) ($header['inventory_type'] ?? ''),
             'count_date' => (string) ($header['count_date'] ?? ''),
@@ -1737,6 +1813,7 @@ class OwwaItemReportService
             'approved_by' => $signatures['approved_by'],
             'verified_by' => $signatures['verified_by'],
             'min_detail_rows' => max($minRows, count($lines)),
+            'nothing_to_report' => $nothingToReport,
         ];
     }
 

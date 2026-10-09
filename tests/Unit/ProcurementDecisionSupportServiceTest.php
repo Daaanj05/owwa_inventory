@@ -204,6 +204,40 @@ class ProcurementDecisionSupportServiceTest extends TestCase
         $this->assertSame((float) $long->months_cover, (float) $short->months_cover);
     }
 
+    public function test_at_risk_rows_exclude_semi_expendable_stockouts_and_keep_consumables_below_reorder(): void
+    {
+        $office = Office::factory()->create();
+        $consumables = ItemCategory::factory()->create(['name' => 'Consumables']);
+        $semi = ItemCategory::factory()->create(['name' => 'Semi-Expendable']);
+
+        $consumable = Item::factory()->create([
+            'item_category_id' => $consumables->id,
+            'name' => 'Folder Short',
+            'reorder_level' => 10,
+        ]);
+        $semiItem = Item::factory()->create([
+            'item_category_id' => $semi->id,
+            'name' => 'Basketball',
+            'reorder_level' => 0,
+        ]);
+
+        $this->createAcquisition($consumable->id, $office->id, 4);
+        $this->seedMonthlyIssuances($semiItem->id, $office->id, 4, 6);
+        $this->createAcquisition($semiItem->id, $office->id, 24);
+
+        $rows = $this->service->getAtRiskRows(
+            from: now()->subMonths(5)->startOfMonth(),
+            to: now()->endOfMonth(),
+            categoryId: null,
+            officeIds: [$office->id],
+            categoryIds: [$consumables->id, $semi->id],
+            limit: 50,
+        );
+
+        $this->assertNotNull($rows->first(fn ($row) => $row->item_id === $consumable->id));
+        $this->assertNull($rows->first(fn ($row) => $row->item_id === $semiItem->id));
+    }
+
     public function test_includes_low_stock_pairs_without_recent_issuances(): void
     {
         $office = Office::factory()->create();

@@ -119,6 +119,51 @@
         <script src="{{ asset('js/physical-count-scanner.js') }}"></script>
 
         <div class="owwa-physical-count-scan-page owwa-pc-scan-container">
+            <p class="owwa-pc-camera-hint">
+                Use a phone or tablet camera. On a computer, enter the property number below.
+            </p>
+
+            <div
+                wire:ignore
+                x-data="physicalCountScanner({ componentId: @js($this->getId()), countedPropertyNumbers: @js($this->countedPropertyNumbers()) })"
+                x-init="init()"
+                x-on:destroy="destroy()"
+                x-on:physical-count-scan-processed.window="handleScanProcessed($event)"
+            >
+                <div x-show="cameraUnavailable" x-cloak class="owwa-pc-camera-notice">
+                    Camera access is unavailable (HTTPS required on mobile). Enter property numbers manually below.
+                </div>
+
+                <div class="owwa-pc-camera-box">
+                    <div id="physical-count-qr-reader" class="owwa-pc-qr-reader"></div>
+                    <div class="owwa-pc-scan-frame" aria-hidden="true"></div>
+                </div>
+            </div>
+
+            <form wire:submit="submitManualCode" class="owwa-pc-manual-form">
+                <input
+                    type="text"
+                    wire:model="manualCode"
+                    placeholder="Enter property number manually"
+                    class="fi-input owwa-pc-manual-input"
+                />
+                <button type="submit" class="fi-btn fi-btn-size-md fi-color fi-color-primary shrink-0">
+                    Submit
+                </button>
+            </form>
+
+            @if ($lastScanMessage)
+                <div @class([
+                    'owwa-pc-feedback',
+                    'owwa-pc-feedback--success' => $lastScanTone === 'success',
+                    'owwa-pc-feedback--warning' => $lastScanTone === 'warning',
+                    'owwa-pc-feedback--danger' => $lastScanTone === 'danger',
+                    'owwa-pc-feedback--info' => $lastScanTone === 'info',
+                ])>
+                    {{ $lastScanMessage }}
+                </div>
+            @endif
+
             <div class="owwa-pc-scan-card">
                 @if ($scanOnly)
                     <div class="owwa-pc-scan-mode-label">Scan mode</div>
@@ -167,51 +212,6 @@
                     </button>
                 </div>
             </div>
-
-            @if ($lastScanMessage)
-                <div @class([
-                    'owwa-pc-feedback',
-                    'owwa-pc-feedback--success' => $lastScanTone === 'success',
-                    'owwa-pc-feedback--warning' => $lastScanTone === 'warning',
-                    'owwa-pc-feedback--danger' => $lastScanTone === 'danger',
-                    'owwa-pc-feedback--info' => $lastScanTone === 'info',
-                ])>
-                    {{ $lastScanMessage }}
-                </div>
-            @endif
-
-            <div
-                wire:ignore
-                x-data="physicalCountScanner({ componentId: @js($this->getId()), countedPropertyNumbers: @js($this->countedPropertyNumbers()) })"
-                x-init="init()"
-                x-on:destroy="destroy()"
-                x-on:physical-count-scan-processed.window="handleScanProcessed($event)"
-            >
-                <div x-show="cameraUnavailable" x-cloak class="owwa-pc-camera-notice">
-                    Camera access is unavailable (HTTPS required on mobile). Enter property numbers manually below.
-                </div>
-
-                <div class="owwa-pc-camera-box">
-                    <div id="physical-count-qr-reader" class="owwa-pc-qr-reader"></div>
-                    <div class="owwa-pc-scan-frame" aria-hidden="true"></div>
-                </div>
-            </div>
-
-            <p class="owwa-pc-camera-hint">
-                Point your phone camera at the property QR tag. HTTPS is required for camera access on mobile browsers.
-            </p>
-
-            <form wire:submit="submitManualCode" class="owwa-pc-manual-form">
-                <input
-                    type="text"
-                    wire:model="manualCode"
-                    placeholder="Enter property number manually"
-                    class="fi-input owwa-pc-manual-input"
-                />
-                <button type="submit" class="fi-btn fi-btn-size-md fi-color fi-color-primary shrink-0">
-                    Submit
-                </button>
-            </form>
 
             @if (count($recentScans) > 0)
                 <div class="owwa-pc-scan-card">

@@ -3,12 +3,10 @@
 namespace App\Services;
 
 use App\Models\Item;
+use App\Models\ItemAttributeOption;
 use App\Models\ItemCategory;
 use App\Models\User;
-use App\Support\ConsumableInventoryType;
 use App\Support\ItemMeasurementUnitInput;
-use App\Support\ItemPropertyClass;
-use App\Support\PpePropertyType;
 use App\Support\SemiExpendableUsefulLife;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -113,7 +111,7 @@ class BulkCreateItemsService
                 && blank($row['ppe_type'] ?? null)
                 && blank($row['uacs_object_code_id'] ?? null)
                 && blank($row['estimated_useful_life'] ?? null)
-                && (blank($row['unit'] ?? null) || $unit === 'piece')
+                && blank($row['unit'] ?? null)
                 && (! isset($row['reorder_level']) || (int) $row['reorder_level'] === 0);
 
             if ($isBlankRow) {
@@ -141,9 +139,13 @@ class BulkCreateItemsService
                 $seenNames[$nameKey] = true;
             }
 
-            $reorderLevel = $row['reorder_level'] ?? 0;
-            if (! is_numeric($reorderLevel) || (int) $reorderLevel < 0) {
-                $errors["items.{$index}.reorder_level"] = 'Reorder point must be 0 or greater.';
+            if (in_array($slug, ['semi_expendable', 'ppe'], true)) {
+                $reorderLevel = 0;
+            } else {
+                $reorderLevel = $row['reorder_level'] ?? 0;
+                if (! is_numeric($reorderLevel) || (int) $reorderLevel < 0) {
+                    $errors["items.{$index}.reorder_level"] = 'Reorder point must be 0 or greater.';
+                }
             }
 
             $daysToConsume = null;
@@ -162,25 +164,34 @@ class BulkCreateItemsService
                     }
                 }
 
-                $inventoryType = filled($row['inventory_type'] ?? null) ? (string) $row['inventory_type'] : null;
-                $resolvedInventoryType = $inventoryType !== null ? ConsumableInventoryType::resolve($inventoryType) : null;
-                if ($resolvedInventoryType === null) {
-                    $errors["items.{$index}.inventory_type"] = 'Inventory type is required.';
-                } else {
-                    $inventoryType = $resolvedInventoryType;
+                $rawInventoryType = filled($row['inventory_type'] ?? null)
+                    ? trim((string) $row['inventory_type'])
+                    : null;
+                $inventoryType = ItemAttributeOption::resolveStoredValue(
+                    ItemAttributeOption::KIND_INVENTORY_TYPE,
+                    $rawInventoryType,
+                );
+                if ($inventoryType === null) {
+                    $errors["items.{$index}.inventory_type"] = $rawInventoryType === null || $rawInventoryType === ''
+                        ? 'Inventory type is required.'
+                        : 'Inventory type must be on the item attribute list.';
                 }
             }
 
             if ($slug === 'semi_expendable') {
-                $propertyClass = filled($row['property_class'] ?? null) ? (string) $row['property_class'] : null;
+                $rawPropertyClass = filled($row['property_class'] ?? null)
+                    ? trim((string) $row['property_class'])
+                    : null;
+                $propertyClass = ItemAttributeOption::resolveStoredValue(
+                    ItemAttributeOption::KIND_PROPERTY_CLASS,
+                    $rawPropertyClass,
+                );
                 $uacsId = filled($row['uacs_object_code_id'] ?? null) ? (int) $row['uacs_object_code_id'] : null;
 
-                if ($propertyClass === null || ! array_key_exists($propertyClass, ItemPropertyClass::options())) {
-                    $errors["items.{$index}.property_class"] = 'Property class is required.';
-                }
-
-                if ($uacsId === null || $uacsId <= 0) {
-                    $errors["items.{$index}.uacs_object_code_id"] = 'UACS object code is required.';
+                if ($propertyClass === null) {
+                    $errors["items.{$index}.property_class"] = $rawPropertyClass === null || $rawPropertyClass === ''
+                        ? 'Property class is required.'
+                        : 'Property class must be on the item attribute list.';
                 }
 
                 $estimatedUsefulLife = filled($row['estimated_useful_life'] ?? null)
@@ -200,13 +211,14 @@ class BulkCreateItemsService
             }
 
             if ($slug === 'ppe') {
-                $ppeType = filled($row['ppe_type'] ?? null) ? (string) $row['ppe_type'] : null;
+                $rawPpeType = filled($row['ppe_type'] ?? null) ? trim((string) $row['ppe_type']) : null;
+                $ppeType = ItemAttributeOption::resolveStoredValue(ItemAttributeOption::KIND_PPE_TYPE, $rawPpeType);
                 $uacsId = filled($row['uacs_object_code_id'] ?? null) ? (int) $row['uacs_object_code_id'] : null;
 
-                if ($ppeType === null || PpePropertyType::normalize($ppeType) === null) {
-                    $errors["items.{$index}.ppe_type"] = 'Type of PPE is required.';
-                } else {
-                    $ppeType = PpePropertyType::normalize($ppeType);
+                if ($ppeType === null) {
+                    $errors["items.{$index}.ppe_type"] = $rawPpeType === null || $rawPpeType === ''
+                        ? 'Type of PPE is required.'
+                        : 'Type of PPE must be on the item attribute list.';
                 }
 
                 if ($uacsId === null || $uacsId <= 0) {

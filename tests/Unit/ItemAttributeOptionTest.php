@@ -3,6 +3,7 @@
 namespace Tests\Unit;
 
 use App\Models\ItemAttributeOption;
+use App\Support\ConsumableInventoryType;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -26,15 +27,17 @@ class ItemAttributeOptionTest extends TestCase
         ]);
         ItemAttributeOption::query()->create([
             'kind' => ItemAttributeOption::KIND_INVENTORY_TYPE,
-            'value' => 'office_supplies',
-            'label' => 'Office Supplies',
+            'value' => 'workshop_supplies',
+            'label' => 'Workshop Supplies',
             'is_active' => true,
         ]);
 
         $this->assertSame(['piece' => 'piece'], ItemAttributeOption::optionsForKind(ItemAttributeOption::KIND_UNIT));
-        $this->assertSame(
-            ['office_supplies' => 'Office Supplies'],
-            ItemAttributeOption::optionsForKind(ItemAttributeOption::KIND_INVENTORY_TYPE),
-        );
+
+        $inventoryTypes = ItemAttributeOption::optionsForKind(ItemAttributeOption::KIND_INVENTORY_TYPE);
+        foreach (ConsumableInventoryType::options() as $value => $label) {
+            $this->assertSame($label, $inventoryTypes[$value]);
+        }
+        $this->assertSame('Workshop Supplies', $inventoryTypes['workshop_supplies']);
     }
 }

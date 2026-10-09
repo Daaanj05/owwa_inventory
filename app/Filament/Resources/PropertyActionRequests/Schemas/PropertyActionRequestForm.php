@@ -162,7 +162,6 @@ class PropertyActionRequestForm
                             ->label('Category')
                             ->options(fn (): array => InventoryCategoryOptions::propertyCategoryOptions())
                             ->required(fn (string $operation): bool => $operation === 'create' && $isEmployee)
-                            ->searchable()
                             ->live()
                             ->dehydrated(false)
                             ->visible(fn (string $operation): bool => $operation === 'create' && $isEmployee)
@@ -190,14 +189,19 @@ class PropertyActionRequestForm
                         ] : []),
                         Select::make('reason_code')
                             ->label('Reason')
-                            ->options(fn (Get $get): array => config(
-                                'property_action_reasons.'.($isEmployee
+                            ->options(function (Get $get) use ($isEmployee): array {
+                                $actionType = $isEmployee
                                     ? PropertyActionRequest::ACTION_RETURN
-                                    : ($get('action_type') ?: PropertyActionRequest::ACTION_RETURN)),
-                                [],
-                            ))
+                                    : ($get('action_type') ?: PropertyActionRequest::ACTION_RETURN);
+                                $options = config('property_action_reasons.'.$actionType, []);
+
+                                if ($actionType === PropertyActionRequest::ACTION_RETURN) {
+                                    unset($options['good_condition']);
+                                }
+
+                                return $options;
+                            })
                             ->markAsRequired()
-                            ->searchable()
                             ->visible(fn (Get $get): bool => $isEmployee
                                 || ($isUnitConsolidator && filled($get('action_type')))),
                         Repeater::make('lines')
@@ -225,7 +229,7 @@ class PropertyActionRequestForm
                             ])
                             ->compact()
                             ->columnSpanFull()
-                            ->extraAttributes(['class' => 'owwa-property-action-lines-repeater'])
+                            ->extraAttributes(['class' => 'owwa-property-action-lines-repeater owwa-line-table'])
                             ->minItems(1)
                             ->defaultItems(1)
                             ->default([
@@ -474,7 +478,7 @@ class PropertyActionRequestForm
         }
 
         if ($reasonCodes->count() === 1) {
-            $set('reason_code', $reasonCodes->first());
+            $set('reason_code', $reasonCodes->first() === 'good_condition' ? 'needs_repair' : $reasonCodes->first());
         }
     }
 

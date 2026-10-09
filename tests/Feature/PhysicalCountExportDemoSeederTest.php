@@ -38,7 +38,7 @@ class PhysicalCountExportDemoSeederTest extends TestCase
         $this->assertSame(3, $rpcppe->lines()->count());
     }
 
-    public function test_rpcsp_seeded_lines_use_one_property_number_per_item_with_quantity(): void
+    public function test_rpcsp_seeded_lines_use_one_property_number_per_unit(): void
     {
         $this->seed(PhysicalCountExportDemoSeeder::class);
 
@@ -63,9 +63,13 @@ class PhysicalCountExportDemoSeederTest extends TestCase
         $bucket = ItemStockBucket::findForItemCost((int) $sampleItem->id, $acquisitionCost !== null ? (float) $acquisitionCost : null);
         $this->assertNotNull($bucket?->property_number);
 
-        $matchingLine = $session->lines->firstWhere('item_id', $sampleItem->id);
-        $this->assertNotNull($matchingLine);
-        $this->assertSame($bucket->property_number, $matchingLine->property_number);
-        $this->assertGreaterThan(1, $matchingLine->balance_per_card);
+        $itemLines = $session->lines->where('item_id', $sampleItem->id);
+        $this->assertGreaterThan(1, $itemLines->count());
+        $this->assertTrue($itemLines->every(
+            fn (PhysicalCountLine $line): bool => (int) $line->balance_per_card === 1,
+        ));
+        $this->assertTrue($itemLines->contains(
+            fn (PhysicalCountLine $line): bool => $line->property_number === $bucket->property_number,
+        ));
     }
 }

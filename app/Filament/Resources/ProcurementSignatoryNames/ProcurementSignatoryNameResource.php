@@ -45,19 +45,22 @@ class ProcurementSignatoryNameResource extends Resource
                     ->label('Role')
                     ->options(SignatorySelect::roleOptions())
                     ->required()
-                    ->searchable()
                     ->live(),
                 TextInput::make('name')
                     ->label(fn (Get $get): string => (string) ($get('role') ?? '') === ProcurementSignatoryName::ROLE_DISPOSAL_INSPECTION_OFFICER
                         ? 'Name'
                         : 'Printed name')
                     ->required()
-                    ->maxLength(255),
+                    ->maxLength(255)
+                    ->autocomplete(false)
+                    ->extraInputAttributes(['autocomplete' => 'off']),
                 TextInput::make('designation')
                     ->label('Designation')
                     ->required(fn (Get $get): bool => ProcurementSignatoryName::roleStoresDesignation((string) ($get('role') ?? '')))
                     ->visible(fn (Get $get): bool => ProcurementSignatoryName::roleStoresDesignation((string) ($get('role') ?? '')))
                     ->maxLength(255)
+                    ->autocomplete(false)
+                    ->extraInputAttributes(['autocomplete' => 'off'])
                     ->helperText('Official title printed with this person’s name.'),
             ]);
     }

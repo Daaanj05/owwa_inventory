@@ -15,11 +15,17 @@ class Issuance extends Model
 {
     use HasFactory, LogsUserActivity, SoftDeletes;
 
+    public const USEFUL_LIFE_STILL_USABLE = 'still_usable';
+
+    public const USEFUL_LIFE_NEEDS_REPLACEMENT = 'needs_replacement';
+
     protected $fillable = [
         'issuance_batch_id', 'reference_code', 'item_id', 'office_id', 'department_id', 'requisition_id',
         'consolidated_requisition_id', 'source_endorsement_id',
         'quantity', 'unit_cost', 'amount', 'issuance_date', 'remarks',
-        'property_number', 'estimated_useful_life', 'eul_expires_at', 'received_from_name',
+        'property_number', 'estimated_useful_life', 'eul_expires_at',
+        'useful_life_condition', 'useful_life_condition_note', 'useful_life_condition_reported_at',
+        'received_from_name',
         'custodian_printed_name', 'accounting_staff_printed_name',
         'custodian_designation', 'issued_to_designation',
         'issued_by', 'issued_to',
@@ -31,6 +37,7 @@ class Issuance extends Model
         return [
             'issuance_date' => 'date',
             'eul_expires_at' => 'date',
+            'useful_life_condition_reported_at' => 'datetime',
             'custody_ended_at' => 'datetime',
             'unit_cost' => 'decimal:2',
             'amount' => 'decimal:2',

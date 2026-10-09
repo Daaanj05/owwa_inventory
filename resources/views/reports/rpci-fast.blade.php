@@ -7,8 +7,8 @@
     <style>
         @page {
             size: A4 landscape;
-            /* Word Narrow: 0.5 inch on all sides. */
-            margin: 12.7mm 12.7mm 12.7mm 12.7mm;
+            /* Word Narrow on the top and sides. Bottom margin is the footer band; content cannot enter it. */
+            margin: 12.7mm 12.7mm 16mm 12.7mm;
         }
         * {
             box-sizing: border-box;
@@ -29,12 +29,14 @@
         }
         .generated-on {
             position: fixed;
-            bottom: 8mm;
+            bottom: -12mm;
             right: 0;
             left: 0;
+            height: 10mm;
             width: 100%;
             text-align: right;
             font-size: 10px;
+            line-height: 10mm;
             font-family: "Times New Roman", Times, serif;
             color: #000;
         }

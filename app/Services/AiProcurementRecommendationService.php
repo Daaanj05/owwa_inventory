@@ -8,6 +8,7 @@ use App\Models\AiProcurementRun;
 use App\Models\ItemCategory;
 use App\Models\User;
 use App\Support\AiProcurementSummaryRestore;
+use App\Support\InventoryCategoryOptions;
 use Carbon\Carbon;
 use Filament\Actions\Action;
 use Filament\Notifications\Notification;
@@ -22,7 +23,66 @@ class AiProcurementRecommendationService
     public function __construct(
         protected ProcurementDecisionSupportService $decisionSupport,
         protected RagService $rag,
+        protected SemiExpendableEulAnalyticsService $eulAnalytics,
     ) {}
+
+    /**
+     * Consumable reorder rows and semi-expendable replacement-due rows for one recommendation.
+     *
+     * @param  array<int>  $officeIds
+     * @param  array<int>  $categoryIds
+     * @return array{reorders: Collection<int, object>, replacements: Collection<int, object>}
+     */
+    public function collectSourceRows(
+        Carbon $from,
+        Carbon $to,
+        ?int $categoryId,
+        array $officeIds,
+        array $categoryIds = [],
+    ): array {
+        $reorders = $this->decisionSupport->getAtRiskRows(
+            from: $from,
+            to: $to,
+            categoryId: $categoryId,
+            officeIds: $officeIds,
+            movingAverageMonths: 6,
+            forecastHorizonMonths: 3,
+            targetCoverMonths: 3,
+            limit: self::AT_RISK_LIMIT,
+            categoryIds: $categoryIds,
+        );
+
+        $replacements = $this->includesSemiExpendable($categoryId, $categoryIds)
+            ? $this->eulAnalytics->getReviewRows($officeIds, self::AT_RISK_LIMIT)
+            : collect();
+
+        return [
+            'reorders' => $reorders,
+            'replacements' => $replacements,
+        ];
+    }
+
+    /**
+     * @param  array<int>  $categoryIds
+     */
+    protected function includesSemiExpendable(?int $categoryId, array $categoryIds): bool
+    {
+        $semiIds = InventoryCategoryOptions::categoryIdsForSlug('semi_expendable')
+            ->map(fn ($id): int => (int) $id)
+            ->all();
+
+        if ($semiIds === []) {
+            return false;
+        }
+
+        if ($categoryId === null && $categoryIds === []) {
+            return true;
+        }
+
+        $requested = $categoryId !== null ? [$categoryId] : array_map('intval', $categoryIds);
+
+        return array_intersect($requested, $semiIds) !== [];
+    }
 
     public function createProcessingRun(Carbon $from, Carbon $to, ?int $createdBy): AiProcurementRun
     {
@@ -58,31 +118,39 @@ class AiProcurementRecommendationService
             $to = Carbon::parse($periodTo)->endOfDay();
 
             if ($categoryId === null && $categoryIds === []) {
-                $categoryIds = \App\Support\InventoryCategoryOptions::procurementAnalyticsCategoryIds()->all();
+                $categoryIds = InventoryCategoryOptions::procurementAnalyticsCategoryIds()->all();
             }
 
-            $rows = $this->decisionSupport->getAtRiskRows(
+            ['reorders' => $rows, 'replacements' => $replacementRows] = $this->collectSourceRows(
                 from: $from,
                 to: $to,
                 categoryId: $categoryId,
                 officeIds: $officeIds,
-                movingAverageMonths: 6,
-                forecastHorizonMonths: 3,
-                targetCoverMonths: 3,
-                limit: self::AT_RISK_LIMIT,
                 categoryIds: $categoryIds,
             );
 
             $categoryName = $categoryId
                 ? (ItemCategory::find($categoryId)?->name ?? null)
-                : 'Consumables & Semi-Expendable (excl. PPE)';
+                : 'Consumables and semi-expendable (excl. PPE)';
             $high = $rows->where('priority', 'High')->count();
             $medium = $rows->where('priority', 'Medium')->count();
             $pairs = $rows->count();
 
             $headline = $pairs === 0
-                ? 'No at-risk pairs in this filter'
-                : sprintf('%d at-risk pairs · %d High · %d Medium', $pairs, $high, $medium);
+                ? 'No consumable reorders in this filter'
+                : sprintf('%d consumable reorder pairs · %d High · %d Medium', $pairs, $high, $medium);
+
+            $replacementLines = $replacementRows
+                ->take(8)
+                ->map(fn (object $row): string => sprintf(
+                    '- %s (%s): %s, unissued stock %d, action %s',
+                    $row->item_name,
+                    $row->property_number ?? 'no property number',
+                    $row->status_label,
+                    (int) $row->unissued_stock,
+                    $row->action_label,
+                ))
+                ->implode("\n");
 
             $facts = [
                 'from' => $from->toDateString(),
@@ -92,6 +160,8 @@ class AiProcurementRecommendationService
                 'high' => $high,
                 'medium' => $medium,
                 'headline' => $headline,
+                'replacement_count' => $replacementRows->count(),
+                'replacement_lines' => $replacementLines !== '' ? $replacementLines : 'none',
             ];
 
             $itemFacts = $rows->map(fn ($row) => [
@@ -108,12 +178,12 @@ class AiProcurementRecommendationService
                 'category_id' => $categoryId,
             ]);
 
-            $table = $this->buildDeterministicMarkdownTable($rows);
+            $table = $this->buildDeterministicMarkdownTable($rows, $replacementRows);
             $rawForStorage = $summary === null
                 ? 'Ollama is not available. Showing deterministic recommendations without AI narrative summary.'."\n\n".$table
                 : trim($summary)."\n\n".$table;
 
-            $this->finalizeRun($run, $rawForStorage, $rows);
+            $this->finalizeRun($run, $rawForStorage, $rows, $replacementRows);
             $this->notifyCreatorOfCompletedRun($run->fresh());
         } catch (Throwable $exception) {
             $run->update([
@@ -142,8 +212,9 @@ class AiProcurementRecommendationService
 
     /**
      * @param  Collection<int, object>  $rows
+     * @param  Collection<int, object>  $replacementRows
      */
-    public function finalizeRun(AiProcurementRun $run, string $rawResponse, Collection $rows): void
+    public function finalizeRun(AiProcurementRun $run, string $rawResponse, Collection $rows, ?Collection $replacementRows = null): void
     {
         $clean = preg_replace('/<think>.*?<\/think>/s', '', $rawResponse);
         $clean = str_replace(["\r\n", "\r"], "\n", trim((string) $clean));
@@ -165,6 +236,8 @@ class AiProcurementRecommendationService
         ]);
 
         $run->items()->delete();
+
+        $replacementRows ??= collect();
 
         foreach ($rows as $row) {
             $reason = sprintf(
@@ -192,6 +265,28 @@ class AiProcurementRecommendationService
                 'suggested_qty_max' => $suggested,
                 'reason' => $reason,
                 'include_in_request' => true,
+            ]);
+        }
+
+        foreach ($replacementRows as $row) {
+            AiProcurementItem::create([
+                'run_id' => $run->id,
+                'section' => 'replacement',
+                'priority' => $row->status === 'expired' ? 'High' : 'Medium',
+                'item_name' => $row->item_name,
+                'property_number' => $row->property_number,
+                'eul_status' => $row->status_label,
+                'replacement_action' => $row->action,
+                'item_id' => $row->item_id,
+                'office_name' => null,
+                'office_id' => $row->office_id,
+                'current_stock' => (int) $row->unissued_stock,
+                'avg_monthly_usage' => null,
+                'months_cover' => null,
+                'suggested_qty_min' => null,
+                'suggested_qty_max' => null,
+                'reason' => $row->action_label,
+                'include_in_request' => $row->action === SemiExpendableEulAnalyticsService::ACTION_PURCHASE,
             ]);
         }
     }
@@ -233,7 +328,7 @@ class AiProcurementRecommendationService
 
         Notification::make()
             ->title('AI recommendation ready')
-            ->body('Your procurement recommendation is ready on Procurement Analytics.')
+            ->body('Your procurement recommendation is ready.')
             ->success()
             ->actions([
                 Action::make('viewResult')
@@ -246,11 +341,36 @@ class AiProcurementRecommendationService
 
     /**
      * @param  Collection<int, object>  $rows
+     * @param  Collection<int, object>|null  $replacementRows
      */
-    public function buildDeterministicMarkdownTable(Collection $rows): string
+    public function buildDeterministicMarkdownTable(Collection $rows, ?Collection $replacementRows = null): string
+    {
+        $replacementRows ??= collect();
+
+        if ($rows->isEmpty() && $replacementRows->isEmpty()) {
+            return 'No consumable reorders or semi-expendable replacement reviews in this filter.';
+        }
+
+        $sections = [];
+
+        if ($rows->isEmpty()) {
+            $sections[] = 'No consumable reorders in this filter.';
+        } else {
+            $sections[] = $this->consumableMarkdownTable($rows);
+        }
+
+        $sections[] = $this->replacementMarkdownTable($replacementRows);
+
+        return implode("\n\n", $sections);
+    }
+
+    /**
+     * @param  Collection<int, object>  $rows
+     */
+    protected function consumableMarkdownTable(Collection $rows): string
     {
         if ($rows->isEmpty()) {
-            return 'No at-risk items identified based on current forecast and stock.';
+            return 'No consumable reorders in this filter.';
         }
 
         $lines = [];
@@ -275,6 +395,33 @@ class AiProcurementRecommendationService
                 $row->months_cover !== null ? number_format((float) $row->months_cover, 1) : '—',
                 $row->suggested_reorder_qty !== null ? (string) (int) $row->suggested_reorder_qty : '—',
                 str_replace('|', '/', $reason),
+            );
+        }
+
+        return implode("\n", $lines);
+    }
+
+    /**
+     * @param  Collection<int, object>  $rows
+     */
+    protected function replacementMarkdownTable(Collection $rows): string
+    {
+        if ($rows->isEmpty()) {
+            return 'No semi-expendable units are due for replacement review.';
+        }
+
+        $lines = [];
+        $lines[] = '### Semi-expendable replacement';
+        $lines[] = '| Item | Property number | Status | Action |';
+        $lines[] = '| --- | --- | --- | --- |';
+
+        foreach ($rows as $row) {
+            $lines[] = sprintf(
+                '| %s | %s | %s | %s |',
+                str_replace('|', '/', (string) $row->item_name),
+                str_replace('|', '/', (string) ($row->property_number ?? '—')),
+                str_replace('|', '/', (string) $row->status_label),
+                str_replace('|', '/', (string) $row->action_label),
             );
         }
 

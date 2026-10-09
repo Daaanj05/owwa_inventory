@@ -252,7 +252,6 @@ class ManageProcurementSignatoryNames extends ManageRecords
                     return SignatorySelect::roleOptionsForTabIncluding($tab, $record?->role);
                 })
                 ->required()
-                ->searchable()
                 ->live(),
             Placeholder::make('role_instruction')
                 ->hiddenLabel()
@@ -274,12 +273,16 @@ class ManageProcurementSignatoryNames extends ManageRecords
             TextInput::make('name')
                 ->label(fn (Get $get): string => self::nameFieldLabel((string) ($get('role') ?? '')))
                 ->required()
-                ->maxLength(255),
+                ->maxLength(255)
+                ->autocomplete(false)
+                ->extraInputAttributes(['autocomplete' => 'off']),
             TextInput::make('designation')
                 ->label('Designation')
                 ->required(fn (Get $get): bool => ProcurementSignatoryName::roleStoresDesignation((string) ($get('role') ?? '')))
                 ->visible(fn (Get $get): bool => ProcurementSignatoryName::roleStoresDesignation((string) ($get('role') ?? '')))
                 ->maxLength(255)
+                ->autocomplete(false)
+                ->extraInputAttributes(['autocomplete' => 'off'])
                 ->helperText('Official title printed with this person’s name.'),
         ];
     }

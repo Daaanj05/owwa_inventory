@@ -97,7 +97,7 @@
     text-align: left !important;
     color: #374151 !important;
     border-radius: 0.5rem !important;
-    font-size: 0.9375rem !important;
+    font-size: 0.875rem !important;
     font-weight: 400 !important;
     cursor: pointer;
     background: transparent;
@@ -125,8 +125,18 @@
 .fi-sidebar a {
     color: #374151 !important;
     border-radius: 0.5rem !important;
-    font-size: 0.9375rem !important;
+    font-size: 0.875rem !important;
     font-weight: 400 !important;
+}
+
+.fi-sidebar .fi-sidebar-item-label {
+    font-size: 0.875rem !important;
+    font-weight: 400 !important;
+}
+
+.fi-sidebar .fi-sidebar-item-button.fi-active .fi-sidebar-item-label,
+.fi-sidebar [aria-current="page"] .fi-sidebar-item-label {
+    font-weight: 600 !important;
 }
 
 .fi-sidebar a:hover {
@@ -141,13 +151,97 @@
     font-weight: 600 !important;
 }
 
-.fi-sidebar .fi-sidebar-group-button {
+.fi-sidebar .fi-sidebar-group:not(.owwa-nav-folder):not(.owwa-nav-plain) > .fi-sidebar-group-btn {
     color: #9ca3af !important;
     font-size: 0.6875rem !important;
     font-weight: 700 !important;
     letter-spacing: 0.08em !important;
     text-transform: uppercase !important;
     padding: 0.5rem 0.75rem 0.25rem !important;
+}
+
+.fi-sidebar .owwa-nav-plain > .fi-sidebar-group-btn {
+    display: none !important;
+}
+
+.fi-sidebar .fi-sidebar-nav-groups,
+.fi-sidebar .fi-sidebar-group-items {
+    gap: 0.45rem !important;
+    row-gap: 0.45rem !important;
+}
+
+.fi-sidebar .owwa-nav-folder > .fi-sidebar-group-btn {
+    color: #374151 !important;
+    font-size: 0.875rem !important;
+    font-weight: 500 !important;
+    letter-spacing: normal !important;
+    text-transform: none !important;
+    padding: 0.3rem 0.75rem !important;
+    border-radius: 0.5rem !important;
+    cursor: pointer;
+}
+
+.fi-sidebar .owwa-nav-folder > .fi-sidebar-group-items {
+    padding-inline-start: 1.35rem;
+}
+
+.fi-sidebar .owwa-nav-folder:not([data-group-label="Setup"]):not([data-group-label="Requisitions"]):not([data-group-label="Analytics"]) > .fi-sidebar-group-btn::before {
+    content: '';
+    width: 1.25rem;
+    height: 1.25rem;
+    flex-shrink: 0;
+    background: center / contain no-repeat url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22none%22%20viewBox%3D%220%200%2024%2024%22%20stroke-width%3D%221.5%22%20stroke%3D%22%236b7280%22%3E%3Cpath%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20d%3D%22M20.25%207.5l-.625%2010.632a2.25%202.25%200%2001-2.247%202.118H6.622a2.25%202.25%200%2001-2.247-2.118L3.75%207.5M10%2011.25h4M3.375%207.5h17.25c.621%200%201.125-.504%201.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621%200-1.125.504-1.125%201.125v1.5c0%20.621.504%201.125%201.125%201.125z%22%2F%3E%3C%2Fsvg%3E");
+}
+
+.fi-sidebar .owwa-nav-folder[data-group-label="Requisitions"] > .fi-sidebar-group-btn::before {
+    content: '';
+    width: 1.25rem;
+    height: 1.25rem;
+    flex-shrink: 0;
+    background: center / contain no-repeat url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22none%22%20viewBox%3D%220%200%2024%2024%22%20stroke-width%3D%221.5%22%20stroke%3D%22%236b7280%22%3E%3Cpath%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20d%3D%22M19.5%2014.25v-2.625a3.375%203.375%200%2000-3.375-3.375h-1.5A1.125%201.125%200%200113.5%207.125v-1.5a3.375%203.375%200%2000-3.375-3.375H8.25m0%2012.75h7.5m-7.5%203H12M10.5%202.25H5.625c-.621%200-1.125.504-1.125%201.125v17.25c0%20.621.504%201.125%201.125%201.125h12.75c.621%200%201.125-.504%201.125-1.125V11.25a9%209%200%2000-9-9z%22%2F%3E%3C%2Fsvg%3E");
+}
+
+.fi-sidebar .owwa-nav-folder[data-group-label="Analytics"] > .fi-sidebar-group-btn::before {
+    content: '';
+    width: 1.25rem;
+    height: 1.25rem;
+    flex-shrink: 0;
+    background: center / contain no-repeat url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22none%22%20viewBox%3D%220%200%2024%2024%22%20stroke-width%3D%221.5%22%20stroke%3D%22%236b7280%22%3E%3Cpath%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20d%3D%22M3%2013.125C3%2012.504%203.504%2012%204.125%2012h2.25c.621%200%201.125.504%201.125%201.125v6.75C7.5%2020.496%206.996%2021%206.375%2021h-2.25A1.125%201.125%200%20013%2019.875v-6.75zM9.75%208.625c0-.621.504-1.125%201.125-1.125h2.25c.621%200%201.125.504%201.125%201.125v11.25c0%20.621-.504%201.125-1.125%201.125h-2.25a1.125%201.125%200%2001-1.125-1.125V8.625zM16.5%204.125c0-.621.504-1.125%201.125-1.125h2.25C20.496%203%2021%203.504%2021%204.125v15.75c0%20.621-.504%201.125-1.125%201.125h-2.25a1.125%201.125%200%2001-1.125-1.125V4.125z%22%2F%3E%3C%2Fsvg%3E");
+}
+
+.fi-sidebar .owwa-nav-folder[data-group-label="Setup"] > .fi-sidebar-group-btn::before {
+    content: '';
+    width: 1.25rem;
+    height: 1.25rem;
+    flex-shrink: 0;
+    background: center / contain no-repeat url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22none%22%20viewBox%3D%220%200%2024%2024%22%20stroke-width%3D%221.5%22%20stroke%3D%22%236b7280%22%3E%3Cpath%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20d%3D%22M9.594%203.94c.09-.542.56-.94%201.11-.94h2.593c.55%200%201.02.398%201.11.94l.213%201.281c.063.374.313.686.645.87.074.04.147.083.22.127.325.196.72.257%201.075.124l1.217-.456a1.125%201.125%200%20011.37.49l1.296%202.247a1.125%201.125%200%2001-.26%201.431l-1.003.827c-.293.241-.438.613-.43.992a7.723%207.723%200%20010%20.255c-.008.378.137.75.43.991l1.004.827c.424.35.534.955.26%201.43l-1.298%202.247a1.125%201.125%200%2001-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.47%206.47%200%2001-.22.128c-.331.183-.581.495-.644.869l-.213%201.281c-.09.543-.56.94-1.11.94h-2.594c-.55%200-1.019-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52%206.52%200%2001-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125%201.125%200%2001-1.369-.49l-1.297-2.247a1.125%201.125%200%2001.26-1.431l1.004-.827c.292-.24.437-.613.43-.991a6.932%206.932%200%20010-.255c.007-.38-.138-.751-.43-.992l-1.004-.827a1.125%201.125%200%2001-.26-1.43l1.297-2.247a1.125%201.125%200%20011.37-.491l1.216.456c.356.133.751.072%201.076-.124.072-.044.146-.086.22-.128.332-.183.582-.495.644-.869l.214-1.28Z%22%2F%3E%3Cpath%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20d%3D%22M15%2012a3%203%200%2011-6%200%203%203%200%20016%200Z%22%2F%3E%3C%2Fsvg%3E");
+}
+
+.fi-sidebar .owwa-nav-folder > .fi-sidebar-group-btn:hover {
+    background-color: #f1f5f9 !important;
+    color: #003366 !important;
+}
+
+.fi-sidebar .fi-sidebar-group[data-group-label="Requisitions"] > .fi-sidebar-group-btn .fi-sidebar-group-label {
+    flex: 1 1 auto;
+}
+
+.fi-sidebar .fi-sidebar-group[data-group-label="Requisitions"] .fi-sidebar-group-items .fi-sidebar-item-badge-ctn {
+    display: none !important;
+}
+
+.fi-sidebar .owwa-nav-group-badge {
+    margin-inline-start: auto;
+    flex: none;
+}
+
+.fi-sidebar .owwa-nav-folder .fi-sidebar-group-label {
+    flex: 1 1 auto;
+    text-transform: none !important;
+    letter-spacing: normal !important;
+    font-size: inherit !important;
+    font-weight: inherit !important;
+    color: inherit !important;
 }
 
 /* ═══════════════════════════════════════════════════════════

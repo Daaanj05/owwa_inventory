@@ -3,9 +3,8 @@
 namespace App\Filament\Resources\Items\Schemas;
 
 use App\Models\Item;
+use App\Models\ItemAttributeOption;
 use App\Support\ConsumableInventoryType;
-use App\Support\ItemPropertyClass;
-use App\Support\PpePropertyType;
 use App\Support\SemiExpendableValueCategory;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Components\Section;
@@ -75,14 +74,14 @@ class ItemInfolist
                 TextEntry::make('property_class')
                     ->label('Property class')
                     ->formatStateUsing(fn (?string $state): string => filled($state)
-                        ? (ItemPropertyClass::options()[$state] ?? $state)
+                        ? ItemAttributeOption::labelFor(ItemAttributeOption::KIND_PROPERTY_CLASS, $state)
                         : '—')
                     ->placeholder('—')
                     ->visible(fn (Item $record): bool => $record->category?->getTemplateSlug() === 'semi_expendable'),
                 TextEntry::make('ppe_type')
                     ->label('Type of PPE')
                     ->formatStateUsing(fn (?string $state): string => filled($state)
-                        ? (PpePropertyType::options()[$state] ?? $state)
+                        ? ItemAttributeOption::labelFor(ItemAttributeOption::KIND_PPE_TYPE, $state)
                         : '—')
                     ->placeholder('—')
                     ->visible(fn (Item $record): bool => $record->category?->getTemplateSlug() === 'ppe'),

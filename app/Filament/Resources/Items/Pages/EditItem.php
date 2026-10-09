@@ -71,6 +71,10 @@ class EditItem extends EditRecord
             $data['ppe_type'] = null;
         }
 
+        if ($category?->getTemplateSlug() !== 'consumables') {
+            $data['reorder_level'] = 0;
+        }
+
         return $data;
     }
 }

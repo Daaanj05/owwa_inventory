@@ -17,10 +17,10 @@ class UacsObjectCodeModalTest extends TestCase
 
     public function test_system_admin_creates_uacs_object_code_from_list_modal(): void
     {
-        Filament::setCurrentPanel(Filament::getPanel('system-admin'));
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
 
         $admin = User::factory()->create([
-            'role' => User::ROLE_SYSTEM_ADMIN,
+            'role' => User::ROLE_SUPPLY_CUSTODIAN,
             'email_verified_at' => now(),
         ]);
 
@@ -43,10 +43,10 @@ class UacsObjectCodeModalTest extends TestCase
 
     public function test_system_admin_edits_uacs_object_code_from_table_modal(): void
     {
-        Filament::setCurrentPanel(Filament::getPanel('system-admin'));
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
 
         $admin = User::factory()->create([
-            'role' => User::ROLE_SYSTEM_ADMIN,
+            'role' => User::ROLE_SUPPLY_CUSTODIAN,
             'email_verified_at' => now(),
         ]);
         $code = UacsObjectCode::query()->create([
@@ -74,10 +74,10 @@ class UacsObjectCodeModalTest extends TestCase
 
     public function test_system_admin_archives_and_restores_uacs_object_code(): void
     {
-        Filament::setCurrentPanel(Filament::getPanel('system-admin'));
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
 
         $admin = User::factory()->create([
-            'role' => User::ROLE_SYSTEM_ADMIN,
+            'role' => User::ROLE_SUPPLY_CUSTODIAN,
             'email_verified_at' => now(),
         ]);
         $code = UacsObjectCode::query()->create([
@@ -104,10 +104,10 @@ class UacsObjectCodeModalTest extends TestCase
 
     public function test_uacs_list_page_uses_wizard_heading_without_create_route(): void
     {
-        Filament::setCurrentPanel(Filament::getPanel('system-admin'));
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
 
         $admin = User::factory()->create([
-            'role' => User::ROLE_SYSTEM_ADMIN,
+            'role' => User::ROLE_SUPPLY_CUSTODIAN,
             'email_verified_at' => now(),
         ]);
 
@@ -115,8 +115,8 @@ class UacsObjectCodeModalTest extends TestCase
 
         Livewire::test(ListUacsObjectCodes::class)
             ->assertSuccessful()
-            ->assertSeeHtml('owwa-wizard-title');
+            ->assertSee('UACS object codes');
 
-        $this->get('/system-admin/uacs-object-codes/create')->assertNotFound();
+        $this->get('/uacs-object-codes/create')->assertNotFound();
     }
 }

@@ -51,6 +51,7 @@ class UsefulLifeExtensionTest extends TestCase
             'unit_cost' => 4500,
             'issuance_date' => '2024-01-01',
             'issued_by' => $approver->id,
+            'property_number' => 'SEMI-EXT-001',
             'estimated_useful_life' => '3 yrs',
         ]);
 

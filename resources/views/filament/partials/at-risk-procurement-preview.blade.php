@@ -8,6 +8,7 @@
     $sortDirection = $sortDirection ?? 'asc';
     $allAtRiskCount = $allAtRiskCount ?? $rows->count();
     $stockoutCount = $stockoutCount ?? 0;
+    $embedded = (bool) ($embedded ?? false);
 
     $sortIndicator = static function (string $column) use ($sortColumn, $sortDirection): string {
         if ($sortColumn !== $column) {
@@ -18,20 +19,24 @@
     };
 @endphp
 
+@if (! $embedded)
 <div class="owwa-pa-card fi-section rounded-xl bg-white shadow-sm ring-1 ring-gray-950/5 dark:bg-gray-900 dark:ring-white/10">
-    <div class="fi-section-header-ctn px-5 py-3 border-b border-gray-200 dark:border-white/10">
+@endif
+    <div class="{{ $embedded ? 'owwa-pa-slide-body' : 'fi-section-header-ctn px-5 py-3 border-b border-gray-200 dark:border-white/10' }}">
+        @if (! $embedded)
         <div class="owwa-pa-table-header">
             <div>
                 <h2 class="fi-section-header-heading">{{ $heading }}</h2>
                 <p class="fi-section-header-description mt-1">{{ $intro }}</p>
             </div>
             <div class="owwa-pa-table-actions">
-                <button type="button" wire:click="exportAtRiskCsv" class="owwa-pa-export-btn">
-                    Export CSV
+                <button type="button" wire:click="exportAtRiskPdf" class="owwa-pa-export-btn">
+                    Export PDF
                 </button>
             </div>
         </div>
-        <div class="owwa-pa-view-tabs" role="tablist" aria-label="At-risk view">
+        @endif
+        <div class="owwa-pa-view-tabs" role="tablist" aria-label="Suggested reorders">
             <button
                 type="button"
                 role="tab"
@@ -56,7 +61,7 @@
             and High-priority items below reorder with no recent usage.
         </p>
     </div>
-    <div class="px-5 py-3">
+    <div class="owwa-pa-slide-table">
         @if($rows->isEmpty())
             <div class="owwa-empty-state">
                 <svg class="owwa-empty-state-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
@@ -169,4 +174,6 @@
             </div>
         @endif
     </div>
+@if (! $embedded)
 </div>
+@endif

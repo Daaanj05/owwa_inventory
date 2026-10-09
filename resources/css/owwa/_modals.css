@@ -624,12 +624,13 @@
 
 .owwa-scan-asset-page .owwa-scan-asset-camera-box {
     position: relative;
+    min-height: 280px;
     max-height: 280px;
     overflow: hidden;
 }
 
 .owwa-scan-asset-page .owwa-pc-qr-reader {
-    min-height: 0;
+    min-height: 280px;
 }
 
 .owwa-scan-asset-page #asset-lookup-qr-reader video {
@@ -642,28 +643,29 @@
     display: none !important;
 }
 
-.owwa-scan-asset-divider {
+.owwa-scan-asset-lookup {
     display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    font-size: 0.75rem;
-    font-weight: 500;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    color: var(--gray-400, #9ca3af);
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 0.875rem;
+    border: 2px solid var(--primary-500, #3b82f6);
+    border-radius: 0.75rem;
+    background: var(--primary-50, #eff6ff);
 }
 
-.owwa-scan-asset-divider::before,
-.owwa-scan-asset-divider::after {
-    content: '';
-    flex: 1;
-    height: 1px;
-    background: var(--gray-200, #e5e7eb);
+.dark .owwa-scan-asset-lookup {
+    border-color: var(--primary-400, #60a5fa);
+    background: rgb(30 58 138 / 0.25);
 }
 
-.dark .owwa-scan-asset-divider::before,
-.dark .owwa-scan-asset-divider::after {
-    background: var(--gray-700, #374151);
+.owwa-scan-asset-lookup-label {
+    font-size: 0.875rem;
+    font-weight: 650;
+    color: var(--gray-950, #030712);
+}
+
+.dark .owwa-scan-asset-lookup-label {
+    color: var(--gray-50, #f9fafb);
 }
 
 .owwa-scan-asset-page .owwa-scan-asset-manual-form {
@@ -677,6 +679,10 @@
     flex: 1 1 12rem;
     min-width: 0;
     margin: 0;
+    min-height: 2.75rem;
+    font-size: 1.05rem;
+    border: 2px solid var(--primary-400, #60a5fa);
+    background: #fff;
 }
 
 .owwa-scan-asset-page .owwa-scan-asset-lookup-btn {
@@ -1637,6 +1643,23 @@
 /* Add Many Items: keep Unit / Reorder / Qty / Cost readable */
 .fi-modal-window.owwa-record-modal .owwa-bulk-items-repeater.fi-fo-table-repeater {
     overflow-x: auto !important;
+}
+
+/*
+ * Add Many Items menus (unit, inventory type, property class, type of PPE,
+ * UACS object code) stay inside the scrolling table. While one is open, stop
+ * the modal shell from clipping it anywhere in the window.
+ */
+.fi-modal:has(.owwa-bulk-items-repeater .fi-dropdown-panel[style*="display: block"]) > .fi-modal-window-ctn,
+.fi-modal-window.owwa-record-modal:has(.owwa-bulk-items-repeater .fi-dropdown-panel[style*="display: block"]),
+.fi-modal-window.owwa-record-modal:has(.owwa-bulk-items-repeater .fi-dropdown-panel[style*="display: block"]) .fi-modal-content,
+.fi-modal-window.owwa-record-modal:has(.owwa-bulk-items-repeater .fi-dropdown-panel[style*="display: block"]) .owwa-bulk-items-repeater.fi-fo-table-repeater,
+.fi-modal-window.owwa-record-modal:has(.owwa-bulk-items-repeater .fi-dropdown-panel[style*="display: block"]) .owwa-bulk-items-repeater.fi-fo-table-repeater > table {
+    overflow: visible !important;
+}
+
+.fi-modal-window.owwa-record-modal .owwa-bulk-items-repeater .fi-dropdown-panel {
+    z-index: 40 !important;
 }
 
 .fi-modal-window.owwa-record-modal .owwa-bulk-items-repeater.fi-fo-table-repeater > table {

@@ -1,13 +1,10 @@
 @php
     use App\Support\FriendlyMessages;
-    use Filament\Facades\Filament;
-
-    $isSystemAdminPanel = Filament::getCurrentPanel()?->getId() === 'system-admin';
 @endphp
 
 <div class="owwa-login-wrapper owwa-password-reset-page">
 
-    @include('filament.pages.auth.partials.brand-panel', ['isSystemAdminPanel' => $isSystemAdminPanel])
+    @include('filament.pages.auth.partials.brand-panel')
 
     <div class="owwa-login-form-panel">
 

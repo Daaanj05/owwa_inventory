@@ -132,7 +132,6 @@ class PurchaseOrderForm
                 ->label('Mode of procurement')
                 ->options(ModeOfProcurementOptions::options())
                 ->required()
-                ->searchable()
                 ->disabled(fn (?PurchaseOrder $record): bool => ! self::isEditable($record)),
             TextInput::make('supplier_tin')
                 ->label('TIN')
@@ -234,20 +233,30 @@ class PurchaseOrderForm
         return Repeater::make('lines')
             ->relationship()
             ->hiddenLabel()
-            ->extraAttributes(['class' => 'owwa-acquisition-lines-repeater owwa-po-lines-repeater fi-fixed-positioning-context'])
+            ->extraAttributes(['class' => 'owwa-acquisition-lines-repeater owwa-po-lines-repeater owwa-line-table fi-fixed-positioning-context'])
             ->addable(false)
             ->deletable(false)
             ->reorderable(false)
-            ->table([
-                TableColumn::make('Item')->width('18%'),
-                TableColumn::make('Stock No.')->width('14%'),
-                TableColumn::make('Description')->width('16%'),
-                TableColumn::make('Unit')->width('8%'),
-                TableColumn::make('Requested Qty')->width('8%'),
-                TableColumn::make('Ordered Qty')->markAsRequired()->width('8%'),
-                TableColumn::make('Unit cost')->markAsRequired()->width('14%'),
-                TableColumn::make('Total Amount')->width('14%'),
-            ])
+            ->table(function (mixed $record): array {
+                $purchaseOrder = $record instanceof PurchaseOrder
+                    ? $record
+                    : ($record instanceof \App\Models\PurchaseOrderLine
+                        ? ($record->purchaseOrder ?? PurchaseOrder::query()->find($record->purchase_order_id))
+                        : null);
+                $identifierLabel = app(\App\Services\CatalogAssetNumberService::class)
+                    ->catalogIdentifierLabel($purchaseOrder?->templateSlug());
+
+                return [
+                    TableColumn::make('Item')->width('16%'),
+                    TableColumn::make($identifierLabel)->width('18%'),
+                    TableColumn::make('Description')->width('16%'),
+                    TableColumn::make('Unit')->width('8%'),
+                    TableColumn::make('Requested Qty')->width('8%'),
+                    TableColumn::make('Order Qty')->markAsRequired()->width('8%'),
+                    TableColumn::make('Unit cost')->markAsRequired()->width('12%'),
+                    TableColumn::make('Total Amount')->width('14%'),
+                ];
+            })
             ->compact()
             ->schema([
                 Placeholder::make('item_name')
@@ -305,7 +314,7 @@ class PurchaseOrderForm
 
                         Notification::make()
                             ->danger()
-                            ->title('Ordered Qty must be between 1 and Requested Qty ('.$prQty.')')
+                            ->title('Order Qty must be between 1 and Requested Qty ('.$prQty.')')
                             ->send();
                     })
                     ->extraInputAttributes(['class' => 'owwa-acquisition-line-qty', 'inputmode' => 'numeric']),

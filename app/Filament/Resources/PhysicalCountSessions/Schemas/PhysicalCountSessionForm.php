@@ -7,6 +7,7 @@ use App\Filament\Resources\PhysicalCountSessions\Pages\CreatePhysicalCountSessio
 use App\Filament\Resources\PhysicalCountSessions\Pages\EditPhysicalCountSession;
 use App\Filament\Resources\PhysicalCountSessions\Pages\ListPhysicalCountSessions;
 use App\Models\Item;
+use App\Models\ItemAttributeOption;
 use App\Models\ItemCategory;
 use App\Models\Office;
 use App\Models\PhysicalCountSession;
@@ -84,7 +85,6 @@ class PhysicalCountSessionForm
                             ->label('Item category')
                             ->options(fn (): array => ItemCategory::query()->whereNull('archived_at')->orderBy('name')->pluck('name', 'id')->all())
                             ->default(fn (): mixed => SyncsActiveItemCategory::resolveCategoryIdFromContext())
-                            ->searchable()
                             ->live()
                             ->required(fn (): bool => ! self::isCategoryScoped())
                             ->visible(fn (): bool => ! self::isCategoryScoped())
@@ -125,8 +125,10 @@ class PhysicalCountSessionForm
                             ->columnSpanFull(),
                         Select::make('ppe_type')
                             ->label('Type of PPE')
-                            ->options(PpePropertyType::options())
-                            ->searchable()
+                            ->options(fn (Get $get): array => ItemAttributeOption::optionsForKindIncluding(
+                                ItemAttributeOption::KIND_PPE_TYPE,
+                                $get('ppe_type'),
+                            ))
                             ->live()
                             ->required(fn (Get $get): bool => $get('count_type') === PhysicalCountSession::TYPE_RPCPPE)
                             ->helperText('Scopes RPCPPE expected assets and prints as Type of PPE on Appendix 73.')
@@ -244,7 +246,7 @@ class PhysicalCountSessionForm
                             ->addActionLabel('Add item line')
                             ->compact()
                             ->extraAttributes([
-                                'class' => 'owwa-pc-count-lines-repeater',
+                                'class' => 'owwa-pc-count-lines-repeater owwa-line-table',
                             ])
                             ->columnSpanFull(),
                     ]),

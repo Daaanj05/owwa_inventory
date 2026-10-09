@@ -5,6 +5,7 @@ namespace App\Filament\Pages;
 use App\Models\InventoryUnit;
 use App\Models\User;
 use App\Services\PhysicalCountScanService;
+use App\Support\InventoryCategoryTasks;
 use App\Support\ScanAssetHandoff;
 use BackedEnum;
 use Filament\Facades\Filament;
@@ -21,7 +22,7 @@ class ScanAsset extends Page
 
     protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-qr-code';
 
-    protected static string|UnitEnum|null $navigationGroup = 'Regional supply';
+    protected static string|UnitEnum|null $navigationGroup = InventoryCategoryTasks::SUPPLY_LINKS_GROUP;
 
     protected static ?string $navigationLabel = 'Scan asset';
 

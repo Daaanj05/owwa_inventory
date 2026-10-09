@@ -242,7 +242,7 @@ class OwwaReferenceLabels
     {
         return match ($categorySlug) {
             'ppe' => 'Assigned at item register: YEAR-CLASS-UACS-SEQ-LOCATION (e.g. 2026-IT-106-001-RWO4A). One Property No. per catalog item; acquisition units reuse it.',
-            'semi_expendable' => 'Assigned at item register as TEMP-YEAR-CLASS-UACS-SEQ-LOCATION, then finalized to SPLV/SPHV on first acquisition unit cost (≤₱5,000 SPLV; above SPHV). One Inventory item no. per catalog item.',
+            'semi_expendable' => 'Assigned at item register as TEMP-YEAR-CLASS-UACS-SEQ-LOCATION. The first unit finalizes TEMP to SPLV/SPHV from unit cost (≤₱5,000 SPLV; above SPHV). Each additional stock unit takes the next yearly sequence.',
             default => '',
         };
     }

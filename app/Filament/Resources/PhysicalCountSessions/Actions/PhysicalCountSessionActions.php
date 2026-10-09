@@ -149,11 +149,12 @@ class PhysicalCountSessionActions
 
     protected static function startExport(PhysicalCountSession $record, Action $action, bool $asPdf): void
     {
-        $isRpciFastPdf = $asPdf && $record->count_type === PhysicalCountSession::TYPE_RPCI;
-
-        $url = $isRpciFastPdf
-            ? route('owwa.export.physical-count.rpci-fast-pdf', $record)
-            : route('owwa.export.physical-count', $record).($asPdf ? '?format=pdf' : '');
+        $url = match (true) {
+            $asPdf && $record->count_type === PhysicalCountSession::TYPE_RPCI => route('owwa.export.physical-count.rpci-fast-pdf', $record),
+            $asPdf && $record->count_type === PhysicalCountSession::TYPE_RPCPPE => route('owwa.export.physical-count.rpcppe-fast-pdf', $record),
+            $asPdf && $record->count_type === PhysicalCountSession::TYPE_RPCSP => route('owwa.export.physical-count.rpcsp-fast-pdf', $record),
+            default => route('owwa.export.physical-count', $record).($asPdf ? '?format=pdf' : ''),
+        };
 
         $livewire = $action->getLivewire();
         OwwaExportBusyDispatcher::start(

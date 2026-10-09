@@ -2,11 +2,11 @@
 
 namespace Tests\Feature;
 
-use App\Filament\Pages\InventoryCategoryDashboard;
 use App\Filament\Pages\StockLevels;
 use App\Models\ItemCategory;
 use App\Models\Office;
 use App\Models\User;
+use App\Support\InventoryCategoryTasks;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
@@ -38,20 +38,16 @@ class InventoryCategoryDashboardUcTest extends TestCase
             ->assertForbidden();
     }
 
-    public function test_unit_consolidator_cannot_access_category_dashboard(): void
+    public function test_category_tasks_replace_the_category_dashboard(): void
     {
-        $office = Office::factory()->create();
+        $this->assertFileDoesNotExist(app_path('Filament/Pages/InventoryCategoryDashboard.php'));
+        $this->assertFileDoesNotExist(resource_path('views/filament/pages/inventory-category-dashboard.blade.php'));
+
         $category = ItemCategory::factory()->create(['name' => 'Consumables']);
-        $uc = User::factory()->create([
-            'role' => User::ROLE_UNIT_CONSOLIDATOR,
-            'office_id' => $office->id,
-        ]);
+        $titles = array_column(InventoryCategoryTasks::forCategory($category), 'title');
 
-        $this->actingAs($uc);
-
-        $this->assertFalse(InventoryCategoryDashboard::canAccess());
-
-        Livewire::test(InventoryCategoryDashboard::class, ['category' => $category->id])
-            ->assertForbidden();
+        $this->assertContains('Stock levels', $titles);
+        $this->assertContains('Items', $titles);
+        $this->assertNotContains('Transfers', $titles);
     }
 }

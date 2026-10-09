@@ -327,7 +327,7 @@ class RequisitionIssuanceFormSchema
 
         $fields[] = Repeater::make('lines')
             ->label($usesEndorsements ? 'Issue per employee' : 'Items to issue')
-            ->extraAttributes(['class' => 'owwa-requisition-issue-lines-repeater'])
+            ->extraAttributes(['class' => 'owwa-requisition-issue-lines-repeater owwa-line-table'])
             ->table($tableColumns)
             ->compact()
             ->schema($lineSchema)

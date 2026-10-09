@@ -1,12 +1,6 @@
-@php
-    use Filament\Facades\Filament;
-
-    $isSystemAdminPanel = Filament::getCurrentPanel()?->getId() === 'system-admin';
-@endphp
-
 <div class="owwa-login-wrapper owwa-change-password-page">
 
-    @include('filament.pages.auth.partials.brand-panel', ['isSystemAdminPanel' => $isSystemAdminPanel])
+    @include('filament.pages.auth.partials.brand-panel')
 
     {{-- Right form panel --}}
     <div class="owwa-login-form-panel">

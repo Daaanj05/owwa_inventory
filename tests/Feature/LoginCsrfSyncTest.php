@@ -3,7 +3,7 @@
 namespace Tests\Feature;
 
 use App\Filament\Pages\Auth\Login;
-use App\Filament\Pages\InventoryCategoryDashboard;
+use App\Filament\Pages\StockLevels;
 use App\Filament\Resources\Requisitions\RequisitionResource;
 use App\Models\ItemCategory;
 use App\Models\Office;
@@ -103,7 +103,7 @@ class LoginCsrfSyncTest extends TestCase
             ->assertRedirect();
     }
 
-    public function test_category_dashboard_starts_echo(): void
+    public function test_stock_levels_starts_echo(): void
     {
         Filament::setCurrentPanel(Filament::getPanel('admin'));
 
@@ -123,7 +123,7 @@ class LoginCsrfSyncTest extends TestCase
         ]);
 
         $this->actingAs($user)
-            ->get(InventoryCategoryDashboard::getUrl(['category' => $category->id]))
+            ->get(StockLevels::getUrl(['category' => $category->id]))
             ->assertOk()
             ->assertSee('EchoFactory', false);
     }

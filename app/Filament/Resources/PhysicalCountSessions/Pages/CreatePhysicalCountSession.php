@@ -25,7 +25,7 @@ class CreatePhysicalCountSession extends CreateRecord
     {
         parent::mount();
 
-        $this->syncActiveItemCategoryFromRequest(false);
+        $this->syncActiveItemCategoryFromRequest();
         $this->form->fill(PhysicalCountSessionForm::defaultCreateFormData($this->activeItemCategoryId()));
     }
 

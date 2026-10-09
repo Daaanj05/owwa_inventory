@@ -114,7 +114,7 @@ class InspectionAcceptanceReportForm
         return Repeater::make('lines')
             ->relationship()
             ->hiddenLabel()
-            ->extraAttributes(['class' => 'owwa-acquisition-lines-repeater owwa-iar-lines-repeater fi-fixed-positioning-context'])
+            ->extraAttributes(['class' => 'owwa-acquisition-lines-repeater owwa-iar-lines-repeater owwa-line-table fi-fixed-positioning-context'])
             ->addable(false)
             ->deletable(false)
             ->reorderable(false)

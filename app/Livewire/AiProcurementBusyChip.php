@@ -82,7 +82,7 @@ class AiProcurementBusyChip extends Component
 
         $this->js(AiProcurementSummaryRestore::browserAnnounceScript([
             'title' => 'AI recommendation ready',
-            'body' => 'Your procurement recommendation is ready on Procurement Analytics.',
+            'body' => 'Your procurement recommendation is ready.',
             'seconds' => 10,
             'actionLabel' => 'View the result',
             'actionUrl' => $analyticsUrl,

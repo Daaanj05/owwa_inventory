@@ -44,7 +44,7 @@ class SystemAdminPanelProvider extends PanelProvider
         $panel = $panel
             ->id('system-admin')
             ->path('system-admin')
-            ->brandName('OWWA Inventory System — System Admin')
+            ->brandName('OWWA Inventory System - System Admin')
             ->favicon('/images/owwa-4a_logo_transparent.png')
             ->login(Login::class)
             ->emailVerification()

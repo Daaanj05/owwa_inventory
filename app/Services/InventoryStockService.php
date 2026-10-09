@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Item;
+use App\Models\ItemCategory;
 use App\Models\ItemStockBucket;
 use App\Models\StockPositionRestockFlag;
 use App\Support\SemiExpendableValueCategory;
@@ -129,6 +130,7 @@ class InventoryStockService
 
         $items = DB::table('items')
             ->whereIn('id', array_keys($itemIds))
+            ->whereIn('item_category_id', $this->consumableCategoryIds())
             ->where('reorder_level', '>', 0)
             ->whereNull('archived_at')
             ->pluck('reorder_level', 'id');
@@ -173,6 +175,7 @@ class InventoryStockService
 
         $items = DB::table('items')
             ->whereIn('id', array_keys($itemIds))
+            ->whereIn('item_category_id', $this->consumableCategoryIds())
             ->where('reorder_level', '>', 0)
             ->whereNull('archived_at')
             ->pluck('reorder_level', 'id');
@@ -293,6 +296,11 @@ class InventoryStockService
 
     public function isLowStock(Item $item, int $officeId): bool
     {
+        $item->loadMissing('category');
+        if ($item->category?->getTemplateSlug() !== 'consumables') {
+            return false;
+        }
+
         if (! $this->hasInventoryActivity($item->id, $officeId)) {
             return false;
         }
@@ -300,6 +308,24 @@ class InventoryStockService
         $stock = $this->getStock($item->id, $officeId);
 
         return $stock < $item->reorder_level && $item->reorder_level > 0;
+    }
+
+    /**
+     * @return array<int, int>
+     */
+    protected function consumableCategoryIds(): array
+    {
+        return ItemCategory::query()
+            ->get(['id', 'name'])
+            ->filter(fn (ItemCategory $category): bool => $category->getTemplateSlug() === 'consumables')
+            ->pluck('id')
+            ->map(fn (mixed $id): int => (int) $id)
+            ->all();
+    }
+
+    protected function categoryTracksReorder(?string $categoryName): bool
+    {
+        return (new ItemCategory(['name' => $categoryName]))->getTemplateSlug() === 'consumables';
     }
 
     /**
@@ -605,6 +631,7 @@ class InventoryStockService
             $costKey = UnitCostKey::normalize($position['unit_cost']);
             $bucket = $bucketsByItemCost[$position['item_id'].'_'.$costKey] ?? null;
             $flag = $flagsByPosition[$position['item_id'].'_'.$position['office_id'].'_'.$costKey] ?? null;
+            $tracksReorder = $this->categoryTracksReorder($item->category_name);
 
             $rows->push((object) [
                 'item_id' => $position['item_id'],
@@ -618,6 +645,7 @@ class InventoryStockService
                 'value_type' => SemiExpendableValueCategory::valueTypeForUnitCost($position['unit_cost']),
                 'stock' => $stock,
                 'reorder_level' => (int) $item->reorder_level,
+                'tracks_reorder' => $tracksReorder,
                 'is_low' => false,
                 'is_inactive_for_restock' => (bool) ($flag?->is_inactive_for_restock ?? false),
                 'inactive_source' => $flag?->inactive_source,
@@ -630,7 +658,9 @@ class InventoryStockService
             ->map(function (object $row) use ($aggregateStockByPair): object {
                 $pairKey = "{$row->item_id}_{$row->office_id}";
                 $aggregate = $aggregateStockByPair[$pairKey] ?? $row->stock;
-                $row->is_low = $row->reorder_level > 0 && $aggregate < $row->reorder_level;
+                $row->is_low = ($row->tracks_reorder ?? false)
+                    && $row->reorder_level > 0
+                    && $aggregate < $row->reorder_level;
 
                 return $row;
             })
@@ -658,6 +688,8 @@ class InventoryStockService
      */
     protected function computeCategoryOfficeStockSummary(int $categoryId, int $officeId): array
     {
+        $tracksReorder = ItemCategory::query()->find($categoryId)?->getTemplateSlug() === 'consumables';
+
         $items = DB::table('items')
             ->where('item_category_id', $categoryId)
             ->whereNull('archived_at')
@@ -711,7 +743,7 @@ class InventoryStockService
         foreach ($positionStocks as $position) {
             $pairKey = "{$position['item_id']}_{$position['office_id']}";
             $aggregate = $aggregateStockByPair[$pairKey] ?? $position['stock'];
-            if ($position['reorder_level'] > 0 && $aggregate < $position['reorder_level']) {
+            if ($tracksReorder && $position['reorder_level'] > 0 && $aggregate < $position['reorder_level']) {
                 $lowCount++;
             }
         }
@@ -1006,7 +1038,10 @@ class InventoryStockService
                     'value_type' => SemiExpendableValueCategory::valueTypeForUnitCost($avg ?? 0),
                     'stock' => $stock,
                     'reorder_level' => (int) ($first->reorder_level ?? 0),
-                    'is_low' => (int) ($first->reorder_level ?? 0) > 0 && $stock < (int) ($first->reorder_level ?? 0),
+                    'tracks_reorder' => (bool) ($first->tracks_reorder ?? false),
+                    'is_low' => (bool) ($first->tracks_reorder ?? false)
+                        && (int) ($first->reorder_level ?? 0) > 0
+                        && $stock < (int) ($first->reorder_level ?? 0),
                     'is_inactive_for_restock' => $allInactive,
                     'inactive_source' => $allInactive ? ($first->inactive_source ?? null) : ($anyInactive ? 'mixed' : null),
                     'restock_status_label' => $allInactive

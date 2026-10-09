@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Filament\Resources\Items\Pages\ListItems;
 use App\Models\Item;
+use App\Models\ItemAttributeOption;
 use App\Models\ItemCategory;
 use App\Models\Office;
 use App\Models\UacsObjectCode;
@@ -182,6 +183,236 @@ class ItemBulkCreateTest extends TestCase
             'uacs_object_code_id' => $uacs->id,
             'estimated_useful_life' => '5 yrs',
             'description' => 'Ergonomic chair',
+        ]);
+    }
+
+    public function test_bulk_create_semi_expendable_allows_blank_uacs_and_reorder_point(): void
+    {
+        $office = Office::factory()->create(['is_regional_supply' => true]);
+        $category = ItemCategory::factory()->create(['name' => 'Semi-Expendable']);
+        $user = User::factory()->create([
+            'role' => User::ROLE_SUPPLY_CUSTODIAN,
+            'office_id' => $office->id,
+            'email_verified_at' => now(),
+        ]);
+
+        $this->actingAs($user);
+        session(['active_item_category_id' => $category->id]);
+
+        Livewire::withQueryParams(['category' => (string) $category->id])
+            ->test(ListItems::class)
+            ->callAction(TestAction::make('bulkCreateItems'), [
+                'item_category_id' => $category->id,
+                'items' => [
+                    [
+                        'base_name' => 'Folding Chair',
+                        'sub_item' => null,
+                        'unit' => 'piece',
+                        'property_class' => ItemPropertyClass::OfficeEquipment,
+                        'estimated_useful_life' => '36 months',
+                    ],
+                ],
+            ])
+            ->assertHasNoActionErrors()
+            ->assertNotified();
+
+        $this->assertDatabaseHas(Item::class, [
+            'item_category_id' => $category->id,
+            'name' => 'Folding Chair',
+            'property_class' => ItemPropertyClass::OfficeEquipment,
+            'uacs_object_code_id' => null,
+            'reorder_level' => 0,
+            'estimated_useful_life' => '36 months',
+        ]);
+    }
+
+    public function test_bulk_create_semi_expendable_requires_estimated_useful_life(): void
+    {
+        $office = Office::factory()->create(['is_regional_supply' => true]);
+        $category = ItemCategory::factory()->create(['name' => 'Semi-Expendable']);
+        $user = User::factory()->create([
+            'role' => User::ROLE_SUPPLY_CUSTODIAN,
+            'office_id' => $office->id,
+            'email_verified_at' => now(),
+        ]);
+
+        $this->actingAs($user);
+        session(['active_item_category_id' => $category->id]);
+
+        Livewire::withQueryParams(['category' => (string) $category->id])
+            ->test(ListItems::class)
+            ->callAction(TestAction::make('bulkCreateItems'), [
+                'item_category_id' => $category->id,
+                'items' => [
+                    [
+                        'base_name' => 'Stool',
+                        'sub_item' => null,
+                        'unit' => 'piece',
+                        'reorder_level' => 0,
+                        'property_class' => ItemPropertyClass::OfficeEquipment,
+                    ],
+                ],
+            ])
+            ->assertHasActionErrors()
+            ->assertNotified('Unable to create items')
+            ->tap(function ($component): void {
+                $this->assertTrue(
+                    collect($component->errors())
+                        ->flatten()
+                        ->contains('Estimated useful life is required.'),
+                );
+            });
+
+        $this->assertDatabaseMissing(Item::class, [
+            'name' => 'Stool',
+        ]);
+    }
+
+    public function test_bulk_create_resolves_property_class_label_to_official_key(): void
+    {
+        $office = Office::factory()->create(['is_regional_supply' => true]);
+        $category = ItemCategory::factory()->create(['name' => 'Semi-Expendable']);
+        $uacs = UacsObjectCode::query()->create([
+            'code' => '106-03',
+            'name' => 'Office equipment',
+            'is_active' => true,
+        ]);
+        ItemAttributeOption::query()->create([
+            'kind' => ItemAttributeOption::KIND_PROPERTY_CLASS,
+            'value' => 'Office Equipment',
+            'label' => 'Office Equipment',
+            'is_active' => true,
+        ]);
+        $user = User::factory()->create([
+            'role' => User::ROLE_SUPPLY_CUSTODIAN,
+            'office_id' => $office->id,
+            'email_verified_at' => now(),
+        ]);
+
+        $this->actingAs($user);
+        session(['active_item_category_id' => $category->id]);
+
+        Livewire::withQueryParams(['category' => (string) $category->id])
+            ->test(ListItems::class)
+            ->callAction(TestAction::make('bulkCreateItems'), [
+                'item_category_id' => $category->id,
+                'items' => [
+                    [
+                        'base_name' => 'Stapler',
+                        'sub_item' => null,
+                        'unit' => 'piece',
+                        'reorder_level' => 0,
+                        'property_class' => 'Office Equipment',
+                        'uacs_object_code_id' => $uacs->id,
+                        'estimated_useful_life' => '5 yrs',
+                    ],
+                ],
+            ])
+            ->assertHasNoActionErrors()
+            ->assertNotified();
+
+        $this->assertDatabaseHas(Item::class, [
+            'item_category_id' => $category->id,
+            'name' => 'Stapler',
+            'property_class' => ItemPropertyClass::OfficeEquipment,
+        ]);
+    }
+
+    public function test_bulk_create_saves_listed_custom_property_class(): void
+    {
+        $office = Office::factory()->create(['is_regional_supply' => true]);
+        $category = ItemCategory::factory()->create(['name' => 'Semi-Expendable']);
+        $uacs = UacsObjectCode::query()->create([
+            'code' => '106-09',
+            'name' => 'Custom class',
+            'is_active' => true,
+        ]);
+        ItemAttributeOption::query()->create([
+            'kind' => ItemAttributeOption::KIND_PROPERTY_CLASS,
+            'value' => 'workshop_tools',
+            'label' => 'Workshop tools',
+            'is_active' => true,
+        ]);
+        $user = User::factory()->create([
+            'role' => User::ROLE_SUPPLY_CUSTODIAN,
+            'office_id' => $office->id,
+            'email_verified_at' => now(),
+        ]);
+
+        $this->actingAs($user);
+        session(['active_item_category_id' => $category->id]);
+
+        Livewire::withQueryParams(['category' => (string) $category->id])
+            ->test(ListItems::class)
+            ->callAction(TestAction::make('bulkCreateItems'), [
+                'item_category_id' => $category->id,
+                'items' => [
+                    [
+                        'base_name' => 'Toolbox',
+                        'sub_item' => null,
+                        'unit' => 'piece',
+                        'reorder_level' => 0,
+                        'property_class' => 'workshop_tools',
+                        'uacs_object_code_id' => $uacs->id,
+                        'estimated_useful_life' => '5 yrs',
+                    ],
+                ],
+            ])
+            ->assertHasNoActionErrors()
+            ->assertNotified();
+
+        $this->assertDatabaseHas(Item::class, [
+            'name' => 'Toolbox',
+            'property_class' => 'workshop_tools',
+        ]);
+    }
+
+    public function test_bulk_create_rejects_unlisted_property_class(): void
+    {
+        $office = Office::factory()->create(['is_regional_supply' => true]);
+        $category = ItemCategory::factory()->create(['name' => 'Semi-Expendable']);
+        $uacs = UacsObjectCode::query()->create([
+            'code' => '106-10',
+            'name' => 'Custom class',
+            'is_active' => true,
+        ]);
+        $user = User::factory()->create([
+            'role' => User::ROLE_SUPPLY_CUSTODIAN,
+            'office_id' => $office->id,
+            'email_verified_at' => now(),
+        ]);
+
+        $this->actingAs($user);
+        session(['active_item_category_id' => $category->id]);
+
+        Livewire::withQueryParams(['category' => (string) $category->id])
+            ->test(ListItems::class)
+            ->callAction(TestAction::make('bulkCreateItems'), [
+                'item_category_id' => $category->id,
+                'items' => [
+                    [
+                        'base_name' => 'Unknown tool',
+                        'sub_item' => null,
+                        'unit' => 'piece',
+                        'reorder_level' => 0,
+                        'property_class' => 'not_on_the_list',
+                        'uacs_object_code_id' => $uacs->id,
+                        'estimated_useful_life' => '5 yrs',
+                    ],
+                ],
+            ])
+            ->assertHasActionErrors()
+            ->assertNotified('Unable to create items')
+            ->tap(function ($component): void {
+                $this->assertTrue(
+                    collect($component->errors())
+                        ->flatten()
+                        ->contains('Property class must be on the item attribute list.'),
+                );
+            });
+
+        $this->assertDatabaseMissing(Item::class, [
+            'name' => 'Unknown tool',
         ]);
     }
 

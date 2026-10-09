@@ -149,8 +149,8 @@ class PropertyActionRequestCompileService
                 $resolvedReasonCode = (string) $reasonCodes->first();
             } else {
                 $resolvedReasonCode = $resolvedActionType === PropertyActionRequest::ACTION_RETURN
-                    ? 'good_condition'
-                    : (string) ($reasonCodes->first() ?? 'good_condition');
+                    ? 'needs_repair'
+                    : (string) ($reasonCodes->first() ?? 'needs_repair');
             }
 
             $batch = PropertyActionRequest::query()->create([

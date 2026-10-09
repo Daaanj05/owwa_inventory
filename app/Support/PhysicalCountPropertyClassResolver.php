@@ -2,6 +2,7 @@
 
 namespace App\Support;
 
+use App\Models\ItemAttributeOption;
 use App\Models\PhysicalCountSession;
 use Illuminate\Support\Collection;
 
@@ -85,14 +86,15 @@ class PhysicalCountPropertyClassResolver
     {
         if ($session->count_type === PhysicalCountSession::TYPE_RPCPPE) {
             if (filled($session->ppe_type)) {
-                return PpePropertyType::options()[$session->ppe_type]
-                    ?? PpePropertyType::propertyTypeLabel($session->ppe_type);
+                return ItemAttributeOption::labelFor(ItemAttributeOption::KIND_PPE_TYPE, $session->ppe_type);
             }
         }
 
         if ($session->count_type === PhysicalCountSession::TYPE_RPCSP && filled($session->property_class)) {
-            return ItemPropertyClass::options()[$session->property_class]
-                ?? (string) $session->property_class;
+            return ItemAttributeOption::labelFor(
+                ItemAttributeOption::KIND_PROPERTY_CLASS,
+                $session->property_class,
+            );
         }
 
         $classes = self::classesForSession($session);
@@ -108,10 +110,10 @@ class PhysicalCountPropertyClassResolver
         $class = (string) $classes->first();
 
         if ($session->count_type === PhysicalCountSession::TYPE_RPCPPE) {
-            return PpePropertyType::options()[$class] ?? $class;
+            return ItemAttributeOption::labelFor(ItemAttributeOption::KIND_PPE_TYPE, $class);
         }
 
-        return ItemPropertyClass::options()[$class] ?? $class;
+        return ItemAttributeOption::labelFor(ItemAttributeOption::KIND_PROPERTY_CLASS, $class);
     }
 
     public static function displayInventoryTypeText(PhysicalCountSession $session): string

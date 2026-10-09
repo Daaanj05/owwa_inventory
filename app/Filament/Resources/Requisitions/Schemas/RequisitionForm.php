@@ -519,7 +519,7 @@ class RequisitionForm
     {
         return Repeater::make('endorsement_lines')
             ->hiddenLabel()
-            ->extraAttributes(['class' => 'owwa-uc-endorsement-repeater'])
+            ->extraAttributes(['class' => 'owwa-uc-endorsement-repeater owwa-line-table'])
             ->addable(false)
             ->deletable(false)
             ->reorderable(false)
@@ -613,7 +613,7 @@ class RequisitionForm
     {
         $repeater = Repeater::make('items')
             ->hiddenLabel()
-            ->extraAttributes(['class' => 'owwa-requisition-items-repeater'])
+            ->extraAttributes(['class' => 'owwa-requisition-items-repeater owwa-line-table'])
             ->schema($isCustodian
                 ? self::custodianRequestItemFields()
                 : self::tableRequestItemFields($isUnitConsolidator))
@@ -747,7 +747,6 @@ class RequisitionForm
         return Select::make('item_category_id')
             ->label('Category')
             ->options(fn (): array => InventoryCategoryOptions::allActiveCategoryOptions())
-            ->searchable()
             ->live()
             ->required()
             ->selectablePlaceholder(false)

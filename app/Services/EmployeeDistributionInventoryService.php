@@ -567,7 +567,10 @@ class EmployeeDistributionInventoryService
                 'quantity' => $quantity,
                 'distributed_by' => $this->resolveDistributedByName($employee, $issuance),
                 'useful_life' => $usefulLife ?? '—',
-                'action' => $showPropertyAction ? 'Start property action' : null,
+                'issuance_id' => $issuance->id,
+                'show_useful_life_report' => $showPropertyAction,
+                'useful_life_condition' => $issuance->useful_life_condition,
+                'action' => $showPropertyAction ? 'Needs replacement' : null,
                 'property_action_url' => $showPropertyAction
                     ? PropertyActionRequestResource::createUrlForIssuance($issuance->id, $suggestedActionType)
                     : null,
@@ -676,6 +679,10 @@ class EmployeeDistributionInventoryService
                 'eul_status' => $eulStatus,
                 'eul_status_label' => SemiExpendableUsefulLife::statusLabel($eulStatus),
                 'show_property_action' => $showPropertyAction,
+                'show_useful_life_report' => $showPropertyAction
+                    && $categorySlug === self::CATEGORY_SEMI_EXPENDABLE
+                    && ! ($viewer instanceof User && $viewer->isUnitConsolidator()),
+                'useful_life_condition' => $issuance->useful_life_condition,
                 'suggested_action_type' => $suggestedActionType,
                 'property_action_url' => $showPropertyAction
                     ? PropertyActionRequestResource::createUrlForIssuance($issuance->id, $suggestedActionType)

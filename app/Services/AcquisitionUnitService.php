@@ -76,9 +76,15 @@ class AcquisitionUnitService
         $units = [];
 
         DB::transaction(function () use ($item, $officeId, $quantity, $unitCost, $acquisitionId, $slug, &$units): void {
-            $propertyNumber = $this->resolveCatalogPropertyNumberForItem($item, $slug, $unitCost);
+            $sharedPropertyNumber = $slug === 'ppe'
+                ? $this->resolveCatalogPropertyNumberForItem($item, $slug, $unitCost)
+                : null;
 
             for ($i = 0; $i < $quantity; $i++) {
+                $propertyNumber = $slug === 'semi_expendable'
+                    ? $this->mintNextSemiUnitNumber($item, $unitCost)
+                    : $sharedPropertyNumber;
+
                 $units[] = InventoryUnit::query()->create([
                     'property_number' => $propertyNumber,
                     'acquisition_id' => $acquisitionId,
@@ -97,18 +103,33 @@ class AcquisitionUnitService
         return $units;
     }
 
-    protected function resolveCatalogPropertyNumberForItem(Item $item, string $slug, ?float $unitCost): string
+    /**
+     * First unit reuses the catalog TEMP sequence. Each later unit takes the next yearly sequence.
+     */
+    protected function mintNextSemiUnitNumber(Item $item, ?float $unitCost): string
     {
-        if ($slug === 'semi_expendable') {
+        $current = (string) ($item->semi_expendable_property_number ?? '');
+
+        if ($current === '' || str_starts_with($current, 'TEMP-')) {
             $number = $this->catalogNumbers->finalizeSemiWithUnitCost($item, $unitCost);
             $this->semiBuilder->persistBucketPropertyNumber($item, $unitCost, $number);
 
-            InventoryUnit::query()
-                ->where('item_id', $item->id)
-                ->where('property_number', 'like', 'TEMP-%')
-                ->update(['property_number' => $number]);
-
             return $number;
+        }
+
+        $number = $this->catalogNumbers->mintSemiForUnitCost($item, $unitCost);
+        $catalogNumber = (string) $item->semi_expendable_property_number;
+        if ($catalogNumber !== '') {
+            $this->semiBuilder->persistBucketPropertyNumber($item, $unitCost, $catalogNumber);
+        }
+
+        return $number;
+    }
+
+    protected function resolveCatalogPropertyNumberForItem(Item $item, string $slug, ?float $unitCost): string
+    {
+        if ($slug === 'semi_expendable') {
+            return $this->mintNextSemiUnitNumber($item, $unitCost);
         }
 
         $number = $item->ppe_property_number;

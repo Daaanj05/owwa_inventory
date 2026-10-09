@@ -22,10 +22,10 @@ class ItemAttributeOptionSelectTest extends TestCase
 
     public function test_system_admin_can_manage_item_attribute_options(): void
     {
-        Filament::setCurrentPanel(Filament::getPanel('system-admin'));
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
 
-        $admin = User::factory()->create(['role' => User::ROLE_SYSTEM_ADMIN]);
-        $this->actingAs($admin);
+        $custodian = User::factory()->create(['role' => User::ROLE_SUPPLY_CUSTODIAN]);
+        $this->actingAs($custodian);
 
         Livewire::test(ManageItemAttributeOptions::class)
             ->callAction('create', [
@@ -45,10 +45,10 @@ class ItemAttributeOptionSelectTest extends TestCase
 
     public function test_classification_tabs_filter_the_list_and_archive_replaces_delete(): void
     {
-        Filament::setCurrentPanel(Filament::getPanel('system-admin'));
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
 
-        $admin = User::factory()->create(['role' => User::ROLE_SYSTEM_ADMIN]);
-        $this->actingAs($admin);
+        $custodian = User::factory()->create(['role' => User::ROLE_SUPPLY_CUSTODIAN]);
+        $this->actingAs($custodian);
 
         $unit = ItemAttributeOption::query()->create([
             'kind' => ItemAttributeOption::KIND_UNIT,
@@ -56,12 +56,10 @@ class ItemAttributeOptionSelectTest extends TestCase
             'label' => 'Ream',
             'is_active' => true,
         ]);
-        $ppe = ItemAttributeOption::query()->create([
+        $ppe = ItemAttributeOption::query()->where([
             'kind' => ItemAttributeOption::KIND_PPE_TYPE,
             'value' => 'land',
-            'label' => 'Land',
-            'is_active' => true,
-        ]);
+        ])->firstOrFail();
 
         Livewire::test(ManageItemAttributeOptions::class)
             ->assertSeeHtml('owwa-acquisition-doc-tabs')
@@ -92,10 +90,10 @@ class ItemAttributeOptionSelectTest extends TestCase
 
     public function test_search_row_shows_new_button_and_archive_view_filters_the_open_classification(): void
     {
-        Filament::setCurrentPanel(Filament::getPanel('system-admin'));
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
 
-        $admin = User::factory()->create(['role' => User::ROLE_SYSTEM_ADMIN]);
-        $this->actingAs($admin);
+        $custodian = User::factory()->create(['role' => User::ROLE_SUPPLY_CUSTODIAN]);
+        $this->actingAs($custodian);
 
         $active = ItemAttributeOption::query()->create([
             'kind' => ItemAttributeOption::KIND_UNIT,
@@ -111,7 +109,7 @@ class ItemAttributeOptionSelectTest extends TestCase
         ]);
 
         $component = Livewire::test(ManageItemAttributeOptions::class)
-            ->assertSeeHtml('owwa-wizard-title')
+            ->assertSee('Item Attribute Lists')
             ->assertDontSeeHtml('fi-breadcrumbs')
             ->assertSeeHtml('owwa-search-row-actions')
             ->assertSeeHtml('owwa-acquisition-doc-tabs')

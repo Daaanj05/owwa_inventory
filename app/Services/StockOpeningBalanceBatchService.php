@@ -96,20 +96,6 @@ class StockOpeningBalanceBatchService
         });
     }
 
-    public function deleteDraft(StockOpeningBalanceBatch $batch): void
-    {
-        if (! $batch->isDraft()) {
-            throw ValidationException::withMessages([
-                'batch' => 'Only draft opening balances can be deleted.',
-            ]);
-        }
-
-        DB::transaction(function () use ($batch): void {
-            $batch->lines()->delete();
-            $batch->delete();
-        });
-    }
-
     public function confirm(StockOpeningBalanceBatch $batch): StockOpeningBalanceBatch
     {
         if ($batch->isConfirmed()) {

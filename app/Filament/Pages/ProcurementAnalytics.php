@@ -2,20 +2,28 @@
 
 namespace App\Filament\Pages;
 
+use App\Filament\Resources\Issuances\Actions\IssuanceViewActions;
+use App\Filament\Support\OwwaFormModalDefaults;
 use App\Jobs\GenerateAiProcurementRecommendationJob;
 use App\Models\AiProcurementRun;
-use App\Models\ItemCategory;
+use App\Models\Issuance;
 use App\Services\AiProcurementRecommendationService;
+use App\Services\InventoryStockService;
 use App\Services\OllamaClient;
 use App\Services\ProcurementDecisionSupportService;
 use App\Services\SemiExpendableEulAnalyticsService;
 use App\Support\AiProcurementSummaryRestore;
 use App\Support\InventoryCategoryOptions;
 use App\Support\OwwaExportFilename;
+use App\Support\SemiExpendableUsefulLife;
 use BackedEnum;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
+use Filament\Actions\Action;
 use Filament\Facades\Filament;
+use Filament\Infolists\Components\TextEntry;
 use Filament\Pages\Page;
+use Filament\Schemas\Components\Section;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
@@ -35,9 +43,9 @@ class ProcurementAnalytics extends Page
 
     protected static string|UnitEnum|null $navigationGroup = 'Analytics';
 
-    protected static ?string $navigationLabel = 'Procurement Analytics';
+    protected static ?string $navigationLabel = 'Procurement Recommendation';
 
-    protected static ?string $title = 'Procurement Analytics';
+    protected static ?string $title = 'Procurement Recommendation';
 
     protected static ?int $navigationSort = 1;
 
@@ -55,6 +63,10 @@ class ProcurementAnalytics extends Page
     #[Url]
     public string $atRiskView = 'all';
 
+    public string $analyticsSlide = 'reorders';
+
+    public string $recommendationSlide = 'reorders';
+
     public ?string $recommendation = null;
 
     public bool $loading = false;
@@ -71,6 +83,8 @@ class ProcurementAnalytics extends Page
     public string $sortColumn = 'priority';
 
     public string $sortDirection = 'asc';
+
+    public ?int $replacementIssuanceId = null;
 
     public function mount(): void
     {
@@ -94,6 +108,8 @@ class ProcurementAnalytics extends Page
                 $this->categoryId = '';
             }
         }
+
+        $this->syncAnalyticsSlides();
 
         $this->restoreRecommendationState();
         $this->stripLegacyAiRunQueryFromBrowserUrl();
@@ -251,6 +267,7 @@ class ProcurementAnalytics extends Page
             }
         }
 
+        $this->syncAnalyticsSlides();
         $this->clearGeneratedSummary();
     }
 
@@ -314,6 +331,122 @@ class ProcurementAnalytics extends Page
         return null;
     }
 
+    /**
+     * @return array<int, string>
+     */
+    public function availableAnalyticsSlides(): array
+    {
+        $slides = [];
+
+        if ($this->shouldShowReorderSlide()) {
+            $slides[] = 'reorders';
+        }
+
+        if ($this->shouldShowEulPanel()) {
+            $slides[] = 'replacement';
+        }
+
+        return $slides === [] ? ['reorders'] : $slides;
+    }
+
+    public function shouldShowReorderSlide(): bool
+    {
+        return true;
+    }
+
+    public function setAnalyticsSlide(string $slide): void
+    {
+        if (! in_array($slide, $this->availableAnalyticsSlides(), true)) {
+            return;
+        }
+
+        $this->analyticsSlide = $slide;
+    }
+
+    public function shiftAnalyticsSlide(int $step): void
+    {
+        $this->analyticsSlide = $this->shiftSlide($this->analyticsSlide, $this->availableAnalyticsSlides(), $step);
+    }
+
+    public function setRecommendationSlide(string $slide): void
+    {
+        if (! in_array($slide, $this->availableAnalyticsSlides(), true)) {
+            return;
+        }
+
+        $this->recommendationSlide = $slide;
+    }
+
+    public function shiftRecommendationSlide(int $step): void
+    {
+        $this->recommendationSlide = $this->shiftSlide($this->recommendationSlide, $this->availableAnalyticsSlides(), $step);
+    }
+
+    public function analyticsSlidePositionLabel(): string
+    {
+        return $this->slidePositionLabel($this->analyticsSlide);
+    }
+
+    public function recommendationSlidePositionLabel(): string
+    {
+        return $this->slidePositionLabel($this->recommendationSlide);
+    }
+
+    public function analyticsSlideHeading(): string
+    {
+        return $this->analyticsSlide === 'replacement'
+            ? 'Replacement due — semi-expendable'
+            : 'Suggested reorders — consumables';
+    }
+
+    public function recommendationSlideHeading(): string
+    {
+        return $this->recommendationSlide === 'replacement'
+            ? 'Semi-expendable replacement'
+            : 'Consumables to buy';
+    }
+
+    protected function syncAnalyticsSlides(): void
+    {
+        $slides = $this->availableAnalyticsSlides();
+
+        if (! in_array($this->analyticsSlide, $slides, true)) {
+            $this->analyticsSlide = $slides[0];
+        }
+
+        if (! in_array($this->recommendationSlide, $slides, true)) {
+            $this->recommendationSlide = $slides[0];
+        }
+    }
+
+    /**
+     * @param  array<int, string>  $slides
+     */
+    protected function shiftSlide(string $current, array $slides, int $step): string
+    {
+        $index = array_search($current, $slides, true);
+        if ($index === false || $slides === []) {
+            return $slides[0] ?? 'reorders';
+        }
+
+        $count = count($slides);
+        $next = ($index + $step) % $count;
+        if ($next < 0) {
+            $next += $count;
+        }
+
+        return $slides[$next];
+    }
+
+    protected function slidePositionLabel(string $current): string
+    {
+        $slides = $this->availableAnalyticsSlides();
+        $index = array_search($current, $slides, true);
+        $position = $index === false ? 1 : $index + 1;
+
+        return $position.' of '.count($slides);
+    }
+
     public function setAtRiskView(string $view): void
     {
         $this->clearGeneratedSummary();
@@ -343,19 +476,11 @@ class ProcurementAnalytics extends Page
             $parts[] = $officeName;
         }
 
-        if ($this->categoryId !== '') {
-            $parts[] = ItemCategory::find((int) $this->categoryId)?->name ?? 'Category';
-        }
-
         return implode(' · ', $parts);
     }
 
     public function getSummaryScopeLabel(): string
     {
-        if ($this->categoryId !== '') {
-            return ItemCategory::find((int) $this->categoryId)?->name ?? 'Category';
-        }
-
         return 'All (excl. PPE)';
     }
 
@@ -374,6 +499,7 @@ class ProcurementAnalytics extends Page
 
         return ($run?->items ?? collect())
             ->sortBy([
+                fn ($row) => $row->section === 'replacement' ? 1 : 0,
                 fn ($row) => match ($row->priority) {
                     'High' => 0,
                     'Medium' => 1,
@@ -382,6 +508,22 @@ class ProcurementAnalytics extends Page
                 fn ($row) => InventoryCategoryOptions::sortRankForCategory($row->item?->category),
                 fn ($row) => strtolower((string) ($row->item_name ?? '')),
             ])
+            ->values();
+    }
+
+    /** @return \Illuminate\Support\Collection<int, \App\Models\AiProcurementItem> */
+    public function getRecommendationReorderRows(): Collection
+    {
+        return $this->getRecommendationTableRows()
+            ->filter(fn ($row): bool => $row->section !== 'replacement')
+            ->values();
+    }
+
+    /** @return \Illuminate\Support\Collection<int, \App\Models\AiProcurementItem> */
+    public function getRecommendationReplacementRows(): Collection
+    {
+        return $this->getRecommendationTableRows()
+            ->filter(fn ($row): bool => $row->section === 'replacement')
             ->values();
     }
 
@@ -408,7 +550,7 @@ class ProcurementAnalytics extends Page
 
     public function getTitle(): string
     {
-        return 'Procurement Analytics';
+        return 'Procurement Recommendation';
     }
 
     public function getHeading(): string|Htmlable|null
@@ -420,12 +562,12 @@ class ProcurementAnalytics extends Page
 
     public function getSubheading(): ?string
     {
-        return 'Reorder signals for consumables and semi-expendable supplies (PPE excluded). Semi-expendable useful life is shown as replacement review signals.';
+        return 'Suggested reorders are for consumables. Semi-expendable units nearing or past useful life are a replacement review. Property, plant, and equipment are excluded.';
     }
 
     public static function getNavigationLabel(): string
     {
-        return 'Procurement Analytics';
+        return 'Procurement Recommendation';
     }
 
     public function formatAiNarrativeMarkdown(string $markdown): string
@@ -524,28 +666,13 @@ class ProcurementAnalytics extends Page
         return ['owwa-pa-page'];
     }
 
-    /** @return Collection<int, ItemCategory> */
-    public function getItemCategories(): Collection
-    {
-        return InventoryCategoryOptions::procurementAnalyticsCategories();
-    }
-
     /**
-     * Resolved category constraint for queries: selected category, or all PA-scoped IDs (excl. PPE).
+     * Both lists stay on the page. Property, plant, and equipment stay out of the reorder query.
      *
      * @return array{categoryId: int|null, categoryIds: array<int>}
      */
     public function resolveProcurementCategoryScope(): array
     {
-        if ($this->categoryId !== '') {
-            $id = (int) $this->categoryId;
-
-            return [
-                'categoryId' => $id,
-                'categoryIds' => [],
-            ];
-        }
-
         return [
             'categoryId' => null,
             'categoryIds' => InventoryCategoryOptions::procurementAnalyticsCategoryIds()->all(),
@@ -554,13 +681,7 @@ class ProcurementAnalytics extends Page
 
     public function shouldShowEulPanel(): bool
     {
-        if ($this->categoryId === '') {
-            return true;
-        }
-
-        $category = ItemCategory::query()->find((int) $this->categoryId);
-
-        return $category?->getTemplateSlug() === 'semi_expendable';
+        return true;
     }
 
     /**
@@ -579,6 +700,80 @@ class ProcurementAnalytics extends Page
             officeIds: $officeIds,
             limit: self::AT_RISK_LIMIT,
         );
+    }
+
+    public function openReplacementIssuance(int $issuanceId): void
+    {
+        $this->replacementIssuanceId = $this->replacementIssuanceForViewer($issuanceId)->id;
+
+        $this->mountAction('viewReplacementIssuance');
+    }
+
+    public function viewReplacementIssuanceAction(): Action
+    {
+        return Action::make('viewReplacementIssuance')
+            ->modalHeading(function (): string {
+                $issuance = $this->replacementIssuanceForViewer((int) $this->replacementIssuanceId);
+
+                return $issuance->item?->name ?? 'Replacement due';
+            })
+            ->modalWidth(OwwaFormModalDefaults::WIDTH_MEDIUM)
+            ->extraModalWindowAttributes(['class' => OwwaFormModalDefaults::MODAL_WINDOW_CLASS], merge: true)
+            ->closeModalByClickingAway(false)
+            ->closeModalByEscaping(false)
+            ->modalSubmitAction(false)
+            ->modalCancelActionLabel('Close')
+            ->record(fn (): Issuance => $this->replacementIssuanceForViewer((int) $this->replacementIssuanceId))
+            ->schema([
+                Section::make('Details')
+                    ->schema([
+                        TextEntry::make('property_number')->label('Property number')->placeholder('—'),
+                        TextEntry::make('issuedTo.name')->label('Issued to')->placeholder('—'),
+                        TextEntry::make('office.name')->label('Office')->placeholder('—'),
+                        TextEntry::make('department.name')->label('Department')->placeholder('—'),
+                        TextEntry::make('issuance_date')->label('Issued on')->date('M j, Y'),
+                        TextEntry::make('estimated_useful_life')->label('Estimated useful life')->placeholder('—'),
+                        TextEntry::make('eul_expires_at')->label('Expires')->date('M j, Y')->placeholder('—'),
+                        TextEntry::make('eul_status')
+                            ->label('Status')
+                            ->state(fn (Issuance $record): string => SemiExpendableUsefulLife::statusLabel(
+                                SemiExpendableUsefulLife::statusForIssuance($record)
+                            )),
+                        TextEntry::make('replacement_action')
+                            ->label('Action')
+                            ->state(function (Issuance $record): string {
+                                $officeId = $record->office_id !== null ? (int) $record->office_id : null;
+                                $unissuedStock = ($record->item_id && $officeId !== null)
+                                    ? app(InventoryStockService::class)->getActiveRestockStock((int) $record->item_id, $officeId)
+                                    : 0;
+                                [, $label] = app(SemiExpendableEulAnalyticsService::class)->replacementAction($record, $unissuedStock);
+
+                                return $label;
+                            }),
+                        TextEntry::make('remarks')->label('Remarks')->placeholder('—')->columnSpanFull(),
+                    ])
+                    ->columns(2)
+                    ->columnSpanFull(),
+            ])
+            ->extraModalFooterActions([
+                IssuanceViewActions::extendUsefulLifeAction(),
+            ]);
+    }
+
+    protected function replacementIssuanceForViewer(int $issuanceId): Issuance
+    {
+        $user = Filament::auth()->user();
+
+        $issuance = Issuance::query()
+            ->with(['item.category', 'office', 'department', 'issuedTo', 'requisition', 'batch'])
+            ->when($user?->office_id, fn ($query) => $query->where('office_id', (int) $user->office_id))
+            ->find($issuanceId);
+
+        if ($issuance === null) {
+            abort(404);
+        }
+
+        return $issuance;
     }
 
     /**
@@ -917,52 +1112,41 @@ class ProcurementAnalytics extends Page
         $this->recommendation = $narrative !== '' ? $narrative : null;
     }
 
-    public function exportAtRiskCsv(): StreamedResponse
+    public function exportAtRiskPdf(): StreamedResponse
     {
-        $rows = $this->displayAtRiskRows($this->queryAtRiskRows());
-        $filename = OwwaExportFilename::csvExport('AtRiskProcurement');
+        if ($this->analyticsSlide === 'replacement') {
+            return $this->streamListPdf(
+                'reports.replacement-due',
+                'Replacement due — semi-expendable',
+                OwwaExportFilename::pdfExport('ReplacementDue'),
+                $this->getEulReviewRows(),
+            );
+        }
 
-        return response()->streamDownload(function () use ($rows): void {
-            $handle = fopen('php://output', 'w');
-            if ($handle === false) {
-                return;
-            }
+        return $this->streamListPdf(
+            'reports.suggested-reorders',
+            'Suggested reorders — consumables',
+            OwwaExportFilename::pdfExport('SuggestedReorders'),
+            $this->displayAtRiskRows($this->queryAtRiskRows()),
+        );
+    }
 
-            fputcsv($handle, [
-                'Priority',
-                'Category',
-                'Item',
-                'Office',
-                'Stock',
-                'Reorder level',
-                'Forecast per month',
-                'Months of cover',
-                'Projected stockout',
-                'Unit cost',
-                'Suggested reorder',
-                'Recent usage',
-            ]);
+    /**
+     * @param  Collection<int, object>  $rows
+     */
+    protected function streamListPdf(string $view, string $title, string $filename, Collection $rows): StreamedResponse
+    {
+        $pdf = Pdf::loadView($view, [
+            'title' => $title,
+            'filterSummary' => $this->getFilterSummary(),
+            'generatedAt' => now()->format('M j, Y g:i A'),
+            'rows' => $rows,
+        ])->setPaper('a4', 'landscape');
 
-            foreach ($rows as $row) {
-                fputcsv($handle, [
-                    $row->priority,
-                    $row->category_name ?? '',
-                    $row->item_name,
-                    $row->office_name,
-                    $row->current_stock,
-                    $row->reorder_level,
-                    $row->forecast_monthly_usage,
-                    $row->months_cover ?? '',
-                    $row->projected_stockout_date ?? '',
-                    $row->latest_unit_cost ?? '',
-                    $row->suggested_reorder_qty ?? '',
-                    ($row->has_recent_usage ?? true) ? 'Yes' : 'No',
-                ]);
-            }
-
-            fclose($handle);
+        return response()->streamDownload(function () use ($pdf): void {
+            echo $pdf->output();
         }, $filename, [
-            'Content-Type' => 'text/csv',
+            'Content-Type' => 'application/pdf',
         ]);
     }
 }

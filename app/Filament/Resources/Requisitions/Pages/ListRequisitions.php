@@ -70,6 +70,13 @@ class ListRequisitions extends ListRecords
     #[Url]
     public ?int $category = null;
 
+    protected bool $requisitionPollHookRegistered = false;
+
+    public function boot(): void
+    {
+        $this->registerRequisitionListPoll();
+    }
+
     public function mount(): void
     {
         $this->alignUcScopeFromNotificationRecord();
@@ -77,28 +84,6 @@ class ListRequisitions extends ListRecords
         parent::mount();
 
         $this->initializeUcListScope();
-
-        static $pollHookRegistered = false;
-
-        if (! $pollHookRegistered) {
-            $pollHookRegistered = true;
-
-            FilamentView::registerRenderHook(
-                PanelsRenderHook::PAGE_END,
-                function (): ?HtmlString {
-                    $interval = $this->requisitionRefreshPollingInterval();
-
-                    if (! filled($interval)) {
-                        return null;
-                    }
-
-                    return new HtmlString(
-                        '<div wire:poll.'.$interval.'="$refresh" class="hidden" aria-hidden="true"></div>',
-                    );
-                },
-                scopes: static::class,
-            );
-        }
 
         if ((int) ($this->create ?? 0) !== 1 || ! RequisitionResource::canCreate()) {
             return;
@@ -115,6 +100,35 @@ class ListRequisitions extends ListRecords
             'catalogPrefillItemId' => $itemId > 0 ? $itemId : null,
             'catalogPrefillCategoryId' => filled($categoryId) ? (int) $categoryId : null,
         ]), ['schemaComponent' => 'content']);
+    }
+
+    /**
+     * Re-register on every request. A hook added only in mount() is missing
+     * after the next Livewire render, so polling stops.
+     */
+    protected function registerRequisitionListPoll(): void
+    {
+        if ($this->requisitionPollHookRegistered) {
+            return;
+        }
+
+        $this->requisitionPollHookRegistered = true;
+
+        FilamentView::registerRenderHook(
+            PanelsRenderHook::PAGE_END,
+            function (): ?HtmlString {
+                $interval = $this->requisitionRefreshPollingInterval();
+
+                if (! filled($interval)) {
+                    return null;
+                }
+
+                return new HtmlString(
+                    '<div wire:poll.'.$interval.'="$refresh" class="hidden" aria-hidden="true"></div>',
+                );
+            },
+            scopes: static::class,
+        );
     }
 
     /**

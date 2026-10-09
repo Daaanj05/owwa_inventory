@@ -2,7 +2,6 @@
 
 namespace App\Support;
 
-use App\Filament\Pages\InventoryCategoryDashboard;
 use App\Models\ItemCategory;
 use Illuminate\Support\HtmlString;
 
@@ -56,15 +55,10 @@ final class CategoryWizardBreadcrumb
             $templateSlug = ItemCategory::query()->whereKey($categoryId)->first()?->getTemplateSlug();
         }
 
-        $dashboardUrl = $categoryId > 0
-            ? InventoryCategoryDashboard::getUrl(['category' => $categoryId])
-            : InventoryCategoryDashboard::getUrl();
-
         $iconHtml = self::iconHtmlFromTemplateSlug($templateSlug);
 
         return new HtmlString(sprintf(
-            '<span class="owwa-wizard-title" role="list"><a class="owwa-wizard-step owwa-wizard-step-link" href="%s" role="listitem">%s<span class="owwa-wizard-step-label">%s</span></a><span class="owwa-wizard-separator" aria-hidden="true">&gt;</span><span class="owwa-wizard-step owwa-wizard-step-current" role="listitem"><span class="owwa-wizard-step-label">%s</span></span></span>',
-            e($dashboardUrl),
+            '<span class="owwa-wizard-title" role="list"><span class="owwa-wizard-step" role="listitem">%s<span class="owwa-wizard-step-label">%s</span></span><span class="owwa-wizard-separator" aria-hidden="true">&gt;</span><span class="owwa-wizard-step owwa-wizard-step-current" role="listitem"><span class="owwa-wizard-step-label">%s</span></span></span>',
             $iconHtml,
             e($categoryName),
             e($taskLabel),

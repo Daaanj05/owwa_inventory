@@ -7,10 +7,12 @@ use App\Models\Issuance;
 use App\Models\PropertyActionRequest;
 use App\Models\User;
 use App\Services\EmployeeDistributionInventoryService;
+use App\Services\UsefulLifeConditionReportService;
 use App\Support\SemiExpendableUsefulLife;
 use BackedEnum;
 use Filament\Actions\Action;
 use Filament\Facades\Filament;
+use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Filament\Support\Enums\Width;
 use Filament\Support\Icons\Heroicon;
@@ -18,6 +20,7 @@ use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Support\HtmlString;
+use Illuminate\Validation\ValidationException;
 use Livewire\Attributes\Url;
 use Livewire\WithPagination;
 
@@ -54,6 +57,9 @@ class MyInventory extends Page
     public ?int $ledgerItem = null;
 
     public int $ledgerPage = 1;
+
+    /** @var array<int, string> */
+    public array $usefulLifeNotes = [];
 
     public function mount(): void
     {
@@ -167,6 +173,62 @@ class MyInventory extends Page
     public function usesPropertyIssuanceView(): bool
     {
         return EmployeeDistributionInventoryService::usesPropertyIssuanceView($this->category);
+    }
+
+    public function reportStillUsable(int $issuanceId): void
+    {
+        $user = Filament::auth()->user();
+        if (! $user instanceof User) {
+            abort(403);
+        }
+
+        $issuance = $this->issuanceForUsefulLifeReport($user, $issuanceId);
+
+        try {
+            app(UsefulLifeConditionReportService::class)->reportStillUsable(
+                $issuance,
+                $user,
+                (string) ($this->usefulLifeNotes[$issuanceId] ?? ''),
+            );
+        } catch (ValidationException $exception) {
+            Notification::make()
+                ->title('Could not report condition')
+                ->body(collect($exception->errors())->flatten()->first() ?: 'Add a short note.')
+                ->danger()
+                ->send();
+
+            return;
+        }
+
+        unset($this->usefulLifeNotes[$issuanceId]);
+
+        Notification::make()
+            ->title('Supply custodian notified')
+            ->body('The useful life date was not changed.')
+            ->success()
+            ->send();
+    }
+
+    public function reportNeedsReplacement(int $issuanceId): void
+    {
+        $user = Filament::auth()->user();
+        if (! $user instanceof User) {
+            abort(403);
+        }
+
+        $issuance = $this->issuanceForUsefulLifeReport($user, $issuanceId);
+        $url = app(UsefulLifeConditionReportService::class)->reportNeedsReplacement($issuance, $user);
+
+        $this->redirect($url);
+    }
+
+    protected function issuanceForUsefulLifeReport(User $user, int $issuanceId): Issuance
+    {
+        app(EmployeeDistributionInventoryService::class)->assertEmployeeOwnsIssuance($user, $issuanceId);
+
+        $issuance = Issuance::query()->with('item.category')->findOrFail($issuanceId);
+
+        return $issuance;
     }
 
     public function propertyActionUrl(Issuance $issuance, string $actionType): string

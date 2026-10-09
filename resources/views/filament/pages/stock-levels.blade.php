@@ -16,7 +16,9 @@
     $sortBy = $this->sortBy;
     $sortDir = $this->sortDir;
     $restockFilter = $this->restockFilter;
-    $isSemiExpendable = $this->categoryRecord?->getTemplateSlug() === 'semi_expendable';
+    $categorySlug = $this->categoryRecord?->getTemplateSlug();
+    $isSemiExpendable = $categorySlug === 'semi_expendable';
+    $showReorder = $categorySlug === null || $categorySlug === 'consumables';
     $propertyClassOptions = ItemPropertyClass::options();
 @endphp
 
@@ -168,7 +170,9 @@
                                     if ($usesTaggedUnits) {
                                         $columns['tagged_units'] = 'Accountable tags';
                                     }
-                                    $columns['reorder_level'] = 'Reorder';
+                                    if ($showReorder) {
+                                        $columns['reorder_level'] = 'Reorder';
+                                    }
                                 @endphp
                                 @foreach($columns as $col => $label)
                                     <th
@@ -230,7 +234,9 @@
                                             {{ number_format($row->accountable_tags ?? $row->tagged_units ?? 0) }}
                                         </td>
                                     @endif
-                                    <td class="owwa-num owwa-cell-muted">{{ number_format($row->reorder_level) }}</td>
+                                    @if($showReorder)
+                                        <td class="owwa-num owwa-cell-muted">{{ number_format($row->reorder_level) }}</td>
+                                    @endif
                                     <td class="owwa-status">
                                         @if($row->can_set_starting_stock ?? false)
                                             <span class="owwa-status-badge owwa-status-low">No stock</span>
@@ -307,7 +313,7 @@
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="{{ ($isSemiExpendable ? 6 : 4) + ($usesTaggedUnits ? 1 : 0) + 3 }}">
+                                    <td colspan="{{ ($isSemiExpendable ? 6 : 4) + ($usesTaggedUnits ? 1 : 0) + ($showReorder ? 3 : 2) }}">
                                         <div class="owwa-empty">
                                             <svg class="owwa-empty-icon" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
                                                 <path stroke-linecap="round" stroke-linejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" />

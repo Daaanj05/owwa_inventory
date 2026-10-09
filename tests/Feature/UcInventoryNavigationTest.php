@@ -112,20 +112,52 @@ class UcInventoryNavigationTest extends TestCase
             ->values()
             ->all();
 
-        $this->assertContains('Consumables', $labels);
-        $this->assertContains('Semi-Expendable', $labels);
+        $this->assertContains('Stock levels', $labels);
+        $this->assertContains('Items', $labels);
+        $this->assertNotContains('Consumables', $labels);
+        $this->assertNotContains('Semi-Expendable', $labels);
         $this->assertNotContains('Distributions', $labels);
         $this->assertNotContains('Office Property Registry', $labels);
 
-        $groups = $items
-            ->filter(fn (NavigationItem $item): bool => (bool) $item->isVisible())
+        $visible = $items->filter(fn (NavigationItem $item): bool => (bool) $item->isVisible());
+
+        $groups = $visible
             ->map(fn (NavigationItem $item): string => (string) $item->getGroup())
             ->unique()
             ->values()
             ->all();
 
-        $this->assertContains('Regional supply', $groups);
+        $this->assertContains('Consumables', $groups);
+        $this->assertContains('Semi-Expendable', $groups);
+        $this->assertNotContains('Regional supply', $groups);
         $this->assertNotContains('Inventory', $groups);
+
+        $consumableLabels = $visible
+            ->filter(fn (NavigationItem $item): bool => $item->getGroup() === 'Consumables')
+            ->map(fn (NavigationItem $item): string => (string) $item->getLabel())
+            ->all();
+        $semiLabels = $visible
+            ->filter(fn (NavigationItem $item): bool => $item->getGroup() === 'Semi-Expendable')
+            ->map(fn (NavigationItem $item): string => (string) $item->getLabel())
+            ->all();
+
+        $this->assertNotContains('Transfers', $consumableLabels);
+        $this->assertContains('Transfers', $semiLabels);
+
+        $groupsMethod = new \ReflectionMethod($provider, 'supplyNavigationGroups');
+        $groupLabels = collect($groupsMethod->invoke($provider))
+            ->map(fn ($group): string => (string) $group->getLabel())
+            ->values()
+            ->all();
+        $analyticsIndex = array_search('Analytics', $groupLabels, true);
+        $supplyLinksIndex = array_search('Supply links', $groupLabels, true);
+        $setupIndex = array_search('Setup', $groupLabels, true);
+
+        $this->assertIsInt($analyticsIndex);
+        $this->assertIsInt($supplyLinksIndex);
+        $this->assertIsInt($setupIndex);
+        $this->assertLessThan($supplyLinksIndex, $analyticsIndex);
+        $this->assertLessThan($setupIndex, $supplyLinksIndex);
     }
 
     public function test_distributions_module_is_removed(): void

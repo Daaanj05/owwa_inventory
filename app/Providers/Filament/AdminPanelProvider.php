@@ -3,6 +3,7 @@
 namespace App\Providers\Filament;
 
 use App\Filament\AvatarProviders\LocalGenderAvatarProvider;
+use App\Filament\Concerns\SyncsActiveItemCategory;
 use App\Filament\Pages\Auth\AccountSettings;
 use App\Filament\Pages\Auth\EditProfile;
 use App\Filament\Pages\Auth\Login;
@@ -10,16 +11,13 @@ use App\Filament\Pages\Auth\RequestPasswordReset;
 use App\Filament\Pages\Auth\ResetPassword;
 use App\Filament\Pages\Dashboard;
 use App\Filament\Pages\EmployeeCustody;
-use App\Filament\Pages\InventoryCategoryDashboard;
 use App\Filament\Pages\OfficePropertyRegister;
 use App\Filament\Resources\IncidentReports\IncidentReportResource;
 use App\Filament\Widgets\ConsumptionSharePieWidget;
 use App\Filament\Widgets\ConsumptionTrendsWidget;
 use App\Filament\Widgets\EmployeeStatsWidget;
 use App\Filament\Widgets\LowStockWidget;
-use App\Filament\Widgets\RecentAcquisitionsWidget;
 use App\Filament\Widgets\SystemAdminStatsWidget;
-use App\Filament\Widgets\TopAcquiredProductsWidget;
 use App\Filament\Widgets\UnitConsolidatorStatsWidget;
 use App\Filament\Widgets\WelcomeWidget;
 use App\Http\Middleware\AdminExecutionTimeLimit;
@@ -33,6 +31,7 @@ use App\Models\ItemCategory;
 use App\Models\User;
 use App\Support\FilamentEchoShouldStart;
 use App\Support\FilamentSessionAudit;
+use App\Support\InventoryCategoryTasks;
 use App\Support\OwwaFilamentTheme;
 use Filament\Actions\Action;
 use Filament\Enums\ThemeMode;
@@ -115,6 +114,7 @@ class AdminPanelProvider extends PanelProvider
                 return;
             }
 
+            $panel->navigationGroups($this->supplyNavigationGroups());
             $panel->navigationItems($this->getNavigationItems());
             $this->adminNavigationReady = true;
         });
@@ -122,6 +122,24 @@ class AdminPanelProvider extends PanelProvider
         return $panel
             ->renderHook(PanelsRenderHook::STYLES_AFTER, function (): string {
                 return OwwaFilamentTheme::stylesheetLinkTag();
+            })
+            ->renderHook(PanelsRenderHook::SIDEBAR_NAV_END, function (): string {
+                if (! Schema::hasTable('item_categories')) {
+                    return '';
+                }
+
+                $labels = $this->navigationCategories()
+                    ->map(fn (ItemCategory $category): string => $category->name)
+                    ->values()
+                    ->all();
+
+                if ($labels === []) {
+                    return '';
+                }
+
+                return view('filament.partials.sidebar-category-folders', [
+                    'labels' => $labels,
+                ])->render();
             })
             ->renderHook(PanelsRenderHook::SIDEBAR_NAV_START, function (): string {
                 $user = Filament::auth()->user();
@@ -178,10 +196,6 @@ class AdminPanelProvider extends PanelProvider
             ->navigationGroups([
                 NavigationGroup::make('My items'),
                 NavigationGroup::make('Office'),
-                NavigationGroup::make('Regional supply'),
-                NavigationGroup::make('Requisitions'),
-                NavigationGroup::make('Analytics'),
-                NavigationGroup::make('Setup'),
             ])
             ->discoverResources(in: app_path('Filament/Resources'), for: 'App\Filament\Resources')
             ->discoverPages(in: app_path('Filament/Pages'), for: 'App\Filament\Pages')
@@ -196,8 +210,6 @@ class AdminPanelProvider extends PanelProvider
                 LowStockWidget::class,
                 ConsumptionTrendsWidget::class,
                 ConsumptionSharePieWidget::class,
-                RecentAcquisitionsWidget::class,
-                TopAcquiredProductsWidget::class,
             ])
             ->middleware([
                 AdminExecutionTimeLimit::class,
@@ -219,16 +231,16 @@ class AdminPanelProvider extends PanelProvider
             ]);
     }
 
-    /** @return array<int, NavigationItem> */
-    protected function getNavigationItems(): array
+    /**
+     * @return \Illuminate\Support\Collection<int, ItemCategory>
+     */
+    protected function navigationCategories(): \Illuminate\Support\Collection
     {
-        $items = [];
-
         if (! Schema::hasTable('item_categories')) {
-            return $items;
+            return collect();
         }
 
-        $categoryItems = ItemCategory::query()
+        return ItemCategory::query()
             ->whereNull('archived_at')
             ->whereNotIn('name', ['PPE', 'Power Plant Equipment'])
             ->get(['id', 'name'])
@@ -242,26 +254,78 @@ class AdminPanelProvider extends PanelProvider
 
                 return strcasecmp($left->name, $right->name);
             })
-            ->values()
-            ->map(
-                fn (ItemCategory $category): NavigationItem => NavigationItem::make($category->name)
-                    ->group('Regional supply')
-                    ->icon(Heroicon::OutlinedArchiveBox)
-                    ->sort(20 + $this->getCategoryNavigationWeight($category->name))
-                    ->url(fn (): string => InventoryCategoryDashboard::getUrl(['category' => $category->id]))
-                    ->visible(fn (): bool => Filament::auth()->check()
-                        && ! Filament::auth()->user()?->isSystemAdmin()
-                        && ! Filament::auth()->user()?->isEmployee()
-                        && ! Filament::auth()->user()?->isUnitConsolidator())
-                    ->isActiveWhen(
-                        fn (): bool => request()->routeIs('filament.admin.pages.inventory-category-dashboard')
-                        && (int) request()->query('category') === $category->id
-                    )
-            )
-            ->all();
+            ->values();
+    }
+
+    /** @return array<int, NavigationGroup> */
+    protected function supplyNavigationGroups(): array
+    {
+        $groups = [];
+
+        foreach ($this->navigationCategories() as $category) {
+            $groups[] = NavigationGroup::make($category->name)
+                ->collapsed()
+                ->extraSidebarAttributes(['class' => 'owwa-nav-folder']);
+        }
+
+        $groups[] = NavigationGroup::make('Requisitions')
+            ->collapsed()
+            ->extraSidebarAttributes(['class' => 'owwa-nav-folder']);
+        $groups[] = NavigationGroup::make('Analytics')
+            ->collapsed()
+            ->extraSidebarAttributes(['class' => 'owwa-nav-folder']);
+        $groups[] = NavigationGroup::make(InventoryCategoryTasks::SUPPLY_LINKS_GROUP)
+            ->collapsible(false)
+            ->extraSidebarAttributes(['class' => 'owwa-nav-plain']);
+        $groups[] = NavigationGroup::make('Setup')
+            ->extraSidebarAttributes(['class' => 'owwa-nav-folder']);
+
+        return $groups;
+    }
+
+    protected function categoryNavigationIsVisible(): bool
+    {
+        return Filament::auth()->check()
+            && ! Filament::auth()->user()?->isSystemAdmin()
+            && ! Filament::auth()->user()?->isEmployee()
+            && ! Filament::auth()->user()?->isUnitConsolidator();
+    }
+
+    /** @return array<int, NavigationItem> */
+    protected function getNavigationItems(): array
+    {
+        $items = [];
+
+        if (! Schema::hasTable('item_categories')) {
+            return $items;
+        }
+
+        $categoryItems = [];
+
+        foreach ($this->navigationCategories() as $category) {
+            foreach (InventoryCategoryTasks::forCategory($category) as $task) {
+                $categoryId = $category->id;
+                $route = $task['route'];
+                $url = $task['url'];
+
+                $categoryItems[] = NavigationItem::make($task['title'])
+                    ->group($category->name)
+                    ->icon($task['icon'])
+                    ->sort($task['sort'])
+                    ->url(fn (): string => $url)
+                    ->visible(fn (): bool => $this->categoryNavigationIsVisible())
+                    ->isActiveWhen(function () use ($route, $categoryId): bool {
+                        if (! request()->routeIs($route)) {
+                            return false;
+                        }
+
+                        return SyncsActiveItemCategory::resolveCategoryIdFromContext() === $categoryId;
+                    });
+            }
+        }
 
         $incidentNav = NavigationItem::make('Incident reports')
-            ->group('Regional supply')
+            ->group(InventoryCategoryTasks::SUPPLY_LINKS_GROUP)
             ->icon(Heroicon::OutlinedExclamationTriangle)
             ->sort(50)
             ->url(fn (): string => IncidentReportResource::getUrl())

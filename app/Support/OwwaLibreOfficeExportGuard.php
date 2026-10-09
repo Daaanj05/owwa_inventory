@@ -23,6 +23,9 @@ class OwwaLibreOfficeExportGuard
             || str_contains($path, '/rsmi-fast-pdf')
             || str_contains($path, '/bulk/issuances/rsmi')
             || str_contains($path, '/stock-cards-fast')
+            || str_contains($path, '/rpci-fast-pdf')
+            || str_contains($path, '/rpcppe-fast-pdf')
+            || str_contains($path, '/rpcsp-fast-pdf')
             || str_contains($path, '/purchase-orders/') && str_ends_with($path, '/pdf')
             || str_contains($path, '/inspection-acceptance-reports/') && str_ends_with($path, '/pdf')
         ) {

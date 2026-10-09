@@ -88,7 +88,36 @@
                         </td>
                         @if (! $readOnly)
                             <td>
-                                @if (($row['show_property_action'] ?? false) && filled($row['property_action_url'] ?? null))
+                                @if (($row['show_useful_life_report'] ?? false) && $page instanceof \App\Filament\Pages\MyInventory)
+                                    <div class="owwa-eul-report">
+                                        @if (($row['useful_life_condition'] ?? null) === \App\Models\Issuance::USEFUL_LIFE_STILL_USABLE)
+                                            <p class="owwa-eul-report-status">Reported as still usable</p>
+                                        @else
+                                            <label class="owwa-eul-report-label" for="eul-note-{{ $row['issuance_id'] }}">Note</label>
+                                            <textarea
+                                                id="eul-note-{{ $row['issuance_id'] }}"
+                                                wire:model="usefulLifeNotes.{{ $row['issuance_id'] }}"
+                                                class="owwa-eul-report-note"
+                                                rows="2"
+                                                placeholder="Short note for the supply custodian"
+                                            ></textarea>
+                                            <button
+                                                type="button"
+                                                wire:click="reportStillUsable({{ (int) $row['issuance_id'] }})"
+                                                class="owwa-inline-action"
+                                            >
+                                                Still usable
+                                            </button>
+                                        @endif
+                                        <button
+                                            type="button"
+                                            wire:click="reportNeedsReplacement({{ (int) $row['issuance_id'] }})"
+                                            class="owwa-inline-action"
+                                        >
+                                            Needs replacement
+                                        </button>
+                                    </div>
+                                @elseif (($row['show_property_action'] ?? false) && filled($row['property_action_url'] ?? null))
                                     <a
                                         href="{{ $row['property_action_url'] }}"
                                         class="owwa-inline-action"

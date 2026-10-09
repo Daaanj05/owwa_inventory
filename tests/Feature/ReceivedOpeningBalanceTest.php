@@ -3,12 +3,14 @@
 namespace Tests\Feature;
 
 use App\Filament\Resources\Acquisitions\Pages\ListReceivedAcquisitions;
+use App\Models\InventoryUnit;
 use App\Models\Item;
 use App\Models\ItemCategory;
 use App\Models\Office;
 use App\Models\StockOpeningBalance;
 use App\Models\StockOpeningBalanceBatch;
 use App\Models\User;
+use App\Services\InventoryQrLabelService;
 use App\Services\InventoryStockService;
 use App\Services\StockOpeningBalanceBatchService;
 use Filament\Actions\Testing\TestAction;
@@ -242,7 +244,10 @@ class ReceivedOpeningBalanceTest extends TestCase
         Livewire::withQueryParams(['category' => (string) $category->id])
             ->test(ListReceivedAcquisitions::class)
             ->set('showingOpeningBalances', true)
-            ->callAction(TestAction::make('confirm')->table($batch))
+            ->callAction([
+                TestAction::make('view')->table($batch),
+                TestAction::make('confirm'),
+            ])
             ->assertNotified();
 
         $batch->refresh();
@@ -357,5 +362,174 @@ class ReceivedOpeningBalanceTest extends TestCase
             itemCategoryId: $category->id,
             recordedBy: $user,
         );
+    }
+
+    public function test_opening_balance_row_opens_view_with_edit_and_confirm_until_confirmed(): void
+    {
+        $office = Office::factory()->create(['is_regional_supply' => true]);
+        $category = ItemCategory::factory()->create(['name' => 'Consumables']);
+        $item = Item::factory()->create([
+            'item_category_id' => $category->id,
+            'name' => 'Folder Long',
+            'unit' => 'piece',
+        ]);
+        $user = User::factory()->create([
+            'role' => User::ROLE_SUPPLY_CUSTODIAN,
+            'office_id' => $office->id,
+            'email_verified_at' => now(),
+        ]);
+
+        $this->actingAs($user);
+        session(['active_item_category_id' => $category->id]);
+
+        $batch = app(StockOpeningBalanceBatchService::class)->saveDraft(
+            lines: [
+                [
+                    'item_id' => $item->id,
+                    'quantity' => 4,
+                    'unit_cost' => 3,
+                ],
+            ],
+            memo: 'Sheet',
+            itemCategoryId: $category->id,
+            recordedBy: $user,
+        );
+
+        $component = Livewire::withQueryParams(['category' => (string) $category->id])
+            ->test(ListReceivedAcquisitions::class)
+            ->set('showingOpeningBalances', true);
+
+        $this->assertSame('view', $component->instance()->getTable()->getRecordAction($batch));
+
+        $component
+            ->assertActionDoesNotExist(TestAction::make('delete')->table($batch))
+            ->assertActionVisible([
+                TestAction::make('view')->table($batch),
+                TestAction::make('editOpeningBalance'),
+            ])
+            ->assertActionVisible([
+                TestAction::make('view')->table($batch),
+                TestAction::make('confirm'),
+            ])
+            ->assertActionHidden([
+                TestAction::make('view')->table($batch),
+                TestAction::make('printOpeningBalanceQr'),
+            ])
+            ->mountTableAction('view', $batch)
+            ->assertActionMounted(TestAction::make('view')->table($batch));
+
+        app(StockOpeningBalanceBatchService::class)->confirm($batch);
+        $batch->refresh();
+
+        Livewire::withQueryParams(['category' => (string) $category->id])
+            ->test(ListReceivedAcquisitions::class)
+            ->set('showingOpeningBalances', true)
+            ->assertActionHidden([
+                TestAction::make('view')->table($batch),
+                TestAction::make('editOpeningBalance'),
+            ])
+            ->assertActionHidden([
+                TestAction::make('view')->table($batch),
+                TestAction::make('confirm'),
+            ])
+            ->assertActionHidden(TestAction::make('edit')->table($batch))
+            ->assertActionHidden([
+                TestAction::make('view')->table($batch),
+                TestAction::make('printOpeningBalanceQr'),
+            ]);
+    }
+
+    public function test_confirmed_ppe_and_semi_opening_balances_can_print_unit_qr_labels(): void
+    {
+        $office = Office::factory()->create(['is_regional_supply' => true]);
+        $ppeCategory = ItemCategory::query()->firstOrCreate(
+            ['name' => 'Property, Plant and Equipment'],
+            ['description' => 'Property, plant and equipment'],
+        );
+        $semiCategory = ItemCategory::query()->firstOrCreate(
+            ['name' => 'Semi-Expendable'],
+            ['description' => 'Semi-expendable properties'],
+        );
+        $consumableCategory = ItemCategory::query()->firstOrCreate(
+            ['name' => 'Consumables'],
+            ['description' => 'Consumable supplies'],
+        );
+        $ppeItem = Item::factory()->create([
+            'item_category_id' => $ppeCategory->id,
+            'name' => 'Office Table',
+            'ppe_property_number' => 'PPE-2026-OPEN',
+            'ppe_type' => \App\Support\PpePropertyType::TechnicalScientificEquipment,
+        ]);
+        $user = User::factory()->create([
+            'role' => User::ROLE_SUPPLY_CUSTODIAN,
+            'office_id' => $office->id,
+            'email_verified_at' => now(),
+        ]);
+
+        $this->actingAs($user);
+
+        $ppeBatch = app(StockOpeningBalanceBatchService::class)->saveDraft(
+            lines: [
+                [
+                    'item_id' => $ppeItem->id,
+                    'quantity' => 2,
+                    'unit_cost' => 75000,
+                ],
+            ],
+            memo: null,
+            itemCategoryId: $ppeCategory->id,
+            recordedBy: $user,
+        );
+
+        $labels = app(InventoryQrLabelService::class);
+        $this->assertFalse($labels->supportsOpeningBalanceQrLabels($ppeBatch));
+
+        $confirmed = app(StockOpeningBalanceBatchService::class)->confirm($ppeBatch);
+        $this->assertTrue($labels->supportsOpeningBalanceQrLabels($confirmed));
+        $this->assertCount(2, $labels->labelsForOpeningBalanceBatch($confirmed));
+        $this->assertSame(2, InventoryUnit::query()->where('item_id', $ppeItem->id)->whereNull('acquisition_id')->count());
+
+        $this->get(route('owwa.qr-labels.opening-balance', $confirmed))
+            ->assertOk()
+            ->assertHeader('content-type', 'application/pdf');
+
+        $semiBatch = StockOpeningBalanceBatch::query()->create([
+            'office_id' => $office->id,
+            'item_category_id' => $semiCategory->id,
+            'reference_code' => '2026-10-0002',
+            'recorded_by' => $user->id,
+            'recorded_at' => now(),
+            'confirmed_at' => now(),
+            'recorded_on' => now()->toDateString(),
+        ]);
+        $this->assertTrue($labels->supportsOpeningBalanceQrLabels($semiBatch));
+
+        $consumableBatch = StockOpeningBalanceBatch::query()->create([
+            'office_id' => $office->id,
+            'item_category_id' => $consumableCategory->id,
+            'reference_code' => '2026-10-0003',
+            'recorded_by' => $user->id,
+            'recorded_at' => now(),
+            'confirmed_at' => now(),
+            'recorded_on' => now()->toDateString(),
+        ]);
+        $this->assertFalse($labels->supportsOpeningBalanceQrLabels($consumableBatch));
+
+        $this->get(route('owwa.qr-labels.opening-balance', $consumableBatch))
+            ->assertNotFound();
+
+        session(['active_item_category_id' => $ppeCategory->id]);
+
+        Livewire::withQueryParams(['category' => (string) $ppeCategory->id])
+            ->test(ListReceivedAcquisitions::class)
+            ->set('showingOpeningBalances', true)
+            ->assertActionVisible([
+                TestAction::make('view')->table($confirmed),
+                TestAction::make('printOpeningBalanceQr'),
+            ])
+            ->assertActionHidden([
+                TestAction::make('view')->table($confirmed),
+                TestAction::make('editOpeningBalance'),
+            ]);
     }
 }

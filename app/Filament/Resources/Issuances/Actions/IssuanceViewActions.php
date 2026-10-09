@@ -5,10 +5,17 @@ namespace App\Filament\Resources\Issuances\Actions;
 use App\Filament\Resources\Issuances\IssuanceResource;
 use App\Filament\Support\OwwaFormModalDefaults;
 use App\Models\Issuance;
+use App\Models\User;
+use App\Services\UsefulLifeExtensionService;
 use App\Support\OwwaExportBusyDispatcher;
+use App\Support\SemiExpendableUsefulLife;
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\EditAction;
+use Filament\Facades\Filament;
+use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\TextInput;
+use Filament\Notifications\Notification;
 use Livewire\Component as LivewireComponent;
 
 class IssuanceViewActions
@@ -53,6 +60,66 @@ class IssuanceViewActions
                 ->color('gray')
                 ->button(),
         ];
+    }
+
+    public static function extendUsefulLifeAction(): Action
+    {
+        return Action::make('extendUsefulLife')
+            ->label('Extend useful life')
+            ->icon('heroicon-o-clock')
+            ->visible(function (Issuance $record): bool {
+                $user = Filament::auth()->user();
+                if (! $user instanceof User || ! $user->isSupplyCustodian()) {
+                    return false;
+                }
+
+                $record->loadMissing('item.category');
+                if ($record->item?->category?->getTemplateSlug() !== 'semi_expendable') {
+                    return false;
+                }
+
+                if ($record->useful_life_condition !== Issuance::USEFUL_LIFE_STILL_USABLE) {
+                    return false;
+                }
+
+                $status = SemiExpendableUsefulLife::statusForIssuance($record);
+
+                return in_array($status, [
+                    SemiExpendableUsefulLife::STATUS_NEARING,
+                    SemiExpendableUsefulLife::STATUS_EXPIRED,
+                ], true);
+            })
+            ->schema([
+                TextInput::make('months')
+                    ->label('New estimated useful life (months)')
+                    ->numeric()
+                    ->required()
+                    ->minValue(SemiExpendableUsefulLife::minMonths() + 1)
+                    ->helperText(SemiExpendableUsefulLife::labelSummary()),
+                Textarea::make('reason')
+                    ->label('Reason')
+                    ->required()
+                    ->rows(3),
+            ])
+            ->action(function (Issuance $record, array $data): void {
+                $approver = Filament::auth()->user();
+                if (! $approver instanceof User) {
+                    return;
+                }
+
+                $eul = SemiExpendableUsefulLife::storeFromMonths((int) $data['months']);
+                app(UsefulLifeExtensionService::class)->extend(
+                    $record,
+                    (string) $eul,
+                    (string) ($data['reason'] ?? ''),
+                    $approver,
+                );
+
+                Notification::make()
+                    ->title('Useful life extended')
+                    ->success()
+                    ->send();
+            });
     }
 
     public static function printQrLabelAction(): Action

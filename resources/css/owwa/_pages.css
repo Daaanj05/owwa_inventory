@@ -1438,6 +1438,151 @@ select.owwa-search-bar {
     background: #eff6ff;
 }
 
+.owwa-pa-slide-footer {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 0.75rem;
+    margin-top: 0.75rem;
+}
+
+.owwa-pa-slide-nav {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.2rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.7rem;
+    background: #f8fafc;
+}
+
+.owwa-pa-slide-viewport {
+    overflow: hidden;
+    transition: height 380ms cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+.owwa-pa-slide-track {
+    display: flex;
+    align-items: flex-start;
+    width: 100%;
+    transition: transform 380ms cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+.owwa-pa-slide-track.is-dual {
+    width: 200%;
+}
+
+.owwa-pa-slide-track.is-dual.is-replacement {
+    transform: translateX(-50%);
+}
+
+.owwa-pa-slide-panel {
+    flex: 0 0 100%;
+    align-self: flex-start;
+    width: 100%;
+    min-width: 0;
+}
+
+.owwa-pa-slide-table {
+    padding: 0.5rem 1.5rem 1rem;
+}
+
+.owwa-pa-slide-track.is-dual .owwa-pa-slide-panel {
+    flex-basis: 50%;
+    width: 50%;
+}
+
+.owwa-pa-slide-copy,
+.owwa-pa-slide-body {
+    padding: 0.85rem 1.5rem 0;
+}
+
+.owwa-pa-slide-btn {
+    border: 1px solid transparent;
+    border-radius: 0.5rem;
+    background: #fff;
+    color: #1e3a5f;
+    font-size: 0.95rem;
+    font-weight: 700;
+    line-height: 1;
+    min-width: 2.25rem;
+    min-height: 2.25rem;
+    padding: 0.35rem 0.55rem;
+    cursor: pointer;
+}
+
+.owwa-pa-slide-btn:hover {
+    border-color: #1e6fbe;
+    color: #1e6fbe;
+}
+
+.dark .owwa-pa-slide-nav {
+    background: #0f172a;
+    border-color: #334155;
+}
+
+.dark .owwa-pa-slide-btn {
+    background: #1e293b;
+    color: #e2e8f0;
+}
+
+.dark .owwa-pa-slide-label {
+    color: #cbd5e1;
+}
+
+.owwa-pa-slide-label {
+    align-self: center;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #64748b;
+}
+
+.owwa-pa-summary-slide {
+    margin-top: 0.75rem;
+}
+
+.owwa-pa-summary-slide-header {
+    margin-bottom: 0.5rem;
+}
+
+.owwa-pa-summary-slide-title {
+    margin: 0;
+    font-size: 0.95rem;
+    font-weight: 700;
+}
+
+.owwa-pa-summary-empty {
+    margin: 0;
+    font-size: 0.875rem;
+    color: #64748b;
+}
+
+.owwa-eul-report {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.35rem;
+    min-width: 11rem;
+}
+
+.owwa-eul-report-label,
+.owwa-eul-report-status {
+    margin: 0;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #475569;
+}
+
+.owwa-eul-report-note {
+    width: 100%;
+    min-height: 3.25rem;
+    border: 1px solid #cbd5e1;
+    border-radius: 0.4rem;
+    padding: 0.35rem 0.5rem;
+    font-size: 0.8125rem;
+    background: #fff;
+}
+
 .owwa-pa-sort-btn {
     border: none;
     background: transparent;
@@ -1464,6 +1609,19 @@ select.owwa-search-bar {
 .owwa-pa-row-actions {
     display: flex;
     gap: 0.35rem;
+}
+
+.owwa-pa-click-row {
+    cursor: pointer;
+}
+
+.owwa-pa-click-row:hover td {
+    background: #f8fafc;
+}
+
+.owwa-pa-click-row:focus-visible {
+    outline: 2px solid #93c5fd;
+    outline-offset: -2px;
 }
 
 .owwa-pa-row-link {
@@ -1583,78 +1741,11 @@ select.owwa-search-bar {
     background: transparent;
 }
 
-/* Category dashboard: no outer white shell — only task cards stay white */
 .fi-page.owwa-inv-category-page .owwa-data-panel {
     background: transparent !important;
     border: none !important;
     box-shadow: none !important;
     overflow: visible !important;
-}
-
-.fi-page.owwa-inv-category-page .owwa-category-task-body {
-    padding: 0;
-}
-
-/* Category dashboard task cards */
-.owwa-category-task-body {
-    padding: 0.75rem;
-}
-
-.owwa-category-task-grid {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 0.6rem;
-}
-
-@media (max-width: 768px) {
-    .owwa-category-task-grid {
-        grid-template-columns: 1fr;
-    }
-}
-
-.owwa-category-task-card {
-    display: flex;
-    align-items: flex-start;
-    gap: 0.6rem;
-    padding: 0.75rem;
-    border: 1px solid #e5e7eb;
-    border-radius: 0.5rem;
-    background: #ffffff;
-    text-decoration: none !important;
-    transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
-}
-
-.owwa-category-task-card:hover {
-    border-color: #bfdbfe;
-    background: #f8fbff;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
-}
-
-.owwa-category-task-icon {
-    width: 2rem;
-    height: 2rem;
-    border-radius: 0.5rem;
-    background: #eff6ff;
-    color: #1d4ed8;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-}
-
-.owwa-category-task-title {
-    margin: 0;
-    font-size: 0.875rem;
-    font-weight: 600;
-    color: #111827;
-    line-height: 1.3;
-}
-
-.owwa-category-task-desc {
-    margin: 0.2rem 0 0;
-    font-size: 0.8125rem;
-    color: #64748b;
-    line-height: 1.45;
 }
 
 /* ═══════════════════════════════════════════════════════════

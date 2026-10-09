@@ -17,6 +17,11 @@ class ListAiProcurementRuns extends ListRecords
 
     protected static string $resource = AiProcurementRunResource::class;
 
+    public function getTitle(): string
+    {
+        return 'Recommendation History';
+    }
+
     public function mount(): void
     {
         parent::mount();

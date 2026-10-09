@@ -864,26 +864,47 @@ button[type="submit"].fi-btn:hover {
     text-align: center;
 }
 
-/* Signatories Setup: compact create/edit fields */
+/* Signatories Setup: one bordered box. The theme also borders the inner input, which stacks a second outline. */
 .fi-modal-window.owwa-signatory-modal {
     max-width: 36rem !important;
 }
 
 .fi-modal-window.owwa-signatory-modal .fi-input-wrp {
     min-height: 2.25rem !important;
-    height: 2.25rem !important;
+    height: auto !important;
     padding-block: 0 !important;
+    align-items: center !important;
     box-sizing: border-box !important;
 }
 
-.fi-modal-window.owwa-signatory-modal .fi-input,
-.fi-modal-window.owwa-signatory-modal .fi-fo-text-input,
+.fi-modal-window.owwa-signatory-modal .fi-input-wrp:focus-within {
+    border-color: #003366 !important;
+    box-shadow: 0 0 0 3px rgba(0, 51, 102, 0.1) !important;
+}
+
+.fi-modal-window.owwa-signatory-modal .fi-input-wrp input.fi-input,
+.fi-modal-window.owwa-signatory-modal .fi-input-wrp .fi-fo-text-input {
+    border: 0 !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    min-height: 0 !important;
+    height: auto !important;
+    padding: 0.4rem 0.75rem !important;
+    box-sizing: border-box !important;
+}
+
+.fi-modal-window.owwa-signatory-modal .fi-input-wrp .fi-input:focus,
+.fi-modal-window.owwa-signatory-modal .fi-input-wrp .fi-fo-text-input:focus {
+    border: 0 !important;
+    box-shadow: none !important;
+}
+
 .fi-modal-window.owwa-signatory-modal [data-slot="select-trigger"],
 .fi-modal-window.owwa-signatory-modal .fi-fo-select-trigger {
     min-height: 2.25rem !important;
-    height: 2.25rem !important;
-    padding-block: 0.25rem !important;
-    padding-inline: 0.75rem !important;
+    height: auto !important;
+    padding: 0.4rem 0.75rem !important;
     box-sizing: border-box !important;
 }
 

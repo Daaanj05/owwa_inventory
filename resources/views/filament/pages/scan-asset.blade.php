@@ -23,22 +23,22 @@
                 </div>
             </div>
 
-            <div class="owwa-scan-asset-divider" role="separator">
-                <span>or enter property number</span>
+            <div class="owwa-scan-asset-lookup">
+                <label class="owwa-scan-asset-lookup-label" for="scan-asset-property-number">Property number</label>
+                <form wire:submit="submitManualCode" class="owwa-pc-manual-form owwa-scan-asset-manual-form">
+                    <input
+                        id="scan-asset-property-number"
+                        type="text"
+                        wire:model="manualCode"
+                        placeholder="Type the property number"
+                        class="fi-input owwa-pc-manual-input"
+                        autocomplete="off"
+                    />
+                    <button type="submit" class="fi-btn fi-btn-size-md fi-color fi-color-primary owwa-scan-asset-lookup-btn">
+                        Look up
+                    </button>
+                </form>
             </div>
-
-            <form wire:submit="submitManualCode" class="owwa-pc-manual-form owwa-scan-asset-manual-form">
-                <input
-                    type="text"
-                    wire:model="manualCode"
-                    placeholder="Property number"
-                    class="fi-input owwa-pc-manual-input"
-                    autocomplete="off"
-                />
-                <button type="submit" class="fi-btn fi-btn-size-md fi-color fi-color-primary owwa-scan-asset-lookup-btn">
-                    Look up
-                </button>
-            </form>
         </div>
 
         @if ($resolvedUnitId)

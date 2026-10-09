@@ -3,17 +3,20 @@
 namespace Tests\Feature;
 
 use App\Events\RequisitionChanged;
+use App\Filament\Resources\PropertyActionRequests\Pages\ListPropertyActionRequests;
 use App\Filament\Resources\Requisitions\Pages\ListRequisitions;
 use App\Models\Department;
 use App\Models\Office;
 use App\Models\Requisition;
 use App\Models\User;
 use Filament\Facades\Filament;
+use Filament\Support\View\ViewManager;
 use Illuminate\Broadcasting\PrivateChannel;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Broadcast;
 use Illuminate\Support\Facades\Event;
 use Livewire\Livewire;
+use ReflectionProperty;
 use Tests\TestCase;
 
 class RequisitionBroadcastTest extends TestCase
@@ -185,6 +188,68 @@ class RequisitionBroadcastTest extends TestCase
         Livewire::test(ListRequisitions::class)
             ->call('refreshFromRequisitionBroadcast')
             ->assertOk();
+    }
+
+    public function test_requisition_list_keeps_polling_after_a_later_request(): void
+    {
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+
+        config([
+            'filament.broadcasting.echo' => [],
+            'inventory.requisition_poll_interval' => '30s',
+        ]);
+
+        $office = Office::factory()->create();
+        $employee = User::factory()->create([
+            'role' => User::ROLE_EMPLOYEE,
+            'office_id' => $office->id,
+        ]);
+
+        $this->actingAs($employee);
+
+        $component = Livewire::test(ListRequisitions::class);
+
+        $this->assertSame(1, substr_count($component->html(), 'wire:poll.30s="$refresh"'));
+
+        $this->forgetFilamentRenderHooks();
+
+        $component->call('refreshFromRequisitionBroadcast');
+
+        $this->assertSame(1, substr_count($component->html(), 'wire:poll.30s="$refresh"'));
+
+        Livewire::test(ListPropertyActionRequests::class)
+            ->assertDontSeeHtml('wire:poll.30s="$refresh"');
+    }
+
+    public function test_requisition_list_does_not_poll_when_echo_is_configured(): void
+    {
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+
+        config([
+            'filament.broadcasting.echo' => [
+                'broadcaster' => 'pusher',
+                'key' => 'test-key',
+                'cluster' => 'ap1',
+                'forceTLS' => true,
+            ],
+        ]);
+
+        $office = Office::factory()->create();
+        $employee = User::factory()->create([
+            'role' => User::ROLE_EMPLOYEE,
+            'office_id' => $office->id,
+        ]);
+
+        $this->actingAs($employee);
+
+        Livewire::test(ListRequisitions::class)
+            ->assertDontSeeHtml('wire:poll.');
+    }
+
+    protected function forgetFilamentRenderHooks(): void
+    {
+        $hooks = new ReflectionProperty(app(ViewManager::class), 'renderHooks');
+        $hooks->setValue(app(ViewManager::class), []);
     }
 
     /**

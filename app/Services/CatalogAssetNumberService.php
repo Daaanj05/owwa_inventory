@@ -132,6 +132,19 @@ class CatalogAssetNumberService
         return $finalized;
     }
 
+    /**
+     * Next yearly sequence for one physical semi-expendable unit.
+     * Does not replace the catalog inventory item number.
+     */
+    public function mintSemiForUnitCost(Item $item, ?float $unitCost): string
+    {
+        SemiExpendableValueCategory::assertWithinSemiCap($unitCost);
+        $item->loadMissing(['category', 'uacsObjectCode']);
+        $prefix = SemiExpendableValueCategory::prefixForUnitCost($unitCost);
+
+        return $this->mintFromSegments(self::SERIES_SEMI, $this->semiSegments($item, $prefix));
+    }
+
     public function catalogIdentifierForItem(Item $item): ?string
     {
         $item->loadMissing('category');

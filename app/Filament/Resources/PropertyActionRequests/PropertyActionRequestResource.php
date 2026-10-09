@@ -62,7 +62,11 @@ class PropertyActionRequestResource extends Resource
         if ($user->isSupplyCustodian()) {
             return $query
                 ->whereNull('compiled_into_property_action_request_id')
-                ->whereNull('archived_at');
+                ->whereNull('archived_at')
+                ->whereNotIn('status', [
+                    PropertyActionRequest::STATUS_DRAFT,
+                    PropertyActionRequest::STATUS_PENDING_UC,
+                ]);
         }
 
         return $query->whereRaw('1 = 0');

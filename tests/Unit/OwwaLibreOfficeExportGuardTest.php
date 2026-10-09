@@ -41,6 +41,15 @@ class OwwaLibreOfficeExportGuardTest extends TestCase
         $this->assertFalse(OwwaLibreOfficeExportGuard::urlNeedsLibreOffice(
             'https://example.test/reports/owwa/bulk/issuances/rsmi?format=pdf&date_from=2026-01-01&date_to=2026-12-31',
         ));
+        $this->assertFalse(OwwaLibreOfficeExportGuard::urlNeedsLibreOffice(
+            'https://example.test/reports/owwa/physical-count/3/rpci-fast-pdf',
+        ));
+        $this->assertFalse(OwwaLibreOfficeExportGuard::urlNeedsLibreOffice(
+            'https://example.test/reports/owwa/physical-count/3/rpcppe-fast-pdf',
+        ));
+        $this->assertFalse(OwwaLibreOfficeExportGuard::urlNeedsLibreOffice(
+            'https://example.test/reports/owwa/physical-count/3/rpcsp-fast-pdf',
+        ));
     }
 
     public function test_url_needs_libreoffice_still_true_for_official_format_pdf_exports(): void

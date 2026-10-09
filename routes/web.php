@@ -72,6 +72,8 @@ Route::middleware(['auth', 'web'])->group(function () {
         Route::get('reports/owwa/item/{item}', [OwwaExportController::class, 'item'])->name('owwa.export.item');
         Route::get('reports/owwa/physical-count/{physicalCountSession}', [OwwaExportController::class, 'physicalCount'])->name('owwa.export.physical-count');
         Route::get('reports/owwa/physical-count/{physicalCountSession}/rpci-fast-pdf', [OwwaExportController::class, 'physicalCountRpciFastPdf'])->name('owwa.export.physical-count.rpci-fast-pdf');
+        Route::get('reports/owwa/physical-count/{physicalCountSession}/rpcppe-fast-pdf', [OwwaExportController::class, 'physicalCountRpcppeFastPdf'])->name('owwa.export.physical-count.rpcppe-fast-pdf');
+        Route::get('reports/owwa/physical-count/{physicalCountSession}/rpcsp-fast-pdf', [OwwaExportController::class, 'physicalCountRpcspFastPdf'])->name('owwa.export.physical-count.rpcsp-fast-pdf');
         Route::get('reports/owwa/acquisition-paperwork/{acquisitionPaperwork}/pr-fast-pdf', [OwwaExportController::class, 'acquisitionPaperworkPrFastPdf'])->name('owwa.export.acquisition-paperwork.pr-fast-pdf');
         Route::get('reports/owwa/acquisition-paperwork/{acquisitionPaperwork}/pr-fast-xlsx', [OwwaExportController::class, 'acquisitionPaperworkPrFastExcel'])->name('owwa.export.acquisition-paperwork.pr-fast-xlsx');
         Route::get('reports/owwa/acquisition-paperwork/{acquisitionPaperwork}/po', [OwwaExportController::class, 'acquisitionPaperworkPo'])->name('owwa.export.acquisition-paperwork.po');
@@ -124,6 +126,7 @@ Route::middleware(['auth', 'web'])->group(function () {
     Route::get('reports/owwa/physical-count/{physicalCountSession}/qr-labels', [InventoryQrLabelController::class, 'physicalCountSession'])->name('owwa.qr-labels.physical-count');
     Route::get('reports/owwa/issuance/{issuance}/qr-label', [InventoryQrLabelController::class, 'issuance'])->name('owwa.qr-labels.issuance');
     Route::get('reports/owwa/acquisition-paperwork/{acquisitionPaperwork}/qr-labels', [InventoryQrLabelController::class, 'acquisitionPaperwork'])->name('owwa.qr-labels.acquisition-paperwork');
+    Route::get('reports/owwa/opening-balances/{stockOpeningBalanceBatch}/qr-labels', [InventoryQrLabelController::class, 'openingBalance'])->name('owwa.qr-labels.opening-balance');
     Route::get('reports/owwa/issuance/{issuance}/print', [OwwaPrintController::class, 'issuance'])->name('owwa.print.issuance');
     Route::get('reports/owwa/transfer/{transfer}/print', [OwwaPrintController::class, 'transfer'])->name('owwa.print.transfer');
     Route::get('reports/owwa/disposal/{disposal}/print', [OwwaPrintController::class, 'disposal'])->name('owwa.print.disposal');

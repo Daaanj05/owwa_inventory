@@ -3,7 +3,7 @@
 return [
     'return' => [
         'good_condition' => 'Return — good condition',
-        'needs_repair' => 'Return — needs repair',
+        'needs_repair' => 'For repair',
     ],
     'replacement' => [
         'end_of_useful_life' => 'Replacement — end of useful life',

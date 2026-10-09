@@ -24,7 +24,7 @@ class UserLogsTable
                     ->weight(\Filament\Support\Enums\FontWeight::Medium),
                 TextColumn::make('logged_in_at')
                     ->label('Logged In At')
-                    ->dateTime()
+                    ->dateTime('M j, Y g:i A')
                     ->sortable(),
                 TextColumn::make('logged_out_at')
                     ->label('Logged Out At')

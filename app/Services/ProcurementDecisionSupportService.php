@@ -62,7 +62,9 @@ class ProcurementDecisionSupportService
         array $categoryIds = [],
     ): Collection {
         $to = min($to->copy()->endOfMonth(), now()->endOfMonth());
-        $resolvedCategoryIds = $this->resolveCategoryIds($categoryId, $categoryIds);
+        $resolvedCategoryIds = $this->consumableCategoryIds(
+            $this->resolveCategoryIds($categoryId, $categoryIds),
+        );
 
         $forecastFrom = $to->copy()->subMonths(self::FORECAST_LOOKBACK_MONTHS - 1)->startOfMonth();
 
@@ -480,6 +482,29 @@ class ProcurementDecisionSupportService
             ->unique()
             ->values()
             ->all();
+    }
+
+    /**
+     * Suggested reorders are consumables only. A non-consumable category filter returns no rows.
+     *
+     * @param  array<int>  $requestedIds
+     * @return array<int>
+     */
+    protected function consumableCategoryIds(array $requestedIds): array
+    {
+        $consumableIds = InventoryCategoryOptions::categoryIdsForSlug('consumables')
+            ->map(fn ($id): int => (int) $id)
+            ->all();
+
+        if ($consumableIds === []) {
+            return $requestedIds;
+        }
+
+        if ($requestedIds === []) {
+            return $consumableIds;
+        }
+
+        return array_values(array_intersect($requestedIds, $consumableIds));
     }
 
     protected function resolveSuggestedReorderQty(

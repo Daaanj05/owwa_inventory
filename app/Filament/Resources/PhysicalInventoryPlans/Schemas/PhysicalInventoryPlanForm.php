@@ -104,7 +104,6 @@ class PhysicalInventoryPlanForm
                                         ->all())
                                     ->default($sessionCategoryId)
                                     ->required()
-                                    ->searchable()
                                     ->helperText('Consumables, Semi-Expendable, PPE, etc.')
                                     ->hintIcon(Heroicon::QuestionMarkCircle, 'Determines the count form (RPCI, RPCPPE, or RPCSP) when you start the count.'),
                                 DatePicker::make('planned_date')
@@ -142,7 +141,6 @@ class PhysicalInventoryPlanForm
                     ->orderBy('name')
                     ->pluck('name', 'id')
                     ->all())
-                ->searchable()
                 ->columnSpanFull()
                 ->helperText('Pre-fills category on new schedule lines.')
                 ->hintIcon(Heroicon::QuestionMarkCircle, 'When set, new lines inherit this category. You can still change category per line.'),

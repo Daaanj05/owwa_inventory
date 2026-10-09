@@ -41,6 +41,38 @@ class PropertyActionRequestListTest extends TestCase
         $this->assertSame('Property Returns', PropertyActionRequestResource::getPluralModelLabel());
     }
 
+    public function test_supply_custodian_does_not_see_returns_still_pending_with_uc(): void
+    {
+        [$employee, $uc, $custodian, $issuance] = $this->seedPropertyContext();
+
+        $pendingUc = PropertyActionRequest::query()->create([
+            'reference_code' => 'PAREQ-PENDING-UC',
+            'action_type' => PropertyActionRequest::ACTION_RETURN,
+            'reason_code' => 'needs_repair',
+            'requested_by' => $employee->id,
+            'accountable_user_id' => $employee->id,
+            'office_id' => $issuance->office_id,
+            'department_id' => $issuance->department_id,
+            'status' => PropertyActionRequest::STATUS_PENDING_UC,
+        ]);
+
+        $pendingSc = PropertyActionRequest::query()->create([
+            'reference_code' => 'PAREQ-PENDING-SC',
+            'action_type' => PropertyActionRequest::ACTION_RETURN,
+            'reason_code' => 'needs_repair',
+            'requested_by' => $uc->id,
+            'accountable_user_id' => $uc->id,
+            'office_id' => $issuance->office_id,
+            'department_id' => $issuance->department_id,
+            'status' => PropertyActionRequest::STATUS_PENDING_SC,
+        ]);
+
+        Livewire::actingAs($custodian)
+            ->test(ListPropertyActionRequests::class)
+            ->assertCanNotSeeTableRecords([$pendingUc])
+            ->assertCanSeeTableRecords([$pendingSc]);
+    }
+
     public function test_employee_create_draft_without_reason_succeeds(): void
     {
         [$employee, $issuance, $category] = $this->seedEmployeeIssuance();
@@ -94,7 +126,7 @@ class PropertyActionRequestListTest extends TestCase
             ->setActionData([
                 'item_category_id' => $category->id,
                 'action_type' => PropertyActionRequest::ACTION_RETURN,
-                'reason_code' => 'good_condition',
+                'reason_code' => 'needs_repair',
                 'lines' => [
                     ['issuance_id' => $issuance->id],
                 ],
@@ -379,7 +411,7 @@ class PropertyActionRequestListTest extends TestCase
                 'office_id' => $issuance->office_id,
                 'department_id' => $issuance->department_id,
                 'action_type' => PropertyActionRequest::ACTION_RETURN,
-                'reason_code' => 'good_condition',
+                'reason_code' => 'needs_repair',
                 'reason_detail' => 'Compiled via create modal',
                 'source_property_action_request_ids' => [$pending->id],
             ])
@@ -460,7 +492,7 @@ class PropertyActionRequestListTest extends TestCase
                 'office_id' => $issuance->office_id,
                 'department_id' => $issuance->department_id,
                 'action_type' => PropertyActionRequest::ACTION_RETURN,
-                'reason_code' => 'good_condition',
+                'reason_code' => 'needs_repair',
                 'reason_detail' => 'Batch for SC',
                 'source_property_action_request_ids' => [$pending->id],
             ])

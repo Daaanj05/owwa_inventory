@@ -2,7 +2,7 @@
 
 namespace App\Filament\Resources\UacsObjectCodes\Schemas;
 
-use App\Support\ItemPropertyClass;
+use App\Models\ItemAttributeOption;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Schema;
@@ -26,8 +26,7 @@ class UacsObjectCodeForm
                     ->maxLength(255),
                 Select::make('property_class')
                     ->label('Property class (optional filter)')
-                    ->options(ItemPropertyClass::options())
-                    ->searchable()
+                    ->options(fn (): array => ItemAttributeOption::optionsForKind(ItemAttributeOption::KIND_PROPERTY_CLASS))
                     ->nullable()
                     ->columnSpanFull(),
             ]);

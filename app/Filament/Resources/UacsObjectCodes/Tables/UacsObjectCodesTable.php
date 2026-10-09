@@ -7,8 +7,8 @@ use App\Filament\Resources\UacsObjectCodes\UacsObjectCodeResource;
 use App\Filament\Support\ConfiguresOwwaViewAction;
 use App\Filament\Support\OwwaFormModalDefaults;
 use App\Filament\Support\OwwaModalSchema;
+use App\Models\ItemAttributeOption;
 use App\Models\UacsObjectCode;
-use App\Support\ItemPropertyClass;
 use App\Support\OwwaRecordHeroData;
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
@@ -34,7 +34,9 @@ class UacsObjectCodesTable
                     ->wrap(),
                 TextColumn::make('property_class')
                     ->label('Property class')
-                    ->formatStateUsing(fn (?string $state): string => ItemPropertyClass::options()[$state] ?? ($state ?: '—'))
+                    ->formatStateUsing(fn (?string $state): string => filled($state)
+                        ? ItemAttributeOption::labelFor(ItemAttributeOption::KIND_PROPERTY_CLASS, $state)
+                        : '—')
                     ->toggleable(),
                 TextColumn::make('status')
                     ->label('Status')

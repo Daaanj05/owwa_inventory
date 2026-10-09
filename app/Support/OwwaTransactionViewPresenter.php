@@ -150,21 +150,26 @@ class OwwaTransactionViewPresenter
     public static function forItem(Item $record): array
     {
         $record->loadMissing(['category']);
+        $slug = $record->category?->getTemplateSlug();
+        $meta = [
+            [
+                'label' => app(\App\Services\CatalogAssetNumberService::class)
+                    ->catalogIdentifierLabel($slug),
+                'value' => $record->catalogAssetIdentifier() ?? '—',
+            ],
+            ['label' => 'Category', 'value' => $record->category?->name ?? '—'],
+            ['label' => 'Unit', 'value' => $record->unit ?? '—'],
+        ];
+
+        if ($slug === 'consumables') {
+            $meta[] = ['label' => 'Reorder point', 'value' => (string) ($record->reorder_level ?? '—')];
+        }
 
         $hero = OwwaRecordHeroData::make(
             reference: $record->name ?? '—',
             statusLabel: $record->archived_at ? 'Archived' : 'Active',
             statusClass: $record->archived_at ? 'owwa-pc-status-badge--incomplete' : 'owwa-pc-status-badge--complete',
-            meta: [
-                [
-                    'label' => app(\App\Services\CatalogAssetNumberService::class)
-                        ->catalogIdentifierLabel($record->category?->getTemplateSlug()),
-                    'value' => $record->catalogAssetIdentifier() ?? '—',
-                ],
-                ['label' => 'Category', 'value' => $record->category?->name ?? '—'],
-                ['label' => 'Unit', 'value' => $record->unit ?? '—'],
-                ['label' => 'Reorder point', 'value' => (string) ($record->reorder_level ?? '—')],
-            ],
+            meta: $meta,
         );
         $hero['referenceLabel'] = 'Item';
 

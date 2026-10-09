@@ -42,6 +42,8 @@ class RagService
 
         $categoryLine = $facts['category'] ? "Category scope: {$facts['category']}." : 'Category scope: All categories.';
         $headlineLine = filled($facts['headline'] ?? null) ? "Summary headline: {$facts['headline']}." : '';
+        $replacementCount = (int) ($facts['replacement_count'] ?? 0);
+        $replacementLines = (string) ($facts['replacement_lines'] ?? 'none');
 
         $retrieved = $this->retrieval->retrieve(
             query: 'procurement recommendations '.($facts['category'] ?? 'all categories'),
@@ -58,17 +60,20 @@ class RagService
 Period covered: {$facts['from']} to {$facts['to']}.
 {$categoryLine}
 {$headlineLine}
-At-risk pairs: {$facts['pairs']} (High: {$facts['high']}, Medium: {$facts['medium']}).
+Consumable reorder pairs: {$facts['pairs']} (High: {$facts['high']}, Medium: {$facts['medium']}).
 
-Top at-risk items (pre-computed):
+Consumable reorders (pre-computed). These are purchases. Use reorder point, forecast, and months of cover only for these rows:
 {$itemsText}
+
+Semi-expendable replacement reviews: {$replacementCount}. These are not reorders. Do not apply reorder point or months of cover to them. Do not turn "Issue from stock" or "Awaiting review" into a purchase quantity. A purchase applies only when the action is Purchase.
+{$replacementLines}
 {$retrievedText}
 
-Write at most 2 sentences of plain prose. Do not output a table.
+Write at most 3 sentences of plain prose. Do not output a table.
 Do not number or label sentences. Never write scaffolding such as "Sentence 1", "Sentence 2", "must be", or similar.
 Do not wrap the answer in quotation marks.
-Start with decision-support framing in this spirit: The analysis below highlights urgent stock gaps requiring action. Kindly consider this result when preparing the next purchase request.
-Then continue in the same prose with High-priority items and suggested quantities only. Do not append office or location after each item. Never use "@".
+Start with decision-support framing in this spirit: The analysis below highlights consumable stock gaps and semi-expendable units due for replacement review. Kindly consider this result when preparing the next purchase request.
+Then name High-priority consumable items and suggested purchase quantities only. If a semi-expendable unit is listed, name the action already given (Issue from stock, Purchase, or Awaiting review) and do not invent a reorder quantity for it. Do not append office or location after each item. Never use "@".
 TXT;
 
         return $this->ollama->chat($systemPrompt, $userMessage);
@@ -203,7 +208,8 @@ You will see risk metrics in the context like:
 - months_cover (sometimes "N/A" when not available)
 
 Rules for the table:
-- Consider an item at risk when its estimated months of cover is LESS than 3 months OR when stock is at or below the reorder_point.
+- Consumable rows use months of cover and reorder point. Semi-expendable rows are replacement reviews, not reorders. Do not apply reorder point or months of cover to a semi-expendable unit, and do not turn "Issue from stock" or "Awaiting review" into a purchase quantity.
+- Consider a consumable at risk when its estimated months of cover is LESS than 3 months OR when stock is at or below the reorder_point.
 - When months_cover is given, use it. When it is missing, estimate it as stock divided by avg_per_month if possible; if that is still not possible, write "N/A" in the column but still include clearly low-stock items.
 - Use Priority = "High" when months of cover < 1 (or stock is critically below reorder_point), "Medium" when 1–3, and "Low" otherwise (omit Low from the table).
 - Include at most 10 rows; choose the most critical items only.

@@ -11,9 +11,11 @@ use App\Models\ItemCategory;
 use App\Models\Office;
 use App\Models\Requisition;
 use App\Models\User;
+use App\Notifications\StillUsableUsefulLifeNotification;
 use App\Services\EmployeeDistributionInventoryService;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Notification;
 use Livewire\Livewire;
 use Tests\TestCase;
 
@@ -483,6 +485,61 @@ class MyInventoryTest extends TestCase
         ]);
 
         return [$employee, $uc, $custodian, $issuance];
+    }
+
+    public function test_still_usable_notifies_custodian_and_does_not_change_expiry(): void
+    {
+        Notification::fake();
+
+        $office = Office::factory()->create();
+        $category = ItemCategory::factory()->create(['name' => 'Semi-Expendable']);
+        $item = Item::factory()->create([
+            'item_category_id' => $category->id,
+            'name' => 'Office Chair',
+            'estimated_useful_life' => '60 months',
+        ]);
+        $employee = User::factory()->create([
+            'role' => User::ROLE_EMPLOYEE,
+            'office_id' => $office->id,
+        ]);
+        $custodian = User::factory()->create([
+            'role' => User::ROLE_SUPPLY_CUSTODIAN,
+            'office_id' => $office->id,
+        ]);
+
+        $requisition = Requisition::query()->create([
+            'reference_code' => 'REQ-STILL-'.uniqid(),
+            'office_id' => $office->id,
+            'requested_by' => $employee->id,
+            'status' => Requisition::STATUS_ACCEPTED,
+        ]);
+
+        $issuance = Issuance::query()->create([
+            'requisition_id' => $requisition->id,
+            'reference_code' => 'ISS-STILL-'.uniqid(),
+            'office_id' => $office->id,
+            'item_id' => $item->id,
+            'quantity' => 1,
+            'issuance_date' => now()->subYears(4)->subMonths(6)->toDateString(),
+            'estimated_useful_life' => '60 months',
+            'property_number' => 'SEMI-STILL',
+            'issued_by' => $custodian->id,
+            'issued_to' => $employee->id,
+        ]);
+
+        $expiresAt = $issuance->fresh()->eul_expires_at?->toDateString();
+        $this->assertNotNull($expiresAt);
+
+        Livewire::actingAs($employee)
+            ->test(MyInventory::class)
+            ->set('usefulLifeNotes', [$issuance->id => 'The chair is still usable.'])
+            ->call('reportStillUsable', $issuance->id);
+
+        $issuance->refresh();
+
+        $this->assertSame($expiresAt, $issuance->eul_expires_at?->toDateString());
+        $this->assertSame(Issuance::USEFUL_LIFE_STILL_USABLE, $issuance->useful_life_condition);
+        Notification::assertSentTo($custodian, StillUsableUsefulLifeNotification::class);
     }
 
     /**

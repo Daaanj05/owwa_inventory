@@ -117,7 +117,7 @@ class ItemAttributeOptionResource extends Resource
     {
         $user = Filament::auth()->user();
 
-        return $user !== null && $user->isSystemAdmin();
+        return $user !== null && $user->isSupplyCustodian();
     }
 
     public static function getPages(): array

@@ -12,9 +12,12 @@ use App\Models\ItemStockBucket;
 use App\Models\Office;
 use App\Models\PhysicalCountLine;
 use App\Models\PhysicalCountSession;
+use App\Models\PropertyNumberBucket;
 use App\Models\Requisition;
+use App\Models\UacsObjectCode;
 use App\Models\User;
 use App\Services\AcquisitionUnitService;
+use App\Services\CatalogAssetNumberService;
 use App\Services\PhysicalCountPreloadService;
 use App\Services\SemiExpendablePropertyNumberBuilder;
 use App\Support\ItemPropertyClass;
@@ -25,7 +28,7 @@ class SemiExpendablePropertyNumberPerItemTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_acquisition_assigns_one_property_number_for_all_units_in_same_cost_bucket(): void
+    public function test_acquisition_assigns_the_next_sequence_to_each_unit(): void
     {
         $office = Office::factory()->create(['code' => 'OWWA-IVA']);
         $category = ItemCategory::factory()->create(['name' => 'Semi-Expendable']);
@@ -51,9 +54,59 @@ class SemiExpendablePropertyNumberPerItemTest extends TestCase
         $bucket = ItemStockBucket::findForItemCost((int) $item->id, 4500.0);
 
         $this->assertCount(5, $units);
-        $this->assertSame(1, $units->pluck('property_number')->unique()->count());
+        $this->assertSame(5, $units->pluck('property_number')->unique()->count());
         $this->assertNotNull($bucket?->property_number);
         $this->assertSame($units->first()->property_number, $bucket->property_number);
+        $this->assertSame($units->first()->property_number, $item->fresh()->semi_expendable_property_number);
+    }
+
+    public function test_quantity_two_uses_the_next_two_yearly_sequences(): void
+    {
+        $office = Office::factory()->create([
+            'code' => 'OWWA-IVA',
+            'is_regional_supply' => true,
+        ]);
+        $uacs = UacsObjectCode::query()->create([
+            'code' => '106',
+            'name' => 'Placeholder',
+            'is_active' => true,
+        ]);
+        PropertyNumberBucket::query()->create([
+            'bucket_key' => CatalogAssetNumberService::SERIES_SEMI.'|'.now()->format('Y'),
+            'next_sequence' => 83,
+        ]);
+        $category = ItemCategory::factory()->create(['name' => 'Semi-Expendable']);
+        $item = Item::factory()->create([
+            'item_category_id' => $category->id,
+            'property_class' => ItemPropertyClass::OfficeEquipment,
+            'uacs_object_code_id' => $uacs->id,
+        ]);
+        $user = User::factory()->create();
+
+        $acquisition = Acquisition::query()->create([
+            'reference_code' => 'ACQ-SEQ-2',
+            'item_id' => $item->id,
+            'office_id' => $office->id,
+            'quantity' => 2,
+            'unit_cost' => 8000,
+            'acquisition_date' => now(),
+            'recorded_by' => $user->id,
+        ]);
+
+        app(AcquisitionUnitService::class)->generateUnitsForAcquisition($acquisition->fresh(['item.category', 'office']));
+
+        $numbers = InventoryUnit::query()
+            ->where('acquisition_id', $acquisition->id)
+            ->orderBy('id')
+            ->pluck('property_number')
+            ->all();
+        $year = now()->format('Y');
+
+        $this->assertSame([
+            "SPHV-{$year}-OE-106-083-OWWA-IVA",
+            "SPHV-{$year}-OE-106-084-OWWA-IVA",
+        ], $numbers);
+        $this->assertSame("SPHV-{$year}-OE-106-083-OWWA-IVA", $item->fresh()->semi_expendable_property_number);
     }
 
     public function test_different_unit_costs_share_one_property_number(): void
@@ -92,10 +145,15 @@ class SemiExpendablePropertyNumberPerItemTest extends TestCase
         $lowBucket = ItemStockBucket::findForItemCost((int) $item->id, 4500.0);
         $highBucket = ItemStockBucket::findForItemCost((int) $item->id, 12000.0);
 
-        $this->assertNotNull($lowBucket?->property_number);
-        $this->assertNotNull($highBucket?->property_number);
-        $this->assertSame($lowBucket->property_number, $highBucket->property_number);
-        $this->assertSame($lowBucket->property_number, $item->fresh()->semi_expendable_property_number);
+        $lowUnit = InventoryUnit::query()->where('acquisition_id', $lowCost->id)->first();
+        $highUnit = InventoryUnit::query()->where('acquisition_id', $highCost->id)->first();
+
+        $this->assertNotNull($lowUnit?->property_number);
+        $this->assertNotNull($highUnit?->property_number);
+        $this->assertNotSame($lowUnit->property_number, $highUnit->property_number);
+        $this->assertSame($lowUnit->property_number, $item->fresh()->semi_expendable_property_number);
+        $this->assertSame($lowUnit->property_number, $lowBucket?->property_number);
+        $this->assertSame($item->fresh()->semi_expendable_property_number, $highBucket?->property_number);
     }
 
     public function test_second_issuance_for_same_cost_reuses_acquisition_property_number(): void
@@ -204,7 +262,7 @@ class SemiExpendablePropertyNumberPerItemTest extends TestCase
 
         $lines = PhysicalCountLine::query()->where('physical_count_session_id', $session->id)->get();
 
-        $this->assertCount(1, $lines);
-        $this->assertSame(4, $lines->first()->balance_per_card);
+        $this->assertCount(4, $lines);
+        $this->assertTrue($lines->every(fn (PhysicalCountLine $line): bool => (int) $line->balance_per_card === 1));
     }
 }

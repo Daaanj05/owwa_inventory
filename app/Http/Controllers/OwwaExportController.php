@@ -28,6 +28,8 @@ use App\Services\PurchaseOrderFastPdfExportService;
 use App\Services\PurchaseRequestFastExcelExportService;
 use App\Services\PurchaseRequestFastPdfExportService;
 use App\Services\RpciFastPdfExportService;
+use App\Services\RpcppeFastPdfExportService;
+use App\Services\RpcspFastPdfExportService;
 use App\Services\RsmiFastPdfExportService;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\Request;
@@ -51,6 +53,8 @@ class OwwaExportController extends Controller
         protected InspectionAcceptanceReportFastExcelExportService $inspectionAcceptanceReportFastExcelExport,
         protected RsmiFastPdfExportService $rsmiFastPdfExport,
         protected RpciFastPdfExportService $rpciFastPdfExport,
+        protected RpcppeFastPdfExportService $rpcppeFastPdfExport,
+        protected RpcspFastPdfExportService $rpcspFastPdfExport,
         protected EmployeeDistributionExportService $employeeDistributionExport,
     ) {}
 
@@ -252,11 +256,12 @@ class OwwaExportController extends Controller
         );
 
         if ($asPdf) {
-            if ($physicalCountSession->count_type === PhysicalCountSession::TYPE_RPCI) {
-                return $this->rpciFastPdfExport->download($physicalCountSession);
-            }
-
-            return $this->itemReport->downloadPhysicalCountPdf($physicalCountSession);
+            return match ($physicalCountSession->count_type) {
+                PhysicalCountSession::TYPE_RPCI => $this->rpciFastPdfExport->download($physicalCountSession),
+                PhysicalCountSession::TYPE_RPCPPE => $this->rpcppeFastPdfExport->download($physicalCountSession),
+                PhysicalCountSession::TYPE_RPCSP => $this->rpcspFastPdfExport->download($physicalCountSession),
+                default => $this->itemReport->downloadPhysicalCountPdf($physicalCountSession),
+            };
         }
 
         return $this->itemReport->downloadPhysicalCount($physicalCountSession);
@@ -279,6 +284,44 @@ class OwwaExportController extends Controller
         );
 
         return $this->rpciFastPdfExport->download($physicalCountSession);
+    }
+
+    public function physicalCountRpcppeFastPdf(PhysicalCountSession $physicalCountSession): Response
+    {
+        $this->authorizePhysicalCountExport($physicalCountSession);
+
+        abort_unless(
+            $physicalCountSession->count_type === PhysicalCountSession::TYPE_RPCPPE,
+            422,
+            'Fast RPCPPE PDF is only available for property, plant and equipment physical count sessions.',
+        );
+
+        $this->logExportActivity(
+            'Exported RPCPPE PDF for physical count '.$physicalCountSession->reference_code,
+            $physicalCountSession,
+            ['format' => 'pdf', 'mode' => 'fast'],
+        );
+
+        return $this->rpcppeFastPdfExport->download($physicalCountSession);
+    }
+
+    public function physicalCountRpcspFastPdf(PhysicalCountSession $physicalCountSession): Response
+    {
+        $this->authorizePhysicalCountExport($physicalCountSession);
+
+        abort_unless(
+            $physicalCountSession->count_type === PhysicalCountSession::TYPE_RPCSP,
+            422,
+            'Fast RPCSP PDF is only available for semi-expendable physical count sessions.',
+        );
+
+        $this->logExportActivity(
+            'Exported RPCSP PDF for physical count '.$physicalCountSession->reference_code,
+            $physicalCountSession,
+            ['format' => 'pdf', 'mode' => 'fast'],
+        );
+
+        return $this->rpcspFastPdfExport->download($physicalCountSession);
     }
 
     public function distribution(Request $request, Distribution $distribution): StreamedResponse|Response

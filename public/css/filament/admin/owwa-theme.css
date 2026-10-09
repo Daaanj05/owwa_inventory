@@ -130,7 +130,7 @@
     text-align: left !important;
     color: #374151 !important;
     border-radius: 0.5rem !important;
-    font-size: 0.9375rem !important;
+    font-size: 0.875rem !important;
     font-weight: 400 !important;
     cursor: pointer;
     background: transparent;
@@ -158,8 +158,18 @@
 .fi-sidebar a {
     color: #374151 !important;
     border-radius: 0.5rem !important;
-    font-size: 0.9375rem !important;
+    font-size: 0.875rem !important;
     font-weight: 400 !important;
+}
+
+.fi-sidebar .fi-sidebar-item-label {
+    font-size: 0.875rem !important;
+    font-weight: 400 !important;
+}
+
+.fi-sidebar .fi-sidebar-item-button.fi-active .fi-sidebar-item-label,
+.fi-sidebar [aria-current="page"] .fi-sidebar-item-label {
+    font-weight: 600 !important;
 }
 
 .fi-sidebar a:hover {
@@ -174,13 +184,97 @@
     font-weight: 600 !important;
 }
 
-.fi-sidebar .fi-sidebar-group-button {
+.fi-sidebar .fi-sidebar-group:not(.owwa-nav-folder):not(.owwa-nav-plain) > .fi-sidebar-group-btn {
     color: #9ca3af !important;
     font-size: 0.6875rem !important;
     font-weight: 700 !important;
     letter-spacing: 0.08em !important;
     text-transform: uppercase !important;
     padding: 0.5rem 0.75rem 0.25rem !important;
+}
+
+.fi-sidebar .owwa-nav-plain > .fi-sidebar-group-btn {
+    display: none !important;
+}
+
+.fi-sidebar .fi-sidebar-nav-groups,
+.fi-sidebar .fi-sidebar-group-items {
+    gap: 0.45rem !important;
+    row-gap: 0.45rem !important;
+}
+
+.fi-sidebar .owwa-nav-folder > .fi-sidebar-group-btn {
+    color: #374151 !important;
+    font-size: 0.875rem !important;
+    font-weight: 500 !important;
+    letter-spacing: normal !important;
+    text-transform: none !important;
+    padding: 0.3rem 0.75rem !important;
+    border-radius: 0.5rem !important;
+    cursor: pointer;
+}
+
+.fi-sidebar .owwa-nav-folder > .fi-sidebar-group-items {
+    padding-inline-start: 1.35rem;
+}
+
+.fi-sidebar .owwa-nav-folder:not([data-group-label="Setup"]):not([data-group-label="Requisitions"]):not([data-group-label="Analytics"]) > .fi-sidebar-group-btn::before {
+    content: '';
+    width: 1.25rem;
+    height: 1.25rem;
+    flex-shrink: 0;
+    background: center / contain no-repeat url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22none%22%20viewBox%3D%220%200%2024%2024%22%20stroke-width%3D%221.5%22%20stroke%3D%22%236b7280%22%3E%3Cpath%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20d%3D%22M20.25%207.5l-.625%2010.632a2.25%202.25%200%2001-2.247%202.118H6.622a2.25%202.25%200%2001-2.247-2.118L3.75%207.5M10%2011.25h4M3.375%207.5h17.25c.621%200%201.125-.504%201.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621%200-1.125.504-1.125%201.125v1.5c0%20.621.504%201.125%201.125%201.125z%22%2F%3E%3C%2Fsvg%3E");
+}
+
+.fi-sidebar .owwa-nav-folder[data-group-label="Requisitions"] > .fi-sidebar-group-btn::before {
+    content: '';
+    width: 1.25rem;
+    height: 1.25rem;
+    flex-shrink: 0;
+    background: center / contain no-repeat url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22none%22%20viewBox%3D%220%200%2024%2024%22%20stroke-width%3D%221.5%22%20stroke%3D%22%236b7280%22%3E%3Cpath%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20d%3D%22M19.5%2014.25v-2.625a3.375%203.375%200%2000-3.375-3.375h-1.5A1.125%201.125%200%200113.5%207.125v-1.5a3.375%203.375%200%2000-3.375-3.375H8.25m0%2012.75h7.5m-7.5%203H12M10.5%202.25H5.625c-.621%200-1.125.504-1.125%201.125v17.25c0%20.621.504%201.125%201.125%201.125h12.75c.621%200%201.125-.504%201.125-1.125V11.25a9%209%200%2000-9-9z%22%2F%3E%3C%2Fsvg%3E");
+}
+
+.fi-sidebar .owwa-nav-folder[data-group-label="Analytics"] > .fi-sidebar-group-btn::before {
+    content: '';
+    width: 1.25rem;
+    height: 1.25rem;
+    flex-shrink: 0;
+    background: center / contain no-repeat url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22none%22%20viewBox%3D%220%200%2024%2024%22%20stroke-width%3D%221.5%22%20stroke%3D%22%236b7280%22%3E%3Cpath%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20d%3D%22M3%2013.125C3%2012.504%203.504%2012%204.125%2012h2.25c.621%200%201.125.504%201.125%201.125v6.75C7.5%2020.496%206.996%2021%206.375%2021h-2.25A1.125%201.125%200%20013%2019.875v-6.75zM9.75%208.625c0-.621.504-1.125%201.125-1.125h2.25c.621%200%201.125.504%201.125%201.125v11.25c0%20.621-.504%201.125-1.125%201.125h-2.25a1.125%201.125%200%2001-1.125-1.125V8.625zM16.5%204.125c0-.621.504-1.125%201.125-1.125h2.25C20.496%203%2021%203.504%2021%204.125v15.75c0%20.621-.504%201.125-1.125%201.125h-2.25a1.125%201.125%200%2001-1.125-1.125V4.125z%22%2F%3E%3C%2Fsvg%3E");
+}
+
+.fi-sidebar .owwa-nav-folder[data-group-label="Setup"] > .fi-sidebar-group-btn::before {
+    content: '';
+    width: 1.25rem;
+    height: 1.25rem;
+    flex-shrink: 0;
+    background: center / contain no-repeat url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22none%22%20viewBox%3D%220%200%2024%2024%22%20stroke-width%3D%221.5%22%20stroke%3D%22%236b7280%22%3E%3Cpath%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20d%3D%22M9.594%203.94c.09-.542.56-.94%201.11-.94h2.593c.55%200%201.02.398%201.11.94l.213%201.281c.063.374.313.686.645.87.074.04.147.083.22.127.325.196.72.257%201.075.124l1.217-.456a1.125%201.125%200%20011.37.49l1.296%202.247a1.125%201.125%200%2001-.26%201.431l-1.003.827c-.293.241-.438.613-.43.992a7.723%207.723%200%20010%20.255c-.008.378.137.75.43.991l1.004.827c.424.35.534.955.26%201.43l-1.298%202.247a1.125%201.125%200%2001-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.47%206.47%200%2001-.22.128c-.331.183-.581.495-.644.869l-.213%201.281c-.09.543-.56.94-1.11.94h-2.594c-.55%200-1.019-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52%206.52%200%2001-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125%201.125%200%2001-1.369-.49l-1.297-2.247a1.125%201.125%200%2001.26-1.431l1.004-.827c.292-.24.437-.613.43-.991a6.932%206.932%200%20010-.255c.007-.38-.138-.751-.43-.992l-1.004-.827a1.125%201.125%200%2001-.26-1.43l1.297-2.247a1.125%201.125%200%20011.37-.491l1.216.456c.356.133.751.072%201.076-.124.072-.044.146-.086.22-.128.332-.183.582-.495.644-.869l.214-1.28Z%22%2F%3E%3Cpath%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20d%3D%22M15%2012a3%203%200%2011-6%200%203%203%200%20016%200Z%22%2F%3E%3C%2Fsvg%3E");
+}
+
+.fi-sidebar .owwa-nav-folder > .fi-sidebar-group-btn:hover {
+    background-color: #f1f5f9 !important;
+    color: #003366 !important;
+}
+
+.fi-sidebar .fi-sidebar-group[data-group-label="Requisitions"] > .fi-sidebar-group-btn .fi-sidebar-group-label {
+    flex: 1 1 auto;
+}
+
+.fi-sidebar .fi-sidebar-group[data-group-label="Requisitions"] .fi-sidebar-group-items .fi-sidebar-item-badge-ctn {
+    display: none !important;
+}
+
+.fi-sidebar .owwa-nav-group-badge {
+    margin-inline-start: auto;
+    flex: none;
+}
+
+.fi-sidebar .owwa-nav-folder .fi-sidebar-group-label {
+    flex: 1 1 auto;
+    text-transform: none !important;
+    letter-spacing: normal !important;
+    font-size: inherit !important;
+    font-weight: inherit !important;
+    color: inherit !important;
 }
 
 /* ═══════════════════════════════════════════════════════════
@@ -1589,26 +1683,47 @@ button[type="submit"].fi-btn:hover {
     text-align: center;
 }
 
-/* Signatories Setup: compact create/edit fields */
+/* Signatories Setup: one bordered box. The theme also borders the inner input, which stacks a second outline. */
 .fi-modal-window.owwa-signatory-modal {
     max-width: 36rem !important;
 }
 
 .fi-modal-window.owwa-signatory-modal .fi-input-wrp {
     min-height: 2.25rem !important;
-    height: 2.25rem !important;
+    height: auto !important;
     padding-block: 0 !important;
+    align-items: center !important;
     box-sizing: border-box !important;
 }
 
-.fi-modal-window.owwa-signatory-modal .fi-input,
-.fi-modal-window.owwa-signatory-modal .fi-fo-text-input,
+.fi-modal-window.owwa-signatory-modal .fi-input-wrp:focus-within {
+    border-color: #003366 !important;
+    box-shadow: 0 0 0 3px rgba(0, 51, 102, 0.1) !important;
+}
+
+.fi-modal-window.owwa-signatory-modal .fi-input-wrp input.fi-input,
+.fi-modal-window.owwa-signatory-modal .fi-input-wrp .fi-fo-text-input {
+    border: 0 !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    min-height: 0 !important;
+    height: auto !important;
+    padding: 0.4rem 0.75rem !important;
+    box-sizing: border-box !important;
+}
+
+.fi-modal-window.owwa-signatory-modal .fi-input-wrp .fi-input:focus,
+.fi-modal-window.owwa-signatory-modal .fi-input-wrp .fi-fo-text-input:focus {
+    border: 0 !important;
+    box-shadow: none !important;
+}
+
 .fi-modal-window.owwa-signatory-modal [data-slot="select-trigger"],
 .fi-modal-window.owwa-signatory-modal .fi-fo-select-trigger {
     min-height: 2.25rem !important;
-    height: 2.25rem !important;
-    padding-block: 0.25rem !important;
-    padding-inline: 0.75rem !important;
+    height: auto !important;
+    padding: 0.4rem 0.75rem !important;
     box-sizing: border-box !important;
 }
 
@@ -1843,7 +1958,17 @@ button[type="submit"].fi-btn:hover {
     gap: 1.25rem !important;
 }
 
-/* Main admin dashboard — tighter widget rhythm */
+/* Main admin dashboard — tighter widget rhythm, and no empty title band above the greeting */
+.fi-page.owwa-dashboard-page .fi-page-header-main-ctn {
+    row-gap: 0 !important;
+    padding-top: 0.35rem !important;
+    padding-bottom: 0 !important;
+}
+
+.fi-page.owwa-dashboard-page .fi-header {
+    display: none !important;
+}
+
 .fi-page.owwa-dashboard-page .fi-page-content .fi-sc-has-gap {
     gap: 0.75rem !important;
 }
@@ -2094,59 +2219,20 @@ button[type="submit"].fi-btn:hover {
     margin: 0 0 0.375rem;
 }
 
+.owwa-login-brand-portal {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.92);
+    margin: 0 0 0.5rem;
+    letter-spacing: 0.02em;
+}
+
 .owwa-login-brand-tagline {
     font-size: 0.8125rem;
     color: rgba(255,255,255,0.6);
     margin: 0;
     font-weight: 400;
     letter-spacing: 0.01em;
-}
-
-.owwa-login-brand-divider {
-    width: 2.5rem;
-    height: 1px;
-    background: transparent;
-    border-radius: 9999px;
-    margin: .5rem auto;
-}
-
-.owwa-login-brand-desc {
-    font-size: 0.9375rem;
-    color: rgba(255,255,255,0.75);
-    line-height: 1.65;
-    margin: 0 0 2rem;
-}
-
-.owwa-login-brand-features {
-    display: flex;
-    flex-direction: column;
-    gap: 1rem;
-}
-
-.owwa-login-feature {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    font-size: 0.875rem;
-    color: rgba(255,255,255,0.85);
-    font-weight: 500;
-}
-
-.owwa-login-feature-icon {
-    width: 2rem;
-    height: 2rem;
-    background: rgba(255,255,255,0.12);
-    border-radius: 0.5rem;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-}
-
-.owwa-login-feature-icon svg {
-    width: 1.125rem;
-    height: 1.125rem;
-    color: rgba(255,255,255,0.9);
 }
 
 /* Decorative circles */
@@ -3355,20 +3441,6 @@ button[type="submit"].fi-btn:hover {
     overflow: hidden;
     text-overflow: ellipsis;
     max-width: 14rem;
-}
-
-/* Dashboard acquisition tables — tighter label-to-table spacing */
-.owwa-dashboard-data-panel .owwa-data-panel-header {
-    padding: 0.55rem 0.85rem 0.3rem;
-}
-
-.owwa-dashboard-data-panel .owwa-data-panel-body {
-    padding: 0 0.85rem 0.55rem;
-}
-
-.owwa-dashboard-data-panel .owwa-data-panel-title {
-    font-size: 0.8125rem;
-    line-height: 1.2;
 }
 
 /* ═══════════════════════════════════════════════════════════
@@ -5104,6 +5176,151 @@ select.owwa-search-bar {
     background: #eff6ff;
 }
 
+.owwa-pa-slide-footer {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 0.75rem;
+    margin-top: 0.75rem;
+}
+
+.owwa-pa-slide-nav {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.2rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.7rem;
+    background: #f8fafc;
+}
+
+.owwa-pa-slide-viewport {
+    overflow: hidden;
+    transition: height 380ms cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+.owwa-pa-slide-track {
+    display: flex;
+    align-items: flex-start;
+    width: 100%;
+    transition: transform 380ms cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+.owwa-pa-slide-track.is-dual {
+    width: 200%;
+}
+
+.owwa-pa-slide-track.is-dual.is-replacement {
+    transform: translateX(-50%);
+}
+
+.owwa-pa-slide-panel {
+    flex: 0 0 100%;
+    align-self: flex-start;
+    width: 100%;
+    min-width: 0;
+}
+
+.owwa-pa-slide-table {
+    padding: 0.5rem 1.5rem 1rem;
+}
+
+.owwa-pa-slide-track.is-dual .owwa-pa-slide-panel {
+    flex-basis: 50%;
+    width: 50%;
+}
+
+.owwa-pa-slide-copy,
+.owwa-pa-slide-body {
+    padding: 0.85rem 1.5rem 0;
+}
+
+.owwa-pa-slide-btn {
+    border: 1px solid transparent;
+    border-radius: 0.5rem;
+    background: #fff;
+    color: #1e3a5f;
+    font-size: 0.95rem;
+    font-weight: 700;
+    line-height: 1;
+    min-width: 2.25rem;
+    min-height: 2.25rem;
+    padding: 0.35rem 0.55rem;
+    cursor: pointer;
+}
+
+.owwa-pa-slide-btn:hover {
+    border-color: #1e6fbe;
+    color: #1e6fbe;
+}
+
+.dark .owwa-pa-slide-nav {
+    background: #0f172a;
+    border-color: #334155;
+}
+
+.dark .owwa-pa-slide-btn {
+    background: #1e293b;
+    color: #e2e8f0;
+}
+
+.dark .owwa-pa-slide-label {
+    color: #cbd5e1;
+}
+
+.owwa-pa-slide-label {
+    align-self: center;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #64748b;
+}
+
+.owwa-pa-summary-slide {
+    margin-top: 0.75rem;
+}
+
+.owwa-pa-summary-slide-header {
+    margin-bottom: 0.5rem;
+}
+
+.owwa-pa-summary-slide-title {
+    margin: 0;
+    font-size: 0.95rem;
+    font-weight: 700;
+}
+
+.owwa-pa-summary-empty {
+    margin: 0;
+    font-size: 0.875rem;
+    color: #64748b;
+}
+
+.owwa-eul-report {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.35rem;
+    min-width: 11rem;
+}
+
+.owwa-eul-report-label,
+.owwa-eul-report-status {
+    margin: 0;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #475569;
+}
+
+.owwa-eul-report-note {
+    width: 100%;
+    min-height: 3.25rem;
+    border: 1px solid #cbd5e1;
+    border-radius: 0.4rem;
+    padding: 0.35rem 0.5rem;
+    font-size: 0.8125rem;
+    background: #fff;
+}
+
 .owwa-pa-sort-btn {
     border: none;
     background: transparent;
@@ -5130,6 +5347,19 @@ select.owwa-search-bar {
 .owwa-pa-row-actions {
     display: flex;
     gap: 0.35rem;
+}
+
+.owwa-pa-click-row {
+    cursor: pointer;
+}
+
+.owwa-pa-click-row:hover td {
+    background: #f8fafc;
+}
+
+.owwa-pa-click-row:focus-visible {
+    outline: 2px solid #93c5fd;
+    outline-offset: -2px;
 }
 
 .owwa-pa-row-link {
@@ -5249,78 +5479,11 @@ select.owwa-search-bar {
     background: transparent;
 }
 
-/* Category dashboard: no outer white shell — only task cards stay white */
 .fi-page.owwa-inv-category-page .owwa-data-panel {
     background: transparent !important;
     border: none !important;
     box-shadow: none !important;
     overflow: visible !important;
-}
-
-.fi-page.owwa-inv-category-page .owwa-category-task-body {
-    padding: 0;
-}
-
-/* Category dashboard task cards */
-.owwa-category-task-body {
-    padding: 0.75rem;
-}
-
-.owwa-category-task-grid {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 0.6rem;
-}
-
-@media (max-width: 768px) {
-    .owwa-category-task-grid {
-        grid-template-columns: 1fr;
-    }
-}
-
-.owwa-category-task-card {
-    display: flex;
-    align-items: flex-start;
-    gap: 0.6rem;
-    padding: 0.75rem;
-    border: 1px solid #e5e7eb;
-    border-radius: 0.5rem;
-    background: #ffffff;
-    text-decoration: none !important;
-    transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
-}
-
-.owwa-category-task-card:hover {
-    border-color: #bfdbfe;
-    background: #f8fbff;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
-}
-
-.owwa-category-task-icon {
-    width: 2rem;
-    height: 2rem;
-    border-radius: 0.5rem;
-    background: #eff6ff;
-    color: #1d4ed8;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-}
-
-.owwa-category-task-title {
-    margin: 0;
-    font-size: 0.875rem;
-    font-weight: 600;
-    color: #111827;
-    line-height: 1.3;
-}
-
-.owwa-category-task-desc {
-    margin: 0.2rem 0 0;
-    font-size: 0.8125rem;
-    color: #64748b;
-    line-height: 1.45;
 }
 
 /* ═══════════════════════════════════════════════════════════
@@ -8334,12 +8497,13 @@ body.owwa-busy-active .fi-topbar a {
 
 .owwa-scan-asset-page .owwa-scan-asset-camera-box {
     position: relative;
+    min-height: 280px;
     max-height: 280px;
     overflow: hidden;
 }
 
 .owwa-scan-asset-page .owwa-pc-qr-reader {
-    min-height: 0;
+    min-height: 280px;
 }
 
 .owwa-scan-asset-page #asset-lookup-qr-reader video {
@@ -8352,28 +8516,29 @@ body.owwa-busy-active .fi-topbar a {
     display: none !important;
 }
 
-.owwa-scan-asset-divider {
+.owwa-scan-asset-lookup {
     display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    font-size: 0.75rem;
-    font-weight: 500;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    color: var(--gray-400, #9ca3af);
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 0.875rem;
+    border: 2px solid var(--primary-500, #3b82f6);
+    border-radius: 0.75rem;
+    background: var(--primary-50, #eff6ff);
 }
 
-.owwa-scan-asset-divider::before,
-.owwa-scan-asset-divider::after {
-    content: '';
-    flex: 1;
-    height: 1px;
-    background: var(--gray-200, #e5e7eb);
+.dark .owwa-scan-asset-lookup {
+    border-color: var(--primary-400, #60a5fa);
+    background: rgb(30 58 138 / 0.25);
 }
 
-.dark .owwa-scan-asset-divider::before,
-.dark .owwa-scan-asset-divider::after {
-    background: var(--gray-700, #374151);
+.owwa-scan-asset-lookup-label {
+    font-size: 0.875rem;
+    font-weight: 650;
+    color: var(--gray-950, #030712);
+}
+
+.dark .owwa-scan-asset-lookup-label {
+    color: var(--gray-50, #f9fafb);
 }
 
 .owwa-scan-asset-page .owwa-scan-asset-manual-form {
@@ -8387,6 +8552,10 @@ body.owwa-busy-active .fi-topbar a {
     flex: 1 1 12rem;
     min-width: 0;
     margin: 0;
+    min-height: 2.75rem;
+    font-size: 1.05rem;
+    border: 2px solid var(--primary-400, #60a5fa);
+    background: #fff;
 }
 
 .owwa-scan-asset-page .owwa-scan-asset-lookup-btn {
@@ -9347,6 +9516,23 @@ body.owwa-busy-active .fi-topbar a {
 /* Add Many Items: keep Unit / Reorder / Qty / Cost readable */
 .fi-modal-window.owwa-record-modal .owwa-bulk-items-repeater.fi-fo-table-repeater {
     overflow-x: auto !important;
+}
+
+/*
+ * Add Many Items menus (unit, inventory type, property class, type of PPE,
+ * UACS object code) stay inside the scrolling table. While one is open, stop
+ * the modal shell from clipping it anywhere in the window.
+ */
+.fi-modal:has(.owwa-bulk-items-repeater .fi-dropdown-panel[style*="display: block"]) > .fi-modal-window-ctn,
+.fi-modal-window.owwa-record-modal:has(.owwa-bulk-items-repeater .fi-dropdown-panel[style*="display: block"]),
+.fi-modal-window.owwa-record-modal:has(.owwa-bulk-items-repeater .fi-dropdown-panel[style*="display: block"]) .fi-modal-content,
+.fi-modal-window.owwa-record-modal:has(.owwa-bulk-items-repeater .fi-dropdown-panel[style*="display: block"]) .owwa-bulk-items-repeater.fi-fo-table-repeater,
+.fi-modal-window.owwa-record-modal:has(.owwa-bulk-items-repeater .fi-dropdown-panel[style*="display: block"]) .owwa-bulk-items-repeater.fi-fo-table-repeater > table {
+    overflow: visible !important;
+}
+
+.fi-modal-window.owwa-record-modal .owwa-bulk-items-repeater .fi-dropdown-panel {
+    z-index: 40 !important;
 }
 
 .fi-modal-window.owwa-record-modal .owwa-bulk-items-repeater.fi-fo-table-repeater > table {

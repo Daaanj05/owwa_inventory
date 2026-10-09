@@ -73,7 +73,7 @@ class PropertyActionRequestFormTest extends TestCase
             ->mountAction('create')
             ->setActionData([
                 'action_type' => PropertyActionRequest::ACTION_RETURN,
-                'reason_code' => 'good_condition',
+                'reason_code' => 'needs_repair',
                 'lines' => [
                     ['issuance_id' => $issuance->id],
                 ],
@@ -92,7 +92,7 @@ class PropertyActionRequestFormTest extends TestCase
             ->setActionData([
                 'item_category_id' => $category->id,
                 'action_type' => PropertyActionRequest::ACTION_RETURN,
-                'reason_code' => 'good_condition',
+                'reason_code' => 'needs_repair',
                 'lines' => [
                     ['issuance_id' => $issuanceOne->id],
                     ['issuance_id' => $issuanceTwo->id],
@@ -117,7 +117,7 @@ class PropertyActionRequestFormTest extends TestCase
             ->setActionData([
                 'item_category_id' => $category->id,
                 'action_type' => PropertyActionRequest::ACTION_RETURN,
-                'reason_code' => 'good_condition',
+                'reason_code' => 'needs_repair',
                 'lines' => [
                     ['issuance_id' => $issuance->id],
                 ],
@@ -140,7 +140,7 @@ class PropertyActionRequestFormTest extends TestCase
             ->setActionData([
                 'item_category_id' => $category->id,
                 'action_type' => PropertyActionRequest::ACTION_RETURN,
-                'reason_code' => 'good_condition',
+                'reason_code' => 'needs_repair',
                 'lines' => [
                     ['issuance_id' => $issuance->id],
                     ['issuance_id' => $issuance->id],

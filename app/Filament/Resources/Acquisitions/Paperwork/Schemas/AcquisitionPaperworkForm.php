@@ -404,7 +404,7 @@ class AcquisitionPaperworkForm
             ->relationship()
             ->hiddenLabel()
             ->extraAttributes([
-                'class' => 'owwa-acquisition-lines-repeater owwa-pr-lines-repeater fi-fixed-positioning-context',
+                'class' => 'owwa-acquisition-lines-repeater owwa-pr-lines-repeater owwa-line-table fi-fixed-positioning-context',
             ])
             ->hintIcon(Heroicon::QuestionMarkCircle, 'Pick the catalog item by name. Stock No. / Inventory item no. / Property No. fills from the Items register and is used on PR/PO/IAR Column A.')
             ->addable(fn (?AcquisitionPaperwork $record): bool => self::isPrEditable($record))
@@ -416,11 +416,11 @@ class AcquisitionPaperworkForm
                 $columns = [
                     TableColumn::make('Item')
                         ->markAsRequired()
-                        ->width($showsCosts ? '18%' : '30%'),
+                        ->width($showsCosts ? '16%' : '18%'),
                     TableColumn::make(self::lineIdentifierColumnLabel((int) $get('item_category_id')))
                         ->wrapHeader()
-                        ->width($showsCosts ? '14%' : '17%'),
-                    TableColumn::make('Description')->width($showsCosts ? '16%' : '31%'),
+                        ->width($showsCosts ? '22%' : '36%'),
+                    TableColumn::make('Description')->width($showsCosts ? '16%' : '28%'),
                     TableColumn::make('Unit')->width($showsCosts ? '9%' : '9%'),
                     TableColumn::make(filled($get('requisitions')) ? 'Requested qty' : 'Qty')
                         ->markAsRequired()
@@ -517,7 +517,7 @@ class AcquisitionPaperworkForm
                         }
 
                         return new HtmlString(
-                            '<span style="display:block;word-break:break-all;font-size:0.8125rem;line-height:1.25;">'
+                            '<span class="owwa-pr-identifier">'
                             .e((string) $identifier)
                             .'</span>'
                         );

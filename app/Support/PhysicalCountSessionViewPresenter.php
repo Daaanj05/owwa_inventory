@@ -149,6 +149,7 @@ class PhysicalCountSessionViewPresenter
 
         return new HtmlString(
             '<p><strong>After You Save This Session:</strong></p>'
+            .'<p>'.e('Scan property QR tags with a phone or tablet. Open Scan with phone on that device. Use this computer to review the tally, complete signatories, and export.').'</p>'
             .'<p>'.$body.'</p>'
             .'<p>'.e('Count lines are added automatically; you do not need to enter items manually on this screen.').'</p>'
         );

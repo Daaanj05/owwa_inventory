@@ -25,7 +25,8 @@ class PasswordResetRequestTest extends TestCase
         Filament::setCurrentPanel(Filament::getPanel('admin'));
 
         Livewire::test(RequestPasswordReset::class)
-            ->assertSee('OWWA 4A Calabarzon Inventory')
+            ->assertSee('OWWA IV-A CALABARZON Inventory System')
+            ->assertDontSee('System Administration')
             ->assertSee(__('filament-panels::auth/pages/password-reset/request-password-reset.heading'));
     }
 

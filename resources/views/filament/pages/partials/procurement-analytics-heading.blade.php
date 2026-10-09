@@ -3,5 +3,5 @@
         icon="heroicon-o-chart-bar-square"
         class="owwa-pa-page-title-icon"
     />
-    <span class="owwa-pa-page-title-text">Procurement Analytics</span>
+    <span class="owwa-pa-page-title-text">Procurement Recommendation</span>
 </span>

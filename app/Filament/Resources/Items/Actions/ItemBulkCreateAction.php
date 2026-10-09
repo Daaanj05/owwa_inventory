@@ -9,10 +9,6 @@ use App\Models\ItemAttributeOption;
 use App\Models\ItemCategory;
 use App\Models\UacsObjectCode;
 use App\Services\BulkCreateItemsService;
-use App\Support\ConsumableInventoryType;
-use App\Support\ItemPropertyClass;
-use App\Support\PpePropertyType;
-use App\Support\SemiExpendableUsefulLife;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Placeholder;
@@ -22,6 +18,7 @@ use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Schemas\Components\Utilities\Get;
+use Filament\Schemas\Components\Utilities\Set;
 use Illuminate\Validation\ValidationException;
 
 class ItemBulkCreateAction
@@ -110,7 +107,7 @@ class ItemBulkCreateAction
         return [
             'base_name' => null,
             'sub_item' => null,
-            'unit' => 'piece',
+            'unit' => null,
             'reorder_level' => 0,
             'days_to_consume' => null,
             'inventory_type' => null,
@@ -152,7 +149,7 @@ class ItemBulkCreateAction
                 ->table($tableColumns)
                 ->compact()
                 ->schema($rowFields)
-                ->extraAttributes(['class' => 'owwa-bulk-items-repeater'])
+                ->extraAttributes(['class' => 'owwa-bulk-items-repeater owwa-line-table'])
                 ->columnSpanFull(),
         ];
     }
@@ -164,23 +161,29 @@ class ItemBulkCreateAction
     {
         return [
             [
-                TableColumn::make('Item family')->markAsRequired()->width('14%'),
-                TableColumn::make('Variant')->width('10%'),
-                TableColumn::make('Unit')->markAsRequired()->width('7rem'),
-                TableColumn::make('Reorder Point')->markAsRequired()->width('7rem'),
-                TableColumn::make('Inventory Type')->markAsRequired()->width('12%'),
-                TableColumn::make('Days To Consume')->width('7rem'),
-                TableColumn::make('Description')->width('16%'),
+                TableColumn::make('Item family')->markAsRequired()->width('18%'),
+                TableColumn::make('Variant')->width('12%'),
+                TableColumn::make('Unit')->markAsRequired()->width('8%'),
+                TableColumn::make('Reorder Point')->markAsRequired()->width('6%'),
+                TableColumn::make('Inventory Type')->markAsRequired()->width('20%'),
+                TableColumn::make('Days To Consume')->width('8%'),
+                TableColumn::make('Description')->width('23%'),
             ],
             [
                 ...self::commonLeadingFields($categoryId),
-                Select::make('inventory_type')
+                TextInput::make('reorder_level')
                     ->hiddenLabel()
-                    ->options(fn (Get $get): array => ItemAttributeOption::optionsForKindIncluding(
-                        ItemAttributeOption::KIND_INVENTORY_TYPE,
-                        ConsumableInventoryType::resolve((string) ($get('inventory_type') ?? '')),
-                    ))
-                    ->searchable(),
+                    ->numeric()
+                    ->default(0)
+                    ->minValue(0),
+                self::lockedChoice(
+                    Select::make('inventory_type')
+                        ->hiddenLabel()
+                        ->options(fn (Get $get): array => ItemAttributeOption::optionsForKindIncluding(
+                            ItemAttributeOption::KIND_INVENTORY_TYPE,
+                            $get('inventory_type'),
+                        )),
+                ),
                 TextInput::make('days_to_consume')
                     ->hiddenLabel()
                     ->numeric()
@@ -199,35 +202,48 @@ class ItemBulkCreateAction
     {
         return [
             [
-                TableColumn::make('Item family')->markAsRequired()->width('12%'),
-                TableColumn::make('Variant')->width('8%'),
-                TableColumn::make('Unit')->markAsRequired()->width('6.5rem'),
-                TableColumn::make('Reorder Point')->markAsRequired()->width('6.5rem'),
-                TableColumn::make('Property Class')->markAsRequired()->width('11%'),
-                TableColumn::make('UACS Object Code')->markAsRequired()->width('12%'),
+                TableColumn::make('Item family')->markAsRequired()->width('14%'),
+                TableColumn::make('Variant')->width('9%'),
+                TableColumn::make('Unit')->markAsRequired()->width('8%'),
+                TableColumn::make('Property Class')->markAsRequired()->width('16%'),
+                TableColumn::make('UACS Object Code')->width('22%'),
                 TableColumn::make('Estimated Useful Life')->markAsRequired()->width('9%'),
-                TableColumn::make('Description')->width('14%'),
+                TableColumn::make('Description')->width('15%'),
             ],
             [
                 ...self::commonLeadingFields($categoryId),
-                Select::make('property_class')
-                    ->hiddenLabel()
-                    ->options(fn (Get $get): array => ItemAttributeOption::optionsForKindIncluding(
-                        ItemAttributeOption::KIND_PROPERTY_CLASS,
-                        ItemPropertyClass::resolve((string) ($get('property_class') ?? '')),
-                    ))
-                    ->searchable()
-                    ->live()
-                    ->afterStateUpdated(function ($state, callable $set, Get $get): void {
-                        if (blank($state) || filled($get('estimated_useful_life'))) {
-                            return;
-                        }
+                self::lockedChoice(
+                    Select::make('property_class')
+                        ->hiddenLabel()
+                        ->options(fn (Get $get): array => ItemAttributeOption::optionsForKindIncluding(
+                            ItemAttributeOption::KIND_PROPERTY_CLASS,
+                            $get('property_class'),
+                        ))
+                        ->live(onBlur: true)
+                        ->dehydrateStateUsing(function (mixed $state): ?string {
+                            if (blank($state)) {
+                                return null;
+                            }
 
-                        $default = SemiExpendableUsefulLife::defaultForPropertyClass($state);
-                        if ($default !== null) {
-                            $set('estimated_useful_life', $default);
-                        }
-                    }),
+                            return ItemAttributeOption::resolveStoredValue(
+                                ItemAttributeOption::KIND_PROPERTY_CLASS,
+                                $state,
+                            ) ?? trim((string) $state);
+                        })
+                        ->afterStateUpdated(function (mixed $state, Set $set): void {
+                            if (blank($state)) {
+                                return;
+                            }
+
+                            $resolved = ItemAttributeOption::resolveStoredValue(
+                                ItemAttributeOption::KIND_PROPERTY_CLASS,
+                                $state,
+                            );
+                            if ($resolved !== null && $resolved !== $state) {
+                                $set('property_class', $resolved);
+                            }
+                        }),
+                ),
                 Select::make('uacs_object_code_id')
                     ->hiddenLabel()
                     ->options(fn (): array => self::uacsOptions())
@@ -249,23 +265,33 @@ class ItemBulkCreateAction
     {
         return [
             [
-                TableColumn::make('Item family')->markAsRequired()->width('13%'),
-                TableColumn::make('Variant')->width('8%'),
-                TableColumn::make('Unit')->markAsRequired()->width('6.5rem'),
-                TableColumn::make('Reorder Point')->markAsRequired()->width('6.5rem'),
-                TableColumn::make('Type of PPE')->markAsRequired()->width('13%'),
-                TableColumn::make('UACS Object Code')->markAsRequired()->width('13%'),
-                TableColumn::make('Description')->width('16%'),
+                TableColumn::make('Item family')->markAsRequired()->width('16%'),
+                TableColumn::make('Variant')->width('11%'),
+                TableColumn::make('Unit')->markAsRequired()->width('8%'),
+                TableColumn::make('Type of PPE')->markAsRequired()->width('20%'),
+                TableColumn::make('UACS Object Code')->markAsRequired()->width('22%'),
+                TableColumn::make('Description')->width('17%'),
             ],
             [
                 ...self::commonLeadingFields($categoryId),
-                Select::make('ppe_type')
-                    ->hiddenLabel()
-                    ->options(fn (Get $get): array => ItemAttributeOption::optionsForKindIncluding(
-                        ItemAttributeOption::KIND_PPE_TYPE,
-                        PpePropertyType::resolve((string) ($get('ppe_type') ?? '')),
-                    ))
-                    ->searchable(),
+                self::lockedChoice(
+                    Select::make('ppe_type')
+                        ->hiddenLabel()
+                        ->options(fn (Get $get): array => ItemAttributeOption::optionsForKindIncluding(
+                            ItemAttributeOption::KIND_PPE_TYPE,
+                            $get('ppe_type'),
+                        ))
+                        ->dehydrateStateUsing(function (mixed $state): ?string {
+                            if (blank($state)) {
+                                return null;
+                            }
+
+                            return ItemAttributeOption::resolveStoredValue(
+                                ItemAttributeOption::KIND_PPE_TYPE,
+                                $state,
+                            ) ?? trim((string) $state);
+                        }),
+                ),
                 Select::make('uacs_object_code_id')
                     ->hiddenLabel()
                     ->options(fn (): array => self::uacsOptions())
@@ -275,6 +301,15 @@ class ItemBulkCreateAction
                     ->maxLength(500),
             ],
         ];
+    }
+
+    protected static function lockedChoice(Select $select): Select
+    {
+        return $select
+            ->native(false)
+            ->selectablePlaceholder(false)
+            ->placeholder('Select an option')
+            ->extraAttributes(['class' => 'owwa-locked-choice']);
     }
 
     /**
@@ -290,19 +325,15 @@ class ItemBulkCreateAction
             TextInput::make('sub_item')
                 ->hiddenLabel()
                 ->maxLength(255),
-            Select::make('unit')
-                ->hiddenLabel()
-                ->default('piece')
-                ->searchable()
-                ->options(fn (Get $get): array => ItemAttributeOption::optionsForKindIncluding(
-                    ItemAttributeOption::KIND_UNIT,
-                    $get('unit'),
-                )),
-            TextInput::make('reorder_level')
-                ->hiddenLabel()
-                ->numeric()
-                ->default(0)
-                ->minValue(0),
+            self::lockedChoice(
+                Select::make('unit')
+                    ->hiddenLabel()
+                    ->searchable()
+                    ->options(fn (Get $get): array => ItemAttributeOption::optionsForKindIncluding(
+                        ItemAttributeOption::KIND_UNIT,
+                        $get('unit'),
+                    )),
+            ),
         ];
     }
 

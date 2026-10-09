@@ -113,6 +113,13 @@ class OwwaExportFilename
         return self::sanitizeSegment($name).'-'.$date.'.csv';
     }
 
+    public static function pdfExport(string $name, ?DateTimeInterface $at = null): string
+    {
+        $date = Carbon::make($at ?? now())?->format('Y-m-d') ?? now()->format('Y-m-d');
+
+        return self::sanitizeSegment($name).'-'.$date.'.pdf';
+    }
+
     public static function sanitizeSegment(string $value): string
     {
         $sanitized = preg_replace('/[^A-Za-z0-9._-]+/', '_', trim($value));

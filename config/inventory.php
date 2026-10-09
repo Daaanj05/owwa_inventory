@@ -178,6 +178,6 @@ return [
 
     'qr_public_lookup' => env('INVENTORY_QR_PUBLIC_LOOKUP', true),
 
-    'requisition_poll_interval' => env('REQUISITION_POLL_INTERVAL', '60s'),
+    'requisition_poll_interval' => env('REQUISITION_POLL_INTERVAL', '30s'),
 
 ];

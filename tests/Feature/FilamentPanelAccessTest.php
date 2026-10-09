@@ -52,12 +52,16 @@ class FilamentPanelAccessTest extends TestCase
         $this->get('/login')
             ->assertOk()
             ->assertSee('OWWA-4A personnel only. Unauthorized access is strictly prohibited.', false)
+            ->assertDontSee('System Administration', false)
             ->assertDontSee('System administrator portal', false)
             ->assertDontSee('Operations portal', false)
             ->assertDontSee('Use this only if you were sent to the wrong portal.', false);
 
         $this->get('/system-admin/login')
             ->assertOk()
+            ->assertSee('System Administration', false)
+            ->assertSee('OWWA Inventory System - System Admin', false)
+            ->assertDontSee('OWWA Inventory System — System Admin', false)
             ->assertSee('OWWA-4A personnel only. Unauthorized access is strictly prohibited.', false)
             ->assertDontSee('System administrator portal', false)
             ->assertDontSee('Operations portal', false)

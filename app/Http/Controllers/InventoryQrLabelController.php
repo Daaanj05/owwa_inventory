@@ -7,6 +7,7 @@ use App\Models\AcquisitionPaperwork;
 use App\Models\Issuance;
 use App\Models\Item;
 use App\Models\PhysicalCountSession;
+use App\Models\StockOpeningBalanceBatch;
 use App\Models\User;
 use App\Services\AcquisitionUnitService;
 use App\Services\InventoryQrLabelService;
@@ -120,6 +121,32 @@ class InventoryQrLabelController extends Controller
         ])->setPaper('a4', 'portrait');
 
         return $pdf->download(OwwaExportFilename::qrLabel('PhysicalCount', (string) $physicalCountSession->reference_code));
+    }
+
+    public function openingBalance(StockOpeningBalanceBatch $stockOpeningBalanceBatch, InventoryQrLabelService $labels): SymfonyResponse
+    {
+        $this->authorizeSupplyCustodian();
+
+        if (! $stockOpeningBalanceBatch->isConfirmed()) {
+            abort(404, 'QR labels are available after the opening balance is confirmed.');
+        }
+
+        if (! $labels->supportsOpeningBalanceQrLabels($stockOpeningBalanceBatch)) {
+            abort(404, 'QR labels are only available for PPE and semi-expendable opening stock.');
+        }
+
+        $labelRows = $labels->labelsForOpeningBalanceBatch($stockOpeningBalanceBatch);
+
+        if ($labelRows->isEmpty()) {
+            abort(404, 'No inventory units on this opening balance.');
+        }
+
+        $pdf = Pdf::loadView('reports.qr-labels', [
+            'title' => 'Unit QR labels — '.$stockOpeningBalanceBatch->reference_code,
+            'labels' => $labelRows,
+        ])->setPaper('a4', 'portrait');
+
+        return $pdf->download(OwwaExportFilename::qrLabel('OpeningBalance', (string) $stockOpeningBalanceBatch->reference_code));
     }
 
     public function item(Item $item, InventoryQrLabelService $labels): SymfonyResponse

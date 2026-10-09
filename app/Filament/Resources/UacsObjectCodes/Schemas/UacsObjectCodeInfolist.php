@@ -2,7 +2,7 @@
 
 namespace App\Filament\Resources\UacsObjectCodes\Schemas;
 
-use App\Support\ItemPropertyClass;
+use App\Models\ItemAttributeOption;
 use Filament\Infolists\Components\TextEntry;
 
 class UacsObjectCodeInfolist
@@ -19,7 +19,9 @@ class UacsObjectCodeInfolist
                 ->columnSpanFull(),
             TextEntry::make('property_class')
                 ->label('Property class')
-                ->formatStateUsing(fn (?string $state): string => ItemPropertyClass::options()[$state] ?? ($state ?: '—'))
+                ->formatStateUsing(fn (?string $state): string => filled($state)
+                    ? ItemAttributeOption::labelFor(ItemAttributeOption::KIND_PROPERTY_CLASS, $state)
+                    : '—')
                 ->placeholder('—'),
             TextEntry::make('status')
                 ->label('Status')

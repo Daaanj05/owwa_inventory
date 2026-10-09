@@ -145,6 +145,7 @@ class IssuancesTable
                         IssuanceResource::modalDetailSections(),
                     ),
                     [
+                        IssuanceViewActions::extendUsefulLifeAction(),
                         IssuanceViewActions::exportOwwaAction(),
                         IssuanceViewActions::exportPdfAction(),
                         IssuanceViewActions::printQrLabelAction(),

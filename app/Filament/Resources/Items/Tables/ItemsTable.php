@@ -195,13 +195,15 @@ class ItemsTable
                 ->grow(false);
         }
 
-        $columns[] = TextColumn::make('reorder_level')
-            ->label('Reorder point')
-            ->numeric()
-            ->sortable()
-            ->width('5rem')
-            ->extraAttributes(['class' => 'owwa-item-reorder-column'])
-            ->grow(false);
+        if (self::isActiveConsumablesCategory()) {
+            $columns[] = TextColumn::make('reorder_level')
+                ->label('Reorder point')
+                ->numeric()
+                ->sortable()
+                ->width('5rem')
+                ->extraAttributes(['class' => 'owwa-item-reorder-column'])
+                ->grow(false);
+        }
 
         return $columns;
     }

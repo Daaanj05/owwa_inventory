@@ -103,6 +103,7 @@ class PhysicalCountSessionViewPresenterTest extends TestCase
         $html = (string) PhysicalCountSessionViewPresenter::qrWorkflowStepsHtml();
 
         $this->assertStringContainsString('After You Save This Session:', $html);
+        $this->assertStringContainsString('Scan property QR tags with a phone or tablet.', $html);
         $this->assertStringContainsString('1. Load Expected Assets — pulls issued property numbers', $html);
         $this->assertStringContainsString('3. Scan With Phone — each tag found increments on-hand count.', $html);
     }
