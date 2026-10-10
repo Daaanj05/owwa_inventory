@@ -12,6 +12,7 @@ use App\Notifications\UserWelcomeNotification;
 use App\Services\PasswordResetRequestService;
 use App\Support\FriendlyMessages;
 use App\Support\MailDelivery;
+use App\Support\TemporaryPassword;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ListRecords;
 use Filament\Schemas\Components\EmbeddedTable;
@@ -21,7 +22,6 @@ use Filament\Schemas\Schema;
 use Filament\View\PanelsRenderHook;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Support\Str;
 
 class ListUsers extends ListRecords
 {
@@ -79,7 +79,7 @@ class ListUsers extends ListRecords
                 ->label('New Users')
                 ->extraModalWindowAttributes(['class' => OwwaFormModalDefaults::MODAL_WINDOW_CLASS.' owwa-user-form-modal'])
                 ->mutateDataUsing(function (array $data) use (&$generatedPassword, &$pendingAssignments): array {
-                    $generatedPassword = $this->generateTemporaryPassword();
+                    $generatedPassword = TemporaryPassword::generate();
                     $data['password'] = $generatedPassword;
                     $data['email_verified_at'] = null;
                     $data['must_change_password'] = true;
@@ -137,17 +137,5 @@ class ListUsers extends ListRecords
     protected function setupActiveTabArchivedCount(): int
     {
         return (int) UserResource::getEloquentQuery()->where('role', User::ROLE_SYSTEM_ADMIN)->count();
-    }
-
-    protected function generateTemporaryPassword(): string
-    {
-        $upper = strtoupper(Str::random(1));
-        $lower = strtolower(Str::random(3));
-        $digits = (string) random_int(1000, 9999);
-        $symbols = '!@#$%&*';
-        $symbol = $symbols[random_int(0, strlen($symbols) - 1)];
-        $tail = Str::random(4);
-
-        return str_shuffle($upper.$lower.$digits.$symbol.$tail);
     }
 }

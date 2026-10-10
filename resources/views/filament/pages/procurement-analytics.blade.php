@@ -47,7 +47,7 @@
                 Suggested reorders compare consumable issuances with current stock and the reorder point.
                 Replacement due lists semi-expendable units that are nearing or past useful life.
                 Use the left and right buttons to switch lists. A useful-life date alone does not create a purchase.
-                <strong>High</strong> means under ~1 month of cover or below reorder. <strong>Medium</strong> means ~1–3 months.
+                <strong>High</strong> means under ~1 month of cover or at or below reorder. <strong>Medium</strong> means ~1–3 months.
             </p>
         </details>
     </div>

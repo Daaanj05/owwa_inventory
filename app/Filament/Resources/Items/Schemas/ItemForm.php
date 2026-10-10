@@ -63,7 +63,35 @@ class ItemForm
                                 return Item::familySuggestionsForCategory($categoryId);
                             })
                             ->live(onBlur: true)
-                            ->helperText('Pick an existing name or type a new one (e.g. Bond Paper).'),
+                            ->helperText('Pick an existing name or type a new one (e.g. Bond Paper).')
+                            ->rule(function (Get $get, ?Item $record = null) {
+                                return function (string $attribute, mixed $value, \Closure $fail) use ($get, $record): void {
+                                    $categoryId = filled($get('item_category_id'))
+                                        ? (int) $get('item_category_id')
+                                        : (int) (self::activeCategoryId() ?? 0);
+                                    $baseName = Item::normalizeFamilyName((string) $value, $categoryId);
+                                    $subItem = filled($get('sub_item')) ? trim((string) $get('sub_item')) : null;
+                                    $name = Item::mergeDisplayName($baseName, $subItem);
+
+                                    if ($name === '' || $categoryId <= 0) {
+                                        return;
+                                    }
+
+                                    $existing = Item::query()
+                                        ->active()
+                                        ->where('item_category_id', $categoryId)
+                                        ->when(
+                                            $record instanceof Item,
+                                            fn ($query) => $query->whereKeyNot($record->getKey()),
+                                        )
+                                        ->get(['name'])
+                                        ->first(fn (Item $item): bool => mb_strtolower((string) $item->name) === mb_strtolower($name));
+
+                                    if ($existing instanceof Item) {
+                                        $fail("Item already exists in this category: {$existing->name}.");
+                                    }
+                                };
+                            }),
                         TextInput::make('sub_item')
                             ->label('Variant')
                             ->maxLength(255)

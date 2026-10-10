@@ -147,7 +147,7 @@ class ProcurementDecisionSupportServiceTest extends TestCase
         $this->assertSame(2, $match->suggested_reorder_qty);
     }
 
-    public function test_stock_equal_to_reorder_without_usage_is_not_at_risk(): void
+    public function test_stock_equal_to_reorder_without_usage_is_at_risk(): void
     {
         $office = Office::factory()->create();
         $category = ItemCategory::factory()->create();
@@ -166,7 +166,10 @@ class ProcurementDecisionSupportServiceTest extends TestCase
             limit: 50,
         );
 
-        $this->assertNull($rows->first(fn ($row) => $row->item_id === $item->id));
+        $match = $rows->first(fn ($row) => $row->item_id === $item->id);
+        $this->assertNotNull($match);
+        $this->assertSame('High', $match->priority);
+        $this->assertSame(1, $match->suggested_reorder_qty);
     }
 
     public function test_forecast_uses_twelve_month_lookback_when_ui_window_is_short(): void

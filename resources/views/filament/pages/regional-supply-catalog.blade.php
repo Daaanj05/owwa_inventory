@@ -5,6 +5,7 @@
     $sortDir = $this->sortDir;
     $officeName = $this->getSupplyOfficeName();
     $categories = $this->getCategoryOptions();
+    $showReorderKpi = $this->showsConsumableReorderKpi();
 @endphp
 
 <x-filament-panels::page>
@@ -18,19 +19,27 @@
                 </div>
             </div>
             <div class="owwa-kpi-card owwa-kpi-card-ok">
-                <span class="owwa-kpi-tooltip">Items above reorder level at regional supply.</span>
+                <span class="owwa-kpi-tooltip">
+                    @if ($showReorderKpi)
+                        Items above reorder level at regional supply.
+                    @else
+                        Items with available stock at regional supply.
+                    @endif
+                </span>
                 <div class="owwa-kpi-card-inner">
                     <span class="owwa-kpi-card-value">{{ number_format($summary['okCount']) }}</span>
                     <span class="owwa-kpi-card-label">In stock</span>
                 </div>
             </div>
-            <div class="owwa-kpi-card owwa-kpi-card-low">
-                <span class="owwa-kpi-tooltip">Items at or below reorder level at regional supply.</span>
-                <div class="owwa-kpi-card-inner">
-                    <span class="owwa-kpi-card-value">{{ number_format($summary['lowCount']) }}</span>
-                    <span class="owwa-kpi-card-label">Low stock</span>
+            @if ($showReorderKpi)
+                <div class="owwa-kpi-card owwa-kpi-card-low">
+                    <span class="owwa-kpi-tooltip">Items at or below reorder level at regional supply.</span>
+                    <div class="owwa-kpi-card-inner">
+                        <span class="owwa-kpi-card-value">{{ number_format($summary['lowCount']) }}</span>
+                        <span class="owwa-kpi-card-label">Low stock</span>
+                    </div>
                 </div>
-            </div>
+            @endif
         </div>
 
         <div class="owwa-search-wrap" style="display:flex;gap:0.75rem;flex-wrap:wrap;align-items:center;">

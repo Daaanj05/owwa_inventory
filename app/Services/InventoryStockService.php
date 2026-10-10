@@ -145,7 +145,7 @@ class InventoryStockService
                 continue;
             }
 
-            if ($this->getStock($itemId, $officeId) < (int) $items[$itemId]) {
+            if ($this->getStock($itemId, $officeId) <= (int) $items[$itemId]) {
                 $count++;
             }
         }
@@ -206,7 +206,7 @@ class InventoryStockService
                 continue;
             }
 
-            if ($stock < (int) $items[$itemId]) {
+            if ($stock <= (int) $items[$itemId]) {
                 $count++;
             }
         }
@@ -307,7 +307,7 @@ class InventoryStockService
 
         $stock = $this->getStock($item->id, $officeId);
 
-        return $stock < $item->reorder_level && $item->reorder_level > 0;
+        return $stock <= $item->reorder_level && $item->reorder_level > 0;
     }
 
     /**
@@ -660,7 +660,7 @@ class InventoryStockService
                 $aggregate = $aggregateStockByPair[$pairKey] ?? $row->stock;
                 $row->is_low = ($row->tracks_reorder ?? false)
                     && $row->reorder_level > 0
-                    && $aggregate < $row->reorder_level;
+                    && $aggregate <= $row->reorder_level;
 
                 return $row;
             })
@@ -743,7 +743,7 @@ class InventoryStockService
         foreach ($positionStocks as $position) {
             $pairKey = "{$position['item_id']}_{$position['office_id']}";
             $aggregate = $aggregateStockByPair[$pairKey] ?? $position['stock'];
-            if ($tracksReorder && $position['reorder_level'] > 0 && $aggregate < $position['reorder_level']) {
+            if ($tracksReorder && $position['reorder_level'] > 0 && $aggregate <= $position['reorder_level']) {
                 $lowCount++;
             }
         }
@@ -1041,7 +1041,7 @@ class InventoryStockService
                     'tracks_reorder' => (bool) ($first->tracks_reorder ?? false),
                     'is_low' => (bool) ($first->tracks_reorder ?? false)
                         && (int) ($first->reorder_level ?? 0) > 0
-                        && $stock < (int) ($first->reorder_level ?? 0),
+                        && $stock <= (int) ($first->reorder_level ?? 0),
                     'is_inactive_for_restock' => $allInactive,
                     'inactive_source' => $allInactive ? ($first->inactive_source ?? null) : ($anyInactive ? 'mixed' : null),
                     'restock_status_label' => $allInactive

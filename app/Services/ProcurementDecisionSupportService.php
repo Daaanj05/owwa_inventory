@@ -398,7 +398,7 @@ class ProcurementDecisionSupportService
 
                 $currentStock = $this->stockService->getActiveRestockStock((int) $item->id, (int) $office->id);
                 $legacyOnHand = $this->stockService->getLegacyOnHandStock((int) $item->id, (int) $office->id);
-                if ($currentStock >= (int) $item->reorder_level) {
+                if ($currentStock > (int) $item->reorder_level) {
                     continue;
                 }
 
@@ -517,7 +517,7 @@ class ProcurementDecisionSupportService
             ? (int) max(0, ceil(($targetCoverMonths * $forecastMonthly) - $currentStock))
             : 0;
 
-        $reorderFloor = ($reorderLevel > 0 && $currentStock < $reorderLevel)
+        $reorderFloor = ($reorderLevel > 0 && $currentStock <= $reorderLevel)
             ? max(1, $reorderLevel - $currentStock)
             : 0;
 
@@ -528,7 +528,7 @@ class ProcurementDecisionSupportService
 
     protected function priorityFor(float $monthsCover, int $reorderLevel, int $currentStock): string
     {
-        if ($reorderLevel > 0 && $currentStock < $reorderLevel) {
+        if ($reorderLevel > 0 && $currentStock <= $reorderLevel) {
             return 'High';
         }
 

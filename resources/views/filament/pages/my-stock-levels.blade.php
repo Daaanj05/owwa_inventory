@@ -80,13 +80,12 @@
                                     ];
                                     $columns['restock_status'] = 'Restock';
                                     $columns['stock'] = 'Stock';
-                                    $columns['reorder_level'] = 'Reorder';
                                 @endphp
                                 @foreach($columns as $col => $label)
                                     <th
                                         wire:click="sortByColumn('{{ $col }}')"
                                         style="cursor: pointer; user-select: none;"
-                                        class="{{ in_array($col, ['stock', 'reorder_level']) ? 'owwa-num' : '' }}"
+                                        class="{{ $col === 'stock' ? 'owwa-num' : '' }}"
                                     >
                                         {{ $label }}
                                         @if($sortBy === $col)
@@ -110,7 +109,6 @@
                                         @endif
                                     </td>
                                     <td class="owwa-num {{ $row->is_low ? 'owwa-cell-danger' : 'owwa-cell-primary' }}">{{ number_format($row->stock) }}</td>
-                                    <td class="owwa-num owwa-cell-muted">{{ number_format($row->reorder_level) }}</td>
                                     <td class="owwa-status">
                                         @if($row->is_low)
                                             <span class="owwa-status-badge owwa-status-low">Low</span>
@@ -121,7 +119,7 @@
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="6">
+                                    <td colspan="5">
                                         <div class="owwa-empty">
                                             <svg class="owwa-empty-icon" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
                                                 <path stroke-linecap="round" stroke-linejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" />

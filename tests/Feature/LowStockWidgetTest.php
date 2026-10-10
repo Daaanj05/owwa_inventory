@@ -18,6 +18,7 @@ use App\Services\AcquisitionUnitService;
 use App\Support\DashboardKpiCache;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Livewire\Livewire;
 use Tests\TestCase;
 
@@ -269,6 +270,60 @@ class LowStockWidgetTest extends TestCase
         $this->assertStringContainsString('Regional Low Item', $html);
         $this->assertStringNotContainsString('Satellite Low Item', $html);
         $this->assertStringContainsString('1 low-stock item', $html);
+        $this->assertStringContainsString('at or below reorder point', $html);
+        $this->assertStringContainsString('Reorder point', $html);
+        $this->assertStringNotContainsString('All categories', $html);
+    }
+
+    public function test_supply_custodian_useful_life_due_kpi_opens_modal_without_category_filter(): void
+    {
+        $office = Office::factory()->create();
+        $semi = ItemCategory::factory()->create(['name' => 'Semi-Expendable']);
+        $user = User::factory()->create([
+            'role' => User::ROLE_SUPPLY_CUSTODIAN,
+            'office_id' => $office->id,
+            'email_verified_at' => now(),
+        ]);
+        $holder = User::factory()->create([
+            'name' => 'Useful Life Holder',
+            'office_id' => $office->id,
+            'email_verified_at' => now(),
+        ]);
+        $item = Item::factory()->create([
+            'item_category_id' => $semi->id,
+            'name' => 'Chair Past Life',
+        ]);
+
+        DB::table('issuances')->insert([
+            'reference_code' => 'ISS-KPI-EUL',
+            'item_id' => $item->id,
+            'office_id' => $office->id,
+            'quantity' => 1,
+            'issuance_date' => now()->subYears(4)->toDateString(),
+            'estimated_useful_life' => '36 months',
+            'eul_expires_at' => now()->subDay()->toDateString(),
+            'property_number' => 'SEMI-KPI-1',
+            'issued_to' => $holder->id,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAs($user);
+
+        $component = Livewire::test(LowStockWidget::class)
+            ->assertOk()
+            ->assertSee('Useful Life Due')
+            ->assertSee('Nearing or past useful life')
+            ->mountAction('viewUsefulLifeDue')
+            ->assertActionMounted('viewUsefulLifeDue');
+
+        $html = (string) $component->instance()->getMountedAction()?->getModalContent();
+        $this->assertStringContainsString('Chair Past Life', $html);
+        $this->assertStringContainsString('SEMI-KPI-1', $html);
+        $this->assertStringContainsString('Useful Life Holder', $html);
+        $this->assertStringContainsString('Expired', $html);
+        $this->assertStringNotContainsString('All categories', $html);
+        $this->assertStringNotContainsString('Reorder point', $html);
     }
 
     public function test_supply_custodian_pending_kpi_uses_sql_counts_matching_modal_rows(): void

@@ -18,7 +18,11 @@
     $restockFilter = $this->restockFilter;
     $categorySlug = $this->categoryRecord?->getTemplateSlug();
     $isSemiExpendable = $categorySlug === 'semi_expendable';
+    $isPpe = $categorySlug === 'ppe';
     $showReorder = $categorySlug === null || $categorySlug === 'consumables';
+    $showUsefulLifeDue = $isSemiExpendable;
+    $usefulLifeDueCount = $showUsefulLifeDue ? $this->usefulLifeDueCount() : 0;
+    $kpiGridClass = $isPpe ? 'owwa-kpi-grid' : 'owwa-kpi-grid owwa-kpi-grid--4';
     $propertyClassOptions = ItemPropertyClass::options();
 @endphp
 
@@ -32,7 +36,7 @@
         })"
     >
         {{-- KPI cards row --}}
-        <div class="owwa-kpi-grid owwa-kpi-grid--4">
+        <div class="{{ $kpiGridClass }}">
             <div class="owwa-kpi-card owwa-kpi-card-total">
                 <span class="owwa-kpi-tooltip">Number of listed items in this category.</span>
                 <div class="owwa-kpi-card-inner">
@@ -47,13 +51,23 @@
                     <span class="owwa-kpi-card-label">In stock</span>
                 </div>
             </div>
-            <div class="owwa-kpi-card owwa-kpi-card-low">
-                <span class="owwa-kpi-tooltip">Number of listed items currently at or below reorder level.</span>
-                <div class="owwa-kpi-card-inner">
-                    <span class="owwa-kpi-card-value">{{ number_format($lowCount) }}</span>
-                    <span class="owwa-kpi-card-label">Low stock</span>
+            @if ($showReorder)
+                <div class="owwa-kpi-card owwa-kpi-card-low">
+                    <span class="owwa-kpi-tooltip">Number of listed items currently at or below reorder level.</span>
+                    <div class="owwa-kpi-card-inner">
+                        <span class="owwa-kpi-card-value">{{ number_format($lowCount) }}</span>
+                        <span class="owwa-kpi-card-label">Low stock</span>
+                    </div>
                 </div>
-            </div>
+            @elseif ($showUsefulLifeDue)
+                <div class="owwa-kpi-card {{ $usefulLifeDueCount > 0 ? 'owwa-kpi-card-low' : 'owwa-kpi-card-ok' }}">
+                    <span class="owwa-kpi-tooltip">Issued semi-expendable units nearing or past useful life.</span>
+                    <div class="owwa-kpi-card-inner">
+                        <span class="owwa-kpi-card-value">{{ number_format($usefulLifeDueCount) }}</span>
+                        <span class="owwa-kpi-card-label">Useful Life Due</span>
+                    </div>
+                </div>
+            @endif
             <div class="owwa-kpi-card owwa-kpi-card-total">
                 <span class="owwa-kpi-tooltip">
                     @if ($usesTaggedUnits)

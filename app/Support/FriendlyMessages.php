@@ -31,6 +31,33 @@ final class FriendlyMessages
         );
     }
 
+    public static function verificationResendWithPasswordSent(string $email, string $temporaryPassword): string
+    {
+        return sprintf(
+            'A new verification email was sent to %s. It includes a new temporary password (backup): %s',
+            $email,
+            $temporaryPassword,
+        );
+    }
+
+    public static function verificationResendWithPasswordQueued(string $email, string $temporaryPassword): string
+    {
+        return sprintf(
+            'Verification email queued for %s and will arrive shortly when the mail worker is running. It includes a new temporary password (backup): %s',
+            $email,
+            $temporaryPassword,
+        );
+    }
+
+    public static function verificationResendWithPasswordFailed(string $email, string $temporaryPassword): string
+    {
+        return sprintf(
+            'We could not send the verification email right now. Share these credentials manually — Email: %s · New temporary password: %s',
+            $email,
+            $temporaryPassword,
+        );
+    }
+
     public static function verificationResendSent(string $email): string
     {
         return sprintf('A new verification link was sent to %s.', $email);

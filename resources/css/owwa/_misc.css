@@ -386,19 +386,22 @@
     height: 2.5rem;
     border-radius: 9999px;
     border: none;
-    background: rgba(255, 255, 255, 0.12);
-    color: #fff !important;
+    background: #ffffff;
+    color: #003366 !important;
     cursor: pointer;
     transition: background-color 0.15s ease;
 }
 
 .owwa-notif-trigger:hover {
-    background: rgba(255, 255, 255, 0.22);
+    background: #e8eef5;
 }
 
-.owwa-notif-trigger-icon {
+.owwa-notif-trigger-icon,
+.owwa-notif-trigger svg {
     width: 1.35rem;
     height: 1.35rem;
+    color: #003366 !important;
+    stroke: currentColor;
 }
 
 .owwa-notif-badge {

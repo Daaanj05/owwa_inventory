@@ -3,6 +3,7 @@
 namespace App\Filament\Widgets;
 
 use App\Filament\Concerns\SyncsActiveItemCategory;
+use App\Filament\Pages\ProcurementAnalytics;
 use App\Filament\Pages\StockLevels;
 use App\Filament\Resources\Acquisitions\PurchaseOrders\PurchaseOrderResource;
 use App\Filament\Resources\Requisitions\RequisitionResource;
@@ -13,8 +14,8 @@ use App\Models\PurchaseOrder;
 use App\Models\Requisition;
 use App\Models\User;
 use App\Services\InventoryStockService;
+use App\Services\SemiExpendableEulAnalyticsService;
 use App\Support\DashboardKpiCache;
-use App\Support\InventoryCategoryOptions;
 use Filament\Actions\Action;
 use Filament\Actions\Concerns\InteractsWithActions;
 use Filament\Actions\Contracts\HasActions;
@@ -23,6 +24,7 @@ use Filament\Support\Enums\Width;
 use Filament\Widgets\StatsOverviewWidget;
 use Filament\Widgets\StatsOverviewWidget\Stat;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\HtmlString;
 
@@ -46,7 +48,7 @@ class LowStockWidget extends StatsOverviewWidget implements HasActions
 
     public int $kpiIncomingPage = 1;
 
-    public ?int $kpiLowStockCategoryId = null;
+    public int $kpiUsefulLifePage = 1;
 
     protected const int KPI_PER_PAGE = 10;
 
@@ -71,7 +73,7 @@ class LowStockWidget extends StatsOverviewWidget implements HasActions
             return [
                 'default' => 1,
                 'md' => 2,
-                'xl' => 3,
+                'xl' => 4,
             ];
         }
 
@@ -86,16 +88,7 @@ class LowStockWidget extends StatsOverviewWidget implements HasActions
             'low_stock' => $this->kpiLowStockPage = $page,
             'pending' => $this->kpiPendingPage = $page,
             'incoming' => $this->kpiIncomingPage = $page,
-            default => null,
-        };
-    }
-
-    public function setKpiCategory(string $key, ?string $categoryId): void
-    {
-        $resolved = filled($categoryId) ? (int) $categoryId : null;
-
-        match ($key) {
-            'low_stock' => [$this->kpiLowStockCategoryId = $resolved, $this->kpiLowStockPage = 1],
+            'useful_life' => $this->kpiUsefulLifePage = $page,
             default => null,
         };
     }
@@ -120,7 +113,7 @@ class LowStockWidget extends StatsOverviewWidget implements HasActions
 
         return [
             Stat::make('Low stock', $lowStockCount)
-                ->description(($lowStockCount > 0 ? 'Below reorder point' : 'All stocks healthy').$scopeLabel)
+                ->description(($lowStockCount > 0 ? 'At or below reorder point' : 'All stocks healthy').$scopeLabel)
                 ->descriptionIcon($lowStockCount > 0 ? 'heroicon-o-exclamation-triangle' : 'heroicon-o-check-circle')
                 ->color($lowStockCount > 0 ? 'warning' : 'success')
                 ->extraAttributes(['class' => 'owwa-kpi-square'], true),
@@ -158,6 +151,7 @@ class LowStockWidget extends StatsOverviewWidget implements HasActions
 
         $pendingCount = $kpiCounts['pending'];
         $ordersToInspectCount = $kpiCounts['orders_to_inspect'];
+        $usefulLifeDueCount = $this->usefulLifeDueCount();
 
         return [
             Stat::make('Items running low', $lowStockCount)
@@ -167,6 +161,18 @@ class LowStockWidget extends StatsOverviewWidget implements HasActions
                 ->extraAttributes([
                     'class' => 'cursor-pointer owwa-stat-clickable owwa-kpi-square',
                     'wire:click' => "mountAction('viewLowStock')",
+                    'title' => 'Click to view details',
+                ], merge: true),
+
+            Stat::make('Useful Life Due', $usefulLifeDueCount)
+                ->description($usefulLifeDueCount > 0
+                    ? 'Nearing or past useful life'
+                    : 'All within useful life')
+                ->descriptionIcon($usefulLifeDueCount > 0 ? 'heroicon-o-clock' : 'heroicon-o-check-circle')
+                ->color($usefulLifeDueCount > 0 ? 'warning' : 'success')
+                ->extraAttributes([
+                    'class' => 'cursor-pointer owwa-stat-clickable owwa-kpi-square',
+                    'wire:click' => "mountAction('viewUsefulLifeDue')",
                     'title' => 'Click to view details',
                 ], merge: true),
 
@@ -202,6 +208,17 @@ class LowStockWidget extends StatsOverviewWidget implements HasActions
             fn (): array => $this->lowStockDetail(),
             StockLevels::getUrl(),
             'Open Stock Levels',
+        );
+    }
+
+    public function viewUsefulLifeDueAction(): Action
+    {
+        return $this->detailModalAction(
+            'viewUsefulLifeDue',
+            'Useful Life Due',
+            fn (): array => $this->usefulLifeDueDetail(),
+            ProcurementAnalytics::getUrl(),
+            'Open Procurement Recommendation',
         );
     }
 
@@ -261,26 +278,20 @@ class LowStockWidget extends StatsOverviewWidget implements HasActions
      */
     protected function lowStockDetail(): array
     {
-        $rows = $this->lowStockRows($this->kpiLowStockCategoryId);
+        $rows = $this->lowStockRows();
 
         $total = $rows->count();
         $lastPage = max(1, (int) ceil($total / self::KPI_PER_PAGE));
         $page = min(max(1, $this->kpiLowStockPage), $lastPage);
         $slice = $rows->forPage($page, self::KPI_PER_PAGE);
 
-        $selectedLabel = $this->selectedCategoryLabel($this->kpiLowStockCategoryId);
-
         return [
             'summary' => number_format($total).' low-stock item'
                 .($total === 1 ? '' : 's')
-                .($selectedLabel ? " in {$selectedLabel}" : '')
-                .' (below reorder point).',
+                .' (at or below reorder point).',
             'empty_title' => 'All stocks healthy',
-            'empty_desc' => $selectedLabel
-                ? "No {$selectedLabel} items are below their reorder point."
-                : 'No items are currently below their reorder point.',
+            'empty_desc' => 'No items are currently at or below their reorder point.',
             'columns' => [
-                'category' => 'Category',
                 'item' => 'Item',
                 'office' => 'Office',
                 'stock' => 'On hand',
@@ -288,17 +299,11 @@ class LowStockWidget extends StatsOverviewWidget implements HasActions
             ],
             'numeric_keys' => ['stock', 'reorder_level'],
             'rows' => $slice->map(fn (object $row): array => [
-                'category' => $row->category_name,
                 'item' => $row->item_name,
                 'office' => $row->office_name,
                 'stock' => $row->stock,
                 'reorder_level' => $row->reorder_level,
             ])->all(),
-            'category_filter' => [
-                'key' => 'low_stock',
-                'value' => $this->kpiLowStockCategoryId,
-                'options' => InventoryCategoryOptions::allActiveCategoryOptions(),
-            ],
             'pagination' => [
                 'key' => 'low_stock',
                 'current' => $page,
@@ -312,21 +317,20 @@ class LowStockWidget extends StatsOverviewWidget implements HasActions
      * One row per item × office so the modal matches {@see InventoryStockService::lowStockCount()}.
      *
      * @return Collection<int, object{
-     *     category_name: string,
      *     item_name: string,
      *     office_name: string,
      *     stock: int,
      *     reorder_level: int
      * }>
      */
-    protected function lowStockRows(?int $categoryId = null): Collection
+    protected function lowStockRows(): Collection
     {
         $user = Filament::auth()->user();
         $officeIds = $this->stockOfficeIds($user instanceof User ? $user : null);
         $officeId = ($officeIds !== null && count($officeIds) === 1) ? $officeIds[0] : null;
 
         return app(InventoryStockService::class)
-            ->getStockLevelsList($categoryId, $officeId)
+            ->getStockLevelsList(null, $officeId)
             ->when(
                 $officeIds !== null && $officeId === null,
                 fn (Collection $rows): Collection => $rows->filter(
@@ -339,24 +343,73 @@ class LowStockWidget extends StatsOverviewWidget implements HasActions
                 $first = $group->first();
 
                 return (object) [
-                    'category_name' => $first->category_name,
                     'item_name' => $first->item_name,
                     'office_name' => $first->office_name,
                     'stock' => (int) $group->sum('stock'),
                     'reorder_level' => (int) $first->reorder_level,
                 ];
             })
-            ->sortBy(['category_name', 'item_name', 'office_name'])
+            ->sortBy(['item_name', 'office_name'])
             ->values();
     }
 
-    protected function selectedCategoryLabel(?int $categoryId): ?string
+    protected function usefulLifeDueCount(): int
     {
-        if ($categoryId === null) {
-            return null;
-        }
+        return $this->usefulLifeDueRows()->count();
+    }
 
-        return ItemCategory::query()->whereKey($categoryId)->value('name');
+    /**
+     * @return Collection<int, object>
+     */
+    protected function usefulLifeDueRows(): Collection
+    {
+        $user = Filament::auth()->user();
+        $officeIds = $this->stockOfficeIds($user instanceof User ? $user : null) ?? [];
+
+        return app(SemiExpendableEulAnalyticsService::class)->dueRows($officeIds);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function usefulLifeDueDetail(): array
+    {
+        $rows = $this->usefulLifeDueRows();
+        $total = $rows->count();
+        $lastPage = max(1, (int) ceil($total / self::KPI_PER_PAGE));
+        $page = min(max(1, $this->kpiUsefulLifePage), $lastPage);
+        $slice = $rows->forPage($page, self::KPI_PER_PAGE);
+
+        return [
+            'summary' => number_format($total).' semi-expendable unit'
+                .($total === 1 ? '' : 's')
+                .' nearing or past useful life.',
+            'empty_title' => 'All within useful life',
+            'empty_desc' => 'No issued semi-expendable units are nearing or past useful life.',
+            'columns' => [
+                'item' => 'Item',
+                'property_number' => 'Property number',
+                'issued_to' => 'Issued to',
+                'expires' => 'Expires',
+                'status' => 'Status',
+            ],
+            'numeric_keys' => [],
+            'rows' => $slice->map(fn (object $row): array => [
+                'item' => $row->item_name,
+                'property_number' => $row->property_number,
+                'issued_to' => $row->issued_to_name,
+                'expires' => filled($row->eul_expires_at)
+                    ? Carbon::parse($row->eul_expires_at)->format('M j, Y')
+                    : null,
+                'status' => $row->status_label,
+            ])->all(),
+            'pagination' => [
+                'key' => 'useful_life',
+                'current' => $page,
+                'last' => $lastPage,
+                'total' => $total,
+            ],
+        ];
     }
 
     /**

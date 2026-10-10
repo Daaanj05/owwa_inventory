@@ -142,7 +142,7 @@ class InventoryStockServiceTest extends TestCase
         $this->assertSame(1, $this->service->lowStockCount());
     }
 
-    public function test_stock_equal_to_reorder_is_not_low_stock(): void
+    public function test_stock_equal_to_reorder_is_low_stock(): void
     {
         $category = ItemCategory::factory()->create();
         $item = Item::factory()->create([
@@ -153,11 +153,11 @@ class InventoryStockServiceTest extends TestCase
 
         $this->createAcquisition($item->id, $office->id, 30);
 
-        $this->assertFalse($this->service->isLowStock($item, $office->id));
+        $this->assertTrue($this->service->isLowStock($item, $office->id));
 
         $list = $this->service->getStockLevelsList();
-        $this->assertFalse($list->first()->is_low);
-        $this->assertSame(0, $this->service->lowStockCount());
+        $this->assertTrue($list->first()->is_low);
+        $this->assertSame(1, $this->service->lowStockCount());
     }
 
     public function test_is_low_stock_returns_false_without_inventory_activity(): void

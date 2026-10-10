@@ -99,7 +99,7 @@ class MyStockLevels extends Page
 
     public function sortByColumn(string $column): void
     {
-        $allowed = ['item_name', 'category_name', 'stock', 'reorder_level'];
+        $allowed = ['item_name', 'category_name', 'stock'];
 
         if (! in_array($column, $allowed, true)) {
             return;

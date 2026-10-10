@@ -1,7 +1,11 @@
 <x-mail::message :logo-message="$message ?? null">
 # Welcome, {{ $user->name }}
 
+@if ($passwordRenewed)
+Your previous verification link expired. A new link and a new temporary password are below. The earlier temporary password no longer works.
+@else
 Your account for the **OWWA Region IV-A Inventory System** has been created.
+@endif
 
 <x-mail::button :url="$verificationUrl">
 Verify email address

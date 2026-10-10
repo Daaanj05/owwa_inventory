@@ -13,6 +13,7 @@ use App\Models\Office;
 use App\Models\StockPositionRestockFlag;
 use App\Services\InventoryStockService;
 use App\Services\OwwaItemReportService;
+use App\Services\SemiExpendableEulAnalyticsService;
 use App\Services\StockCardExportStatusService;
 use App\Services\StockLedgerViewService;
 use App\Services\StockLevelExportService;
@@ -1435,6 +1436,19 @@ class StockLevels extends Page
             $this->sortBy = $column;
             $this->sortDir = 'asc';
         }
+    }
+
+    public function usefulLifeDueCount(): int
+    {
+        if ($this->categoryRecord?->getTemplateSlug() !== 'semi_expendable') {
+            return 0;
+        }
+
+        $officeId = Filament::auth()->user()?->office_id;
+
+        return app(SemiExpendableEulAnalyticsService::class)
+            ->dueRows($officeId !== null ? [(int) $officeId] : [])
+            ->count();
     }
 
     /** @return array{total: int, totalStockQty: int, lowCount: int, okCount: int} */

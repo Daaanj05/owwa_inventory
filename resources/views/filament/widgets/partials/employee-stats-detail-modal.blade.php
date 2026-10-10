@@ -1,5 +1,5 @@
 @php
-    /** @var array{summary: string|null, empty_title: string, empty_desc: string, columns: array<string, string>, numeric_keys: array<int, string>, rows?: array<int, array<string, mixed>>, sections?: array<int, array{heading: string, columns?: array<string, string>, rows: array<int, array<string, mixed>>}>, category_filter?: array{key: string, value: int|null, options: array<int, string>}, pagination?: array{key: string, current: int, last: int, total: int}} $detail */
+    /** @var array{summary: string|null, empty_title: string, empty_desc: string, columns: array<string, string>, numeric_keys: array<int, string>, rows?: array<int, array<string, mixed>>, sections?: array<int, array{heading: string, columns?: array<string, string>, rows: array<int, array<string, mixed>>}>, pagination?: array{key: string, current: int, last: int, total: int}} $detail */
     $summary = $detail['summary'] ?? null;
     $columns = $detail['columns'];
     $rows = $detail['rows'] ?? [];
@@ -8,7 +8,6 @@
     $emptyTitle = $detail['empty_title'] ?? 'No records';
     $emptyDesc = $detail['empty_desc'] ?? 'Nothing to show.';
     $pagination = $detail['pagination'] ?? null;
-    $categoryFilter = $detail['category_filter'] ?? null;
     $hasSections = $sections !== [];
     $isEmpty = $hasSections
         ? collect($sections)->every(fn (array $section): bool => ($section['rows'] ?? []) === [])
@@ -16,26 +15,6 @@
 @endphp
 
 <div class="owwa-stock-ledger-modal">
-    @if (is_array($categoryFilter))
-        <div style="display:flex;align-items:center;gap:0.75rem;margin:0 0 0.75rem;flex-wrap:wrap;">
-            <label for="kpi-category-{{ $categoryFilter['key'] }}" style="font-size:0.8125rem;color:#64748b;font-weight:500;">
-                Category
-            </label>
-            <select
-                id="kpi-category-{{ $categoryFilter['key'] }}"
-                wire:change="setKpiCategory('{{ $categoryFilter['key'] }}', $event.target.value || null)"
-                style="min-width:14rem;border:1px solid #cbd5e1;border-radius:0.375rem;padding:0.375rem 0.625rem;font-size:0.8125rem;background:#fff;color:#0f172a;"
-            >
-                <option value="" @selected(($categoryFilter['value'] ?? null) === null)>All categories</option>
-                @foreach (($categoryFilter['options'] ?? []) as $id => $label)
-                    <option value="{{ $id }}" @selected((int) ($categoryFilter['value'] ?? 0) === (int) $id)>
-                        {{ $label }}
-                    </option>
-                @endforeach
-            </select>
-        </div>
-    @endif
-
     @if (filled($summary))
         <p class="owwa-stock-ledger-header" style="margin:0 0 0.75rem;color:#64748b;font-size:0.8125rem;">
             {{ $summary }}
@@ -48,11 +27,9 @@
                 $sectionColumns = $section['columns'] ?? $columns;
                 $sectionRows = $section['rows'] ?? [];
             @endphp
-            @if (($categoryFilter['value'] ?? null) === null)
-                <h3 style="margin:1rem 0 0.5rem;font-size:0.875rem;font-weight:600;color:#0f172a;">
-                    {{ $section['heading'] }}
-                </h3>
-            @endif
+            <h3 style="margin:1rem 0 0.5rem;font-size:0.875rem;font-weight:600;color:#0f172a;">
+                {{ $section['heading'] }}
+            </h3>
             <div class="owwa-table-wrap owwa-stock-ledger-table-wrap">
                 <table class="owwa-data-table">
                     <thead>

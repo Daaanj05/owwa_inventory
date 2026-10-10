@@ -10,10 +10,13 @@ use App\Filament\Support\OwwaModalSchema;
 use App\Filament\Support\UserAssignmentActionHooks;
 use App\Filament\Support\UserIdentityChangeHooks;
 use App\Models\User;
+use App\Notifications\UserWelcomeNotification;
 use App\Services\PasswordResetRequestService;
 use App\Support\FriendlyMessages;
 use App\Support\MailDelivery;
+use App\Support\MailDeliveryResult;
 use App\Support\OwwaTransactionViewPresenter;
+use App\Support\TemporaryPassword;
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\BulkActionGroup;
@@ -136,37 +139,13 @@ class UsersTable
                             ->icon('heroicon-o-envelope')
                             ->visible(fn (User $record): bool => ! $record->hasVerifiedEmail())
                             ->action(function (User $record): void {
-                                $notification = app(FilamentVerifyEmail::class);
-                                $notification->onQueue('mail');
-                                $notification->url = User::guestEmailVerificationUrlFor($record);
-
-                                $result = MailDelivery::notify($record, $notification);
-
-                                if ($result->success && $result->wasQueued) {
-                                    Notification::make()
-                                        ->title('Verification email queued')
-                                        ->body(FriendlyMessages::verificationResendQueued($record->email))
-                                        ->success()
-                                        ->send();
+                                if ($record->mustChangePassword()) {
+                                    self::resendWelcomeWithNewPassword($record);
 
                                     return;
                                 }
 
-                                if ($result->success) {
-                                    Notification::make()
-                                        ->title('Verification email sent')
-                                        ->body(FriendlyMessages::verificationResendSent($record->email))
-                                        ->success()
-                                        ->send();
-
-                                    return;
-                                }
-
-                                Notification::make()
-                                    ->title('Email could not be sent')
-                                    ->body(FriendlyMessages::verificationResendFailed())
-                                    ->warning()
-                                    ->send();
+                                self::resendVerificationLinkOnly($record);
                             }),
                         Action::make('sendPasswordResetEmail')
                             ->label('Send password reset email')
@@ -258,7 +237,85 @@ class UsersTable
             });
     }
 
-    protected static function notifyPasswordResetEmailResult(string $email, \App\Support\MailDeliveryResult $result): void
+    protected static function resendWelcomeWithNewPassword(User $record): void
+    {
+        $temporaryPassword = TemporaryPassword::generate();
+
+        $record->forceFill([
+            'password' => $temporaryPassword,
+            'must_change_password' => true,
+        ])->save();
+
+        $result = MailDelivery::notify($record, new UserWelcomeNotification(
+            temporaryPassword: $temporaryPassword,
+            panelLoginUrl: User::panelLoginUrlFor($record),
+            verificationUrl: User::guestEmailVerificationUrlFor($record),
+            passwordRenewed: true,
+        ));
+
+        if ($result->success && $result->wasQueued) {
+            Notification::make()
+                ->title('Verification email queued')
+                ->body(FriendlyMessages::verificationResendWithPasswordQueued($record->email, $temporaryPassword))
+                ->success()
+                ->send();
+
+            return;
+        }
+
+        if ($result->success) {
+            Notification::make()
+                ->title('Verification email sent')
+                ->body(FriendlyMessages::verificationResendWithPasswordSent($record->email, $temporaryPassword))
+                ->success()
+                ->send();
+
+            return;
+        }
+
+        Notification::make()
+            ->title('Email could not be sent')
+            ->body(FriendlyMessages::verificationResendWithPasswordFailed($record->email, $temporaryPassword))
+            ->warning()
+            ->send();
+    }
+
+    protected static function resendVerificationLinkOnly(User $record): void
+    {
+        $notification = app(FilamentVerifyEmail::class);
+        $notification->onQueue('mail');
+        $notification->url = User::guestEmailVerificationUrlFor($record);
+
+        $result = MailDelivery::notify($record, $notification);
+
+        if ($result->success && $result->wasQueued) {
+            Notification::make()
+                ->title('Verification email queued')
+                ->body(FriendlyMessages::verificationResendQueued($record->email))
+                ->success()
+                ->send();
+
+            return;
+        }
+
+        if ($result->success) {
+            Notification::make()
+                ->title('Verification email sent')
+                ->body(FriendlyMessages::verificationResendSent($record->email))
+                ->success()
+                ->send();
+
+            return;
+        }
+
+        Notification::make()
+            ->title('Email could not be sent')
+            ->body(FriendlyMessages::verificationResendFailed())
+            ->warning()
+            ->send();
+    }
+
+    protected static function notifyPasswordResetEmailResult(string $email, MailDeliveryResult $result): void
     {
         if ($result->success && $result->wasQueued) {
             Notification::make()

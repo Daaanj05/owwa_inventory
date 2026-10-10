@@ -15,6 +15,7 @@ use Filament\Facades\Filament;
 use Illuminate\Auth\Notifications\VerifyEmail;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Notification;
 use Livewire\Livewire;
 use Tests\TestCase;
@@ -355,5 +356,77 @@ class UserEmailVerificationTest extends TestCase
         $this->assertNotNull($employee->email_verified_at);
         Notification::assertNotSentTo($employee, FilamentVerifyEmail::class);
         Notification::assertSentOnDemandTimes(SignInEmailChangedNotification::class, 0);
+    }
+
+    public function test_resend_verification_for_pending_password_includes_new_temporary_password(): void
+    {
+        Notification::fake();
+
+        Filament::setCurrentPanel(Filament::getPanel('system-admin'));
+
+        $admin = User::factory()->create([
+            'role' => User::ROLE_SYSTEM_ADMIN,
+            'email_verified_at' => now(),
+        ]);
+        $employee = User::factory()->unverified()->create([
+            'role' => User::ROLE_EMPLOYEE,
+            'email' => 'pending.resend@example.com',
+            'password' => 'OldTemp1!',
+            'must_change_password' => true,
+        ]);
+        $previousHash = $employee->password;
+
+        $this->actingAs($admin);
+
+        Livewire::test(ListUsers::class)
+            ->mountAction(TestAction::make('view')->table($employee))
+            ->callAction(TestAction::make('resendVerification'))
+            ->assertNotified();
+
+        $employee->refresh();
+
+        $this->assertNotSame($previousHash, $employee->password);
+        $this->assertTrue($employee->must_change_password);
+
+        Notification::assertSentTo($employee, UserWelcomeNotification::class, function (UserWelcomeNotification $notification) use ($employee): bool {
+            $html = (string) $notification->toMail($employee)->render();
+
+            return $notification->passwordRenewed
+                && Hash::check($notification->temporaryPassword, $employee->password)
+                && str_contains($notification->verificationUrl, '/email/verify/')
+                && str_contains($html, $notification->temporaryPassword)
+                && str_contains($html, 'new temporary password');
+        });
+        Notification::assertNotSentTo($employee, FilamentVerifyEmail::class);
+    }
+
+    public function test_resend_verification_keeps_password_when_user_already_changed_it(): void
+    {
+        Notification::fake();
+
+        Filament::setCurrentPanel(Filament::getPanel('system-admin'));
+
+        $admin = User::factory()->create([
+            'role' => User::ROLE_SYSTEM_ADMIN,
+            'email_verified_at' => now(),
+        ]);
+        $employee = User::factory()->unverified()->create([
+            'role' => User::ROLE_EMPLOYEE,
+            'email' => 'changed.password@example.com',
+            'password' => 'ChosenPass1!',
+            'must_change_password' => false,
+        ]);
+        $previousHash = $employee->password;
+
+        $this->actingAs($admin);
+
+        Livewire::test(ListUsers::class)
+            ->mountAction(TestAction::make('view')->table($employee))
+            ->callAction(TestAction::make('resendVerification'))
+            ->assertNotified();
+
+        $this->assertSame($previousHash, $employee->fresh()->password);
+        Notification::assertSentTo($employee, FilamentVerifyEmail::class);
+        Notification::assertNotSentTo($employee, UserWelcomeNotification::class);
     }
 }

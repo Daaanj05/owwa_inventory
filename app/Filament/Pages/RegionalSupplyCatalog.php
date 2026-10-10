@@ -156,6 +156,15 @@ class RegionalSupplyCatalog extends Page
         }
     }
 
+    public function showsConsumableReorderKpi(): bool
+    {
+        if (blank($this->category)) {
+            return false;
+        }
+
+        return ItemCategory::query()->find((int) $this->category)?->getTemplateSlug() === 'consumables';
+    }
+
     public function getSupplyOfficeName(): string
     {
         return app(SupplyOfficeResolver::class)->resolveOffice()?->name ?? 'Regional supply office';

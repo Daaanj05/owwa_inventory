@@ -15,6 +15,7 @@ class UserWelcomeNotification extends Notification implements ShouldQueue
         public string $temporaryPassword,
         public string $panelLoginUrl,
         public string $verificationUrl,
+        public bool $passwordRenewed = false,
     ) {
         $this->onQueue('mail');
     }
@@ -29,13 +30,18 @@ class UserWelcomeNotification extends Notification implements ShouldQueue
 
     public function toMail(object $notifiable): MailMessage
     {
+        $subject = $this->passwordRenewed
+            ? 'New verification link and temporary password — OWWA Region IV-A Inventory System'
+            : 'Welcome to the OWWA Region IV-A Inventory System — verify your email';
+
         return (new MailMessage)
-            ->subject('Welcome to the OWWA Region IV-A Inventory System — verify your email')
+            ->subject($subject)
             ->markdown('mail.user-welcome', [
                 'user' => $notifiable,
                 'temporaryPassword' => $this->temporaryPassword,
                 'panelLoginUrl' => $this->panelLoginUrl,
                 'verificationUrl' => $this->verificationUrl,
+                'passwordRenewed' => $this->passwordRenewed,
             ]);
     }
 }

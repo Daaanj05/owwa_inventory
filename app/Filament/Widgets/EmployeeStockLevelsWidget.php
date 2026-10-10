@@ -29,7 +29,7 @@ class EmployeeStockLevelsWidget extends Widget
 
     public function sortStock(string $column): void
     {
-        $allowed = ['item_name', 'category_name', 'stock', 'reorder_level'];
+        $allowed = ['item_name', 'category_name', 'stock'];
 
         if (! in_array($column, $allowed, true)) {
             return;
