@@ -15,10 +15,6 @@ use InvalidArgumentException;
 
 class RequisitionFulfillmentService
 {
-    public function __construct(
-        protected InventoryStockService $stockService,
-    ) {}
-
     public function hasSourceEndorsements(Requisition $requisition): bool
     {
         if ($requisition->relationLoaded('sourceEndorsements')) {
@@ -58,25 +54,24 @@ class RequisitionFulfillmentService
             'sourceEndorsements.requisitionItem',
         ]);
 
-        $officeId = (int) $requisition->office_id;
+        $stockSnapshot = app(RequisitionStockSnapshotService::class);
 
         return $requisition->sourceEndorsements
-            ->filter(function (RequisitionSourceEndorsement $endorsement) use ($remainderOnly): bool {
+            ->filter(function (RequisitionSourceEndorsement $endorsement) use ($remainderOnly, $stockSnapshot): bool {
                 $remaining = $this->endorsementRemainingQuantity($endorsement);
 
                 if ($remainderOnly) {
-                    return $remaining > 0;
+                    return $remaining > 0
+                        && $stockSnapshot->regionalStockForItem((int) $endorsement->item_id) > 0;
                 }
 
                 return $remaining > 0 || $this->endorsementIssuedQuantity($endorsement) === 0;
             })
-            ->map(function (RequisitionSourceEndorsement $endorsement) use ($officeId): array {
+            ->map(function (RequisitionSourceEndorsement $endorsement) use ($stockSnapshot): array {
                 $remaining = $this->endorsementRemainingQuantity($endorsement);
                 $issued = $this->endorsementIssuedQuantity($endorsement);
                 $itemId = (int) $endorsement->item_id;
-                $stock = $officeId > 0
-                    ? max(0, $this->stockService->getStock($itemId, $officeId))
-                    : 0;
+                $stock = $stockSnapshot->regionalStockForItem($itemId);
                 $employee = $endorsement->sourceRequisition?->requestedBy;
                 $transactionNumber = $endorsement->sourceRequisition?->transaction_number
                     ?? ('#'.$endorsement->source_requisition_id);
@@ -178,7 +173,7 @@ class RequisitionFulfillmentService
                     continue;
                 }
 
-                $stock = max(0, $this->stockService->getStock((int) $line->item_id, (int) $requisition->office_id));
+                $stock = $this->issuableStock((int) $line->item_id);
 
                 if ($qtyToIssue <= 0) {
                     if (blank($row['issue_remarks'] ?? null)) {
@@ -244,7 +239,7 @@ class RequisitionFulfillmentService
                         /** @var RequisitionItem $line */
                         $line = $entry['line'];
                         $qtyToIssue = $entry['qty'];
-                        $stock = max(0, $this->stockService->getStock((int) $line->item_id, (int) $requisition->office_id));
+                        $stock = $this->issuableStock((int) $line->item_id);
 
                         $this->createIssuanceRecord(
                             batch: $batch,
@@ -324,7 +319,7 @@ class RequisitionFulfillmentService
                     continue;
                 }
 
-                $stock = max(0, $this->stockService->getStock((int) $endorsement->item_id, (int) $consolidated->office_id));
+                $stock = $this->issuableStock((int) $endorsement->item_id);
 
                 if ($qtyToIssue <= 0) {
                     if (blank($row['issue_remarks'] ?? null)) {
@@ -405,7 +400,7 @@ class RequisitionFulfillmentService
                             continue;
                         }
 
-                        $stock = max(0, $this->stockService->getStock((int) $endorsement->item_id, (int) $consolidated->office_id));
+                        $stock = $this->issuableStock((int) $endorsement->item_id);
 
                         $consolidatedLine = RequisitionItem::query()
                             ->where('requisition_id', $consolidated->id)
@@ -461,6 +456,11 @@ class RequisitionFulfillmentService
         }
 
         return $this->finalizeIssueResult($consolidated, $custodian, $created, $acknowledged, $categoryCounts);
+    }
+
+    protected function issuableStock(int $itemId): int
+    {
+        return app(RequisitionStockSnapshotService::class)->regionalStockForItem($itemId);
     }
 
     /**

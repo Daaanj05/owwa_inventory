@@ -77,7 +77,7 @@ class ListAcquisitions extends ListRecordsWithoutFilterUrl
 
         $user = auth()->user();
         if ($this->createFromRequisitionId !== null && $user instanceof User && $user->isSupplyCustodian()) {
-            $this->replaceMountedAction('create', [
+            $this->replaceMountedAction('createPr', [
                 'sourceRequisitionId' => $this->createFromRequisitionId,
                 'sourceCategoryId' => $this->activeItemCategoryId(),
             ]);

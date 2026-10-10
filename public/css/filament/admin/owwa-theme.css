@@ -8117,6 +8117,24 @@ body.owwa-busy-active .fi-topbar a {
     color: #374151;
 }
 
+.fi-modal-window.owwa-view-record-modal .owwa-requisition-items-table table {
+    width: 100%;
+}
+
+.fi-modal-window.owwa-view-record-modal .owwa-requisition-items-table th,
+.fi-modal-window.owwa-view-record-modal .owwa-requisition-items-table td {
+    padding: 0.28rem 0.32rem !important;
+    font-size: 0.75rem;
+    line-height: 1.2;
+    white-space: normal;
+}
+
+.fi-modal-window.owwa-view-record-modal .owwa-requisition-items-table .fi-in-entry-content-ctn .fi-in-text,
+.fi-modal-window.owwa-view-record-modal .owwa-requisition-items-table .fi-in-entry-content-ctn .fi-badge,
+.fi-modal-window.owwa-view-record-modal .owwa-requisition-items-table .fi-in-placeholder {
+    font-size: 0.75rem;
+}
+
 /* Panel / status badges: hug label text instead of stretching full row width */
 .fi-modal-window.owwa-view-record-modal .fi-in-entry-content-ctn .fi-badge {
     width: fit-content;

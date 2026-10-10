@@ -7,6 +7,7 @@ use App\Models\Requisition;
 use App\Models\RequisitionItem;
 use App\Services\RequisitionFulfillmentService;
 use App\Services\RequisitionRestockStatusService;
+use App\Services\RequisitionStockSnapshotService;
 use App\Support\EmployeeRequisitionOriginalSubmission;
 use App\Support\EmployeeRequisitionStatus;
 use App\Support\OwwaReferenceLabels;
@@ -393,15 +394,17 @@ class RequisitionInfolistSchema
         return RepeatableEntry::make('items')
             ->hiddenLabel()
             ->visible(fn (Requisition $record): bool => ! $record->isEmployeeRequest())
+            ->extraAttributes(['class' => 'owwa-requisition-items-table'])
             ->table([
                 TableColumn::make('Category'),
                 TableColumn::make('Item'),
-                TableColumn::make('Restock'),
                 TableColumn::make(OwwaReferenceLabels::assetIdentifierTableHeader()),
+                TableColumn::make('Available stock'),
                 TableColumn::make('Requested'),
-                TableColumn::make('Status'),
                 TableColumn::make('Issued'),
                 TableColumn::make('Remaining'),
+                TableColumn::make('Status'),
+                TableColumn::make('Restock'),
                 TableColumn::make('Remarks'),
             ])
             ->schema(self::sharedItemFields(
@@ -425,16 +428,13 @@ class RequisitionInfolistSchema
                 ->badge()
                 ->placeholder('—'),
             TextEntry::make('item.name')->label('Item')->placeholder('—'),
-            self::restockStatusEntry(),
             TextEntry::make('line_identifier')
                 ->label(fn (RequisitionItem $record): string => RequisitionLineDisplay::identifierLabel($record))
                 ->state(fn (RequisitionItem $record): string => RequisitionLineDisplay::identifierValue($record) ?? '—'),
+            TextEntry::make('available_stock')
+                ->label('Available stock')
+                ->state(fn (RequisitionItem $record): int => app(RequisitionStockSnapshotService::class)->regionalStockForItem((int) $record->item_id)),
             TextEntry::make('quantity')->label($quantityLabel),
-            TextEntry::make('fulfillment_state')
-                ->label('Status')
-                ->badge()
-                ->state(fn (RequisitionItem $record): string => $record->fulfillmentStateLabel())
-                ->color(fn (RequisitionItem $record): string => RequisitionLineFulfillmentState::color($record->fulfillmentState())),
         ];
 
         if ($includeIssued) {
@@ -447,6 +447,12 @@ class RequisitionInfolistSchema
                 ->state(fn (RequisitionItem $record): int => app(RequisitionFulfillmentService::class)->remainingQuantity($record));
         }
 
+        $fields[] = TextEntry::make('fulfillment_state')
+            ->label('Status')
+            ->badge()
+            ->state(fn (RequisitionItem $record): string => $record->fulfillmentStateLabel())
+            ->color(fn (RequisitionItem $record): string => RequisitionLineFulfillmentState::color($record->fulfillmentState()));
+        $fields[] = self::restockStatusEntry();
         $fields[] = TextEntry::make('line_remarks')
             ->label('Remarks')
             ->state(fn (RequisitionItem $record): ?string => $record->issue_remarks)

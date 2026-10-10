@@ -10,6 +10,7 @@ use App\Models\Requisition;
 use App\Models\User;
 use App\Services\RequisitionFulfillmentService;
 use App\Services\RequisitionPurchaseRequestService;
+use App\Services\RequisitionStockSnapshotService;
 use App\Support\RequisitionLineDisplay;
 use App\Support\RequisitionStatus;
 use Filament\Actions\Action;
@@ -57,15 +58,14 @@ class CustodianRequisitionActions
     }
 
     /**
-     * True when at least one remaining line can be issued (has stock) or still needs
-     * a first-time zero-stock acknowledgement (no issue remarks yet).
+     * True when at least one remaining line can be issued from regional supply,
+     * or still needs a first-time zero-stock acknowledgement (no issue remarks yet).
      */
     public static function hasActionableIssueLines(Requisition $record, bool $requireStock = false): bool
     {
         $record->loadMissing('items');
         $fulfillment = app(RequisitionFulfillmentService::class);
-        $stockService = app(\App\Services\InventoryStockService::class);
-        $officeId = (int) $record->office_id;
+        $stockSnapshot = app(RequisitionStockSnapshotService::class);
 
         foreach ($record->items as $line) {
             $remaining = $fulfillment->remainingQuantity($line);
@@ -73,9 +73,7 @@ class CustodianRequisitionActions
                 continue;
             }
 
-            $stock = $officeId > 0
-                ? max(0, $stockService->getStock((int) $line->item_id, $officeId))
-                : 0;
+            $stock = $stockSnapshot->regionalStockForItem((int) $line->item_id);
 
             if ($stock > 0) {
                 return true;
@@ -146,7 +144,7 @@ class CustodianRequisitionActions
                 ->fillForm(fn (Requisition $record): array => RequisitionIssuanceFormSchema::defaultFormState($record, remainderOnly: true))
                 ->form(fn (Requisition $record): array => RequisitionIssuanceFormSchema::issueModalFields($record, remainderOnly: true))
                 ->action(function (Requisition $record, array $data): void {
-                    self::runIssueAction($record, $data, 'Stock issued');
+                    self::runIssueAction($record, $data, 'Stock issued', acknowledgeZeroQuantity: false);
                 }),
             OwwaFormModalDefaults::WIDTH_WIDE,
             'owwa-requisition-issue-modal',
@@ -197,15 +195,19 @@ class CustodianRequisitionActions
     /**
      * @param  array<string, mixed>  $data
      */
-    protected static function runIssueAction(Requisition $record, array $data, string $successTitle): void
-    {
+    protected static function runIssueAction(
+        Requisition $record,
+        array $data,
+        string $successTitle,
+        bool $acknowledgeZeroQuantity = true,
+    ): void {
         $user = Auth::user();
         if (! $user instanceof User) {
             return;
         }
 
         $rows = collect($data['lines'] ?? [])
-            ->filter(function (mixed $row): bool {
+            ->filter(function (mixed $row) use ($acknowledgeZeroQuantity): bool {
                 if (! is_array($row)) {
                     return false;
                 }
@@ -219,7 +221,7 @@ class CustodianRequisitionActions
 
                 $qty = (int) ($row['quantity_to_issue'] ?? 0);
 
-                return $qty > 0 || filled($row['issue_remarks'] ?? null);
+                return $qty > 0 || ($acknowledgeZeroQuantity && filled($row['issue_remarks'] ?? null));
             })
             ->unique(fn (array $row): string => ($row['source_endorsement_id'] ?? null) !== null
                 ? 'endorsement:'.(int) $row['source_endorsement_id']

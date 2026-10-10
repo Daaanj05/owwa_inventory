@@ -4,8 +4,8 @@ namespace App\Filament\Resources\Requisitions\Schemas;
 
 use App\Models\Requisition;
 use App\Models\RequisitionItem;
-use App\Services\InventoryStockService;
 use App\Services\RequisitionFulfillmentService;
+use App\Services\RequisitionStockSnapshotService;
 use App\Support\OfficeSignatoryDefaults;
 use App\Support\RequisitionLineDisplay;
 use Carbon\Carbon;
@@ -51,23 +51,23 @@ class RequisitionIssuanceFormSchema
     {
         $record->loadMissing('items.item.category');
         $fulfillment = app(RequisitionFulfillmentService::class);
-        $stockService = app(InventoryStockService::class);
-        $officeId = (int) $record->office_id;
+        $stockSnapshot = app(RequisitionStockSnapshotService::class);
 
         return $record->items
-            ->filter(function (RequisitionItem $line) use ($fulfillment, $remainderOnly): bool {
+            ->filter(function (RequisitionItem $line) use ($fulfillment, $remainderOnly, $stockSnapshot): bool {
+                $remaining = $fulfillment->remainingQuantity($line);
+
                 if ($remainderOnly) {
-                    return $fulfillment->remainingQuantity($line) > 0;
+                    return $remaining > 0
+                        && $stockSnapshot->regionalStockForItem((int) $line->item_id) > 0;
                 }
 
-                return $fulfillment->remainingQuantity($line) > 0
+                return $remaining > 0
                     || (int) ($line->quantity_issued ?? 0) === 0;
             })
-            ->map(function (RequisitionItem $line) use ($fulfillment, $stockService, $officeId): array {
+            ->map(function (RequisitionItem $line) use ($fulfillment, $stockSnapshot): array {
                 $remaining = $fulfillment->remainingQuantity($line);
-                $stock = $officeId > 0
-                    ? max(0, $stockService->getStock((int) $line->item_id, $officeId))
-                    : 0;
+                $stock = $stockSnapshot->regionalStockForItem((int) $line->item_id);
 
                 return [
                     'requisition_item_id' => $line->id,
