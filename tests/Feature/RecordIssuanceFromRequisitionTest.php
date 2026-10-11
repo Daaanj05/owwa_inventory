@@ -519,6 +519,79 @@ class RecordIssuanceFromRequisitionTest extends TestCase
         $this->assertSame($uc->name, $paperworkValues['B8']);
     }
 
+    public function test_semi_expendable_issue_uses_units_stored_at_regional_supply(): void
+    {
+        $supplyOffice = Office::factory()->create([
+            'name' => 'Regional Supply',
+            'is_regional_supply' => true,
+        ]);
+        $requestingOffice = Office::factory()->create([
+            'name' => 'Field Office',
+            'is_regional_supply' => false,
+        ]);
+        $category = ItemCategory::factory()->create(['name' => 'Semi-Expendable']);
+        $item = Item::factory()->create([
+            'item_category_id' => $category->id,
+            'property_class' => \App\Support\ItemPropertyClass::OfficeEquipment,
+            'estimated_useful_life' => '60 months',
+        ]);
+        $custodian = User::factory()->create([
+            'role' => User::ROLE_SUPPLY_CUSTODIAN,
+        ]);
+        $uc = User::factory()->create([
+            'role' => User::ROLE_UNIT_CONSOLIDATOR,
+            'office_id' => $requestingOffice->id,
+        ]);
+
+        $acquisition = Acquisition::query()->create([
+            'reference_code' => 'ACQ-SEMI-SUPPLY',
+            'item_id' => $item->id,
+            'office_id' => $supplyOffice->id,
+            'quantity' => 1,
+            'unit_cost' => 1500,
+            'acquisition_date' => now()->toDateString(),
+            'recorded_by' => $custodian->id,
+        ]);
+
+        $unit = InventoryUnit::query()->where('acquisition_id', $acquisition->id)->first();
+        $this->assertNotNull($unit);
+        $this->assertSame($supplyOffice->id, $unit->office_id);
+
+        $requisition = Requisition::query()->create([
+            'reference_code' => '2026-01-0600',
+            'office_id' => $requestingOffice->id,
+            'requested_by' => $uc->id,
+            'status' => Requisition::STATUS_PENDING,
+        ]);
+        $line = RequisitionItem::query()->create([
+            'requisition_id' => $requisition->id,
+            'item_id' => $item->id,
+            'quantity' => 1,
+        ]);
+
+        $result = app(RequisitionFulfillmentService::class)->issueLines(
+            $requisition,
+            $custodian,
+            [
+                [
+                    'requisition_item_id' => $line->id,
+                    'quantity_to_issue' => 1,
+                ],
+            ],
+            '2026-06-11',
+        );
+
+        $this->assertSame(1, $result['created']);
+
+        $issuance = Issuance::query()->where('requisition_id', $requisition->id)->first();
+        $this->assertNotNull($issuance);
+        $this->assertSame($unit->property_number, $issuance->property_number);
+
+        $unit->refresh();
+        $this->assertSame(InventoryUnit::STATUS_ISSUED, $unit->status);
+        $this->assertSame($issuance->id, $unit->issuance_id);
+    }
+
     public function test_issuance_without_requisition_is_blocked(): void
     {
         $office = Office::factory()->create();

@@ -3,6 +3,7 @@
 namespace App\Observers;
 
 use App\Events\IssuanceChanged;
+use App\Models\InventoryUnit;
 use App\Models\Issuance;
 use App\Models\Item;
 use App\Services\EmployeeRequisitionClosureService;
@@ -79,6 +80,15 @@ class IssuanceObserver
 
     public function created(Issuance $issuance): void
     {
+        if ($issuance->reservedInventoryUnitIds !== []) {
+            InventoryUnit::query()
+                ->whereIn('id', $issuance->reservedInventoryUnitIds)
+                ->update([
+                    'issuance_id' => $issuance->id,
+                    'status' => InventoryUnit::STATUS_ISSUED,
+                ]);
+        }
+
         app(InventoryStockService::class)->forgetMovementTotalsCache();
         DashboardKpiCache::bump();
         app(IssuanceNotificationService::class)->handleCreated($issuance);

@@ -5,8 +5,11 @@ namespace App\Services;
 use App\Models\InventoryUnit;
 use App\Models\Issuance;
 use App\Models\Item;
+use App\Support\SupplyOfficeResolver;
 use App\Support\UnitCostKey;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class IssuanceUnitAssignmentService
 {
@@ -25,39 +28,82 @@ class IssuanceUnitAssignmentService
             return;
         }
 
-        $query = InventoryUnit::query()
-            ->where('item_id', $issuance->item_id)
-            ->where('office_id', $issuance->office_id)
-            ->where('status', InventoryUnit::STATUS_IN_STOCK)
-            ->orderBy('id');
+        $needed = max(1, (int) $issuance->quantity);
+        $supplyOfficeId = app(SupplyOfficeResolver::class)->resolve();
+        $requestingOfficeId = (int) ($issuance->office_id ?? 0);
 
-        if ($issuance->unit_cost !== null) {
-            $normalized = UnitCostKey::normalize((float) $issuance->unit_cost);
-            $query->where('unit_cost', $normalized);
+        $unitIds = $this->inStockUnitIds($issuance, $needed, $supplyOfficeId, $requestingOfficeId, matchUnitCost: true);
+
+        if ($unitIds->count() < $needed && $issuance->unit_cost !== null) {
+            $unitIds = $this->inStockUnitIds($issuance, $needed, $supplyOfficeId, $requestingOfficeId, matchUnitCost: false);
         }
 
-        $unit = $query->first();
-
-        if ($unit === null) {
-            return;
+        if ($unitIds->count() < $needed) {
+            throw ValidationException::withMessages([
+                'property_number' => $unitIds->isEmpty()
+                    ? 'No in-stock inventory unit with an assigned property or inventory number. Record acquisition first.'
+                    : "Only {$unitIds->count()} in-stock unit(s) are available to issue.",
+            ]);
         }
 
-        DB::transaction(function () use ($issuance, $unit): void {
+        DB::transaction(function () use ($issuance, $unitIds, $needed): void {
             $locked = InventoryUnit::query()
-                ->whereKey($unit->id)
+                ->whereIn('id', $unitIds)
                 ->lockForUpdate()
-                ->first();
+                ->orderBy('id')
+                ->get();
 
-            if ($locked === null || $locked->status !== InventoryUnit::STATUS_IN_STOCK) {
-                return;
+            $available = $locked->filter(
+                fn (InventoryUnit $unit): bool => $unit->status === InventoryUnit::STATUS_IN_STOCK,
+            );
+
+            if ($available->count() < $needed) {
+                throw ValidationException::withMessages([
+                    'property_number' => 'No in-stock inventory unit with an assigned property or inventory number. Record acquisition first.',
+                ]);
             }
 
-            $locked->update([
-                'status' => InventoryUnit::STATUS_ISSUED,
-                'issuance_id' => $issuance->id,
-            ]);
+            $reserved = $available->take($needed)->values();
 
-            $issuance->property_number = $locked->property_number;
+            InventoryUnit::query()
+                ->whereIn('id', $reserved->pluck('id'))
+                ->update([
+                    'status' => InventoryUnit::STATUS_ISSUED,
+                ]);
+
+            $issuance->property_number = $reserved->first()?->property_number;
+            $issuance->reservedInventoryUnitIds = $reserved
+                ->pluck('id')
+                ->map(fn (mixed $id): int => (int) $id)
+                ->all();
         });
+    }
+
+    /**
+     * @return Collection<int, int>
+     */
+    protected function inStockUnitIds(
+        Issuance $issuance,
+        int $needed,
+        ?int $supplyOfficeId,
+        int $requestingOfficeId,
+        bool $matchUnitCost,
+    ): Collection {
+        $query = InventoryUnit::query()
+            ->where('item_id', $issuance->item_id)
+            ->where('status', InventoryUnit::STATUS_IN_STOCK);
+
+        if ($matchUnitCost && $issuance->unit_cost !== null) {
+            $query->where('unit_cost', UnitCostKey::normalize((float) $issuance->unit_cost));
+        }
+
+        return $query
+            ->orderByRaw(
+                'CASE office_id WHEN ? THEN 0 WHEN ? THEN 1 ELSE 2 END',
+                [$supplyOfficeId ?? 0, $requestingOfficeId],
+            )
+            ->orderBy('id')
+            ->limit($needed)
+            ->pluck('id');
     }
 }

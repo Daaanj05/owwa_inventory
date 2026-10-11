@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Filament\Resources\Issuances\IssuanceResource;
+use App\Models\InventoryUnit;
 use App\Models\Issuance;
 use App\Models\IssuanceBatch;
 use App\Models\Item;
@@ -83,6 +84,13 @@ class IssuanceBatchTest extends TestCase
                 'updated_at' => now(),
             ]);
         }
+
+        InventoryUnit::query()->create([
+            'property_number' => 'PPE-'.$ppeItem->id,
+            'item_id' => $ppeItem->id,
+            'office_id' => $office->id,
+            'status' => InventoryUnit::STATUS_IN_STOCK,
+        ]);
 
         $custodian = User::factory()->create(['role' => User::ROLE_SUPPLY_CUSTODIAN]);
         $uc = User::factory()->create(['role' => User::ROLE_UNIT_CONSOLIDATOR, 'office_id' => $office->id]);
@@ -225,6 +233,13 @@ class IssuanceBatchTest extends TestCase
                 'acquisition_date' => now()->toDateString(),
                 'created_at' => now(),
                 'updated_at' => now(),
+            ]);
+
+            InventoryUnit::query()->create([
+                'property_number' => 'PPE-'.$item->id,
+                'item_id' => $item->id,
+                'office_id' => $office->id,
+                'status' => InventoryUnit::STATUS_IN_STOCK,
             ]);
         }
 

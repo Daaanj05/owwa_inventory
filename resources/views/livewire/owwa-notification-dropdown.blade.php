@@ -175,7 +175,7 @@
         @endif
     </div>
 
-    @if (filled($broadcastChannel) && blank($pollingInterval))
+    @if (filled($broadcastChannel))
         @script
             <script>
                 window.addEventListener('EchoLoaded', () => {

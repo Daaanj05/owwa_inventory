@@ -36,7 +36,7 @@
             >
                 <option value="" disabled @selected(blank($ucOfficeId ?? null))>Select office…</option>
                 @foreach ($officeOptions ?? [] as $value => $label)
-                    <option value="{{ $value }}">{{ $label }}</option>
+                    <option value="{{ $value }}" @selected((string) ($ucOfficeId ?? '') === (string) $value)>{{ $label }}</option>
                 @endforeach
             </select>
 
@@ -47,7 +47,7 @@
             >
                 <option value="" disabled @selected(blank($ucDepartmentId ?? null))>Select department…</option>
                 @foreach ($departmentOptions ?? [] as $value => $label)
-                    <option value="{{ $value }}">{{ $label }}</option>
+                    <option value="{{ $value }}" @selected((string) ($ucDepartmentId ?? '') === (string) $value)>{{ $label }}</option>
                 @endforeach
             </select>
         </div>

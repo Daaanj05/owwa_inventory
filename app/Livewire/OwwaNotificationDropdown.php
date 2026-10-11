@@ -31,11 +31,9 @@ class OwwaNotificationDropdown extends BaseDatabaseNotifications
 
     public function getPollingInterval(): ?string
     {
-        if (filled(config('filament.broadcasting.echo.key'))) {
-            return null;
-        }
+        $interval = config('inventory.requisition_poll_interval');
 
-        return Filament::getDatabaseNotificationsPollingInterval();
+        return filled($interval) ? (string) $interval : '5s';
     }
 
     public function setTab(string $tab): void

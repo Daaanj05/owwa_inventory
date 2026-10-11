@@ -110,15 +110,18 @@ class DatabaseNotificationBroadcastTest extends TestCase
         Event::assertNotDispatched(DatabaseNotificationsSentNow::class);
     }
 
-    public function test_dropdown_skips_polling_when_echo_key_is_configured(): void
+    public function test_dropdown_keeps_polling_when_echo_key_is_configured(): void
     {
         Filament::setCurrentPanel(Filament::getPanel('admin'));
 
-        config()->set('filament.broadcasting.echo', [
-            'broadcaster' => 'pusher',
-            'key' => 'test-key',
-            'cluster' => 'ap1',
-            'forceTLS' => true,
+        config([
+            'filament.broadcasting.echo' => [
+                'broadcaster' => 'pusher',
+                'key' => 'test-key',
+                'cluster' => 'ap1',
+                'forceTLS' => true,
+            ],
+            'inventory.requisition_poll_interval' => '5s',
         ]);
 
         $user = User::factory()->create([
@@ -129,14 +132,17 @@ class DatabaseNotificationBroadcastTest extends TestCase
         $this->actingAs($user);
 
         $component = Livewire::test(OwwaNotificationDropdown::class);
-        $this->assertNull($component->instance()->getPollingInterval());
+        $this->assertSame('5s', $component->instance()->getPollingInterval());
     }
 
     public function test_dropdown_polls_when_echo_key_is_missing(): void
     {
         Filament::setCurrentPanel(Filament::getPanel('admin'));
 
-        config()->set('filament.broadcasting.echo', []);
+        config([
+            'filament.broadcasting.echo' => [],
+            'inventory.requisition_poll_interval' => '5s',
+        ]);
 
         $user = User::factory()->create([
             'role' => User::ROLE_SUPPLY_CUSTODIAN,
@@ -146,6 +152,6 @@ class DatabaseNotificationBroadcastTest extends TestCase
         $this->actingAs($user);
 
         $component = Livewire::test(OwwaNotificationDropdown::class);
-        $this->assertSame('30s', $component->instance()->getPollingInterval());
+        $this->assertSame('5s', $component->instance()->getPollingInterval());
     }
 }

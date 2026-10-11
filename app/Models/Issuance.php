@@ -19,6 +19,13 @@ class Issuance extends Model
 
     public const USEFUL_LIFE_NEEDS_REPLACEMENT = 'needs_replacement';
 
+    /**
+     * In-stock units reserved while this issuance is being created.
+     *
+     * @var list<int>
+     */
+    public array $reservedInventoryUnitIds = [];
+
     protected $fillable = [
         'issuance_batch_id', 'reference_code', 'item_id', 'office_id', 'department_id', 'requisition_id',
         'consolidated_requisition_id', 'source_endorsement_id',

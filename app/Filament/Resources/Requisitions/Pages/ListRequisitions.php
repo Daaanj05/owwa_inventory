@@ -80,10 +80,9 @@ class ListRequisitions extends ListRecords
     public function mount(): void
     {
         $this->alignUcScopeFromNotificationRecord();
+        $this->initializeUcListScope();
 
         parent::mount();
-
-        $this->initializeUcListScope();
 
         if ((int) ($this->create ?? 0) !== 1 || ! RequisitionResource::canCreate()) {
             return;
@@ -873,15 +872,34 @@ class ListRequisitions extends ListRecords
             return;
         }
 
-        if ($user->hasSingleOfficeAssignment()) {
-            $this->ucOfficeId ??= $user->assignedOfficeIds()[0] ?? null;
+        $officeIds = $user->assignedOfficeIds();
+
+        if ($this->ucOfficeId === null) {
+            if ($user->hasSingleOfficeAssignment()) {
+                $this->ucOfficeId = $officeIds[0] ?? null;
+            } elseif ($user->office_id && in_array((int) $user->office_id, $officeIds, true)) {
+                $this->ucOfficeId = (int) $user->office_id;
+            }
         }
 
-        if ($this->ucOfficeId !== null
-            && $this->ucOfficeId > 0
-            && $user->hasSingleDepartmentAssignmentForOffice($this->ucOfficeId)) {
-            $departmentIds = $user->assignedDepartmentIdsForOffice($this->ucOfficeId);
-            $this->ucDepartmentId ??= $departmentIds[0] ?? null;
+        if ($this->ucOfficeId === null || $this->ucOfficeId <= 0) {
+            return;
+        }
+
+        $departmentIds = $user->assignedDepartmentIdsForOffice($this->ucOfficeId);
+
+        if ($this->ucDepartmentId !== null) {
+            return;
+        }
+
+        if ($user->hasSingleDepartmentAssignmentForOffice($this->ucOfficeId)) {
+            $this->ucDepartmentId = $departmentIds[0] ?? null;
+
+            return;
+        }
+
+        if ($user->department_id && in_array((int) $user->department_id, $departmentIds, true)) {
+            $this->ucDepartmentId = (int) $user->department_id;
         }
     }
 

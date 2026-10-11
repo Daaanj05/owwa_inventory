@@ -58,6 +58,18 @@ class UcRequisitionToolbarTest extends TestCase
             ->assertCanNotSeeTableRecords([$pending]);
     }
 
+    public function test_uc_received_list_loads_assigned_scope_without_reselecting_filters(): void
+    {
+        [$uc, $office, $department, $pending] = $this->seedUcRequisitions();
+
+        $this->actingAs($uc);
+
+        Livewire::test(ListRequisitions::class)
+            ->assertSet('ucOfficeId', $office->id)
+            ->assertSet('ucDepartmentId', $department->id)
+            ->assertCanSeeTableRecords([$pending]);
+    }
+
     /**
      * @return array{0: User, 1: Office, 2: Department, 3: Requisition, 4: Requisition}
      */

@@ -19,6 +19,8 @@ use Filament\Notifications\Notification;
 use Filament\Support\Enums\Alignment;
 use Filament\Support\Enums\Size;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Validation\ValidationException;
+use InvalidArgumentException;
 
 class CustodianRequisitionActions
 {
@@ -109,8 +111,8 @@ class CustodianRequisitionActions
                 ->visible(fn (Requisition $record): bool => self::canAcceptAndIssue($record))
                 ->fillForm(fn (Requisition $record): array => RequisitionIssuanceFormSchema::defaultFormState($record, remainderOnly: false))
                 ->form(fn (Requisition $record): array => RequisitionIssuanceFormSchema::issueModalFields($record, remainderOnly: false))
-                ->action(function (Requisition $record, array $data): void {
-                    self::runIssueAction($record, $data, 'Stock issued');
+                ->action(function (Requisition $record, array $data, Action $action): void {
+                    self::runIssueAction($record, $data, 'Stock issued', action: $action);
                 }),
             OwwaFormModalDefaults::WIDTH_WIDE,
             'owwa-requisition-issue-modal',
@@ -143,8 +145,8 @@ class CustodianRequisitionActions
                 ->visible(fn (Requisition $record): bool => self::canIssueRemainder($record))
                 ->fillForm(fn (Requisition $record): array => RequisitionIssuanceFormSchema::defaultFormState($record, remainderOnly: true))
                 ->form(fn (Requisition $record): array => RequisitionIssuanceFormSchema::issueModalFields($record, remainderOnly: true))
-                ->action(function (Requisition $record, array $data): void {
-                    self::runIssueAction($record, $data, 'Stock issued', acknowledgeZeroQuantity: false);
+                ->action(function (Requisition $record, array $data, Action $action): void {
+                    self::runIssueAction($record, $data, 'Stock issued', acknowledgeZeroQuantity: false, action: $action);
                 }),
             OwwaFormModalDefaults::WIDTH_WIDE,
             'owwa-requisition-issue-modal',
@@ -200,6 +202,7 @@ class CustodianRequisitionActions
         array $data,
         string $successTitle,
         bool $acknowledgeZeroQuantity = true,
+        ?Action $action = null,
     ): void {
         $user = Auth::user();
         if (! $user instanceof User) {
@@ -229,18 +232,34 @@ class CustodianRequisitionActions
             ->values()
             ->all();
 
-        $result = app(RequisitionFulfillmentService::class)->issueLines(
-            $record,
-            $user,
-            $rows,
-            (string) ($data['issuance_date'] ?? now()->toDateString()),
-            [
-                'custodian_printed_name' => $data['custodian_printed_name'] ?? null,
-                'custodian_designation' => $data['custodian_designation'] ?? null,
-                'issued_to_designation' => $data['issued_to_designation'] ?? null,
-                'accounting_staff_printed_name' => $data['accounting_staff_printed_name'] ?? null,
-            ],
-        );
+        try {
+            $result = app(RequisitionFulfillmentService::class)->issueLines(
+                $record,
+                $user,
+                $rows,
+                (string) ($data['issuance_date'] ?? now()->toDateString()),
+                [
+                    'custodian_printed_name' => $data['custodian_printed_name'] ?? null,
+                    'custodian_designation' => $data['custodian_designation'] ?? null,
+                    'issued_to_designation' => $data['issued_to_designation'] ?? null,
+                    'accounting_staff_printed_name' => $data['accounting_staff_printed_name'] ?? null,
+                ],
+            );
+        } catch (ValidationException|InvalidArgumentException $exception) {
+            $message = $exception instanceof ValidationException
+                ? (collect($exception->errors())->flatten()->first() ?? $exception->getMessage())
+                : $exception->getMessage();
+
+            Notification::make()
+                ->title('Could not issue stock')
+                ->body(is_string($message) && $message !== '' ? $message : 'Could not issue this requisition.')
+                ->danger()
+                ->send();
+
+            $action?->halt();
+
+            return;
+        }
 
         $created = (int) ($result['created'] ?? 0);
         $acknowledged = (int) ($result['acknowledged'] ?? 0);

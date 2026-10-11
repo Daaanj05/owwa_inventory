@@ -221,7 +221,7 @@ class RequisitionBroadcastTest extends TestCase
             ->assertDontSeeHtml('wire:poll.30s="$refresh"');
     }
 
-    public function test_requisition_list_does_not_poll_when_echo_is_configured(): void
+    public function test_requisition_list_still_polls_when_echo_is_configured(): void
     {
         Filament::setCurrentPanel(Filament::getPanel('admin'));
 
@@ -232,6 +232,7 @@ class RequisitionBroadcastTest extends TestCase
                 'cluster' => 'ap1',
                 'forceTLS' => true,
             ],
+            'inventory.requisition_poll_interval' => '5s',
         ]);
 
         $office = Office::factory()->create();
@@ -243,7 +244,7 @@ class RequisitionBroadcastTest extends TestCase
         $this->actingAs($employee);
 
         Livewire::test(ListRequisitions::class)
-            ->assertDontSeeHtml('wire:poll.');
+            ->assertSeeHtml('wire:poll.5s="$refresh"');
     }
 
     protected function forgetFilamentRenderHooks(): void
