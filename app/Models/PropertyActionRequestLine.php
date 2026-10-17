@@ -14,6 +14,7 @@ class PropertyActionRequestLine extends Model
         'quantity',
         'disposal_id',
         'transfer_id',
+        'outcome',
         'sort_order',
     ];
 
@@ -48,5 +49,63 @@ class PropertyActionRequestLine extends Model
     public function transfer(): BelongsTo
     {
         return $this->belongsTo(Transfer::class);
+    }
+
+    /**
+     * The unit this line sent to repair is still waiting for the Supply Custodian (not re-issued and repaired again elsewhere).
+     */
+    public function isUnderRepair(): bool
+    {
+        return $this->outcome === PropertyActionRequest::OUTCOME_REPAIR
+            && $this->inventoryUnit?->status === InventoryUnit::STATUS_UNDER_REPAIR
+            && (int) $this->inventoryUnit->repair_source_issuance_id === (int) $this->issuance_id;
+    }
+
+    public function outcomeLabel(): string
+    {
+        return [
+            'returned' => 'Returned to stock',
+            'disposed' => 'Disposed',
+            'under_repair' => 'Under repair',
+            'repaired_stock' => 'Repaired — in stock',
+            'repaired_reissued' => 'Repaired — re-issued',
+            'unrepairable' => 'Unrepairable — disposed',
+        ][$this->outcomeState()] ?? '—';
+    }
+
+    public function outcomeColor(): string
+    {
+        return match ($this->outcomeState()) {
+            'under_repair' => 'warning',
+            'disposed', 'unrepairable' => 'danger',
+            null => 'gray',
+            default => 'success',
+        };
+    }
+
+    /**
+     * Receive outcome of this unit; repair lines follow the unit to its current result.
+     */
+    protected function outcomeState(): ?string
+    {
+        if ($this->outcome !== PropertyActionRequest::OUTCOME_REPAIR) {
+            return match ($this->outcome) {
+                PropertyActionRequest::OUTCOME_RETURN_TO_STOCK => 'returned',
+                PropertyActionRequest::OUTCOME_DISPOSE => 'disposed',
+                default => null,
+            };
+        }
+
+        if ($this->isUnderRepair()) {
+            return 'under_repair';
+        }
+
+        return match ($this->inventoryUnit?->status) {
+            InventoryUnit::STATUS_UNDER_REPAIR => 'repaired_reissued',
+            InventoryUnit::STATUS_IN_STOCK => 'repaired_stock',
+            InventoryUnit::STATUS_ISSUED => 'repaired_reissued',
+            InventoryUnit::STATUS_DISPOSED => 'unrepairable',
+            default => 'under_repair',
+        };
     }
 }

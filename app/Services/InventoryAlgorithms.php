@@ -97,8 +97,8 @@ class InventoryAlgorithms
         $first = (float) $values[0];
         $last = (float) $values[count($values) - 1];
 
-        if ($first == 0) {
-            return $last > 0 ? 100.0 : null;
+        if ($first == 0.0) {
+            return null;
         }
 
         return round((($last - $first) / $first) * 100, 1);

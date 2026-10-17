@@ -88,6 +88,7 @@ class DemoPhysicalCountSeeder extends Seeder
             ['reference_code' => 'PC-DEMO-RPCSP-2026'],
             $this->sessionDefaults($category, $office, $custodian, PhysicalCountSession::TYPE_RPCSP, [
                 'book_list_loaded' => false,
+                ...$this->openForPreload(),
             ]),
         );
 
@@ -108,6 +109,7 @@ class DemoPhysicalCountSeeder extends Seeder
         }
 
         PhysicalCountPropertyClassResolver::syncSession($session->fresh(['lines.item']));
+        $this->markComplete($session);
     }
 
     protected function seedRpcppeSession(ItemCategory $category, Office $office, User $custodian): void
@@ -116,6 +118,7 @@ class DemoPhysicalCountSeeder extends Seeder
             ['reference_code' => 'PC-DEMO-RPCPPE-2026'],
             $this->sessionDefaults($category, $office, $custodian, PhysicalCountSession::TYPE_RPCPPE, [
                 'book_list_loaded' => false,
+                ...$this->openForPreload(),
             ]),
         );
 
@@ -126,6 +129,27 @@ class DemoPhysicalCountSeeder extends Seeder
         foreach ($session->fresh()->lines as $line) {
             $line->update(['on_hand_count' => (int) $line->balance_per_card]);
         }
+
+        $this->markComplete($session);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function openForPreload(): array
+    {
+        return [
+            'status' => PhysicalCountSession::STATUS_IN_PROGRESS,
+            'completed_at' => null,
+        ];
+    }
+
+    protected function markComplete(PhysicalCountSession $session): void
+    {
+        $session->update([
+            'status' => PhysicalCountSession::STATUS_COMPLETE,
+            'completed_at' => now(),
+        ]);
     }
 
     /**

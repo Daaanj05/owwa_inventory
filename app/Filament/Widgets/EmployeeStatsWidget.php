@@ -5,7 +5,7 @@ namespace App\Filament\Widgets;
 use App\Filament\Concerns\ListensForRequisitionBroadcasts;
 use App\Filament\Pages\MyInventory;
 use App\Filament\Resources\Requisitions\RequisitionResource;
-use App\Models\Distribution;
+use App\Models\Issuance;
 use App\Models\Requisition;
 use App\Models\User;
 use App\Support\OwwaReferenceLabels;
@@ -54,14 +54,14 @@ class EmployeeStatsWidget extends StatsOverviewWidget implements HasActions
         $totalRequests = $baseQuery()->count();
         $pending = $baseQuery()->where('status', Requisition::STATUS_PENDING)->count();
 
-        $received = (int) Distribution::query()
-            ->where('distributed_to', $user->id)
-            ->whereBetween('distribution_date', [$yearStart, $yearEnd])
+        $received = (int) Issuance::query()
+            ->where('issued_to', $user->id)
+            ->whereBetween('issuance_date', [$yearStart, $yearEnd])
             ->sum('quantity');
 
-        $distinctItems = Distribution::query()
-            ->where('distributed_to', $user->id)
-            ->whereBetween('distribution_date', [$yearStart, $yearEnd])
+        $distinctItems = Issuance::query()
+            ->where('issued_to', $user->id)
+            ->whereBetween('issuance_date', [$yearStart, $yearEnd])
             ->distinct('item_id')
             ->count('item_id');
 
@@ -87,7 +87,7 @@ class EmployeeStatsWidget extends StatsOverviewWidget implements HasActions
                 ], merge: true),
 
             Stat::make('Items received', number_format($received))
-                ->description("{$distinctItems} distinct ".($distinctItems === 1 ? 'item' : 'items').' distributed to you')
+                ->description("{$distinctItems} distinct ".($distinctItems === 1 ? 'item' : 'items').' issued to you')
                 ->descriptionIcon('heroicon-o-inbox-arrow-down')
                 ->color('info')
                 ->extraAttributes([
@@ -227,14 +227,8 @@ class EmployeeStatsWidget extends StatsOverviewWidget implements HasActions
             return [
                 'summary' => null,
                 'empty_title' => 'No items received',
-                'empty_desc' => 'No distributions recorded for you this year.',
-                'columns' => [
-                    'item' => 'Item',
-                    'category' => 'Category',
-                    'quantity' => 'Qty',
-                    'date' => 'Received',
-                    'from' => 'Distributed by',
-                ],
+                'empty_desc' => 'No issuances recorded for you this year.',
+                'columns' => $this->itemsReceivedColumns(),
                 'numeric_keys' => ['quantity'],
                 'rows' => [],
             ];
@@ -242,40 +236,48 @@ class EmployeeStatsWidget extends StatsOverviewWidget implements HasActions
 
         [$yearStart, $yearEnd] = $this->yearBounds();
 
-        $distributions = Distribution::query()
-            ->with(['item.category', 'distributedBy'])
-            ->where('distributed_to', $user->id)
-            ->whereBetween('distribution_date', [$yearStart, $yearEnd])
-            ->latest('distribution_date')
+        $issuances = Issuance::query()
+            ->with(['item.category', 'issuedBy'])
+            ->where('issued_to', $user->id)
+            ->whereBetween('issuance_date', [$yearStart, $yearEnd])
+            ->latest('issuance_date')
             ->limit(100)
             ->get();
 
-        $rows = $distributions->map(fn (Distribution $distribution): array => [
-            'item' => $distribution->item?->name,
-            'category' => $distribution->item?->category?->name,
-            'quantity' => $distribution->quantity,
-            'date' => optional($distribution->distribution_date)?->format('M j, Y'),
-            'from' => $distribution->distributedBy?->name,
-            'record_url' => filled($distribution->requisition_id)
-                ? RequisitionResource::viewModalUrl((int) $distribution->requisition_id)
+        $rows = $issuances->map(fn (Issuance $issuance): array => [
+            'item' => $issuance->item?->name,
+            'category' => $issuance->item?->category?->name,
+            'quantity' => $issuance->quantity,
+            'date' => optional($issuance->issuance_date)?->format('M j, Y'),
+            'from' => $issuance->issuedBy?->name,
+            'record_url' => filled($issuance->requisition_id)
+                ? RequisitionResource::viewModalUrl((int) $issuance->requisition_id)
                 : null,
         ])->all();
 
-        $totalQty = (int) $distributions->sum('quantity');
+        $totalQty = (int) $issuances->sum('quantity');
 
         return [
-            'summary' => number_format($totalQty).' unit'.($totalQty === 1 ? '' : 's').' received across '.count($rows).' distribution'.(count($rows) === 1 ? '' : 's').' (showing up to 100).',
+            'summary' => number_format($totalQty).' unit'.($totalQty === 1 ? '' : 's').' received across '.count($rows).' issuance'.(count($rows) === 1 ? '' : 's').' (showing up to 100).',
             'empty_title' => 'No items received',
-            'empty_desc' => 'No distributions recorded for you this year.',
-            'columns' => [
-                'item' => 'Item',
-                'category' => 'Category',
-                'quantity' => 'Qty',
-                'date' => 'Received',
-                'from' => 'Distributed by',
-            ],
+            'empty_desc' => 'No issuances recorded for you this year.',
+            'columns' => $this->itemsReceivedColumns(),
             'numeric_keys' => ['quantity'],
             'rows' => $rows,
+        ];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    protected function itemsReceivedColumns(): array
+    {
+        return [
+            'item' => 'Item',
+            'category' => 'Category',
+            'quantity' => 'Qty',
+            'date' => 'Received',
+            'from' => 'Issued by',
         ];
     }
 

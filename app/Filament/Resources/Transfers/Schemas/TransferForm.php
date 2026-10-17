@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Transfers\Schemas;
 
 use App\Filament\Concerns\SyncsActiveItemCategory;
+use App\Models\InventoryUnit;
 use App\Models\Issuance;
 use App\Models\Item;
 use App\Models\ItemCategory;
@@ -184,15 +185,19 @@ class TransferForm
                                     return;
                                 }
 
-                                $issuance = Issuance::query()->with('inventoryUnit')->find($state);
+                                $issuance = Issuance::query()->find($state);
                                 if ($issuance === null) {
                                     return;
                                 }
 
+                                $unit = $issuance->inventoryUnits()
+                                    ->where('status', InventoryUnit::STATUS_ISSUED)
+                                    ->first();
+
                                 $set('item_id', $issuance->item_id);
-                                $set('property_number', $issuance->property_number);
+                                $set('property_number', $unit?->property_number ?? $issuance->property_number);
                                 $set('unit_cost', $issuance->unit_cost);
-                                $set('inventory_unit_id', $issuance->inventoryUnit?->id);
+                                $set('inventory_unit_id', $unit?->id);
                             }),
                         Hidden::make('inventory_unit_id'),
                         Select::make('item_id')

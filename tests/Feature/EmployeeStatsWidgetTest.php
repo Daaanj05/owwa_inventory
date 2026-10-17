@@ -3,7 +3,7 @@
 namespace Tests\Feature;
 
 use App\Filament\Widgets\EmployeeStatsWidget;
-use App\Models\Distribution;
+use App\Models\Issuance;
 use App\Models\Item;
 use App\Models\ItemCategory;
 use App\Models\Office;
@@ -39,14 +39,14 @@ class EmployeeStatsWidgetTest extends TestCase
             'office_id' => $office->id,
         ]);
 
-        /** @var User $distributor */
-        $distributor = User::factory()->create([
-            'role' => User::ROLE_UNIT_CONSOLIDATOR,
+        /** @var User $custodian */
+        $custodian = User::factory()->create([
+            'role' => User::ROLE_SUPPLY_CUSTODIAN,
             'office_id' => $office->id,
-            'name' => 'Ana Distributor',
+            'name' => 'Ana Custodian',
         ]);
 
-        Requisition::query()->create([
+        $acceptedRequisition = Requisition::query()->create([
             'transaction_number' => '2026-EMP-REQ-01',
             'office_id' => $office->id,
             'requested_by' => $employee->id,
@@ -64,13 +64,14 @@ class EmployeeStatsWidgetTest extends TestCase
             'created_at' => now()->startOfYear()->addDays(20),
         ]);
 
-        Distribution::factory()->create([
+        Issuance::query()->create([
+            'requisition_id' => $acceptedRequisition->id,
             'office_id' => $office->id,
             'item_id' => $item->id,
-            'distributed_to' => $employee->id,
-            'distributed_by' => $distributor->id,
+            'issued_to' => $employee->id,
+            'issued_by' => $custodian->id,
             'quantity' => 5,
-            'distribution_date' => now()->startOfYear()->addMonths(2)->toDateString(),
+            'issuance_date' => now()->startOfYear()->addMonths(2)->toDateString(),
         ]);
 
         $component = Livewire::actingAs($employee)
@@ -101,7 +102,7 @@ class EmployeeStatsWidgetTest extends TestCase
         $receivedHtml = (string) $component->instance()->getMountedAction()?->getModalContent();
         $this->assertStringContainsString('Bond Paper A4', $receivedHtml);
         $this->assertStringContainsString('Consumables', $receivedHtml);
-        $this->assertStringContainsString('Ana Distributor', $receivedHtml);
+        $this->assertStringContainsString('Ana Custodian', $receivedHtml);
     }
 
     public function test_employee_is_denied_requisition_ris_export_route(): void
@@ -126,7 +127,7 @@ class EmployeeStatsWidgetTest extends TestCase
             ->assertForbidden();
     }
 
-    public function test_unit_consolidator_can_export_requisition_ris(): void
+    public function test_only_supply_custodian_can_export_requisition_ris(): void
     {
         $office = Office::factory()->create();
 
@@ -144,6 +145,15 @@ class EmployeeStatsWidgetTest extends TestCase
         ]);
 
         $this->actingAs($uc)
+            ->get(route('owwa.export.requisition', $requisition))
+            ->assertForbidden();
+
+        $custodian = User::factory()->create([
+            'role' => User::ROLE_SUPPLY_CUSTODIAN,
+            'office_id' => $office->id,
+        ]);
+
+        $this->actingAs($custodian)
             ->get(route('owwa.export.requisition', $requisition))
             ->assertOk();
     }

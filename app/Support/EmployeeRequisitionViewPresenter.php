@@ -54,13 +54,13 @@ class EmployeeRequisitionViewPresenter
         $submittedState = 'done';
         $reviewState = $record->status === Requisition::STATUS_PENDING ? 'pending' : 'done';
         $endorsedState = $record->compiled_into_requisition_id !== null ? 'done' : ($record->status === Requisition::STATUS_ACCEPTED ? 'active' : 'pending');
-        $distributedState = $record->closed_at !== null
+        $issuedState = $record->closed_at !== null
             ? 'done'
             : ($record->compiled_into_requisition_id !== null ? 'active' : 'pending');
 
         if ($record->status === Requisition::STATUS_REJECTED) {
             $endorsedState = 'pending';
-            $distributedState = 'pending';
+            $issuedState = 'pending';
         }
 
         $latestIssuanceDate = EmployeeRequisitionStatus::latestIssuanceDate($record);
@@ -117,7 +117,7 @@ class EmployeeRequisitionViewPresenter
                         ? self::stepDescription('Partial issuance recorded', $latestIssuanceDate)
                         : 'Awaiting issuance from Supply Custodian',
                 },
-                'state' => $distributedState,
+                'state' => $issuedState,
                 'url' => null,
             ],
         ];

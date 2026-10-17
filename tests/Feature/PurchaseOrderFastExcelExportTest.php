@@ -35,7 +35,7 @@ class PurchaseOrderFastExcelExportTest extends TestCase
         $spreadsheet = app(PurchaseOrderFastExcelExportService::class)->makeSpreadsheet($pages);
         $sheet = $spreadsheet->getActiveSheet();
 
-        $entityName = (string) config('owwa_export_standards.entity_name', 'OWWA-4A');
+        $entityName = (string) config('owwa_export_standards.entity_name');
         $this->assertStringContainsString($entityName, (string) $sheet->getCell('A5')->getValue());
         $this->assertSame(
             \PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER,

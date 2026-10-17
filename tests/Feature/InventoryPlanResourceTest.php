@@ -139,7 +139,7 @@ class InventoryPlanResourceTest extends TestCase
 
         $this->actingAs($employee)
             ->get(PhysicalInventoryPlanResource::getUrl('index'))
-            ->assertNotFound();
+            ->assertForbidden();
     }
 
     public function test_active_tab_hides_archived_plans_and_archived_tab_shows_them(): void

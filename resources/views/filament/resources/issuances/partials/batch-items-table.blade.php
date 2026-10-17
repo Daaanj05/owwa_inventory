@@ -22,7 +22,7 @@
                         ?? ((float) ($line->unit_cost ?? 0) * (int) $line->quantity);
                 @endphp
                 <tr>
-                    <td>{{ $line->property_number ?: ($line->item?->item_code ?? '—') }}</td>
+                    <td>{{ $line->issuedPropertyNumbersLabel() ?: ($line->item?->item_code ?? '—') }}</td>
                     <td>
                         <strong>{{ $line->item?->name ?? '—' }}</strong>
                         @if (filled($line->estimated_useful_life))

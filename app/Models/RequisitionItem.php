@@ -77,13 +77,13 @@ class RequisitionItem extends Model
         $requisition = $this->requisition;
         $employeeFacing = $requisition?->isEmployeeRequest() ?? false;
         $endorsed = $requisition !== null && $requisition->compiled_into_requisition_id !== null;
-        $fullyDistributed = $requisition !== null && $requisition->closed_at !== null;
+        $fullyReceived = $requisition !== null && $requisition->closed_at !== null;
 
         return RequisitionLineFulfillmentState::label(
             $this->fulfillmentState(),
             $employeeFacing,
             $endorsed,
-            $fullyDistributed,
+            $fullyReceived,
         );
     }
 }

@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Filament\Resources\PropertyActionRequests\PropertyActionRequestResource;
 use App\Models\Department;
+use App\Models\InventoryUnit;
 use App\Models\Issuance;
 use App\Models\Item;
 use App\Models\ItemCategory;
@@ -111,7 +112,8 @@ class PropertyReturnCompileNotificationTest extends TestCase
         Notification::fake();
 
         $batch = app(PropertyActionRequestCompileService::class)
-            ->createCompiledSubmission($uc, [$request->fresh()]);
+            ->createCompiledSubmissions($uc, [$request->fresh()])
+            ->sole();
 
         Notification::assertSentTo(
             $custodian,
@@ -125,33 +127,107 @@ class PropertyReturnCompileNotificationTest extends TestCase
         $this->assertSame(PropertyActionRequest::STATUS_PENDING_SC, $batch->status);
     }
 
+    public function test_sc_decisions_on_compiled_return_sync_and_notify_the_employee_source(): void
+    {
+        [$employee, $uc, $request] = $this->seedPendingDraftReturn();
+        $custodian = User::factory()->create([
+            'role' => User::ROLE_SUPPLY_CUSTODIAN,
+            'office_id' => $request->office_id,
+        ]);
+
+        $workflow = app(PropertyActionRequestWorkflowService::class);
+        $workflow->submit($request);
+        $workflow->approveByUnitConsolidator($request->fresh(), $uc);
+        $batch = app(PropertyActionRequestCompileService::class)
+            ->createCompiledSubmissions($uc, [$request->fresh()])
+            ->sole();
+
+        Notification::fake();
+
+        $workflow->approveBySupplyCustodian($batch->fresh(), $custodian);
+        $this->assertSame(PropertyActionRequest::STATUS_APPROVED, $request->fresh()->status);
+        Notification::assertSentTo(
+            $employee,
+            RequisitionWorkflowDatabaseNotification::class,
+            fn (RequisitionWorkflowDatabaseNotification $notification): bool => $notification->propertyActionRequestId === (int) $request->id,
+        );
+
+        $workflow->execute($batch->fresh(), $custodian);
+        $this->assertSame(PropertyActionRequest::STATUS_EXECUTED, $request->fresh()->status);
+        Notification::assertSentTo(
+            $employee,
+            RequisitionWorkflowDatabaseNotification::class,
+            fn (RequisitionWorkflowDatabaseNotification $notification): bool => $notification->title === 'Property return received'
+                && $notification->propertyActionRequestId === (int) $request->id,
+        );
+    }
+
+    public function test_compile_creates_one_combined_request_per_reason(): void
+    {
+        [$employee, $uc, $first] = $this->seedPendingDraftReturn();
+        [, , $second] = $this->seedPendingDraftReturn(
+            employee: $employee,
+            uc: $uc,
+            reasonCode: 'needs_repair',
+            propertyNumber: 'SPLV-RET-2',
+        );
+
+        $workflow = app(PropertyActionRequestWorkflowService::class);
+        foreach ([$first, $second] as $source) {
+            $workflow->submit($source);
+            $workflow->approveByUnitConsolidator($source->fresh(), $uc);
+        }
+
+        $batches = app(PropertyActionRequestCompileService::class)
+            ->createCompiledSubmissions($uc, [$first->fresh(), $second->fresh()]);
+
+        $this->assertCount(2, $batches);
+        $this->assertEqualsCanonicalizing(
+            ['serviceable_not_needed', 'needs_repair'],
+            $batches->pluck('reason_code')->all(),
+        );
+        $this->assertNotSame(
+            $first->fresh()->compiled_into_property_action_request_id,
+            $second->fresh()->compiled_into_property_action_request_id,
+        );
+    }
+
     /**
      * @return array{0: User, 1: User, 2: PropertyActionRequest}
      */
-    protected function seedPendingDraftReturn(): array
-    {
-        $office = Office::factory()->create();
-        $department = Department::query()->create([
-            'office_id' => $office->id,
-            'name' => 'Admin',
-            'code' => 'ADM',
-        ]);
-        $category = ItemCategory::factory()->create(['name' => 'Semi-Expendable']);
-        $item = Item::factory()->create(['item_category_id' => $category->id]);
+    protected function seedPendingDraftReturn(
+        ?User $employee = null,
+        ?User $uc = null,
+        string $reasonCode = 'serviceable_not_needed',
+        string $propertyNumber = 'SPLV-RET-1',
+    ): array {
+        if ($employee === null || $uc === null) {
+            $office = Office::factory()->create();
+            $department = Department::query()->create([
+                'office_id' => $office->id,
+                'name' => 'Admin',
+                'code' => 'ADM',
+            ]);
 
-        $employee = User::factory()->create([
-            'role' => User::ROLE_EMPLOYEE,
-            'office_id' => $office->id,
-            'department_id' => $department->id,
-        ]);
-        $uc = User::factory()->create([
-            'role' => User::ROLE_UNIT_CONSOLIDATOR,
-            'office_id' => $office->id,
-            'department_id' => $department->id,
-        ]);
-        $uc->syncOfficeAssignments([
-            ['office_id' => $office->id, 'department_id' => $department->id],
-        ]);
+            $employee = User::factory()->create([
+                'role' => User::ROLE_EMPLOYEE,
+                'office_id' => $office->id,
+                'department_id' => $department->id,
+            ]);
+            $uc = User::factory()->create([
+                'role' => User::ROLE_UNIT_CONSOLIDATOR,
+                'office_id' => $office->id,
+                'department_id' => $department->id,
+            ]);
+            $uc->syncOfficeAssignments([
+                ['office_id' => $office->id, 'department_id' => $department->id],
+            ]);
+        }
+
+        $office = Office::query()->findOrFail($employee->office_id);
+        $department = Department::query()->findOrFail($employee->department_id);
+        $category = ItemCategory::query()->firstOrCreate(['name' => 'Semi-Expendable']);
+        $item = Item::factory()->create(['item_category_id' => $category->id]);
 
         $requisition = Requisition::query()->create([
             'office_id' => $office->id,
@@ -161,7 +237,7 @@ class PropertyReturnCompileNotificationTest extends TestCase
         ]);
 
         $issuance = Issuance::withoutEvents(fn () => Issuance::query()->create([
-            'reference_code' => 'ICS-RET-1',
+            'reference_code' => 'ICS-'.$propertyNumber,
             'item_id' => $item->id,
             'office_id' => $office->id,
             'department_id' => $department->id,
@@ -174,11 +250,20 @@ class PropertyReturnCompileNotificationTest extends TestCase
             'requisition_id' => $requisition->id,
         ]));
 
+        $unit = InventoryUnit::query()->create([
+            'item_id' => $item->id,
+            'office_id' => $office->id,
+            'property_number' => $propertyNumber,
+            'status' => InventoryUnit::STATUS_ISSUED,
+            'issuance_id' => $issuance->id,
+            'unit_cost' => 100,
+        ]);
+
         $request = PropertyActionRequest::query()->create([
             'action_type' => PropertyActionRequest::ACTION_RETURN,
-            'reason_code' => 'good_condition',
+            'reason_code' => $reasonCode,
             'requested_by' => $employee->id,
-            'accountable_user_id' => $uc->id,
+            'accountable_user_id' => $employee->id,
             'office_id' => $office->id,
             'department_id' => $department->id,
             'status' => PropertyActionRequest::STATUS_DRAFT,
@@ -187,6 +272,7 @@ class PropertyReturnCompileNotificationTest extends TestCase
         PropertyActionRequestLine::query()->create([
             'property_action_request_id' => $request->id,
             'issuance_id' => $issuance->id,
+            'inventory_unit_id' => $unit->id,
             'sort_order' => 0,
             'quantity' => 1,
         ]);

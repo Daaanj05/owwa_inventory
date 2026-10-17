@@ -47,5 +47,6 @@ trait ListensForRequisitionBroadcasts
     public function refreshFromRequisitionBroadcast(): void
     {
         $this->dispatch('$refresh');
+        $this->dispatch('refresh-sidebar');
     }
 }

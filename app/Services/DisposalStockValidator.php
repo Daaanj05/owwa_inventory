@@ -149,7 +149,7 @@ class DisposalStockValidator
             ]);
         }
 
-        $allowedStatuses = [InventoryUnit::STATUS_IN_STOCK, InventoryUnit::STATUS_ISSUED];
+        $allowedStatuses = [InventoryUnit::STATUS_IN_STOCK, InventoryUnit::STATUS_ISSUED, InventoryUnit::STATUS_UNDER_REPAIR];
         $isSameUnitOnExisting = $existing !== null
             && (int) $existing->inventory_unit_id === $inventoryUnitId;
 

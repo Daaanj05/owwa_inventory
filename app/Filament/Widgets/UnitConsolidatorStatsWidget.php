@@ -58,10 +58,13 @@ class UnitConsolidatorStatsWidget extends StatsOverviewWidget implements HasActi
 
         $nearingEul = app(OfficePropertyRegisterService::class)->countNearingExpiryForUser($user);
 
-        $distributed = (int) Issuance::query()
-            ->whereHas('consolidatedRequisition', fn (Builder $query) => $query->where('requested_by', $user->id))
-            ->whereBetween('issuance_date', [$yearStart, $yearEnd])
-            ->sum('quantity');
+        $officeIds = $user->assignedOfficeIds();
+        $received = $officeIds === []
+            ? 0
+            : (int) Issuance::query()
+                ->whereIn('office_id', $officeIds)
+                ->whereBetween('issuance_date', [$yearStart, $yearEnd])
+                ->sum('quantity');
 
         return [
             Stat::make('Pending employee requests', $pendingEmployeeRequests)
@@ -84,13 +87,13 @@ class UnitConsolidatorStatsWidget extends StatsOverviewWidget implements HasActi
                     'title' => 'Click to view details',
                 ], merge: true),
 
-            Stat::make('Items issued', number_format($distributed))
-                ->description('Total items issued to employees this year')
-                ->descriptionIcon('heroicon-o-gift')
+            Stat::make('Item Received', number_format($received))
+                ->description('Quantity Supply issued to your offices this year')
+                ->descriptionIcon('heroicon-o-archive-box')
                 ->color('info')
                 ->extraAttributes([
                     'class' => 'cursor-pointer owwa-stat-clickable',
-                    'wire:click' => "mountAction('viewItemsDistributed')",
+                    'wire:click' => "mountAction('viewItemsReceived')",
                     'title' => 'Click to view details',
                 ], merge: true),
         ];
@@ -122,14 +125,14 @@ class UnitConsolidatorStatsWidget extends StatsOverviewWidget implements HasActi
         );
     }
 
-    public function viewItemsDistributedAction(): Action
+    public function viewItemsReceivedAction(): Action
     {
         return $this->detailModalAction(
-            'viewItemsDistributed',
-            'Items issued to employees (this year)',
-            fn (): array => $this->itemsIssuedDetail(),
-            RequisitionResource::getUrl('index'),
-            'Open Requisitions',
+            'viewItemsReceived',
+            'Item Received (this year)',
+            fn (): array => $this->itemsReceivedDetail(),
+            OfficePropertyRegister::getUrl(),
+            'Open Office Property Registry',
         );
     }
 
@@ -261,19 +264,19 @@ class UnitConsolidatorStatsWidget extends StatsOverviewWidget implements HasActi
     /**
      * @return array{summary: string|null, empty_title: string, empty_desc: string, columns: array<string, string>, numeric_keys: array<int, string>, rows: array<int, array<string, mixed>>}
      */
-    protected function itemsIssuedDetail(): array
+    protected function itemsReceivedDetail(): array
     {
         $user = Filament::auth()->user();
         if (! $user instanceof User) {
             return [
                 'summary' => null,
-                'empty_title' => 'No items issued',
+                'empty_title' => 'No items received',
                 'empty_desc' => 'Nothing to show.',
                 'columns' => [
                     'item' => 'Item',
                     'category' => 'Category',
                     'quantity' => 'Qty',
-                    'employee' => 'Issued to',
+                    'office' => 'Office',
                     'date' => 'Date',
                 ],
                 'numeric_keys' => ['quantity'],
@@ -282,34 +285,37 @@ class UnitConsolidatorStatsWidget extends StatsOverviewWidget implements HasActi
         }
 
         [$yearStart, $yearEnd] = $this->yearBounds();
+        $officeIds = $user->assignedOfficeIds();
 
-        $issuances = Issuance::query()
-            ->with(['item.category', 'issuedTo', 'requisition'])
-            ->whereHas('consolidatedRequisition', fn (Builder $query) => $query->where('requested_by', $user->id))
-            ->whereBetween('issuance_date', [$yearStart, $yearEnd])
-            ->latest('issuance_date')
-            ->limit(100)
-            ->get();
+        $issuances = $officeIds === []
+            ? collect()
+            : Issuance::query()
+                ->with(['item.category', 'office'])
+                ->whereIn('office_id', $officeIds)
+                ->whereBetween('issuance_date', [$yearStart, $yearEnd])
+                ->latest('issuance_date')
+                ->limit(100)
+                ->get();
 
         $rows = $issuances->map(fn (Issuance $issuance): array => [
             'item' => $issuance->item?->name,
             'category' => $issuance->item?->category?->name,
             'quantity' => $issuance->quantity,
-            'employee' => $issuance->issuedTo?->name,
+            'office' => $issuance->office?->name,
             'date' => optional($issuance->issuance_date)?->format('M j, Y'),
         ])->all();
 
         $totalQty = (int) $issuances->sum('quantity');
 
         return [
-            'summary' => number_format($totalQty).' unit'.($totalQty === 1 ? '' : 's').' issued across '.count($rows).' record'.(count($rows) === 1 ? '' : 's').' (showing up to 100).',
-            'empty_title' => 'No items issued',
-            'empty_desc' => 'No items have been issued to employees from your consolidated requisitions this year.',
+            'summary' => number_format($totalQty).' unit'.($totalQty === 1 ? '' : 's').' received across '.count($rows).' record'.(count($rows) === 1 ? '' : 's').' (showing up to 100).',
+            'empty_title' => 'No items received',
+            'empty_desc' => 'Supply has not issued items to your offices this year.',
             'columns' => [
                 'item' => 'Item',
                 'category' => 'Category',
                 'quantity' => 'Qty',
-                'employee' => 'Issued to',
+                'office' => 'Office',
                 'date' => 'Date',
             ],
             'numeric_keys' => ['quantity'],

@@ -52,7 +52,7 @@
                 <td>{{ $issuance->unit_cost ?? '—' }}</td>
                 <td>{{ $issuance->amount ?? '—' }}</td>
                 <td>{{ $issuance->item?->name }}</td>
-                <td>{{ $issuance->property_number ?? $issuance->item?->item_code ?? '—' }}</td>
+                <td>{{ $issuance->issuedPropertyNumbersLabel() ?: ($issuance->item?->item_code ?? '—') }}</td>
                 <td>{{ $issuance->estimated_useful_life ?? $issuance->item?->estimated_useful_life ?? '—' }}</td>
             </tr>
         </tbody>

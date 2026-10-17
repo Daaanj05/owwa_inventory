@@ -60,7 +60,7 @@
                         <td colspan="{{ count($columns) }}">
                             <div class="owwa-empty">
                                 <p class="owwa-empty-title">No history yet</p>
-                                <p class="owwa-empty-desc">Received and distributed movements will appear here.</p>
+                                <p class="owwa-empty-desc">Received and issued movements will appear here.</p>
                             </div>
                         </td>
                     </tr>

@@ -10,7 +10,7 @@ use App\Filament\Resources\Issuances\Schemas\IssuanceForm;
 use App\Filament\Resources\Issuances\Tables\IssuancesTable;
 use App\Models\Issuance;
 use App\Models\User;
-use App\Support\IssuanceDistributionVisibility;
+use App\Support\IssuanceRecipientSummary;
 use App\Support\OwwaReferenceLabels;
 use App\Support\SemiExpendableUsefulLife;
 use BackedEnum;
@@ -174,10 +174,11 @@ class IssuanceResource extends Resource
                 ->columnSpanFull(),
             Section::make('Assignment')
                 ->schema([
-                    TextEntry::make('issuedTo.name')->label('Unit Consolidator')->placeholder('—'),
-                    TextEntry::make('distribution_status')
-                        ->label('Distribution status')
-                        ->state(fn (Issuance $record): string => IssuanceDistributionVisibility::forIssuance($record)['distribution_status_label']),
+                    TextEntry::make('issuedTo.name')->label('Issued to')->placeholder('—'),
+                    TextEntry::make('endorsed_by')
+                        ->label('Endorsed by (UC)')
+                        ->state(fn (Issuance $record): ?string => IssuanceRecipientSummary::resolveUnitConsolidatorName($record))
+                        ->placeholder('—'),
                     TextEntry::make('asset_identifier')
                         ->label(fn (Issuance $record): string => OwwaReferenceLabels::assetIdentifierLabel(
                             $record->item?->category?->getTemplateSlug()

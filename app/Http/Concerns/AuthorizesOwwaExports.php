@@ -16,16 +16,13 @@ use App\Filament\Resources\Transfers\TransferResource;
 use App\Models\Acquisition;
 use App\Models\AcquisitionPaperwork;
 use App\Models\Disposal;
-use App\Models\Distribution;
 use App\Models\InspectionAcceptanceReport;
 use App\Models\Issuance;
 use App\Models\Item;
 use App\Models\PhysicalCountSession;
 use App\Models\PurchaseOrder;
 use App\Models\Transfer;
-use App\Models\User;
 use App\Support\CustodianOfficeScope;
-use Illuminate\Support\Facades\Auth;
 
 trait AuthorizesOwwaExports
 {
@@ -72,20 +69,6 @@ trait AuthorizesOwwaExports
     {
         abort_unless(PhysicalCountSessionResource::canViewAny(), 403);
         $this->assertCustodianOffice((int) $session->office_id);
-    }
-
-    protected function authorizeDistributionExport(Distribution $distribution): void
-    {
-        $user = Auth::user();
-        abort_unless($user instanceof User && $user->isUnitConsolidator(), 403);
-
-        if ($user->office_id) {
-            abort_unless((int) $distribution->office_id === (int) $user->office_id, 403);
-        }
-
-        if ($user->department_id) {
-            abort_unless((int) $distribution->department_id === (int) $user->department_id, 403);
-        }
     }
 
     protected function authorizeAcquisitionPaperworkExport(AcquisitionPaperwork $paperwork): void

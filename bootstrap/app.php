@@ -23,6 +23,7 @@ return Application::configure(basePath: dirname(__DIR__))
             \Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class => \App\Http\Middleware\VerifyCsrfToken::class,
         ]);
         $middleware->append(\App\Http\Middleware\LogSlowRequests::class);
+        $middleware->append(\App\Http\Middleware\PreventSearchEngineIndexing::class);
     })
     ->withSchedule(function (Schedule $schedule): void {
         $schedule->command('sessions:close-stale')->everyFiveMinutes();

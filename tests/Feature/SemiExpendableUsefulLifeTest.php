@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Acquisition;
 use App\Models\Department;
+use App\Models\InventoryUnit;
 use App\Models\Issuance;
 use App\Models\Item;
 use App\Models\ItemCategory;
@@ -104,6 +105,13 @@ class SemiExpendableUsefulLifeTest extends TestCase
             'requested_by' => $custodian->id,
             'status' => 'pending',
         ]);
+        InventoryUnit::query()->create([
+            'property_number' => 'SPLV-EUL-001',
+            'item_id' => $item->id,
+            'office_id' => $office->id,
+            'unit_cost' => 4500,
+            'status' => InventoryUnit::STATUS_IN_STOCK,
+        ]);
 
         $issuance = Issuance::query()->create([
             'requisition_id' => $requisition->id,
@@ -197,6 +205,6 @@ class SemiExpendableUsefulLifeTest extends TestCase
             'estimated_useful_life' => null,
         ]);
 
-        $this->assertSame('5 yrs', SemiExpendableUsefulLife::resolveForItem($item));
+        $this->assertSame('60 months', SemiExpendableUsefulLife::resolveForItem($item));
     }
 }

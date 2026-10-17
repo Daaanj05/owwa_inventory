@@ -2,7 +2,6 @@
 
 namespace App\Support;
 
-use App\Models\Distribution;
 use App\Models\Issuance;
 use App\Models\Requisition;
 use App\Models\RequisitionSourceEndorsement;
@@ -146,42 +145,9 @@ class EmployeeRequisitionStatus
             ->sum('quantity');
     }
 
-    /**
-     * @deprecated Use issuedTotal() — kept for legacy distribution reads.
-     */
-    public static function distributedTotal(Requisition $requisition): int
-    {
-        $issued = self::issuedTotal($requisition);
-
-        if ($issued > 0) {
-            return $issued;
-        }
-
-        return (int) Distribution::query()
-            ->where('requisition_id', $requisition->id)
-            ->sum('quantity');
-    }
-
     public static function issuedTotalForItem(Requisition $requisition, int $itemId): int
     {
         return (int) Issuance::query()
-            ->where('requisition_id', $requisition->id)
-            ->where('item_id', $itemId)
-            ->sum('quantity');
-    }
-
-    /**
-     * @deprecated Use issuedTotalForItem() — kept for legacy distribution reads.
-     */
-    public static function distributedTotalForItem(Requisition $requisition, int $itemId): int
-    {
-        $issued = self::issuedTotalForItem($requisition, $itemId);
-
-        if ($issued > 0) {
-            return $issued;
-        }
-
-        return (int) Distribution::query()
             ->where('requisition_id', $requisition->id)
             ->where('item_id', $itemId)
             ->sum('quantity');
@@ -221,23 +187,7 @@ class EmployeeRequisitionStatus
             ->where('requisition_id', $requisition->id)
             ->max('issuance_date');
 
-        if ($date) {
-            return Carbon::parse($date);
-        }
-
-        $distributionDate = Distribution::query()
-            ->where('requisition_id', $requisition->id)
-            ->max('distribution_date');
-
-        return $distributionDate ? Carbon::parse($distributionDate) : null;
-    }
-
-    /**
-     * @deprecated Use latestIssuanceDate()
-     */
-    public static function latestDistributionDate(Requisition $requisition): ?Carbon
-    {
-        return self::latestIssuanceDate($requisition);
+        return $date ? Carbon::parse($date) : null;
     }
 
     public static function formatSummary(int $fulfilled, int $target): string

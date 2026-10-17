@@ -12,15 +12,15 @@ class RequisitionLineFulfillmentState
 
     public const FULLY_ISSUED = 'fully_issued';
 
-    public static function label(string $state, bool $employeeFacing = false, bool $endorsed = false, bool $fullyDistributed = false): string
+    public static function label(string $state, bool $employeeFacing = false, bool $endorsed = false, bool $fullyReceived = false): string
     {
         if ($employeeFacing) {
             if ($state === self::IN_STOCK && $endorsed) {
                 return 'Endorsed';
             }
 
-            if ($state === self::FULLY_ISSUED && ($fullyDistributed || $endorsed)) {
-                return 'Fully distributed';
+            if ($state === self::FULLY_ISSUED && ($fullyReceived || $endorsed)) {
+                return 'Fully received';
             }
         }
 

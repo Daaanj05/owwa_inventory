@@ -53,7 +53,8 @@ class ForcePasswordChangeTest extends TestCase
 
         $this->assertDatabaseHas(User::class, [
             'email' => 'new.user@example.com',
-            'must_change_password' => true,
+            'must_change_password' => false,
+            'email_verified_at' => null,
         ]);
     }
 
@@ -103,7 +104,7 @@ class ForcePasswordChangeTest extends TestCase
     {
         Filament::setCurrentPanel(Filament::getPanel('admin'));
 
-        $user = User::factory()->mustChangePassword()->create([
+        $user = User::factory()->withoutMultiFactorAuthentication()->mustChangePassword()->create([
             'role' => User::ROLE_EMPLOYEE,
             'email_verified_at' => now(),
             'password' => 'TempPass1',
@@ -124,7 +125,7 @@ class ForcePasswordChangeTest extends TestCase
     {
         Filament::setCurrentPanel(Filament::getPanel('admin'));
 
-        $user = User::factory()->mustChangePassword()->create([
+        $user = User::factory()->withoutMultiFactorAuthentication()->mustChangePassword()->create([
             'role' => User::ROLE_EMPLOYEE,
             'email_verified_at' => now(),
             'password' => 'TempPass1',
@@ -146,7 +147,8 @@ class ForcePasswordChangeTest extends TestCase
         $this->assertFalse($user->mustChangePassword());
         $this->assertTrue(Hash::check('NewPass1', $user->password));
 
-        $this->get('/')->assertOk();
+        $this->get('/')
+            ->assertRedirect(Filament::getSetUpRequiredMultiFactorAuthenticationUrl());
     }
 
     public function test_verified_user_can_access_profile_when_flag_is_false(): void

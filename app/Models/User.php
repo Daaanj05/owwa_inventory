@@ -3,8 +3,15 @@
 namespace App\Models;
 
 use App\Models\Concerns\LogsUserActivity;
+use App\Services\EmailVerificationCodeService;
 use App\Services\UserActivityLogger;
 use App\Support\CustodianOfficeScope;
+use Filament\Auth\MultiFactor\App\Concerns\InteractsWithAppAuthentication;
+use Filament\Auth\MultiFactor\App\Concerns\InteractsWithAppAuthenticationRecovery;
+use Filament\Auth\MultiFactor\App\Contracts\HasAppAuthentication;
+use Filament\Auth\MultiFactor\App\Contracts\HasAppAuthenticationRecovery;
+use Filament\Auth\MultiFactor\Email\Concerns\InteractsWithEmailAuthentication;
+use Filament\Auth\MultiFactor\Email\Contracts\HasEmailAuthentication;
 use Filament\Facades\Filament;
 use Filament\Models\Contracts\FilamentUser;
 use Filament\Panel;
@@ -15,9 +22,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
-use Illuminate\Support\Facades\URL;
 
-class User extends Authenticatable implements FilamentUser, MustVerifyEmail
+class User extends Authenticatable implements FilamentUser, HasAppAuthentication, HasAppAuthenticationRecovery, HasEmailAuthentication, MustVerifyEmail
 {
     public const ROLE_SYSTEM_ADMIN = 'system_admin';
 
@@ -32,7 +38,13 @@ class User extends Authenticatable implements FilamentUser, MustVerifyEmail
     public const GENDER_FEMALE = 'female';
 
     /** @use HasFactory<\Database\Factories\UserFactory> */
-    use HasFactory, LogsUserActivity, Notifiable;
+    use HasFactory;
+
+    use InteractsWithAppAuthentication;
+    use InteractsWithAppAuthenticationRecovery;
+    use InteractsWithEmailAuthentication;
+    use LogsUserActivity;
+    use Notifiable;
 
     /**
      * The attributes that are mass assignable.
@@ -61,6 +73,7 @@ class User extends Authenticatable implements FilamentUser, MustVerifyEmail
     protected $hidden = [
         'password',
         'remember_token',
+        'email_verification_code_hash',
     ];
 
     /**
@@ -74,6 +87,7 @@ class User extends Authenticatable implements FilamentUser, MustVerifyEmail
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'must_change_password' => 'boolean',
+            'email_verification_code_expires_at' => 'datetime',
         ];
     }
 
@@ -465,6 +479,14 @@ class User extends Authenticatable implements FilamentUser, MustVerifyEmail
         return $this->hasMany(PasswordResetRequest::class);
     }
 
+    /**
+     * @return HasMany<TrustedDevice, $this>
+     */
+    public function trustedDevices(): HasMany
+    {
+        return $this->hasMany(TrustedDevice::class)->latest('last_used_at');
+    }
+
     public function isSupplyCustodian(): bool
     {
         return $this->role === self::ROLE_SUPPLY_CUSTODIAN;
@@ -495,6 +517,11 @@ class User extends Authenticatable implements FilamentUser, MustVerifyEmail
         return (bool) $this->must_change_password;
     }
 
+    public function sendEmailVerificationNotification(): void
+    {
+        app(EmailVerificationCodeService::class)->sendSetupInvite($this);
+    }
+
     public function canAccessPanel(Panel $panel): bool
     {
         return match ($panel->getId()) {
@@ -515,16 +542,12 @@ class User extends Authenticatable implements FilamentUser, MustVerifyEmail
         return Filament::getPanel($panelId)->getLoginUrl();
     }
 
-    public static function guestEmailVerificationUrlFor(self $user): string
+    public static function panelSetupUrlFor(self $user): string
     {
-        return URL::temporarySignedRoute(
-            'verification.verify.guest',
-            now()->addMinutes(config('auth.verification.expire', 60)),
-            [
-                'id' => $user->getKey(),
-                'hash' => sha1($user->getEmailForVerification()),
-            ],
-        );
+        $panelId = $user->isSystemAdmin() ? 'system-admin' : 'admin';
+        $panel = Filament::getPanel($panelId);
+
+        return url()->route($panel->generateRouteName('auth.verify-email'));
     }
 
     /**

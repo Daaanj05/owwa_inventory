@@ -2,8 +2,10 @@
 
 return [
     'return' => [
-        'good_condition' => 'Return — good condition',
+        'serviceable_not_needed' => 'Serviceable — no longer needed',
+        'officer_separation' => 'Resignation / retirement / transfer of accountable officer',
         'needs_repair' => 'For repair',
+        'unserviceable' => 'Unserviceable — beyond repair',
     ],
     'replacement' => [
         'end_of_useful_life' => 'Replacement — end of useful life',

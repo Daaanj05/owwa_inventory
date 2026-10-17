@@ -48,7 +48,7 @@ class RsmiFastPdfExportTest extends TestCase
         $this->assertSame('2026-09-0100', $pages[0]['lines'][0]['ris_no']);
         $this->assertNotEmpty($pages[0]['recap_lines']);
 
-        $entityName = (string) config('owwa_export_standards.entity_name', 'OWWA-4A');
+        $entityName = (string) config('owwa_export_standards.entity_name');
         $this->assertStringContainsString($entityName, $html);
         $this->assertStringContainsString('REPORT OF SUPPLIES AND MATERIALS ISSUED', $html);
         $this->assertStringContainsString('Republic of the Philippines', $html);

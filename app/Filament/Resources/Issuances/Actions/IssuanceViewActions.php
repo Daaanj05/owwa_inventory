@@ -122,22 +122,6 @@ class IssuanceViewActions
             });
     }
 
-    public static function printQrLabelAction(): Action
-    {
-        return Action::make('printQrLabel')
-            ->label('Print QR label')
-            ->icon('heroicon-o-qr-code')
-            ->visible(function (Issuance $record): bool {
-                $slug = $record->item?->category?->getTemplateSlug();
-
-                return in_array($slug, ['ppe', 'semi_expendable'], true)
-                    && $record->batchLines()->count() === 1
-                    && filled($record->property_number);
-            })
-            ->url(fn (Issuance $record): string => route('owwa.qr-labels.issuance', $record))
-            ->openUrlInNewTab();
-    }
-
     protected static function startExport(Issuance $record, Action $action, bool $asPdf): void
     {
         $record->loadMissing('item.category');

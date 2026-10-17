@@ -20,7 +20,6 @@ trait HasPhysicalCountQrActions
                     PhysicalCountSessionResource::viewModalUrl($record),
                 ),
             ),
-            PhysicalCountSessionActions::printQrLabelsAction(),
         ];
     }
 }

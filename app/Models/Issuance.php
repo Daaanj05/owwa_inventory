@@ -7,7 +7,6 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Collection;
 
@@ -27,14 +26,14 @@ class Issuance extends Model
     public array $reservedInventoryUnitIds = [];
 
     protected $fillable = [
-        'issuance_batch_id', 'reference_code', 'item_id', 'office_id', 'department_id', 'requisition_id',
+        'issuance_batch_id', 'reference_code', 'item_id', 'office_id', 'issued_from_office_id', 'department_id', 'requisition_id',
         'consolidated_requisition_id', 'source_endorsement_id',
-        'quantity', 'unit_cost', 'amount', 'issuance_date', 'remarks',
-        'property_number', 'estimated_useful_life', 'eul_expires_at',
+        'quantity', 'returned_quantity', 'unit_cost', 'amount', 'issuance_date', 'remarks',
+        'property_number', 'issued_property_numbers', 'estimated_useful_life', 'eul_expires_at',
         'useful_life_condition', 'useful_life_condition_note', 'useful_life_condition_reported_at',
         'received_from_name',
         'custodian_printed_name', 'accounting_staff_printed_name',
-        'custodian_designation', 'issued_to_designation',
+        'custodian_designation', 'issued_to_designation', 'received_by_printed_name',
         'issued_by', 'issued_to',
         'custody_ended_at', 'custody_end_type', 'custody_end_reference',
     ];
@@ -48,7 +47,41 @@ class Issuance extends Model
             'custody_ended_at' => 'datetime',
             'unit_cost' => 'decimal:2',
             'amount' => 'decimal:2',
+            'issued_property_numbers' => 'array',
+            'returned_quantity' => 'integer',
         ];
+    }
+
+    /**
+     * Inventory item / property numbers of every unit issued on this slip (ICS/PAR).
+     *
+     * @return list<string>
+     */
+    public function issuedPropertyNumbers(): array
+    {
+        $numbers = collect($this->issued_property_numbers ?? [])
+            ->map(fn (mixed $number): string => trim((string) $number))
+            ->filter()
+            ->values();
+
+        if ($numbers->isEmpty() && filled($this->property_number)) {
+            return [(string) $this->property_number];
+        }
+
+        return $numbers->all();
+    }
+
+    public function issuedPropertyNumbersLabel(): string
+    {
+        return implode(', ', $this->issuedPropertyNumbers());
+    }
+
+    /**
+     * Quantity still in the employee's custody (issued minus returned/disposed through property actions).
+     */
+    public function remainingQuantity(): int
+    {
+        return max(0, (int) $this->quantity - (int) $this->returned_quantity);
     }
 
     protected static function booted(): void
@@ -60,7 +93,7 @@ class Issuance extends Model
 
     protected static function applyPricingFromAcquisitions(Issuance $issuance): void
     {
-        if ($issuance->item_id && ($issuance->isDirty('item_id') || $issuance->unit_cost === null)) {
+        if ($issuance->item_id && $issuance->unit_cost === null) {
             $unitCost = Acquisition::query()
                 ->where('item_id', $issuance->item_id)
                 ->orderByDesc('acquisition_date')
@@ -187,9 +220,21 @@ class Issuance extends Model
         return $this->belongsTo(User::class, 'issued_to');
     }
 
-    public function inventoryUnit(): HasOne
+    public function inventoryUnits(): HasMany
     {
-        return $this->hasOne(InventoryUnit::class);
+        return $this->hasMany(InventoryUnit::class)->orderBy('id');
+    }
+
+    /**
+     * Executed return lines (each carries the SC's receive outcome) against this issuance.
+     *
+     * @return HasMany<PropertyActionRequestLine, $this>
+     */
+    public function executedReturnLines(): HasMany
+    {
+        return $this->hasMany(PropertyActionRequestLine::class)
+            ->whereNotNull('outcome')
+            ->orderBy('id');
     }
 
     /**

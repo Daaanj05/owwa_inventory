@@ -3,6 +3,7 @@
 namespace Database\Seeders;
 
 use App\Models\Disposal;
+use App\Models\DisposalBatch;
 use App\Models\InventoryUnit;
 use App\Models\Issuance;
 use App\Models\Item;
@@ -42,10 +43,19 @@ class IncidentReportDemoSeeder extends Seeder
 
         $issuance = $this->resolveIssuance($unit, $item, $office);
         $cost = (float) ($unit->acquisition?->unit_cost ?? 4500.00);
+        $batch = $this->confirmedBatch('2026-07-0001', [
+            'category_slug' => 'semi_expendable',
+            'office_id' => $office->id,
+            'department_id' => $issuance?->department_id,
+            'disposal_date' => Carbon::parse('2026-07-10'),
+            'disposal_type' => 'lost_stolen_damaged',
+            'recorded_by' => $custodian->id,
+        ]);
 
         Disposal::query()->updateOrCreate(
             ['reference_code' => '2026-07-0001'],
             [
+                'disposal_batch_id' => $batch->id,
                 'item_id' => $item->id,
                 'inventory_unit_id' => $unit->id,
                 'office_id' => $office->id,
@@ -92,10 +102,19 @@ class IncidentReportDemoSeeder extends Seeder
 
         $issuance = $this->resolveIssuance($unit, $item, $office);
         $cost = (float) ($unit->acquisition?->unit_cost ?? 55000.00);
+        $batch = $this->confirmedBatch('2026-07-0002', [
+            'category_slug' => 'ppe',
+            'office_id' => $office->id,
+            'department_id' => $issuance?->department_id,
+            'disposal_date' => Carbon::parse('2026-07-12'),
+            'disposal_type' => 'lost_stolen_damaged',
+            'recorded_by' => $custodian->id,
+        ]);
 
         Disposal::query()->updateOrCreate(
             ['reference_code' => '2026-07-0002'],
             [
+                'disposal_batch_id' => $batch->id,
                 'item_id' => $item->id,
                 'inventory_unit_id' => $unit->id,
                 'office_id' => $office->id,
@@ -117,6 +136,17 @@ class IncidentReportDemoSeeder extends Seeder
                 'inspection_officer_printed_name' => 'Ana Reyes',
                 'recorded_by' => $custodian->id,
             ],
+        );
+    }
+
+    /**
+     * @param  array<string, mixed>  $attributes
+     */
+    protected function confirmedBatch(string $referenceCode, array $attributes): DisposalBatch
+    {
+        return DisposalBatch::query()->updateOrCreate(
+            ['reference_code' => $referenceCode],
+            [...$attributes, 'confirmed_at' => now()],
         );
     }
 

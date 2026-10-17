@@ -2,6 +2,7 @@
 
 namespace App\Filament\Pages\Auth;
 
+use App\Filament\Concerns\ChallengesMultiFactorForSensitiveActions;
 use App\Models\User;
 use App\Support\PasswordRules;
 use Filament\Actions\Action;
@@ -20,6 +21,7 @@ use Illuminate\Validation\Rules\Password;
 
 class ChangePassword extends Page
 {
+    use ChallengesMultiFactorForSensitiveActions;
     use HasTopbar;
 
     protected static bool $shouldRegisterNavigation = false;
@@ -45,18 +47,26 @@ class ChangePassword extends Page
             return;
         }
 
+        if ($this->userHasEnabledMultiFactorProvider($user)) {
+            $this->prepareMultiFactorChallenge($user);
+        }
+
         $this->form->fill();
     }
 
     public function changePassword(): void
     {
-        $data = $this->form->getState();
-
         $user = Filament::auth()->user();
 
         if (! $user instanceof User) {
             return;
         }
+
+        if ($this->userHasEnabledMultiFactorProvider($user)) {
+            $this->hitMultiFactorChallengeRateLimiter($user);
+        }
+
+        $data = $this->form->getState();
 
         $user->forceFill([
             'password' => $data['password'],
@@ -75,11 +85,21 @@ class ChangePassword extends Page
             ->success()
             ->send();
 
+        $mfaUrl = Filament::getSetUpRequiredMultiFactorAuthenticationUrl();
+
+        if (filled($mfaUrl) && ! $this->userHasEnabledMultiFactorProvider($user->fresh())) {
+            $this->redirect($mfaUrl, navigate: true);
+
+            return;
+        }
+
         $this->redirect(Filament::getUrl(), navigate: true);
     }
 
     public function form(Schema $schema): Schema
     {
+        $user = Filament::auth()->user();
+
         return $schema
             ->components([
                 TextInput::make('password')
@@ -98,6 +118,7 @@ class ChangePassword extends Page
                     ->required()
                     ->autocomplete('new-password')
                     ->dehydrated(false),
+                ...($user instanceof User ? $this->multiFactorChallengeFormComponents($user) : []),
             ])
             ->statePath('data');
     }
@@ -114,7 +135,13 @@ class ChangePassword extends Page
 
     public function getSubheading(): string|Htmlable|null
     {
-        return 'You must set a new password before continuing.';
+        $user = Filament::auth()->user();
+
+        if ($user instanceof User && $this->userHasEnabledMultiFactorProvider($user)) {
+            return 'Confirm with your authenticator or email code, then set a new password.';
+        }
+
+        return 'Choose a new password to continue.';
     }
 
     /**
@@ -161,6 +188,11 @@ class ChangePassword extends Page
     }
 
     public function hasLogo(): bool
+    {
+        return false;
+    }
+
+    public static function isMultiFactorAuthenticationRequired(\Filament\Panel $panel): bool
     {
         return false;
     }

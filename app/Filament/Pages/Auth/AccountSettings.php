@@ -2,8 +2,12 @@
 
 namespace App\Filament\Pages\Auth;
 
+use App\Filament\Concerns\ChallengesMultiFactorForSensitiveActions;
 use App\Filament\Concerns\InteractsWithAccountNavigation;
 use App\Filament\Concerns\InteractsWithProfileUser;
+use App\Models\TrustedDevice;
+use App\Services\EmailVerificationCodeService;
+use App\Services\TrustedDeviceService;
 use App\Support\PasswordRules;
 use Filament\Actions\Action;
 use Filament\Facades\Filament;
@@ -13,10 +17,13 @@ use Filament\Pages\Page;
 use Filament\Support\Enums\Width;
 use Filament\Support\Icons\Heroicon;
 use Illuminate\Contracts\Support\Htmlable;
+use Illuminate\Support\Collection;
 use Illuminate\Validation\Rules\Password;
+use Illuminate\Validation\ValidationException;
 
 class AccountSettings extends Page
 {
+    use ChallengesMultiFactorForSensitiveActions;
     use InteractsWithAccountNavigation;
     use InteractsWithProfileUser;
 
@@ -33,6 +40,40 @@ class AccountSettings extends Page
     public function mount(): void
     {
         $this->loadProfileUserRelations();
+        app(TrustedDeviceService::class)->pruneExpiredForUser($this->profileUser());
+    }
+
+    /**
+     * @return Collection<int, TrustedDevice>
+     */
+    public function activeTrustedDevices(): Collection
+    {
+        return $this->profileUser()
+            ->trustedDevices()
+            ->where('expires_at', '>', now())
+            ->orderByDesc('last_used_at')
+            ->get();
+    }
+
+    public function revokeTrustedDevice(int $deviceId): void
+    {
+        $user = $this->profileUser();
+        $device = TrustedDevice::query()
+            ->where('user_id', $user->id)
+            ->whereKey($deviceId)
+            ->first();
+
+        if ($device === null) {
+            return;
+        }
+
+        app(TrustedDeviceService::class)->revoke($device, $user);
+
+        Notification::make()
+            ->title('Device removed')
+            ->body('That browser will need a verification code the next time you sign in.')
+            ->success()
+            ->send();
     }
 
     /**
@@ -88,11 +129,20 @@ class AccountSettings extends Page
                     return;
                 }
 
-                $user->sendEmailVerificationNotification();
+                $result = app(EmailVerificationCodeService::class)->sendSetupInvite($user);
+
+                if (! $result->success) {
+                    Notification::make()
+                        ->title('Could not send setup email')
+                        ->danger()
+                        ->send();
+
+                    return;
+                }
 
                 Notification::make()
-                    ->title('Verification email sent')
-                    ->body('Check your inbox for the verification link.')
+                    ->title('Setup email sent')
+                    ->body('Check your inbox for the account setup link.')
                     ->success()
                     ->send();
             });
@@ -106,10 +156,13 @@ class AccountSettings extends Page
             ->color('gray')
             ->size('sm')
             ->modalHeading('Change password')
-            ->modalDescription('Enter your current password, then choose a new one.')
+            ->modalDescription('Enter your current password, a verification code, then choose a new password.')
             ->modalWidth(Width::Large)
             ->modalSubmitActionLabel('Update password')
-            ->form([
+            ->mountUsing(function (): void {
+                $this->prepareMultiFactorChallenge($this->profileUser());
+            })
+            ->form(fn (): array => [
                 TextInput::make('currentPassword')
                     ->label('Current password')
                     ->password()
@@ -134,9 +187,18 @@ class AccountSettings extends Page
                     ->autocomplete('new-password')
                     ->dehydrated(false)
                     ->required(),
+                ...$this->multiFactorChallengeFormComponents($this->profileUser()),
             ])
             ->action(function (array $data): void {
                 $user = $this->profileUser();
+
+                if (! $this->userHasEnabledMultiFactorProvider($user)) {
+                    throw ValidationException::withMessages([
+                        'password' => 'Set up multi-factor authentication before changing your password.',
+                    ]);
+                }
+
+                $this->hitMultiFactorChallengeRateLimiter($user);
 
                 $user->forceFill([
                     'password' => $data['password'],

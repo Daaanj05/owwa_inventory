@@ -66,7 +66,7 @@ class PropertyActionRequestEmployeeViewTest extends TestCase
         $record = new PropertyActionRequest([
             'reference_code' => '2026-10-0002',
             'action_type' => PropertyActionRequest::ACTION_RETURN,
-            'reason_code' => 'good_condition',
+            'reason_code' => 'serviceable_not_needed',
             'reason_detail' => 'Return of item; not needed anymore',
             'requested_by' => 14,
             'accountable_user_id' => 14,

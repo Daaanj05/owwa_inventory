@@ -2643,7 +2643,7 @@ class OwwaTemplateExportService
         $rsmiMap = OwwaCellMapping::form('RSMI');
         $values = [];
         OwwaCellMapping::applyHeader($values, (array) ($rsmiMap['header'] ?? []), [
-            'entity_name' => (string) config('owwa_export_standards.entity_name', 'OWWA-4A'),
+            'entity_name' => (string) config('owwa_export_standards.entity_name'),
             'serial_no' => $rsmiSerial,
             'fund_cluster' => '',
             'date' => $reportDate,
@@ -2796,7 +2796,7 @@ class OwwaTemplateExportService
 
         $values = [];
         OwwaCellMapping::applyHeader($values, (array) ($parMap['header'] ?? []), [
-            'entity_name' => (string) config('owwa_export_standards.entity_name', 'OWWA-4A'),
+            'entity_name' => (string) config('owwa_export_standards.entity_name'),
             'fund_cluster' => '',
             'par_no' => $this->ensureControlNumberFormat($first->controlNumber(), $first->issuance_date?->format('Y-m-d'), 'yearly'),
         ]);
@@ -2811,13 +2811,16 @@ class OwwaTemplateExportService
             $values[OwwaCellMapping::columnCell($cols['quantity'] ?? 'A', $row)] = (string) $issuance->quantity;
             $values[OwwaCellMapping::columnCell($cols['unit'] ?? 'B', $row)] = $item?->unit ?? '';
             $values[OwwaCellMapping::columnCell($cols['description'] ?? 'C', $row)] = $description;
-            $values[OwwaCellMapping::columnCell($cols['property_number'] ?? 'D', $row)] = $issuance->property_number ?? $item?->item_code ?? '';
+            $values[OwwaCellMapping::columnCell($cols['property_number'] ?? 'D', $row)] = $issuance->issuedPropertyNumbersLabel() ?: ($item?->item_code ?? '');
             $values[OwwaCellMapping::columnCell($cols['date_acquired'] ?? 'E', $row)] = $dateAcquired ?? '';
             $values[OwwaCellMapping::columnCell($cols['amount'] ?? 'F', $row)] = $issuance->amount ?? $issuance->unit_cost ?? '';
             $row++;
         }
 
-        $receivedByName = $this->paperworkReceivedBy($first)?->name ?? '';
+        $receivedByName = $batch?->received_by_printed_name
+            ?? $first->received_by_printed_name
+            ?? $this->paperworkReceivedBy($first)?->name
+            ?? '';
         $issuedByName = $batch?->custodian_printed_name
             ?? $first->custodian_printed_name
             ?? $first->issuedBy?->name
@@ -2834,7 +2837,11 @@ class OwwaTemplateExportService
             ?? $first->issuedBy?->office?->name
             ?? $office?->name
             ?? '';
+        $first->loadMissing(['consolidatedRequisition', 'requisition']);
+        $slip = $first->consolidatedRequisition ?? $first->requisition;
         $date = $first->issuance_date?->format('Y-m-d') ?? '';
+        $receivedDate = $slip?->ris_received_by_date?->format('Y-m-d') ?? $date;
+        $issuedDate = $slip?->ris_issued_by_date?->format('Y-m-d') ?? $date;
 
         // Underscore lines hold values; retain A44/D44, A46/D46, A48/D48, A50/D50 labels.
         return array_merge($values, $this->filledSignatureCells([
@@ -2842,8 +2849,8 @@ class OwwaTemplateExportService
             'D45' => $issuedByName,
             'A47' => $receivedByPosition,
             'D47' => $issuedByPosition,
-            'A49' => $date,
-            'D49' => $date,
+            'A49' => $receivedDate,
+            'D49' => $issuedDate,
         ], $rowOffset));
     }
 
@@ -2886,7 +2893,10 @@ class OwwaTemplateExportService
             ?? $first->custodian_printed_name
             ?? $first->issuedBy?->name
             ?? '';
-        $receivedByName = $this->paperworkReceivedBy($first)?->name ?? '';
+        $receivedByName = $batch?->received_by_printed_name
+            ?? $first->received_by_printed_name
+            ?? $this->paperworkReceivedBy($first)?->name
+            ?? '';
         $receivedFromPosition = $batch?->custodian_designation
             ?? $first->custodian_designation
             ?? $office?->supply_custodian_designation
@@ -2907,7 +2917,7 @@ class OwwaTemplateExportService
 
         $values = [];
         OwwaCellMapping::applyHeader($values, (array) ($icsMap['header'] ?? []), [
-            'entity_name' => (string) config('owwa_export_standards.entity_name', 'OWWA-4A'),
+            'entity_name' => (string) config('owwa_export_standards.entity_name'),
             'fund_cluster' => '',
             'ics_no' => $this->ensureControlNumberFormat($first->controlNumber(), $first->issuance_date?->format('Y-m-d'), 'yearly'),
         ]);
@@ -2925,7 +2935,7 @@ class OwwaTemplateExportService
             $values[OwwaCellMapping::columnCell($cols['unit_cost'] ?? 'C', $row)] = $unitCost !== null ? $unitCost : '';
             $values[OwwaCellMapping::columnCell($cols['total_cost'] ?? 'D', $row)] = $totalCost !== null ? $totalCost : '';
             $values[OwwaCellMapping::columnCell($cols['description'] ?? 'E', $row)] = $this->formatItemDescription($item);
-            $values[OwwaCellMapping::columnCell($cols['inventory_item_no'] ?? 'G', $row)] = $issuance->property_number ?? $item?->item_code ?? '';
+            $values[OwwaCellMapping::columnCell($cols['inventory_item_no'] ?? 'G', $row)] = $issuance->issuedPropertyNumbersLabel() ?: ($item?->item_code ?? '');
             $values[OwwaCellMapping::columnCell($cols['estimated_useful_life'] ?? 'H', $row)] = $usefulLife;
             $row++;
         }
@@ -2933,13 +2943,17 @@ class OwwaTemplateExportService
         // Signature line cells (A46/F46, A48/F48, A50/F50) are underscore placeholders in the
         // template. Write values onto those lines and leave A49/F49/A51/F51 labels untouched.
         // Skip blank values so the template underscore length is preserved.
+        $first->loadMissing(['consolidatedRequisition', 'requisition']);
+        $slip = $first->consolidatedRequisition ?? $first->requisition;
+        $date = $first->issuance_date?->format('Y-m-d') ?? '';
+
         return array_merge($values, $this->filledSignatureCells([
             'A46' => $receivedFromName,
             'F46' => $receivedByName,
             'A48' => $receivedFromPosition,
             'F48' => $receivedByPosition,
-            'A50' => $first->issuance_date?->format('Y-m-d') ?? '',
-            'F50' => $first->issuance_date?->format('Y-m-d') ?? '',
+            'A50' => $slip?->ris_issued_by_date?->format('Y-m-d') ?? $date,
+            'F50' => $slip?->ris_received_by_date?->format('Y-m-d') ?? $date,
         ], $rowOffset));
     }
 
@@ -3022,7 +3036,7 @@ class OwwaTemplateExportService
 
         $values = [];
         OwwaCellMapping::applyHeader($values, (array) ($scMap['header'] ?? []), [
-            'entity_name' => (string) config('owwa_export_standards.entity_name', 'OWWA-4A'),
+            'entity_name' => (string) config('owwa_export_standards.entity_name'),
             'fund_cluster' => '',
             'item' => $item?->name ?? '',
             'stock_no' => $item?->item_code ?? '',
@@ -3088,7 +3102,7 @@ class OwwaTemplateExportService
 
         return [
             'header' => [
-                'entity_name' => (string) config('owwa_export_standards.entity_name', 'OWWA-4A'),
+                'entity_name' => (string) config('owwa_export_standards.entity_name'),
                 'fund_cluster' => '',
                 'property_type' => \App\Support\ItemPropertyClass::propertyTypeLabel($propertyClass),
                 'property_number' => $item?->resolvedSemiExpendablePropertyNumber() ?? $item?->item_code ?? '',
@@ -3141,7 +3155,7 @@ class OwwaTemplateExportService
 
         $values = [];
         OwwaCellMapping::applyHeader($values, (array) ($ptrMap['header'] ?? []), [
-            'entity_name' => (string) config('owwa_export_standards.entity_name', 'OWWA-4A'),
+            'entity_name' => (string) config('owwa_export_standards.entity_name'),
             'fund_cluster' => '',
             'from_accountable' => $transfer->from_accountable_officer ?? $from?->name ?? '',
             'ptr_no' => $this->ensureControlNumberFormat($transfer->reference_code, $transfer->transfer_date?->format('Y-m-d'), 'yearly'),
@@ -3184,7 +3198,7 @@ class OwwaTemplateExportService
 
         $values = [];
         OwwaCellMapping::applyHeader($values, (array) ($rsmiMap['header'] ?? []), [
-            'entity_name' => (string) config('owwa_export_standards.entity_name', 'OWWA-4A'),
+            'entity_name' => (string) config('owwa_export_standards.entity_name'),
             'serial_no' => $this->ensureControlNumberFormat($transfer->reference_code, $transfer->transfer_date?->format('Y-m-d'), 'monthly'),
             'fund_cluster' => '',
             'date' => $transfer->transfer_date?->format('Y-m-d') ?? '',
@@ -3313,7 +3327,7 @@ class OwwaTemplateExportService
 
         $values = [];
         OwwaCellMapping::applyHeader($values, (array) ($risMap['header'] ?? []), [
-            'entity_name' => (string) config('owwa_export_standards.entity_name', 'OWWA-4A'),
+            'entity_name' => (string) config('owwa_export_standards.entity_name'),
             'fund_cluster' => '',
             'division' => $department?->name ?? '',
             'responsibility_center_code' => $responsibilityCenterCode,
@@ -3368,15 +3382,29 @@ class OwwaTemplateExportService
             $rowIndex++;
         }
 
-        $signatures = (array) ($risMap['signatures'] ?? []);
-        if (isset($signatures['requested_by'])) {
-            $values[$signatures['requested_by']] = $requisition->requestedBy?->name ?? '';
-        }
-        if (isset($signatures['approved_by'])) {
-            $values[$signatures['approved_by']] = $requisition->approvedBy?->name ?? '';
-        }
+        $requestedByDate = $requisition->ris_requested_by_date?->format('Y-m-d')
+            ?? $requisition->created_at?->format('Y-m-d')
+            ?? '';
+        $approvedByDate = $requisition->ris_approved_by_date?->format('Y-m-d')
+            ?? $requisition->approved_at?->format('Y-m-d')
+            ?? '';
+        $issuedByDate = $requisition->ris_issued_by_date?->format('Y-m-d') ?? '';
+        $receivedByDate = $requisition->ris_received_by_date?->format('Y-m-d') ?? '';
 
-        return $values;
+        return array_merge($values, $this->filledSignatureCells([
+            'C37' => $requisition->ris_requested_by_name ?: ($requisition->requestedBy?->name ?? ''),
+            'D37' => $requisition->ris_approved_by_name ?: ($requisition->approvedBy?->name ?? ''),
+            'F37' => $requisition->ris_issued_by_name ?? '',
+            'H37' => $requisition->ris_received_by_name ?? '',
+            'C38' => $requisition->ris_requested_by_designation ?? '',
+            'D38' => $requisition->ris_approved_by_designation ?? '',
+            'F38' => $requisition->ris_issued_by_designation ?? '',
+            'H38' => $requisition->ris_received_by_designation ?? '',
+            'C39' => $requestedByDate,
+            'D39' => $approvedByDate,
+            'F39' => $issuedByDate,
+            'H39' => $receivedByDate,
+        ]));
     }
 
     /**
@@ -3981,70 +4009,6 @@ class OwwaTemplateExportService
         );
     }
 
-    /**
-     * Export a distribution using the OWWA issuance form for the item category (RSMI/PAR/ICS).
-     */
-    public function downloadDistribution(\App\Models\Distribution $distribution, ?string $formSlug = null): StreamedResponse
-    {
-        $distribution->loadMissing(['item.category', 'office', 'department', 'distributedTo', 'distributedBy', 'requisition']);
-        $templateFilename = $this->getTemplatePathForCategory('distribution', $distribution->item?->category, $formSlug);
-        $sheet = $this->resolveTemplateSheetForCategory('distribution', $distribution->item?->category, $formSlug);
-        $cellValues = $this->cellValuesForDistribution($distribution, $templateFilename);
-        $formCode = $this->resolveOwwaFormCode($templateFilename);
-        $reference = $distribution->requisition?->reference_code ?? 'DIST-'.$distribution->getKey();
-        $filename = $this->buildOwwaExportFilename($formCode, $reference);
-
-        return $this->downloadFromTemplate($templateFilename, $cellValues, $filename, $sheet['sheetIndex'], $sheet['sheetName']);
-    }
-
-    public function downloadDistributionPdf(\App\Models\Distribution $distribution, ?string $formSlug = null): Response
-    {
-        $distribution->loadMissing(['item.category', 'office', 'department', 'distributedTo', 'distributedBy', 'requisition']);
-        $templateFilename = $this->getTemplatePathForCategory('distribution', $distribution->item?->category, $formSlug);
-        $sheet = $this->resolveTemplateSheetForCategory('distribution', $distribution->item?->category, $formSlug);
-        $cellValues = $this->cellValuesForDistribution($distribution, $templateFilename);
-        $formCode = $this->resolveOwwaFormCode($templateFilename);
-        $reference = $distribution->requisition?->reference_code ?? 'DIST-'.$distribution->getKey();
-        $filename = $this->buildOwwaExportFilename($formCode, $reference);
-
-        return $this->downloadPdfFromTemplate($templateFilename, $cellValues, $filename, $sheet['sheetIndex'], $sheet['sheetName']);
-    }
-
-    /**
-     * @return array<string, string|int|float|null>
-     */
-    public function cellValuesForDistribution(\App\Models\Distribution $distribution, ?string $templatePath = null): array
-    {
-        $pathForMatch = $templatePath !== null ? str_replace('\\', '/', $templatePath) : '';
-        $pseudoIssuance = new Issuance([
-            'reference_code' => 'DIST-'.$distribution->id,
-            'item_id' => $distribution->item_id,
-            'office_id' => $distribution->office_id,
-            'department_id' => $distribution->department_id,
-            'quantity' => $distribution->quantity,
-            'issuance_date' => $distribution->distribution_date,
-            'remarks' => $distribution->remarks,
-            'issued_to' => $distribution->distributed_to,
-            'issued_by' => $distribution->distributed_by,
-            'custodian_printed_name' => $distribution->distributedBy?->name,
-            'issued_to_designation' => $distribution->distributedTo?->department?->name,
-        ]);
-        $pseudoIssuance->setRelation('item', $distribution->item);
-        $pseudoIssuance->setRelation('office', $distribution->office);
-        $pseudoIssuance->setRelation('department', $distribution->department);
-        $pseudoIssuance->setRelation('issuedTo', $distribution->distributedTo);
-        $pseudoIssuance->setRelation('issuedBy', $distribution->distributedBy);
-
-        if (str_contains($pathForMatch, 'PAR') || str_contains($pathForMatch, 'Appendix 71')) {
-            return $this->cellValuesForIssuancePar($pseudoIssuance);
-        }
-        if (str_contains($pathForMatch, 'ICS') || str_contains($pathForMatch, 'Appendix 59')) {
-            return $this->cellValuesForIssuanceIcs($pseudoIssuance);
-        }
-
-        return $this->cellValuesForIssuanceRsmi($pseudoIssuance);
-    }
-
     public function acquisitionPaperworkFilledSpreadsheet(AcquisitionPaperwork $paperwork, string $formSlug): Spreadsheet
     {
         $paperwork->loadMissing(['office', 'department', 'itemCategory', 'lines.item']);
@@ -4150,7 +4114,7 @@ class OwwaTemplateExportService
         ).$this->procurementContinuationSuffix($continuationPageIndex, $continuationPageCount);
 
         OwwaCellMapping::applyHeader($values, $headerMap, [
-            'entity_name' => (string) config('owwa_export_standards.entity_name', 'OWWA-4A'),
+            'entity_name' => (string) config('owwa_export_standards.entity_name'),
             'fund_cluster' => '',
             'pr_no' => $prNumber,
             'date' => $case->pr_date?->format('Y-m-d') ?? '',
@@ -4263,7 +4227,7 @@ class OwwaTemplateExportService
         $values = [];
 
         OwwaCellMapping::applyHeader($values, (array) ($iarMap['header'] ?? []), [
-            'entity_name' => (string) config('owwa_export_standards.entity_name', 'OWWA-4A'),
+            'entity_name' => (string) config('owwa_export_standards.entity_name'),
             'fund_cluster' => '',
             'supplier' => $case->supplier ?? '',
             'iar_no' => $this->ensureControlNumberFormat(

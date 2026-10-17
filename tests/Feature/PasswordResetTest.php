@@ -2,14 +2,12 @@
 
 namespace Tests\Feature;
 
-use App\Filament\Pages\Auth\ResetPassword;
+use App\Filament\Pages\Auth\RequestPasswordReset;
+use App\Models\PasswordResetRequest;
 use App\Models\User;
+use App\Support\OneTimeCode;
 use Filament\Facades\Filament;
-use Illuminate\Auth\Notifications\ResetPassword as ResetPasswordNotification;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Notification;
-use Illuminate\Support\Facades\Password;
 use Livewire\Livewire;
 use Tests\TestCase;
 
@@ -17,66 +15,35 @@ class PasswordResetTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_password_reset_notification_is_sent_for_existing_user(): void
-    {
-        Notification::fake();
-
-        $user = User::factory()->create([
-            'role' => User::ROLE_EMPLOYEE,
-            'email' => 'reset.me@example.com',
-        ]);
-
-        Password::sendResetLink(['email' => $user->email]);
-
-        Notification::assertSentTo($user, ResetPasswordNotification::class);
-    }
-
-    public function test_password_reset_does_not_send_notification_for_unknown_email(): void
-    {
-        Notification::fake();
-
-        Password::sendResetLink(['email' => 'unknown@example.com']);
-
-        Notification::assertNothingSent();
-    }
-
-    public function test_password_reset_clears_must_change_password_and_applies_rules(): void
+    public function test_invalid_reset_code_is_rejected(): void
     {
         Filament::setCurrentPanel(Filament::getPanel('admin'));
 
-        $user = User::factory()->mustChangePassword()->create([
+        $user = User::factory()->create([
             'role' => User::ROLE_EMPLOYEE,
-            'email' => 'reset.me@example.com',
+            'email' => 'bad.reset@example.com',
         ]);
 
-        $token = Password::createToken($user);
+        PasswordResetRequest::query()->create([
+            'user_id' => $user->id,
+            'status' => PasswordResetRequest::STATUS_SENT,
+            'requested_at' => now(),
+            'handled_at' => now(),
+            'reset_code_hash' => OneTimeCode::hash('654321'),
+            'reset_code_expires_at' => now()->addHour(),
+        ]);
 
-        Livewire::test(ResetPassword::class, [
-            'email' => $user->email,
-            'token' => $token,
-        ])
-            ->fillForm([
-                'password' => 'weakpass',
-                'passwordConfirmation' => 'weakpass',
+        Livewire::test(RequestPasswordReset::class)
+            ->set('step', 2)
+            ->set('data', [
+                'email' => 'bad.reset@example.com',
             ])
-            ->call('resetPassword')
-            ->assertHasFormErrors(['password']);
-
-        Livewire::test(ResetPassword::class, [
-            'email' => $user->email,
-            'token' => $token,
-        ])
             ->fillForm([
+                'code' => '000000',
                 'password' => 'NewPass1',
                 'passwordConfirmation' => 'NewPass1',
             ])
             ->call('resetPassword')
-            ->assertHasNoFormErrors()
-            ->assertNotified();
-
-        $user->refresh();
-
-        $this->assertFalse($user->mustChangePassword());
-        $this->assertTrue(Hash::check('NewPass1', $user->password));
+            ->assertHasFormErrors(['code']);
     }
 }

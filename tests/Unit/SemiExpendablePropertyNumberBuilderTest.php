@@ -55,7 +55,7 @@ class SemiExpendablePropertyNumberBuilderTest extends TestCase
         $this->assertSame($number, $item->fresh()->semi_expendable_property_number);
     }
 
-    public function test_ppe_units_reuse_item_property_number(): void
+    public function test_ppe_units_get_their_own_property_numbers_starting_with_the_item_number(): void
     {
         Office::factory()->create([
             'code' => 'OWWAIVA',
@@ -95,6 +95,7 @@ class SemiExpendablePropertyNumberBuilderTest extends TestCase
 
         $this->assertCount(2, $units);
         $this->assertSame($propertyNumber, $units[0]->property_number);
-        $this->assertSame($propertyNumber, $units[1]->property_number);
+        $this->assertNotEmpty($units[1]->property_number);
+        $this->assertNotSame($propertyNumber, $units[1]->property_number);
     }
 }

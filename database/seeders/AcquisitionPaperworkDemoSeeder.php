@@ -169,6 +169,8 @@ class AcquisitionPaperworkDemoSeeder extends Seeder
             'delivery_term' => 'FOB Destination',
             'technical_specifications' => 'As per PR line items',
             'po_date' => $paperwork->po_date?->toDateString() ?? now()->toDateString(),
+            'date_of_delivery' => ($paperwork->po_date ?? now())->copy()->addDays(7)->toDateString(),
+            'payment_term' => '30 days',
         ]);
         $po->lines()->each(function ($line): void {
             $line->update([

@@ -33,9 +33,11 @@ class PhysicalCountExportDemoSeederTest extends TestCase
 
         $this->assertGreaterThanOrEqual(70, $rpci->lines()->count());
         $this->assertGreaterThanOrEqual(70, $rpcsp->lines()->count());
-        // PPE uses one Property No. per catalog item; lines preload by property number (3 export items).
-        $this->assertGreaterThanOrEqual(3, $rpcppe->lines()->count());
-        $this->assertSame(3, $rpcppe->lines()->count());
+        $this->assertGreaterThanOrEqual(70, $rpcppe->lines()->count());
+        $this->assertSame(
+            $rpcppe->lines()->count(),
+            $rpcppe->lines()->distinct()->count('property_number'),
+        );
     }
 
     public function test_rpcsp_seeded_lines_use_one_property_number_per_unit(): void

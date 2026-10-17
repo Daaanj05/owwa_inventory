@@ -99,7 +99,7 @@ class ProcurementAnalyticsPageTest extends TestCase
             });
     }
 
-    public function test_stockout_tab_shows_rows_on_three_month_preset(): void
+    public function test_stockout_tab_shows_rows_for_fixed_twelve_month_window(): void
     {
         Filament::setCurrentPanel(Filament::getPanel('admin'));
 
@@ -117,7 +117,6 @@ class ProcurementAnalyticsPageTest extends TestCase
 
         Livewire::actingAs($custodian)
             ->test(ProcurementAnalytics::class)
-            ->call('applyPeriodPreset', '3m')
             ->call('setAtRiskView', 'stockouts')
             ->tap(function ($component): void {
                 $this->assertGreaterThan(0, $component->instance()->getStockoutPreviewCount());
@@ -153,7 +152,7 @@ class ProcurementAnalyticsPageTest extends TestCase
             });
     }
 
-    public function test_active_period_preset_matches_applied_preset(): void
+    public function test_period_context_uses_fixed_twelve_month_label(): void
     {
         Filament::setCurrentPanel(Filament::getPanel('admin'));
 
@@ -165,11 +164,14 @@ class ProcurementAnalyticsPageTest extends TestCase
 
         $component = Livewire::actingAs($custodian)->test(ProcurementAnalytics::class);
 
-        $component->call('applyPeriodPreset', '3m');
-        $this->assertSame('3m', $component->instance()->getActivePeriodPreset());
-
-        $component->set('from', now()->subMonths(4)->startOfMonth()->toDateString());
-        $this->assertNull($component->instance()->getActivePeriodPreset());
+        $this->assertSame(
+            'Last 12 months through today',
+            $component->instance()->getPeriodContext()['label'],
+        );
+        $this->assertStringContainsString(
+            'Suggestions use the last 12 months through today.',
+            $component->html(),
+        );
     }
 
     public function test_build_procurement_action_summary_headline_counts_high_and_medium(): void
@@ -446,7 +448,7 @@ class ProcurementAnalyticsPageTest extends TestCase
         $this->assertNotNull($component->get('lastAiRunId'));
 
         $component
-            ->set('from', now()->subMonths(2)->startOfMonth()->toDateString())
+            ->call('setAtRiskView', 'stockouts')
             ->assertSet('recommendation', null)
             ->assertSee('Generate a recommendation from the consumable reorder list and the replacement-due list.')
             ->assertDontSee('AI recommendation unavailable');

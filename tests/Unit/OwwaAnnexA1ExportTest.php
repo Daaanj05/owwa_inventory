@@ -45,8 +45,8 @@ class OwwaAnnexA1ExportTest extends TestCase
 
     public function test_ict_property_class_uses_ict_sheet_label(): void
     {
-        $this->assertSame('INFORMATION & COMMUNICATION TECHNOLOGY', ItemPropertyClass::propertyTypeLabel(ItemPropertyClass::Ict));
-        $this->assertSame('ICT', ItemPropertyClass::sheetNameForForm('annex_a1', ItemPropertyClass::Ict));
+        $this->assertSame('INFORMATION TECHNOLOGY EQUIPMENT', ItemPropertyClass::propertyTypeLabel(ItemPropertyClass::Ict));
+        $this->assertSame('IT', ItemPropertyClass::sheetNameForForm('annex_a1', ItemPropertyClass::Ict));
     }
 
     public function test_annex_a1_export_clears_template_sample_values(): void
@@ -99,8 +99,8 @@ class OwwaAnnexA1ExportTest extends TestCase
         $method = new \ReflectionMethod($service, 'cellValuesForAcquisitionAnnexA1');
         $values = $method->invoke($service, $acquisition);
 
-        $this->assertStringContainsString('RWO IV-A', (string) $values['A8']);
-        $this->assertStringContainsString('INFORMATION & COMMUNICATION TECHNOLOGY', (string) $values['A10']);
+        $this->assertStringContainsString((string) config('owwa_export_standards.entity_name'), (string) $values['A8']);
+        $this->assertStringContainsString('INFORMATION TECHNOLOGY EQUIPMENT', (string) $values['A10']);
         $this->assertSame('2026-01-15', $values['A15']);
         $this->assertSame('ACQ-100', $values['B15']);
         $this->assertSame(2, $values['C15']);

@@ -3,7 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\User;
-use App\Notifications\UserWelcomeNotification;
+use App\Notifications\EmailVerificationCodeNotification;
 use App\Support\OwwaMailLogo;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Mail\Message;
@@ -15,7 +15,7 @@ class OwwaMailThemeTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_welcome_email_renders_owwa_branding_and_verification_url(): void
+    public function test_verification_email_renders_owwa_branding_and_code(): void
     {
         URL::forceRootUrl('https://capstoneproject.test');
 
@@ -24,13 +24,8 @@ class OwwaMailThemeTest extends TestCase
             'email' => 'jane@example.com',
         ]);
 
-        $verificationUrl = 'https://capstoneproject.test/email/verify/1/abc123';
-        $loginUrl = 'https://capstoneproject.test/login';
-
-        $notification = new UserWelcomeNotification(
-            temporaryPassword: 'TempPass1!',
-            panelLoginUrl: $loginUrl,
-            verificationUrl: $verificationUrl,
+        $notification = new EmailVerificationCodeNotification(
+            code: '123456',
         );
 
         $html = (string) $notification->toMail($user)->render();
@@ -40,9 +35,9 @@ class OwwaMailThemeTest extends TestCase
         $this->assertStringContainsString('data:image/', $html);
         $this->assertStringNotContainsString(URL::to(config('owwa_mail.logos.owwa')), $html);
         $this->assertStringNotContainsString(URL::to(config('owwa_mail.logos.bagong_pilipinas')), $html);
-        $this->assertStringContainsString($verificationUrl, $html);
-        $this->assertStringContainsString('TempPass1!', $html);
-        $this->assertStringContainsString('Verify email address', $html);
+        $this->assertStringContainsString('123456', $html);
+        $this->assertStringNotContainsString('Temporary password', $html);
+        $this->assertStringContainsString('Verification code', $html);
         $this->assertStringContainsString('#003f8a', $html);
     }
 

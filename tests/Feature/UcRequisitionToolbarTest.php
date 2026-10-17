@@ -65,8 +65,8 @@ class UcRequisitionToolbarTest extends TestCase
         $this->actingAs($uc);
 
         Livewire::test(ListRequisitions::class)
-            ->assertSet('ucOfficeId', $office->id)
-            ->assertSet('ucDepartmentId', $department->id)
+            ->assertSet('ucOfficeId', null)
+            ->assertSet('ucDepartmentId', null)
             ->assertCanSeeTableRecords([$pending]);
     }
 

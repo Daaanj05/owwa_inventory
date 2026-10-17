@@ -2,10 +2,13 @@
 
 namespace App\Providers\Filament;
 
+use App\Filament\Auth\MultiFactor\App\AppAuthentication;
 use App\Filament\AvatarProviders\LocalGenderAvatarProvider;
 use App\Filament\Pages\Auth\AccountSettings;
 use App\Filament\Pages\Auth\EditProfile;
 use App\Filament\Pages\Auth\Login;
+use App\Filament\Pages\Auth\SetUpRequiredMultiFactorAuthentication;
+use App\Filament\Pages\Auth\VerifyEmailWithCode;
 use App\Filament\Pages\Dashboard;
 use App\Filament\Widgets\WelcomeWidget;
 use App\Http\Middleware\AdminExecutionTimeLimit;
@@ -19,6 +22,7 @@ use App\Support\FilamentEchoShouldStart;
 use App\Support\FilamentSessionAudit;
 use App\Support\OwwaFilamentTheme;
 use Filament\Actions\Action;
+use Filament\Auth\MultiFactor\Email\EmailAuthentication;
 use Filament\Enums\ThemeMode;
 use Filament\Facades\Filament;
 use Filament\Http\Middleware\AuthenticateSession;
@@ -34,6 +38,7 @@ use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
 use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Session\Middleware\StartSession;
+use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
 
@@ -48,6 +53,19 @@ class SystemAdminPanelProvider extends PanelProvider
             ->favicon('/images/owwa-4a_logo_transparent.png')
             ->login(Login::class)
             ->emailVerification()
+            ->multiFactorAuthentication([
+                AppAuthentication::make()
+                    ->brandName('OWWA Region IV-A')
+                    ->recoverable(),
+                EmailAuthentication::make(),
+            ], setUpRequiredAction: SetUpRequiredMultiFactorAuthentication::class, isRequired: true)
+            ->livewireComponents([
+                VerifyEmailWithCode::class,
+            ])
+            ->routes(function (): void {
+                Route::get('/verify-email', VerifyEmailWithCode::class)
+                    ->name('auth.verify-email');
+            })
             ->defaultAvatarProvider(LocalGenderAvatarProvider::class)
             ->profile(EditProfile::class, isSimple: false)
             ->userMenuItems([

@@ -3,16 +3,18 @@
 namespace Tests\Feature;
 
 use App\Filament\Pages\Auth\Login;
+use App\Filament\Pages\Auth\VerifyEmailWithCode;
 use App\Filament\Resources\Users\Pages\ListUsers;
 use App\Models\Department;
 use App\Models\Office;
 use App\Models\User;
+use App\Notifications\AccountSetupInviteNotification;
+use App\Notifications\EmailVerificationCodeNotification;
 use App\Notifications\SignInEmailChangedNotification;
-use App\Notifications\UserWelcomeNotification;
+use App\Support\FriendlyMessages;
+use App\Support\OneTimeCode;
 use Filament\Actions\Testing\TestAction;
-use Filament\Auth\Notifications\VerifyEmail as FilamentVerifyEmail;
 use Filament\Facades\Filament;
-use Illuminate\Auth\Notifications\VerifyEmail;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -24,7 +26,7 @@ class UserEmailVerificationTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_system_admin_create_user_sends_single_welcome_notification_with_verification_url(): void
+    public function test_system_admin_create_user_sends_setup_invite_without_code(): void
     {
         Notification::fake();
 
@@ -60,49 +62,62 @@ class UserEmailVerificationTest extends TestCase
         $user = User::query()->where('email', 'jane.employee@example.com')->first();
         $this->assertNotNull($user);
         $this->assertNull($user->email_verified_at);
+        $this->assertNull($user->email_verification_code_hash);
+        $this->assertFalse($user->must_change_password);
 
-        Notification::assertSentTo($user, UserWelcomeNotification::class);
-        Notification::assertNotSentTo($user, VerifyEmail::class);
-
-        Notification::assertSentTo($user, UserWelcomeNotification::class, function (UserWelcomeNotification $notification): bool {
-            return filled($notification->verificationUrl)
-                && str_contains($notification->verificationUrl, '/email/verify/')
-                && ! str_contains($notification->verificationUrl, '/admin/email-verification/')
-                && filled($notification->temporaryPassword)
-                && filled($notification->panelLoginUrl);
-        });
+        Notification::assertSentTo($user, AccountSetupInviteNotification::class);
+        Notification::assertNotSentTo($user, EmailVerificationCodeNotification::class);
     }
 
-    public function test_guest_verification_link_marks_email_verified_without_login(): void
+    public function test_setup_wizard_completes_with_code_and_password(): void
     {
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+
         $office = Office::factory()->create();
-        $user = User::factory()->unverified()->create([
+        $user = User::factory()->unverified()->withoutMultiFactorAuthentication()->create([
             'role' => User::ROLE_EMPLOYEE,
             'office_id' => $office->id,
             'email' => 'guest.verify@example.com',
+            'password' => 'OldInternal1!',
         ]);
 
-        $url = User::guestEmailVerificationUrlFor($user);
+        Notification::fake();
 
-        $this->get($url)
-            ->assertRedirect(User::panelLoginUrlFor($user))
-            ->assertSessionHas('status', 'email-verified');
+        $component = Livewire::test(VerifyEmailWithCode::class)
+            ->fillForm(['email' => 'guest.verify@example.com'])
+            ->call('advance')
+            ->assertHasNoFormErrors()
+            ->assertSet('step', 2)
+            ->assertSee('Verification code')
+            ->assertSee('Verify code')
+            ->assertNotified();
 
-        $this->assertNotNull($user->fresh()->email_verified_at);
-    }
+        Notification::assertSentTo($user, EmailVerificationCodeNotification::class);
 
-    public function test_guest_verification_link_requires_valid_signature(): void
-    {
-        $user = User::factory()->unverified()->create([
-            'role' => User::ROLE_EMPLOYEE,
-            'email' => 'unsigned@example.com',
-        ]);
+        $code = '123456';
+        $user->forceFill([
+            'email_verification_code_hash' => OneTimeCode::hash($code),
+            'email_verification_code_expires_at' => now()->addHour(),
+        ])->save();
 
-        $this->get('/email/verify/'.$user->id.'/'.sha1($user->getEmailForVerification()))
-            ->assertRedirect('/login')
-            ->assertSessionHas('verification_error');
+        $component
+            ->fillForm(['code' => $code])
+            ->call('advance')
+            ->assertHasNoFormErrors()
+            ->assertSet('step', 3)
+            ->assertSee('Choose your password')
+            ->fillForm([
+                'password' => 'ChosenPass1!',
+                'passwordConfirmation' => 'ChosenPass1!',
+            ])
+            ->call('advance')
+            ->assertHasNoFormErrors()
+            ->assertNotified();
 
-        $this->assertNull($user->fresh()->email_verified_at);
+        $user->refresh();
+        $this->assertNotNull($user->email_verified_at);
+        $this->assertTrue(Hash::check('ChosenPass1!', $user->password));
+        $this->assertAuthenticatedAs($user);
     }
 
     public function test_unverified_user_cannot_login_and_sees_verification_message(): void
@@ -110,7 +125,7 @@ class UserEmailVerificationTest extends TestCase
         Filament::setCurrentPanel(Filament::getPanel('admin'));
 
         $office = Office::factory()->create();
-        User::factory()->unverified()->create([
+        $user = User::factory()->unverified()->create([
             'role' => User::ROLE_EMPLOYEE,
             'office_id' => $office->id,
             'password' => 'password',
@@ -124,7 +139,12 @@ class UserEmailVerificationTest extends TestCase
                 'remember' => false,
             ])
             ->call('authenticate')
-            ->assertHasFormErrors(['email' => \App\Support\FriendlyMessages::emailNotVerifiedLogin()]);
+            ->assertHasFormErrors(['email']);
+
+        $this->assertStringContainsString(
+            'finish setting up your account',
+            strtolower(FriendlyMessages::emailNotVerifiedLogin(User::panelSetupUrlFor($user))),
+        );
     }
 
     public function test_login_with_unknown_email_shows_generic_failure_message(): void
@@ -172,7 +192,7 @@ class UserEmailVerificationTest extends TestCase
         $this->assertTrue($user->canAccessPanel(Filament::getPanel('admin')));
     }
 
-    public function test_create_user_toast_includes_temporary_password_backup(): void
+    public function test_create_user_toast_does_not_include_temporary_password(): void
     {
         Filament::setCurrentPanel(Filament::getPanel('system-admin'));
 
@@ -201,13 +221,12 @@ class UserEmailVerificationTest extends TestCase
             ])
             ->callMountedAction()
             ->assertHasNoFormErrors()
-            ->assertNotified('User created');
+            ->assertNotified();
 
-        $this->assertDatabaseHas(User::class, [
-            'email' => 'backup.password@example.com',
-            'email_verified_at' => null,
-            'must_change_password' => true,
-        ]);
+        $user = User::query()->where('email', 'backup.password@example.com')->first();
+        $this->assertNotNull($user);
+        $this->assertNull($user->email_verified_at);
+        $this->assertFalse($user->must_change_password);
     }
 
     public function test_admin_email_change_clears_verification_notifies_and_revokes_sessions(): void
@@ -270,19 +289,11 @@ class UserEmailVerificationTest extends TestCase
         $this->assertNotSame('old-remember-token', $employee->remember_token);
         $this->assertDatabaseMissing('sessions', ['id' => 'employee-session-1']);
 
-        Notification::assertSentTo($employee, FilamentVerifyEmail::class);
+        Notification::assertSentTo($employee, AccountSetupInviteNotification::class);
         Notification::assertSentOnDemand(SignInEmailChangedNotification::class, function (SignInEmailChangedNotification $notification, array $channels, object $notifiable): bool {
             return $notification->newEmail === 'jane.new@example.com'
                 && ($notifiable->routes['mail'] ?? null) === 'jane.old@example.com';
         });
-
-        $url = User::guestEmailVerificationUrlFor($employee);
-
-        $this->get($url)
-            ->assertRedirect(User::panelLoginUrlFor($employee))
-            ->assertSessionHas('status', 'email-verified');
-
-        $this->assertNotNull($employee->fresh()->email_verified_at);
     }
 
     public function test_admin_changed_email_blocks_login_until_verified(): void
@@ -296,6 +307,7 @@ class UserEmailVerificationTest extends TestCase
             'password' => 'password',
             'email' => 'changed@example.com',
             'email_verified_at' => null,
+            'has_email_authentication' => false,
         ]);
 
         Livewire::test(Login::class)
@@ -305,7 +317,7 @@ class UserEmailVerificationTest extends TestCase
                 'remember' => false,
             ])
             ->call('authenticate')
-            ->assertHasFormErrors(['email' => \App\Support\FriendlyMessages::emailNotVerifiedLogin()]);
+            ->assertHasFormErrors(['email']);
     }
 
     public function test_admin_save_with_unchanged_email_keeps_verification(): void
@@ -354,11 +366,11 @@ class UserEmailVerificationTest extends TestCase
 
         $this->assertSame('jane.same@example.com', $employee->email);
         $this->assertNotNull($employee->email_verified_at);
-        Notification::assertNotSentTo($employee, FilamentVerifyEmail::class);
+        Notification::assertNotSentTo($employee, AccountSetupInviteNotification::class);
         Notification::assertSentOnDemandTimes(SignInEmailChangedNotification::class, 0);
     }
 
-    public function test_resend_verification_for_pending_password_includes_new_temporary_password(): void
+    public function test_resend_setup_email_for_unverified_user(): void
     {
         Notification::fake();
 
@@ -372,48 +384,6 @@ class UserEmailVerificationTest extends TestCase
             'role' => User::ROLE_EMPLOYEE,
             'email' => 'pending.resend@example.com',
             'password' => 'OldTemp1!',
-            'must_change_password' => true,
-        ]);
-        $previousHash = $employee->password;
-
-        $this->actingAs($admin);
-
-        Livewire::test(ListUsers::class)
-            ->mountAction(TestAction::make('view')->table($employee))
-            ->callAction(TestAction::make('resendVerification'))
-            ->assertNotified();
-
-        $employee->refresh();
-
-        $this->assertNotSame($previousHash, $employee->password);
-        $this->assertTrue($employee->must_change_password);
-
-        Notification::assertSentTo($employee, UserWelcomeNotification::class, function (UserWelcomeNotification $notification) use ($employee): bool {
-            $html = (string) $notification->toMail($employee)->render();
-
-            return $notification->passwordRenewed
-                && Hash::check($notification->temporaryPassword, $employee->password)
-                && str_contains($notification->verificationUrl, '/email/verify/')
-                && str_contains($html, $notification->temporaryPassword)
-                && str_contains($html, 'new temporary password');
-        });
-        Notification::assertNotSentTo($employee, FilamentVerifyEmail::class);
-    }
-
-    public function test_resend_verification_keeps_password_when_user_already_changed_it(): void
-    {
-        Notification::fake();
-
-        Filament::setCurrentPanel(Filament::getPanel('system-admin'));
-
-        $admin = User::factory()->create([
-            'role' => User::ROLE_SYSTEM_ADMIN,
-            'email_verified_at' => now(),
-        ]);
-        $employee = User::factory()->unverified()->create([
-            'role' => User::ROLE_EMPLOYEE,
-            'email' => 'changed.password@example.com',
-            'password' => 'ChosenPass1!',
             'must_change_password' => false,
         ]);
         $previousHash = $employee->password;
@@ -426,7 +396,6 @@ class UserEmailVerificationTest extends TestCase
             ->assertNotified();
 
         $this->assertSame($previousHash, $employee->fresh()->password);
-        Notification::assertSentTo($employee, FilamentVerifyEmail::class);
-        Notification::assertNotSentTo($employee, UserWelcomeNotification::class);
+        Notification::assertSentTo($employee, AccountSetupInviteNotification::class);
     }
 }

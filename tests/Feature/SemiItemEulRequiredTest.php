@@ -79,7 +79,7 @@ class SemiItemEulRequiredTest extends TestCase
                 'reorder_level' => 0,
                 'property_class' => ItemPropertyClass::OfficeEquipment,
                 'uacs_object_code_id' => $uacs->id,
-                'estimated_useful_life' => '5 yrs',
+                'estimated_useful_life' => '60',
             ])
             ->call('create')
             ->assertHasNoFormErrors()
@@ -88,7 +88,7 @@ class SemiItemEulRequiredTest extends TestCase
         $this->assertDatabaseHas('items', [
             'base_name' => 'Office chair',
             'name' => 'Office chair',
-            'estimated_useful_life' => '5 yrs',
+            'estimated_useful_life' => '60 months',
         ]);
     }
 }

@@ -38,7 +38,7 @@ class StockCardFastPdfExportService
         if ($previewHtml) {
             return response()->view('reports.stock-card-fast', [
                 'cards' => $cards,
-                'entityName' => (string) config('owwa_export_standards.entity_name', 'OWWA-4A'),
+                'entityName' => (string) config('owwa_export_standards.entity_name'),
                 'forDomPdf' => false,
                 'showGeneratedOn' => false,
             ]);
@@ -190,7 +190,7 @@ class StockCardFastPdfExportService
     {
         return Pdf::loadView('reports.stock-card-fast', [
             'cards' => $cards,
-            'entityName' => (string) config('owwa_export_standards.entity_name', 'OWWA-4A'),
+            'entityName' => (string) config('owwa_export_standards.entity_name'),
             'forDomPdf' => true,
             'showGeneratedOn' => true,
             'generatedOn' => now()->timezone(config('app.timezone'))->format('Y-m-d H:i'),

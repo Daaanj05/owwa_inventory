@@ -28,7 +28,7 @@ class AnnexA4PdfExportTest extends TestCase
 
         $response->assertOk();
         $response->assertHeader('content-type', 'application/pdf');
-        $response->assertCookie(OwwaExportDownloadCookie::DONE_COOKIE, $token);
+        $response->assertCookie(OwwaExportDownloadCookie::DONE_COOKIE, $token, encrypted: false);
         $this->assertStringStartsWith('%PDF', $response->getContent());
     }
 }

@@ -75,13 +75,14 @@ class OwwaPropertyCardBulkExportTest extends TestCase
         }
     }
 
-    public function test_bulk_property_card_export_returns_404_when_no_stock_rows(): void
+    public function test_bulk_property_card_export_reports_validation_error_when_no_stock_rows(): void
     {
         $category = ItemCategory::factory()->create(['name' => 'PPE']);
         $custodian = User::factory()->create(['role' => User::ROLE_SUPPLY_CUSTODIAN]);
 
         $this->actingAs($custodian)
             ->get(route('owwa.export.bulk.property-cards', ['category' => $category->id]))
-            ->assertNotFound();
+            ->assertRedirect()
+            ->assertSessionHasErrors(['pairs' => 'No stock positions matched the current filters.']);
     }
 }

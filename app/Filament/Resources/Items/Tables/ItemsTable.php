@@ -47,32 +47,6 @@ class ItemsTable
                 ),
                 ActionGroup::make([
                     OwwaFormModalDefaults::editActionForResource(ItemResource::class, OwwaFormModalDefaults::WIDTH_COMPACT),
-                    Action::make('downloadQrLabels')
-                        ->label('Download QR labels')
-                        ->icon('heroicon-o-qr-code')
-                        ->url(fn (Item $record): string => route('owwa.qr-labels.item', $record))
-                        ->openUrlInNewTab()
-                        ->visible(function (Item $record): bool {
-                            $pageSlug = self::activeCategorySlug();
-                            if ($pageSlug === 'consumables') {
-                                return false;
-                            }
-
-                            $slug = $pageSlug
-                                ?? $record->category?->getTemplateSlug()
-                                ?? $record->loadMissing('category')->category?->getTemplateSlug();
-
-                            if (! in_array($slug, ['ppe', 'semi_expendable'], true)) {
-                                return false;
-                            }
-
-                            $officeId = \App\Support\CustodianOfficeScope::inventoryOfficeId();
-
-                            return \App\Models\InventoryUnit::query()
-                                ->where('item_id', $record->id)
-                                ->when($officeId !== null, fn ($q) => $q->where('office_id', $officeId))
-                                ->exists();
-                        }),
                     Action::make('archive')
                         ->label('Archive')
                         ->icon('heroicon-o-archive-box')

@@ -34,7 +34,7 @@
                 class="owwa-search-bar owwa-uc-scope-select"
                 aria-label="Office"
             >
-                <option value="" disabled @selected(blank($ucOfficeId ?? null))>Select office…</option>
+                <option value="" @selected(blank($ucOfficeId ?? null))>All offices</option>
                 @foreach ($officeOptions ?? [] as $value => $label)
                     <option value="{{ $value }}" @selected((string) ($ucOfficeId ?? '') === (string) $value)>{{ $label }}</option>
                 @endforeach
@@ -45,7 +45,7 @@
                 class="owwa-search-bar owwa-uc-scope-select"
                 aria-label="Department"
             >
-                <option value="" disabled @selected(blank($ucDepartmentId ?? null))>Select department…</option>
+                <option value="" @selected(blank($ucDepartmentId ?? null))>All departments</option>
                 @foreach ($departmentOptions ?? [] as $value => $label)
                     <option value="{{ $value }}" @selected((string) ($ucDepartmentId ?? '') === (string) $value)>{{ $label }}</option>
                 @endforeach
@@ -87,5 +87,5 @@
 </div>
 
 @if ($isReceived && ! ($scopeComplete ?? false))
-    <span class="owwa-uc-scope-hint text-sm text-gray-500">Select office and department to view employee requests.</span>
+    <span class="owwa-uc-scope-hint text-sm text-gray-500">No office assignment. Employee requests stay hidden until an office is assigned.</span>
 @endif

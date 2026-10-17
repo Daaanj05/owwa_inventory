@@ -27,7 +27,7 @@ class LoginRateLimitTest extends TestCase
         Filament::setCurrentPanel(Filament::getPanel('admin'));
 
         $office = Office::factory()->create();
-        User::factory()->create([
+        User::factory()->withoutMultiFactorAuthentication()->create([
             'role' => User::ROLE_EMPLOYEE,
             'office_id' => $office->id,
             'email' => 'rate.limit@example.com',

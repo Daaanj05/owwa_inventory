@@ -14,12 +14,20 @@ class PasswordResetRequest extends Model
 
     public const STATUS_DISMISSED = 'dismissed';
 
+    public const STATUS_USED = 'used';
+
     protected $fillable = [
         'user_id',
         'status',
         'requested_at',
         'handled_by',
         'handled_at',
+        'reset_code_hash',
+        'reset_code_expires_at',
+    ];
+
+    protected $hidden = [
+        'reset_code_hash',
     ];
 
     protected function casts(): array
@@ -27,6 +35,7 @@ class PasswordResetRequest extends Model
         return [
             'requested_at' => 'datetime',
             'handled_at' => 'datetime',
+            'reset_code_expires_at' => 'datetime',
         ];
     }
 

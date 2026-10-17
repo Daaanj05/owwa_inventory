@@ -7,9 +7,8 @@ use App\Filament\Pages\Auth\RequestPasswordReset;
 use App\Filament\Resources\Users\Pages\ListUsers;
 use App\Models\PasswordResetRequest;
 use App\Models\User;
-use App\Notifications\PasswordResetRequestDatabaseNotification;
-use Filament\Actions\Testing\TestAction;
-use Filament\Auth\Notifications\ResetPassword as FilamentResetPassword;
+use App\Notifications\PasswordResetCodeNotification;
+use App\Services\PasswordResetCodeService;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Notification;
@@ -30,14 +29,10 @@ class PasswordResetRequestTest extends TestCase
             ->assertSee(__('filament-panels::auth/pages/password-reset/request-password-reset.heading'));
     }
 
-    public function test_admin_password_reset_request_creates_pending_row_and_notifies_system_admins(): void
+    public function test_forgot_password_sends_code_automatically(): void
     {
         Notification::fake();
 
-        $admin = User::factory()->create([
-            'role' => User::ROLE_SYSTEM_ADMIN,
-            'email_verified_at' => now(),
-        ]);
         $employee = User::factory()->create([
             'role' => User::ROLE_EMPLOYEE,
             'email' => 'employee@example.com',
@@ -49,15 +44,15 @@ class PasswordResetRequestTest extends TestCase
         Livewire::test(RequestPasswordReset::class)
             ->fillForm(['email' => $employee->email])
             ->call('request')
-            ->assertNotified();
+            ->assertNotified()
+            ->assertSet('step', 2);
 
         $this->assertDatabaseHas('password_reset_requests', [
             'user_id' => $employee->id,
-            'status' => PasswordResetRequest::STATUS_PENDING,
+            'status' => PasswordResetRequest::STATUS_SENT,
         ]);
 
-        Notification::assertSentTo($admin, PasswordResetRequestDatabaseNotification::class);
-        Notification::assertNotSentTo($employee, FilamentResetPassword::class);
+        Notification::assertSentTo($employee, PasswordResetCodeNotification::class);
     }
 
     public function test_unknown_email_shows_success_without_creating_request(): void
@@ -69,7 +64,8 @@ class PasswordResetRequestTest extends TestCase
         Livewire::test(RequestPasswordReset::class)
             ->fillForm(['email' => 'unknown@example.com'])
             ->call('request')
-            ->assertNotified();
+            ->assertNotified()
+            ->assertSet('step', 2);
 
         $this->assertDatabaseCount('password_reset_requests', 0);
         Notification::assertNothingSent();
@@ -85,108 +81,44 @@ class PasswordResetRequestTest extends TestCase
             ->assertDontSee(__('filament-panels::auth/pages/login.actions.request_password_reset.label'));
     }
 
-    public function test_admin_login_shows_forgot_password_link(): void
+    public function test_admin_login_shows_forgot_password_link_only(): void
     {
         Filament::setCurrentPanel(Filament::getPanel('admin'));
 
         $this->assertTrue(Filament::getCurrentPanel()->hasPasswordReset());
 
         Livewire::test(Login::class)
-            ->assertSee(__('filament-panels::auth/pages/login.actions.request_password_reset.label'));
+            ->assertSee(__('filament-panels::auth/pages/login.actions.request_password_reset.label'))
+            ->assertDontSee('I have a reset code')
+            ->assertDontSee('Verify email with code');
     }
 
-    public function test_admin_send_password_reset_email_queues_notification(): void
+    public function test_prune_expired_requests_keeps_recent_rows(): void
     {
-        Notification::fake();
-
-        Filament::setCurrentPanel(Filament::getPanel('system-admin'));
-
-        $admin = User::factory()->create([
-            'role' => User::ROLE_SYSTEM_ADMIN,
-            'email_verified_at' => now(),
-        ]);
-        $employee = User::factory()->create([
+        $user = User::factory()->create([
             'role' => User::ROLE_EMPLOYEE,
-            'email' => 'employee@example.com',
-            'email_verified_at' => now(),
-        ]);
-        $request = PasswordResetRequest::query()->create([
-            'user_id' => $employee->id,
-            'status' => PasswordResetRequest::STATUS_PENDING,
-            'requested_at' => now(),
-        ]);
-
-        $this->actingAs($admin);
-
-        Livewire::test(ListUsers::class)
-            ->mountAction(TestAction::make('view')->table($employee))
-            ->callAction(TestAction::make('sendPasswordResetEmail'))
-            ->assertNotified();
-
-        Notification::assertSentTo($employee, FilamentResetPassword::class);
-
-        $request->refresh();
-        $this->assertSame(PasswordResetRequest::STATUS_SENT, $request->status);
-        $this->assertSame($admin->id, $request->handled_by);
-    }
-
-    public function test_admin_can_dismiss_password_reset_request(): void
-    {
-        Filament::setCurrentPanel(Filament::getPanel('system-admin'));
-
-        $admin = User::factory()->create([
-            'role' => User::ROLE_SYSTEM_ADMIN,
-            'email_verified_at' => now(),
-        ]);
-        $employee = User::factory()->create([
-            'role' => User::ROLE_EMPLOYEE,
-            'email_verified_at' => now(),
-        ]);
-        $request = PasswordResetRequest::query()->create([
-            'user_id' => $employee->id,
-            'status' => PasswordResetRequest::STATUS_PENDING,
-            'requested_at' => now(),
-        ]);
-
-        $this->actingAs($admin);
-
-        Livewire::test(ListUsers::class)
-            ->mountAction(TestAction::make('view')->table($employee))
-            ->callAction(TestAction::make('dismissPasswordResetRequest'))
-            ->assertNotified();
-
-        $request->refresh();
-        $this->assertSame(PasswordResetRequest::STATUS_DISMISSED, $request->status);
-        $this->assertSame($admin->id, $request->handled_by);
-    }
-
-    public function test_prune_command_deletes_old_password_reset_requests(): void
-    {
-        $employee = User::factory()->create([
-            'role' => User::ROLE_EMPLOYEE,
-            'email_verified_at' => now(),
         ]);
 
         $oldRequest = PasswordResetRequest::query()->create([
-            'user_id' => $employee->id,
+            'user_id' => $user->id,
             'status' => PasswordResetRequest::STATUS_SENT,
-            'requested_at' => now()->subDays(40),
+            'requested_at' => now()->subDays(60),
         ]);
-        $oldRequest->forceFill(['created_at' => now()->subDays(40)])->save();
+        $oldRequest->forceFill(['created_at' => now()->subDays(60)])->save();
 
         $recentRequest = PasswordResetRequest::query()->create([
-            'user_id' => $employee->id,
-            'status' => PasswordResetRequest::STATUS_PENDING,
+            'user_id' => $user->id,
+            'status' => PasswordResetRequest::STATUS_SENT,
             'requested_at' => now(),
         ]);
 
-        $this->artisan('password-reset-requests:prune')->assertSuccessful();
+        app(PasswordResetCodeService::class)->pruneExpiredRequests();
 
         $this->assertDatabaseMissing('password_reset_requests', ['id' => $oldRequest->id]);
         $this->assertDatabaseHas('password_reset_requests', ['id' => $recentRequest->id]);
     }
 
-    public function test_users_table_filters_reset_requested_and_view_shows_badge(): void
+    public function test_users_table_has_no_pending_reset_column(): void
     {
         Filament::setCurrentPanel(Filament::getPanel('system-admin'));
 
@@ -194,35 +126,10 @@ class PasswordResetRequestTest extends TestCase
             'role' => User::ROLE_SYSTEM_ADMIN,
             'email_verified_at' => now(),
         ]);
-        $employeeWithRequest = User::factory()->create([
-            'role' => User::ROLE_EMPLOYEE,
-            'email_verified_at' => now(),
-        ]);
-        $employeeWithoutRequest = User::factory()->create([
-            'role' => User::ROLE_EMPLOYEE,
-            'email_verified_at' => now(),
-        ]);
-        PasswordResetRequest::query()->create([
-            'user_id' => $employeeWithRequest->id,
-            'status' => PasswordResetRequest::STATUS_PENDING,
-            'requested_at' => now(),
-        ]);
 
         $this->actingAs($admin);
 
         Livewire::test(ListUsers::class)
-            ->assertCanSeeTableRecords([$employeeWithRequest, $employeeWithoutRequest])
-            ->assertTableColumnDoesNotExist('pendingPasswordResetRequest.requested_at')
-            ->filterTable('password_reset_status', 'pending')
-            ->assertCanSeeTableRecords([$employeeWithRequest])
-            ->assertCanNotSeeTableRecords([$employeeWithoutRequest]);
-
-        $detailKeys = collect(\App\Filament\Resources\Users\Schemas\UserInfolist::modalDetailSections())
-            ->map(fn ($component) => method_exists($component, 'getName') ? $component->getName() : null)
-            ->filter()
-            ->values()
-            ->all();
-
-        $this->assertContains('pendingPasswordResetRequest.requested_at', $detailKeys);
+            ->assertTableColumnDoesNotExist('pendingPasswordResetRequest.requested_at');
     }
 }

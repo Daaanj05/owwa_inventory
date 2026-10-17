@@ -10,6 +10,7 @@ use App\Filament\Resources\PropertyActionRequests\Schemas\PropertyActionRequestI
 use App\Filament\Support\ConfiguresOwwaViewAction;
 use App\Filament\Support\OwwaModalSchema;
 use App\Models\PropertyActionRequest;
+use App\Models\PropertyActionRequestLine;
 use App\Models\User;
 use App\Services\PropertyActionRequestCompileService;
 use App\Support\InventoryCategoryOptions;
@@ -19,8 +20,10 @@ use Filament\Actions\BulkAction;
 use Filament\Actions\BulkActionGroup;
 use Filament\Notifications\Notification;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Auth;
 
@@ -31,8 +34,10 @@ class PropertyActionRequestsTable
         /** @var User|null $viewer */
         $viewer = Auth::user();
         $isEmployeeViewer = $viewer?->isEmployee() ?? false;
+        $isSupplyCustodianViewer = $viewer?->isSupplyCustodian() ?? false;
 
         return $table
+            ->modifyQueryUsing(fn (Builder $query): Builder => $query->with(['lines.issuance', 'lines.inventoryUnit']))
             ->columns([
                 TextColumn::make('reference_code')
                     ->label('Reference')
@@ -50,6 +55,15 @@ class PropertyActionRequestsTable
                         PropertyActionRequest::STATUS_REJECTED => 'danger',
                         PropertyActionRequest::STATUS_PENDING_UC, PropertyActionRequest::STATUS_PENDING_SC => 'warning',
                         default => 'gray',
+                    })
+                    ->description(function (PropertyActionRequest $record) use ($isSupplyCustodianViewer): ?string {
+                        if (! $isSupplyCustodianViewer || $record->status !== PropertyActionRequest::STATUS_EXECUTED) {
+                            return null;
+                        }
+
+                        $underRepair = $record->lines->filter(fn (PropertyActionRequestLine $line): bool => $line->isUnderRepair())->count();
+
+                        return $underRepair > 0 ? $underRepair.' under repair' : null;
                     }),
                 TextColumn::make('property_numbers')
                     ->label(OwwaReferenceLabels::assetIdentifierTableHeader())
@@ -80,6 +94,11 @@ class PropertyActionRequestsTable
 
                         return $query->whereHas('lines.issuance.item', fn ($itemQuery) => $itemQuery->where('item_category_id', $categoryId));
                     }),
+                Filter::make('under_repair')
+                    ->label('Has units under repair')
+                    ->toggle()
+                    ->query(fn (Builder $query): Builder => $query->withUnitsUnderRepair())
+                    ->visible(fn (): bool => $isSupplyCustodianViewer),
             ])
             ->recordActions([
                 ConfiguresOwwaViewAction::make(
@@ -94,6 +113,7 @@ class PropertyActionRequestsTable
                         PropertyActionRequestTableActions::scApproveAction(),
                         PropertyActionRequestTableActions::scRejectAction(),
                         PropertyActionRequestTableActions::scReceiveAndRouteAction(),
+                        PropertyActionRequestTableActions::scResolveRepairAction(),
                         PropertyActionRequestTableActions::openDisposalAction(),
                         PropertyActionRequestTableActions::openTransferAction(),
                     ],

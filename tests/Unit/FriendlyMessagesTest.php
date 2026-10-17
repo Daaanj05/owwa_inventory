@@ -7,11 +7,11 @@ use Tests\TestCase;
 
 class FriendlyMessagesTest extends TestCase
 {
-    public function test_welcome_email_messages_include_email_and_password(): void
+    public function test_welcome_email_messages_include_email(): void
     {
-        $this->assertStringContainsString('test@example.com', FriendlyMessages::welcomeEmailSent('test@example.com', 'Pass123!'));
-        $this->assertStringContainsString('Pass123!', FriendlyMessages::welcomeEmailQueued('test@example.com', 'Pass123!'));
-        $this->assertStringContainsString('mail worker', FriendlyMessages::welcomeEmailQueued('test@example.com', 'Pass123!'));
+        $this->assertStringContainsString('test@example.com', FriendlyMessages::welcomeEmailSent('test@example.com'));
+        $this->assertStringContainsString('mail worker', FriendlyMessages::welcomeEmailQueued('test@example.com'));
+        $this->assertStringNotContainsString('Temporary password', FriendlyMessages::welcomeEmailSent('test@example.com'));
     }
 
     public function test_downtime_messages_are_non_empty(): void

@@ -21,7 +21,7 @@ class LoginRememberedEmailTest extends TestCase
         Filament::setCurrentPanel(Filament::getPanel('admin'));
 
         $office = Office::factory()->create();
-        $user = User::factory()->create([
+        $user = User::factory()->withoutMultiFactorAuthentication()->create([
             'role' => User::ROLE_SUPPLY_CUSTODIAN,
             'office_id' => $office->id,
             'email' => 'remember.me@example.com',
@@ -60,7 +60,7 @@ class LoginRememberedEmailTest extends TestCase
         Filament::setCurrentPanel(Filament::getPanel('admin'));
 
         $office = Office::factory()->create();
-        User::factory()->create([
+        User::factory()->withoutMultiFactorAuthentication()->create([
             'role' => User::ROLE_SUPPLY_CUSTODIAN,
             'office_id' => $office->id,
             'email' => 'forget.me@example.com',

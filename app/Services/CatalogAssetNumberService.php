@@ -58,8 +58,12 @@ class CatalogAssetNumberService
                 $fromUacs = $item->uacsObjectCode?->property_class
                     ?? UacsObjectCode::query()->whereKey($item->uacs_object_code_id)->value('property_class');
 
-                if (filled($fromUacs)) {
-                    $item->ppe_type = (string) $fromUacs;
+                $resolved = filled($fromUacs)
+                    ? (string) $fromUacs
+                    : PpePropertyType::normalize($item->property_class);
+
+                if ($resolved !== null) {
+                    $item->ppe_type = $resolved;
                 }
             }
 
@@ -101,6 +105,17 @@ class CatalogAssetNumberService
         $segments = $this->ppeSegments($item);
 
         return $this->mintFromSegments(self::SERIES_PPE, $segments);
+    }
+
+    /**
+     * Next yearly sequence for one physical PPE unit.
+     * Does not replace the catalog Property No.
+     */
+    public function mintPpeForUnit(Item $item): string
+    {
+        $item->loadMissing(['category', 'uacsObjectCode']);
+
+        return $this->mintPpe($item);
     }
 
     /**

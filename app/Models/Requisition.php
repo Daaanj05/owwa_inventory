@@ -29,6 +29,10 @@ class Requisition extends Model
         'reference_code', 'transaction_number', 'office_id', 'department_id', 'requested_by',
         'status', 'remarks', 'purpose', 'original_submission', 'content_edited_at',
         'approved_by', 'approved_at',
+        'ris_requested_by_name', 'ris_requested_by_designation', 'ris_requested_by_date',
+        'ris_approved_by_name', 'ris_approved_by_designation', 'ris_approved_by_date',
+        'ris_issued_by_name', 'ris_issued_by_designation', 'ris_issued_by_date',
+        'ris_received_by_name', 'ris_received_by_designation', 'ris_received_by_date',
         'endorsed_at', 'endorsed_by', 'closed_at', 'fulfillment_summary',
         'compiled_into_requisition_id', 'archived_at',
     ];
@@ -39,6 +43,10 @@ class Requisition extends Model
             'original_submission' => 'array',
             'content_edited_at' => 'datetime',
             'approved_at' => 'datetime',
+            'ris_requested_by_date' => 'date',
+            'ris_approved_by_date' => 'date',
+            'ris_issued_by_date' => 'date',
+            'ris_received_by_date' => 'date',
             'endorsed_at' => 'datetime',
             'closed_at' => 'datetime',
             'archived_at' => 'datetime',
@@ -109,11 +117,6 @@ class Requisition extends Model
             ->where('source_requisition_id', $this->id)
             ->where('requisition_item_id', $requisitionItemId)
             ->first();
-    }
-
-    public function distributions(): HasMany
-    {
-        return $this->hasMany(Distribution::class);
     }
 
     public function issuances(): HasMany

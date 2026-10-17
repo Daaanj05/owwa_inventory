@@ -67,6 +67,8 @@ class PhysicalCountSessionViewPresenterTest extends TestCase
         $session->update([
             'fund_cluster' => '01',
             'accountable_officer_name' => 'Officer',
+            'accountable_officer_designation' => 'Supply Officer',
+            'date_of_assumption' => now(),
             'certified_by_printed_name' => 'Certifier',
             'approved_by_printed_name' => 'Approver',
             'verified_by_printed_name' => 'Verifier',

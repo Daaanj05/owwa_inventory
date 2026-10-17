@@ -41,6 +41,37 @@
             </div>
         </div>
 
+        @if ($duplicateUnitOptions !== [])
+            <div class="owwa-pc-scan-card owwa-scan-asset-result">
+                <div class="owwa-scan-asset-result-header">
+                    <h2 class="owwa-scan-asset-result-title">Several units share this number</h2>
+                    <button
+                        type="button"
+                        wire:click="clearResolvedAsset"
+                        class="fi-btn fi-btn-size-sm fi-color fi-color-gray owwa-scan-asset-clear-btn"
+                    >
+                        Clear
+                    </button>
+                </div>
+
+                <p class="owwa-scan-asset-result-hint">
+                    Pick the unit that matches the physical item (check the item, office, and status).
+                </p>
+
+                <div class="owwa-scan-asset-actions">
+                    @foreach ($duplicateUnitOptions as $unitId => $label)
+                        <button
+                            type="button"
+                            wire:click="selectDuplicateUnit({{ $unitId }})"
+                            class="fi-btn fi-btn-size-md fi-color fi-color-gray"
+                        >
+                            {{ $label }}
+                        </button>
+                    @endforeach
+                </div>
+            </div>
+        @endif
+
         @if ($resolvedUnitId)
             <div class="owwa-pc-scan-card owwa-scan-asset-result" wire:key="scan-asset-result-{{ $resolvedUnitId }}">
                 <div class="owwa-scan-asset-result-header">
@@ -56,12 +87,24 @@
 
                 <dl class="owwa-scan-asset-result-grid">
                     <div>
-                        <dt>Property no.</dt>
+                        <dt>Inventory item no.</dt>
                         <dd>{{ $resolvedPropertyNumber }}</dd>
                     </div>
                     <div>
                         <dt>Item</dt>
                         <dd>{{ $resolvedItemName }}</dd>
+                    </div>
+                    <div>
+                        <dt>Description</dt>
+                        <dd>{{ $resolvedDetails['description'] ?? '—' }}</dd>
+                    </div>
+                    <div>
+                        <dt>Unit cost</dt>
+                        <dd>{{ $resolvedDetails['unit_cost'] ?? '—' }}</dd>
+                    </div>
+                    <div>
+                        <dt>Source</dt>
+                        <dd>{{ $resolvedDetails['source'] ?? '—' }}</dd>
                     </div>
                     <div>
                         <dt>Office</dt>
@@ -71,34 +114,45 @@
                         <dt>Status</dt>
                         <dd class="owwa-scan-asset-status">{{ $resolvedStatus }}</dd>
                     </div>
+                    <div>
+                        <dt>Holder · ICS/PAR</dt>
+                        <dd>{{ $resolvedDetails['holder'] ?? '—' }}</dd>
+                    </div>
                 </dl>
 
                 <p class="owwa-scan-asset-result-hint">
-                    Choose an action. Finish the remaining details on desktop, then confirm when ready.
+                    @if ($resolvedIsClaimed)
+                        This unit is linked to a disposal or incident report draft. Only the QR label reprint is available.
+                    @else
+                        Choose an action. Finish the remaining details on desktop, then confirm when ready.
+                    @endif
                 </p>
 
                 <div class="owwa-scan-asset-actions">
-                    <button
-                        type="button"
-                        wire:click="startDisposal"
-                        class="fi-btn fi-btn-size-md fi-color fi-color-danger"
-                    >
-                        Disposal
-                    </button>
-                    <button
-                        type="button"
-                        wire:click="startIncident"
-                        class="fi-btn fi-btn-size-md fi-color fi-color-warning"
-                    >
-                        Incident report
-                    </button>
-                    <button
-                        type="button"
-                        wire:click="startTransfer"
-                        class="fi-btn fi-btn-size-md fi-color fi-color-primary"
-                    >
-                        Transfer
-                    </button>
+                    @unless ($resolvedIsClaimed)
+                        <button
+                            type="button"
+                            wire:click="startDisposal"
+                            class="fi-btn fi-btn-size-md fi-color fi-color-danger"
+                        >
+                            Disposal
+                        </button>
+                        <button
+                            type="button"
+                            wire:click="startIncident"
+                            class="fi-btn fi-btn-size-md fi-color fi-color-warning"
+                        >
+                            Incident report
+                        </button>
+                        <button
+                            type="button"
+                            wire:click="startTransfer"
+                            class="fi-btn fi-btn-size-md fi-color fi-color-primary"
+                        >
+                            Transfer
+                        </button>
+                    @endunless
+                    {{ $this->reprintQrLabelAction }}
                 </div>
 
                 @if ($resolvedPublicUrl)

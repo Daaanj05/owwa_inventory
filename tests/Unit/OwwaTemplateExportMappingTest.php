@@ -66,7 +66,7 @@ class OwwaTemplateExportMappingTest extends TestCase
         $this->assertArrayNotHasKey('G6', $values);
         $this->assertArrayNotHasKey('G7', $values);
 
-        $this->assertStringContainsString('OWWA-4A', (string) $values['A6']);
+        $this->assertStringContainsString((string) config('owwa_export_standards.entity_name'), (string) $values['A6']);
         $this->assertStringContainsString('Operations', (string) $values['A8']);
         $this->assertStringContainsString('OPS', (string) $values['F8']);
         $this->assertStringContainsString('OWWA Regional Office IV-A', (string) $values['A9']);

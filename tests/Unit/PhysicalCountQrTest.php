@@ -91,7 +91,7 @@ class PhysicalCountQrTest extends TestCase
 
         $this->assertCount(3, $units);
         $this->assertTrue($units->every(fn (InventoryUnit $unit): bool => $unit->status === InventoryUnit::STATUS_IN_STOCK));
-        $this->assertSame(1, $units->pluck('property_number')->unique()->count());
+        $this->assertSame(3, $units->pluck('property_number')->unique()->count());
         $this->assertTrue($units->every(fn (InventoryUnit $unit): bool => filled($unit->property_number)));
     }
 
@@ -190,6 +190,8 @@ class PhysicalCountQrTest extends TestCase
         $session->update([
             'fund_cluster' => '01',
             'accountable_officer_name' => 'Officer',
+            'accountable_officer_designation' => 'Supply Officer',
+            'date_of_assumption' => now(),
             'inventory_type_label' => 'ICT',
             'certified_by_printed_name' => 'A',
             'approved_by_printed_name' => 'B',
@@ -210,6 +212,8 @@ class PhysicalCountQrTest extends TestCase
         $session->update([
             'fund_cluster' => '01',
             'accountable_officer_name' => 'Officer',
+            'accountable_officer_designation' => 'Supply Officer',
+            'date_of_assumption' => now(),
             'inventory_type_label' => 'ICT',
             'certified_by_printed_name' => 'A',
             'approved_by_printed_name' => 'B',
@@ -230,6 +234,8 @@ class PhysicalCountQrTest extends TestCase
         $session->update([
             'fund_cluster' => '01',
             'accountable_officer_name' => 'Officer',
+            'accountable_officer_designation' => 'Supply Officer',
+            'date_of_assumption' => now(),
             'inventory_type_label' => 'ICT',
             'certified_by_printed_name' => 'A',
             'approved_by_printed_name' => 'B',
@@ -251,6 +257,8 @@ class PhysicalCountQrTest extends TestCase
         $session->update([
             'fund_cluster' => '01',
             'accountable_officer_name' => 'Officer',
+            'accountable_officer_designation' => 'Supply Officer',
+            'date_of_assumption' => now(),
             'inventory_type_label' => 'ICT',
             'certified_by_printed_name' => 'A',
             'approved_by_printed_name' => 'B',
@@ -316,7 +324,7 @@ class PhysicalCountQrTest extends TestCase
 
         $this->assertStringContainsString('Officer A', (string) ($values['B10'] ?? ''));
         $this->assertSame(
-            'INFORMATION & COMMUNICATION TECHNOLOGY',
+            'INFORMATION TECHNOLOGY EQUIPMENT',
             (string) ($values['B5'] ?? ''),
         );
     }

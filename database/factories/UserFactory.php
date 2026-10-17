@@ -28,16 +28,27 @@ class UserFactory extends Factory
             'email_verified_at' => now(),
             'password' => static::$password ??= 'password',
             'remember_token' => Str::random(10),
+            'has_email_authentication' => true,
         ];
     }
 
     /**
-     * Indicate that the model's email address should be unverified.
+     * Indicate that the model's email address is unverified.
      */
     public function unverified(): static
     {
         return $this->state(fn (array $attributes) => [
             'email_verified_at' => null,
+            'has_email_authentication' => false,
+        ]);
+    }
+
+    public function withoutMultiFactorAuthentication(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'has_email_authentication' => false,
+            'app_authentication_secret' => null,
+            'app_authentication_recovery_codes' => null,
         ]);
     }
 

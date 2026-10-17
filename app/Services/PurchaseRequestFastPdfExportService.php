@@ -64,7 +64,7 @@ class PurchaseRequestFastPdfExportService
         $maxRows = $this->maxRowsPerPage();
         $chunks = ProcurementSpreadsheetBuilder::chunkLines($lines->values(), $maxRows);
         $pageCount = count($chunks);
-        $entityName = (string) config('owwa_export_standards.entity_name', 'OWWA-4A');
+        $entityName = (string) config('owwa_export_standards.entity_name');
         $officeSection = $this->officeSectionName($paperwork);
         $responsibilityCode = $this->responsibilityCenterCode($paperwork);
         $prBase = $this->formatControlNumber(

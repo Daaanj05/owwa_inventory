@@ -38,7 +38,7 @@ class InspectionAcceptanceReportFastExcelExportTest extends TestCase
         $spreadsheet = app(InspectionAcceptanceReportFastExcelExportService::class)->makeSpreadsheet($pages);
         $sheet = $spreadsheet->getActiveSheet();
 
-        $entityName = (string) config('owwa_export_standards.entity_name', 'OWWA-4A');
+        $entityName = (string) config('owwa_export_standards.entity_name');
         $this->assertStringContainsString($entityName, (string) $sheet->getCell('A5')->getValue());
         $this->assertStringContainsString('Supplier Co.', (string) $sheet->getCell('A6')->getValue());
         $this->assertStringContainsString('IAR-2026-0042', (string) $sheet->getCell('C6')->getValue());

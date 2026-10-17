@@ -80,7 +80,7 @@ class OwwaModalRedirectTest extends TestCase
 
         $this->actingAs($custodian)
             ->get(AcquisitionResource::getUrl('view', ['record' => $paperwork]))
-            ->assertRedirect(AcquisitionResource::viewModalUrl($paperwork));
+            ->assertRedirect(AcquisitionResource::viewModalUrl($paperwork->fresh()));
     }
 
     public function test_custodian_can_open_requisition_view_modal_from_table(): void

@@ -45,15 +45,53 @@ class SemiExpendableEulAnalyticsServiceTest extends TestCase
 
         $this->assertSame(SemiExpendableEulAnalyticsService::ACTION_ISSUE_FROM_STOCK, $rows['Chair In Stock']->action);
         $this->assertGreaterThan(0, $rows['Chair In Stock']->unissued_stock);
-        $this->assertSame(
-            'Issue from stock ('.number_format($rows['Chair In Stock']->unissued_stock).' on hand)',
-            $rows['Chair In Stock']->action_label,
-        );
+        $this->assertSame('Issue from stock', $rows['Chair In Stock']->action_label);
         $this->assertSame(SemiExpendableEulAnalyticsService::ACTION_PURCHASE, $rows['Chair To Buy']->action);
         $this->assertSame('Purchase', $rows['Chair To Buy']->action_label);
         $this->assertSame(0, $rows['Chair To Buy']->unissued_stock);
         $this->assertSame(SemiExpendableEulAnalyticsService::ACTION_AWAITING_REVIEW, $rows['Chair Awaiting']->action);
         $this->assertSame('Awaiting review', $rows['Chair Awaiting']->action_label);
+    }
+
+    public function test_reserves_one_on_hand_unit_across_needs_replacement_rows(): void
+    {
+        $office = Office::factory()->create();
+        $semi = ItemCategory::factory()->create(['name' => 'Semi-Expendable']);
+        $item = Item::factory()->create([
+            'item_category_id' => $semi->id,
+            'name' => 'Shared Chair',
+        ]);
+
+        $this->insertAcquisition($item->id, $office->id, 4);
+        $this->insertIssuance($item->id, $office->id, 'SEMI-A', Issuance::USEFUL_LIFE_NEEDS_REPLACEMENT, now()->addDays(5)->toDateString());
+        $this->insertIssuance($item->id, $office->id, 'SEMI-B', Issuance::USEFUL_LIFE_NEEDS_REPLACEMENT, now()->addDays(10)->toDateString());
+        $this->insertIssuance($item->id, $office->id, 'SEMI-C', Issuance::USEFUL_LIFE_NEEDS_REPLACEMENT, now()->addDays(15)->toDateString());
+
+        $rows = app(SemiExpendableEulAnalyticsService::class)
+            ->getReviewRows([$office->id])
+            ->values();
+
+        $this->assertCount(3, $rows);
+        $this->assertSame(SemiExpendableEulAnalyticsService::ACTION_ISSUE_FROM_STOCK, $rows[0]->action);
+        $this->assertSame('Issue from stock', $rows[0]->action_label);
+        $this->assertSame(SemiExpendableEulAnalyticsService::ACTION_PURCHASE, $rows[1]->action);
+        $this->assertSame(SemiExpendableEulAnalyticsService::ACTION_PURCHASE, $rows[2]->action);
+    }
+
+    public function test_still_usable_issuances_are_omitted_from_review_rows(): void
+    {
+        $office = Office::factory()->create();
+        $semi = ItemCategory::factory()->create(['name' => 'Semi-Expendable']);
+        $item = Item::factory()->create([
+            'item_category_id' => $semi->id,
+            'name' => 'Still Usable Chair',
+        ]);
+
+        $this->insertIssuance($item->id, $office->id, 'SEMI-STILL', Issuance::USEFUL_LIFE_STILL_USABLE);
+
+        $rows = app(SemiExpendableEulAnalyticsService::class)->getReviewRows([$office->id]);
+
+        $this->assertTrue($rows->isEmpty());
     }
 
     protected function insertAcquisition(int $itemId, int $officeId, int $quantity): void
@@ -69,8 +107,13 @@ class SemiExpendableEulAnalyticsServiceTest extends TestCase
         ]);
     }
 
-    protected function insertIssuance(int $itemId, int $officeId, string $propertyNumber, ?string $condition): void
-    {
+    protected function insertIssuance(
+        int $itemId,
+        int $officeId,
+        string $propertyNumber,
+        ?string $condition,
+        ?string $expiresAt = null,
+    ): void {
         DB::table('issuances')->insert([
             'reference_code' => 'ISS-EUL-'.$propertyNumber.'-'.uniqid(),
             'item_id' => $itemId,
@@ -78,7 +121,7 @@ class SemiExpendableEulAnalyticsServiceTest extends TestCase
             'quantity' => 1,
             'issuance_date' => now()->subYears(4)->toDateString(),
             'estimated_useful_life' => '5 years',
-            'eul_expires_at' => now()->addDays(20)->toDateString(),
+            'eul_expires_at' => $expiresAt ?? now()->addDays(20)->toDateString(),
             'property_number' => $propertyNumber,
             'useful_life_condition' => $condition,
             'created_at' => now(),

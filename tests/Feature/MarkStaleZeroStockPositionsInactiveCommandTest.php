@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Acquisition;
+use App\Models\DisposalBatch;
 use App\Models\Item;
 use App\Models\ItemCategory;
 use App\Models\Office;
@@ -172,9 +173,18 @@ class MarkStaleZeroStockPositionsInactiveCommandTest extends TestCase
             'recorded_by' => $user->id,
         ]);
 
+        $batch = DisposalBatch::query()->create([
+            'category_slug' => 'consumables',
+            'reference_code' => 'DSP-ZERO-'.uniqid(),
+            'office_id' => $office->id,
+            'disposal_date' => $depletedOn,
+            'confirmed_at' => now(),
+        ]);
+
         $now = now();
         DB::table('disposals')->insert([
-            'reference_code' => 'DSP-ZERO-'.uniqid(),
+            'disposal_batch_id' => $batch->id,
+            'reference_code' => $batch->reference_code,
             'item_id' => $item->id,
             'office_id' => $office->id,
             'quantity' => 5,

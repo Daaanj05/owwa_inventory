@@ -18,8 +18,8 @@ class SemiExpendableUsefulLifeTest extends TestCase
 
     public function test_default_for_property_class_uses_config(): void
     {
-        $this->assertSame('5 yrs', SemiExpendableUsefulLife::defaultForPropertyClass('ict'));
-        $this->assertSame('5 yrs', SemiExpendableUsefulLife::defaultForPropertyClass('furnitures_fixtures'));
+        $this->assertSame('60 months', SemiExpendableUsefulLife::defaultForPropertyClass('ict'));
+        $this->assertSame('60 months', SemiExpendableUsefulLife::defaultForPropertyClass('furnitures_fixtures'));
     }
 
     public function test_assert_eligible_rejects_one_year_or_less(): void

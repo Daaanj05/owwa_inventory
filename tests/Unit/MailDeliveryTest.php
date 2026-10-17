@@ -3,7 +3,7 @@
 namespace Tests\Unit;
 
 use App\Models\User;
-use App\Notifications\UserWelcomeNotification;
+use App\Notifications\EmailVerificationCodeNotification;
 use App\Support\MailDelivery;
 use App\Support\MailDeliveryResult;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -30,17 +30,15 @@ class MailDeliveryTest extends TestCase
 
         $user = User::factory()->create();
 
-        $result = MailDelivery::notify($user, new UserWelcomeNotification(
-            'TempPass1!',
-            'https://example.com/login',
-            'https://example.com/verify',
+        $result = MailDelivery::notify($user, new EmailVerificationCodeNotification(
+            code: '123456',
         ));
 
         $this->assertInstanceOf(MailDeliveryResult::class, $result);
         $this->assertTrue($result->success);
         $this->assertTrue($result->wasQueued);
 
-        NotificationFacade::assertSentTo($user, UserWelcomeNotification::class);
+        NotificationFacade::assertSentTo($user, EmailVerificationCodeNotification::class);
     }
 
     public function test_notify_reports_sent_when_queue_is_sync(): void
@@ -51,10 +49,8 @@ class MailDeliveryTest extends TestCase
 
         $user = User::factory()->create();
 
-        $result = MailDelivery::notify($user, new UserWelcomeNotification(
-            'TempPass1!',
-            'https://example.com/login',
-            'https://example.com/verify',
+        $result = MailDelivery::notify($user, new EmailVerificationCodeNotification(
+            code: '123456',
         ));
 
         $this->assertTrue($result->success);

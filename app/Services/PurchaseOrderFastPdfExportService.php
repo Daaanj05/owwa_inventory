@@ -64,7 +64,7 @@ class PurchaseOrderFastPdfExportService
         $maxRows = $this->maxRowsPerPage();
         $chunks = ProcurementSpreadsheetBuilder::chunkLines($lines->values(), $maxRows);
         $pageCount = count($chunks);
-        $entityName = (string) config('owwa_export_standards.entity_name', 'OWWA-4A');
+        $entityName = (string) config('owwa_export_standards.entity_name');
         $poBase = (string) ($purchaseOrder->number ?? '');
         $date = $purchaseOrder->po_date?->format('Y-m-d') ?? '';
         $totalAmount = (float) $lines->sum(fn (PurchaseOrderLine $line): float => (float) ($line->amount ?? 0));

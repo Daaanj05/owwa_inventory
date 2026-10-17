@@ -49,7 +49,7 @@
                 <td>{{ $issuance->quantity }}</td>
                 <td>{{ $issuance->item?->unit ?? '—' }}</td>
                 <td>{{ $issuance->item?->name }}</td>
-                <td>{{ $issuance->property_number ?? $issuance->item?->item_code ?? '—' }}</td>
+                <td>{{ $issuance->issuedPropertyNumbersLabel() ?: ($issuance->item?->item_code ?? '—') }}</td>
                 <td>{{ $dateAcquired ?? '—' }}</td>
                 <td>{{ $issuance->amount ?? $issuance->unit_cost ?? '—' }}</td>
             </tr>

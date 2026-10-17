@@ -35,7 +35,7 @@ class PurchaseRequestFastExcelExportTest extends TestCase
         $spreadsheet = app(PurchaseRequestFastExcelExportService::class)->makeSpreadsheet($pages);
         $sheet = $spreadsheet->getActiveSheet();
 
-        $entityName = (string) config('owwa_export_standards.entity_name', 'OWWA-4A');
+        $entityName = (string) config('owwa_export_standards.entity_name');
         $this->assertStringContainsString($entityName, (string) $sheet->getCell('A5')->getValue());
         $this->assertTrue($sheet->getStyle('A5')->getFont()->getBold());
         $this->assertTrue($sheet->getStyle('D5')->getFont()->getBold());

@@ -4,9 +4,9 @@ namespace App\Filament\Support;
 
 use App\Models\User;
 use App\Notifications\SignInEmailChangedNotification;
+use App\Services\EmailVerificationCodeService;
 use App\Support\FriendlyMessages;
 use App\Support\MailDelivery;
-use Filament\Auth\Notifications\VerifyEmail as FilamentVerifyEmail;
 use Filament\Notifications\Notification;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification as NotificationFacade;
@@ -54,14 +54,14 @@ class UserIdentityChangeHooks
         $record->forceFill([
             'email_verified_at' => null,
             'remember_token' => Str::random(60),
+            'has_email_authentication' => false,
+            'app_authentication_secret' => null,
+            'app_authentication_recovery_codes' => null,
         ])->save();
 
         DB::table('sessions')->where('user_id', $record->id)->delete();
 
-        $verifyNotification = app(FilamentVerifyEmail::class);
-        $verifyNotification->onQueue('mail');
-        $verifyNotification->url = User::guestEmailVerificationUrlFor($record);
-        $verifyResult = MailDelivery::notify($record, $verifyNotification);
+        $verifyResult = app(EmailVerificationCodeService::class)->sendSetupInvite($record);
 
         MailDelivery::notify(
             NotificationFacade::route('mail', $previousEmail),

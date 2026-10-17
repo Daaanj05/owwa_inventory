@@ -71,7 +71,7 @@ class NotificationRecipientResolver
             $officeCustodians = $this->supplyCustodiansForOffice((int) $issuance->office_id);
             $recipients = $recipients->merge($officeCustodians);
 
-            $unitConsolidators = IssuanceDistributionVisibility::unitConsolidatorsForOffice(
+            $unitConsolidators = RequisitionNotificationRecipients::unitConsolidatorsForOffice(
                 (int) $issuance->office_id,
                 $issuance->department_id ? (int) $issuance->department_id : null,
             );

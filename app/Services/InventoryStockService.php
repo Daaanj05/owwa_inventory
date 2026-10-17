@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\InventoryUnit;
 use App\Models\Item;
 use App\Models\ItemCategory;
 use App\Models\ItemStockBucket;
@@ -44,6 +45,149 @@ class InventoryStockService
         }
 
         return $total;
+    }
+
+    /**
+     * Lots at an office that can be issued, oldest receipt first (opening balance before acquisitions).
+     * Semi-expendable and PPE lots are capped by the in-stock units carrying that unit cost unless $capByUnits is false.
+     *
+     * @return list<array{unit_cost: float, quantity: int}>
+     */
+    public function availableLotsForIssue(int $itemId, int $officeId, bool $capByUnits = true): array
+    {
+        $maps = $this->getMovementTotalsMaps();
+        $prefix = "{$itemId}_{$officeId}_";
+        $receiptOrder = $this->lotReceiptOrder($itemId, $officeId);
+        $unitCounts = $capByUnits && $this->tracksUnits($itemId) ? $this->inStockUnitCountsByCost($itemId, $officeId) : null;
+        $lots = [];
+
+        foreach ($this->positionKeysFromMaps($maps) as $key) {
+            if (! str_starts_with($key, $prefix)) {
+                continue;
+            }
+
+            $parsed = UnitCostKey::parsePositionKey($key);
+
+            if ($parsed === null) {
+                continue;
+            }
+
+            $costKey = UnitCostKey::normalize($parsed['unit_cost']);
+            $quantity = $this->calculateStockFromMaps($key, $maps);
+
+            if ($unitCounts !== null) {
+                $quantity = min($quantity, $unitCounts[$costKey] ?? 0);
+            }
+
+            if ($quantity <= 0) {
+                continue;
+            }
+
+            $lots[] = [
+                'unit_cost' => $parsed['unit_cost'],
+                'quantity' => $quantity,
+                'order' => $receiptOrder[$costKey] ?? '9|9999-12-31',
+            ];
+        }
+
+        usort($lots, fn (array $a, array $b): int => [$a['order'], $a['unit_cost']] <=> [$b['order'], $b['unit_cost']]);
+
+        return array_map(
+            fn (array $lot): array => ['unit_cost' => $lot['unit_cost'], 'quantity' => $lot['quantity']],
+            $lots,
+        );
+    }
+
+    /**
+     * Quantity that can be issued from an office right now (sum of issuable lots).
+     */
+    public function issuableQuantity(int $itemId, int $officeId): int
+    {
+        return array_sum(array_column($this->availableLotsForIssue($itemId, $officeId), 'quantity'));
+    }
+
+    /**
+     * @return array<string, string> normalized unit cost => sortable receipt key
+     */
+    protected function lotReceiptOrder(int $itemId, int $officeId): array
+    {
+        $order = [];
+
+        $remember = function (string $costKey, string $sortKey) use (&$order): void {
+            if (! isset($order[$costKey]) || $sortKey < $order[$costKey]) {
+                $order[$costKey] = $sortKey;
+            }
+        };
+
+        DB::table('stock_opening_balances')
+            ->leftJoin('stock_opening_balance_batches', 'stock_opening_balances.batch_id', '=', 'stock_opening_balance_batches.id')
+            ->where('stock_opening_balances.item_id', $itemId)
+            ->where('stock_opening_balances.office_id', $officeId)
+            ->select(
+                'stock_opening_balances.unit_cost',
+                DB::raw('MIN(COALESCE(stock_opening_balance_batches.recorded_on, stock_opening_balances.created_at)) as received_at'),
+            )
+            ->groupBy('stock_opening_balances.unit_cost')
+            ->get()
+            ->each(fn (object $row) => $remember(
+                UnitCostKey::normalize($row->unit_cost !== null ? (float) $row->unit_cost : null),
+                '0|'.$row->received_at,
+            ));
+
+        DB::table('acquisitions')
+            ->whereNull('deleted_at')
+            ->where('item_id', $itemId)
+            ->where('office_id', $officeId)
+            ->select('unit_cost', DB::raw('MIN(COALESCE(acquisition_date, created_at)) as received_at'))
+            ->groupBy('unit_cost')
+            ->get()
+            ->each(fn (object $row) => $remember(
+                UnitCostKey::normalize($row->unit_cost !== null ? (float) $row->unit_cost : null),
+                '1|'.$row->received_at,
+            ));
+
+        DB::table('transfers')
+            ->whereNull('deleted_at')
+            ->where('item_id', $itemId)
+            ->where('to_office_id', $officeId)
+            ->select('unit_cost', DB::raw('MIN(created_at) as received_at'))
+            ->groupBy('unit_cost')
+            ->get()
+            ->each(fn (object $row) => $remember(
+                UnitCostKey::normalize($row->unit_cost !== null ? (float) $row->unit_cost : null),
+                '1|'.$row->received_at,
+            ));
+
+        return $order;
+    }
+
+    protected function tracksUnits(int $itemId): bool
+    {
+        $slug = Item::query()->with('category')->find($itemId)?->category?->getTemplateSlug();
+
+        return in_array($slug, ['ppe', 'semi_expendable'], true);
+    }
+
+    /**
+     * @return array<string, int> normalized unit cost => in-stock unit count
+     */
+    protected function inStockUnitCountsByCost(int $itemId, int $officeId): array
+    {
+        $counts = [];
+
+        InventoryUnit::query()
+            ->where('item_id', $itemId)
+            ->where('office_id', $officeId)
+            ->where('status', InventoryUnit::STATUS_IN_STOCK)
+            ->select('unit_cost', DB::raw('COUNT(*) as total'))
+            ->groupBy('unit_cost')
+            ->get()
+            ->each(function (InventoryUnit $row) use (&$counts): void {
+                $costKey = UnitCostKey::normalize($row->unit_cost !== null ? (float) $row->unit_cost : null);
+                $counts[$costKey] = ($counts[$costKey] ?? 0) + (int) $row->getAttribute('total');
+            });
+
+        return $counts;
     }
 
     public function forgetMovementTotalsCache(): void
@@ -403,8 +547,19 @@ class InventoryStockService
                 ->get();
         };
 
+        $issuedFromExpr = 'COALESCE(issued_from_office_id, office_id)';
+
         $addKeys($scopeTable('acquisitions', 'office_id'), 'office_id');
-        $addKeys($scopeTable('issuances', 'office_id'), 'office_id');
+        $addKeys(
+            DB::table('issuances')
+                ->whereNull('deleted_at')
+                ->when($itemIds !== null, fn ($q) => $q->whereIn('item_id', $itemIds))
+                ->when($officeId !== null, fn ($q) => $q->whereRaw("{$issuedFromExpr} = ?", [$officeId]))
+                ->select('item_id', DB::raw("{$issuedFromExpr} as office_id"), 'unit_cost')
+                ->distinct()
+                ->get(),
+            'office_id',
+        );
         $addKeys(
             DB::table('disposals')
                 ->join('disposal_batches', 'disposals.disposal_batch_id', '=', 'disposal_batches.id')
@@ -1083,7 +1238,7 @@ class InventoryStockService
             'opening' => $this->buildOpeningBalanceMap(),
             'acq' => $this->buildMovementMap('acquisitions', 'office_id', 'unit_cost'),
             'inTransfers' => $this->buildMovementMap('transfers', 'to_office_id', 'unit_cost'),
-            'issuances' => $this->buildMovementMap('issuances', 'office_id', 'unit_cost'),
+            'issuances' => $this->buildIssuanceMovementMap(),
             'outTransfers' => $this->buildMovementMap('transfers', 'from_office_id', 'unit_cost', excludeReturns: true),
             'disposals' => $this->buildConfirmedDisposalMovementMap(),
         ];
@@ -1108,7 +1263,7 @@ class InventoryStockService
             'opening' => $this->buildOpeningBalanceMap($itemIds, $officeId),
             'acq' => $this->buildMovementMap('acquisitions', 'office_id', 'unit_cost', itemIds: $itemIds, officeId: $officeId),
             'inTransfers' => $this->buildMovementMap('transfers', 'to_office_id', 'unit_cost', itemIds: $itemIds, officeId: $officeId),
-            'issuances' => $this->buildMovementMap('issuances', 'office_id', 'unit_cost', itemIds: $itemIds, officeId: $officeId),
+            'issuances' => $this->buildIssuanceMovementMap($itemIds, $officeId),
             'outTransfers' => $this->buildMovementMap('transfers', 'from_office_id', 'unit_cost', excludeReturns: true, itemIds: $itemIds, officeId: $officeId),
             'disposals' => $this->buildConfirmedDisposalMovementMap($itemIds, $officeId),
         ];
@@ -1161,6 +1316,43 @@ class InventoryStockService
      * @param  array<int, int>|null  $itemIds
      * @return array<string, int>
      */
+    /**
+     * Issuances leave the supply office when issued_from_office_id is set.
+     * Older rows still deduct the office stored on the issuance.
+     *
+     * @param  array<int, int>|null  $itemIds
+     * @return array<string, int>
+     */
+    protected function buildIssuanceMovementMap(?array $itemIds = null, ?int $officeId = null): array
+    {
+        $officeExpr = 'COALESCE(issued_from_office_id, office_id)';
+
+        $query = DB::table('issuances')
+            ->whereNull('deleted_at')
+            ->when($itemIds !== null, fn ($q) => $q->whereIn('item_id', $itemIds))
+            ->when($officeId !== null, fn ($q) => $q->whereRaw("{$officeExpr} = ?", [$officeId]));
+
+        return $query
+            ->select(
+                'item_id',
+                DB::raw("{$officeExpr} as office_id"),
+                DB::raw('COALESCE(unit_cost, 0) as unit_cost'),
+                DB::raw('SUM(quantity) as total'),
+            )
+            ->groupBy('item_id', DB::raw($officeExpr), DB::raw('COALESCE(unit_cost, 0)'))
+            ->get()
+            ->mapWithKeys(function ($row): array {
+                $key = UnitCostKey::positionKey(
+                    (int) $row->item_id,
+                    (int) $row->office_id,
+                    (float) $row->unit_cost,
+                );
+
+                return [$key => (int) $row->total];
+            })
+            ->all();
+    }
+
     protected function buildMovementMap(
         string $table,
         string $officeColumn,
@@ -1203,7 +1395,8 @@ class InventoryStockService
     }
 
     /**
-     * Only confirmed disposals reduce stock (draft disposals are excluded).
+     * Only confirmed disposals of property still in stock reduce stock. Draft disposals are excluded, and so are
+     * disposals of issued property (par_issuance_id), which already left stock when it was issued.
      *
      * @param  array<int, int>|null  $itemIds
      * @return array<string, int>
@@ -1214,6 +1407,7 @@ class InventoryStockService
             ->join('disposal_batches', 'disposals.disposal_batch_id', '=', 'disposal_batches.id')
             ->whereNull('disposals.deleted_at')
             ->whereNotNull('disposal_batches.confirmed_at')
+            ->whereNull('disposals.par_issuance_id')
             ->when($itemIds !== null, fn ($q) => $q->whereIn('disposals.item_id', $itemIds))
             ->when($officeId !== null, fn ($q) => $q->where('disposals.office_id', $officeId))
             ->select(

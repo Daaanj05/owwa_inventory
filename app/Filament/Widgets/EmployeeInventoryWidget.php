@@ -4,7 +4,7 @@ namespace App\Filament\Widgets;
 
 use App\Filament\Pages\MyInventory;
 use App\Models\User;
-use App\Services\EmployeeDistributionInventoryService;
+use App\Services\EmployeeReceivedInventoryService;
 use Filament\Facades\Filament;
 use Filament\Widgets\Widget;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -22,13 +22,13 @@ class EmployeeInventoryWidget extends Widget
 
     protected string $view = 'filament.widgets.employee-inventory-widget';
 
-    public string $invSort = 'distribution_date';
+    public string $invSort = 'received_date';
 
     public string $invDir = 'desc';
 
     public string $invSearch = '';
 
-    public string $invCategory = EmployeeDistributionInventoryService::CATEGORY_CONSUMABLES;
+    public string $invCategory = EmployeeReceivedInventoryService::CATEGORY_CONSUMABLES;
 
     public static function canView(): bool
     {
@@ -39,7 +39,7 @@ class EmployeeInventoryWidget extends Widget
 
     public function sortInventory(string $column): void
     {
-        $allowed = ['item_name', 'category_name', 'quantity', 'distribution_date', 'distribution_count'];
+        $allowed = ['item_name', 'category_name', 'quantity', 'received_date', 'receipt_count'];
 
         if (! in_array($column, $allowed, true)) {
             return;
@@ -55,8 +55,8 @@ class EmployeeInventoryWidget extends Widget
 
     public function updatedInvCategory(): void
     {
-        if (! EmployeeDistributionInventoryService::isValidCategory($this->invCategory)) {
-            $this->invCategory = EmployeeDistributionInventoryService::CATEGORY_CONSUMABLES;
+        if (! EmployeeReceivedInventoryService::isValidCategory($this->invCategory)) {
+            $this->invCategory = EmployeeReceivedInventoryService::CATEGORY_CONSUMABLES;
         }
 
         $this->resetPage();
@@ -74,7 +74,7 @@ class EmployeeInventoryWidget extends Widget
             return (new \Illuminate\Pagination\LengthAwarePaginator([], 0, 10, 1))->onEachSide(0);
         }
 
-        return app(EmployeeDistributionInventoryService::class)->paginatedGroupedInventory(
+        return app(EmployeeReceivedInventoryService::class)->paginatedGroupedInventory(
             $user,
             filled($this->invSearch) ? $this->invSearch : null,
             $this->invSort,

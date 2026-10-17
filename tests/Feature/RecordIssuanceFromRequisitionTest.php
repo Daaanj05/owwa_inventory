@@ -163,6 +163,18 @@ class RecordIssuanceFromRequisitionTest extends TestCase
             ->mountTableAction('view', $requisition)
             ->callAction(TestAction::make('acceptAndIssue'), [
                 'issuance_date' => '2026-06-07',
+                'ris_requested_by_name' => 'Unit Custodian',
+                'ris_requested_by_designation' => 'Admin',
+                'ris_requested_by_date' => '2026-06-07',
+                'ris_approved_by_name' => 'Approving Officer',
+                'ris_approved_by_designation' => 'Chief',
+                'ris_approved_by_date' => '2026-06-07',
+                'ris_issued_by_name' => 'Supply Custodian',
+                'ris_issued_by_designation' => 'Supply Officer',
+                'ris_issued_by_date' => '2026-06-07',
+                'ris_received_by_name' => 'Unit Custodian',
+                'ris_received_by_designation' => 'Admin',
+                'ris_received_by_date' => '2026-06-07',
                 'lines' => RequisitionIssuanceFormSchema::defaultLines($requisition->fresh(), false),
             ])
             ->assertNotified();
@@ -256,9 +268,14 @@ class RecordIssuanceFromRequisitionTest extends TestCase
             ->mountTableAction('view', $requisition)
             ->mountAction(TestAction::make('acceptAndIssue'))
             ->assertFormFieldExists('issuance_date')
-            ->assertFormFieldExists('custodian_printed_name')
-            ->assertFormFieldExists('custodian_designation')
-            ->assertFormFieldExists('issued_to_designation')
+            ->assertFormFieldExists('ris_requested_by_name')
+            ->assertFormFieldExists('ris_requested_by_designation')
+            ->assertFormFieldExists('ris_requested_by_date')
+            ->assertFormFieldExists('ris_approved_by_name')
+            ->assertFormFieldExists('ris_issued_by_name')
+            ->assertFormFieldExists('ris_issued_by_designation')
+            ->assertFormFieldExists('ris_received_by_name')
+            ->assertFormFieldExists('ris_received_by_designation')
             ->assertFormFieldDoesNotExist('accounting_staff_printed_name')
             ->assertFormFieldExists('lines');
     }

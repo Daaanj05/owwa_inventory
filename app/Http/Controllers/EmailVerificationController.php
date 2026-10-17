@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Services\EmailVerificationCodeService;
 use Filament\Facades\Filament;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -20,8 +21,8 @@ class EmailVerificationController extends Controller
             return redirect()->intended(Filament::getPanel('admin')->getUrl());
         }
 
-        $request->user()->sendEmailVerificationNotification();
+        app(EmailVerificationCodeService::class)->send($request->user());
 
-        return back()->with('status', 'verification-link-sent');
+        return back()->with('status', 'verification-code-sent');
     }
 }

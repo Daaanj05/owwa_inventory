@@ -46,7 +46,7 @@ class PropertyActionRequestBroadcastTest extends TestCase
 
         $request = PropertyActionRequest::query()->create([
             'action_type' => PropertyActionRequest::ACTION_RETURN,
-            'reason_code' => 'good_condition',
+            'reason_code' => 'serviceable_not_needed',
             'requested_by' => $employee->id,
             'accountable_user_id' => $employee->id,
             'office_id' => $office->id,
@@ -71,7 +71,7 @@ class PropertyActionRequestBroadcastTest extends TestCase
 
         PropertyActionRequest::query()->create([
             'action_type' => PropertyActionRequest::ACTION_RETURN,
-            'reason_code' => 'good_condition',
+            'reason_code' => 'serviceable_not_needed',
             'requested_by' => $employee->id,
             'accountable_user_id' => $employee->id,
             'office_id' => $office->id,
@@ -96,7 +96,7 @@ class PropertyActionRequestBroadcastTest extends TestCase
 
         $request = PropertyActionRequest::query()->create([
             'action_type' => PropertyActionRequest::ACTION_RETURN,
-            'reason_code' => 'good_condition',
+            'reason_code' => 'serviceable_not_needed',
             'requested_by' => $employee->id,
             'accountable_user_id' => $employee->id,
             'office_id' => $office->id,
@@ -123,7 +123,7 @@ class PropertyActionRequestBroadcastTest extends TestCase
 
         $request = PropertyActionRequest::query()->create([
             'action_type' => PropertyActionRequest::ACTION_RETURN,
-            'reason_code' => 'good_condition',
+            'reason_code' => 'serviceable_not_needed',
             'requested_by' => $employee->id,
             'accountable_user_id' => $employee->id,
             'office_id' => $office->id,
@@ -150,7 +150,7 @@ class PropertyActionRequestBroadcastTest extends TestCase
 
         $request = PropertyActionRequest::query()->create([
             'action_type' => PropertyActionRequest::ACTION_RETURN,
-            'reason_code' => 'good_condition',
+            'reason_code' => 'serviceable_not_needed',
             'requested_by' => $employee->id,
             'accountable_user_id' => $employee->id,
             'office_id' => $office->id,
@@ -177,7 +177,7 @@ class PropertyActionRequestBroadcastTest extends TestCase
 
         $request = PropertyActionRequest::query()->create([
             'action_type' => PropertyActionRequest::ACTION_RETURN,
-            'reason_code' => 'good_condition',
+            'reason_code' => 'serviceable_not_needed',
             'requested_by' => $uc->id,
             'accountable_user_id' => $uc->id,
             'office_id' => $office->id,

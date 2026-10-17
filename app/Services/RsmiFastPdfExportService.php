@@ -138,7 +138,7 @@ class RsmiFastPdfExportService
         });
 
         $first = $issuances->first();
-        $entityName = (string) config('owwa_export_standards.entity_name', 'OWWA-4A');
+        $entityName = (string) config('owwa_export_standards.entity_name');
         $reportDate = $issuances
             ->map(fn (Issuance $issuance): ?string => $issuance->issuance_date?->format('Y-m-d'))
             ->filter()

@@ -2613,6 +2613,34 @@ button[type="submit"].fi-btn:hover {
     text-decoration: underline;
 }
 
+.owwa-login-forgot-sep {
+    margin: 0 0.35rem;
+    color: #94a3b8;
+}
+
+.owwa-mfa-challenge-form,
+.owwa-mfa-setup-form {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.owwa-mfa-challenge-form .fi-sc-form,
+.owwa-mfa-setup-form .fi-sc-form {
+    gap: 1.25rem !important;
+}
+
+.fi-body:has(.owwa-mfa-setup-page) .fi-simple-layout-header,
+.fi-body:has(.owwa-verify-email-page) .fi-simple-layout-header {
+    display: none;
+}
+
+.owwa-mfa-setup-page .fi-simple-page,
+.owwa-verify-email-page .fi-simple-page {
+    max-width: none;
+    padding: 0;
+}
+
 .owwa-login-remember {
     display: flex;
     align-items: center;
@@ -4616,33 +4644,11 @@ select.owwa-search-bar {
     overflow: auto;
 }
 
-.owwa-pa-presets {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.35rem;
-}
-
-.owwa-pa-preset-btn {
-    border: 1px solid #d1d5db;
-    border-radius: 9999px;
-    padding: 0.2rem 0.65rem;
+.owwa-pa-period-note {
+    margin: 0;
     font-size: 0.75rem;
-    font-weight: 500;
-    color: #374151;
-    background: #fff;
-    cursor: pointer;
-}
-
-.owwa-pa-preset-btn:hover {
-    border-color: #1e6fbe;
-    color: #1e6fbe;
-}
-
-.owwa-pa-preset-btn.is-active {
-    background: #eff6ff;
-    border-color: #93c5fd;
-    color: #1e6fbe;
-    font-weight: 600;
+    line-height: 1.4;
+    color: #64748b;
 }
 
 .owwa-pa-chip--inline {
@@ -5614,27 +5620,6 @@ select.owwa-search-bar {
 .fi-resource-list-records-page .fi-ta-header-toolbar > div:has(.fi-ta-search-field) {
     order: 1;
     width: 100%;
-}
-
-/* UC Distributions: category left of search (Office Property Register pattern) */
-.fi-page.owwa-distributions-uc-toolbar .fi-ta-ctn .fi-ta-header-toolbar > div:has(.fi-ta-search-field) {
-    display: flex !important;
-    flex-wrap: wrap !important;
-    align-items: center !important;
-    gap: 0.75rem !important;
-}
-
-.fi-page.owwa-distributions-uc-toolbar .fi-ta-ctn .fi-ta-header-toolbar > div:has(.fi-ta-search-field) .owwa-distributions-category-select {
-    flex: 0 0 auto !important;
-    width: 16rem !important;
-    max-width: 100% !important;
-}
-
-.fi-page.owwa-distributions-uc-toolbar .fi-ta-ctn .fi-ta-header-toolbar > div:has(.fi-ta-search-field) .fi-ta-search-field {
-    flex: 0 0 auto !important;
-    width: 18rem !important;
-    max-width: 100% !important;
-    margin-right: auto !important;
 }
 
 .owwa-consolidated-totals-summary {
@@ -8182,7 +8167,7 @@ body.owwa-busy-active .fi-topbar a {
     grid-column: 1 / -1;
 }
 
-.owwa-employee-distribution-ledger-header {
+.owwa-employee-received-ledger-header {
     grid-template-columns: minmax(12rem, 2fr) minmax(10rem, 1.4fr) repeat(3, minmax(7rem, 0.8fr));
 }
 
@@ -9747,18 +9732,18 @@ body.owwa-busy-active .fi-topbar a {
 
 .fi-modal-window.owwa-record-modal .owwa-acquisition-lines-repeater > table > thead > tr > th,
 .fi-modal-window.owwa-record-modal .owwa-acquisition-lines-repeater > table > tbody > tr > td {
-    vertical-align: top !important;
+    vertical-align: middle !important;
     word-break: break-word;
     overflow-wrap: anywhere;
 }
 
-/* Keep field wrappers constrained inside table cells, top-aligned with placeholders. */
+/* Keep field wrappers constrained inside table cells, vertically centered with placeholders. */
 .fi-modal-window.owwa-record-modal .owwa-acquisition-lines-repeater .fi-fo-field,
 .fi-modal-window.owwa-record-modal .owwa-acquisition-lines-repeater .fi-fo-field-wrp {
     min-width: 0;
     max-width: 100%;
-    align-items: flex-start;
-    justify-content: flex-start;
+    align-items: stretch;
+    justify-content: stretch;
 }
 
 .fi-modal-window.owwa-record-modal .owwa-acquisition-lines-repeater > table > tbody > tr > td .fi-input-wrp,
@@ -9772,31 +9757,8 @@ body.owwa-busy-active .fi-topbar a {
     display: flex;
     flex-direction: column;
     align-items: stretch;
-    justify-content: flex-start;
+    justify-content: center;
     height: 100%;
-}
-
-/* PO/IAR line row: vertically center cells with qty inputs. */
-.fi-modal-window.owwa-record-modal .owwa-po-lines-repeater > table > thead > tr > th,
-.fi-modal-window.owwa-record-modal .owwa-po-lines-repeater > table > tbody > tr > td,
-.fi-modal-window.owwa-record-modal .owwa-iar-lines-repeater > table > thead > tr > th,
-.fi-modal-window.owwa-record-modal .owwa-iar-lines-repeater > table > tbody > tr > td {
-    vertical-align: middle !important;
-}
-
-.fi-modal-window.owwa-record-modal .owwa-po-lines-repeater .fi-fo-field,
-.fi-modal-window.owwa-record-modal .owwa-po-lines-repeater .fi-fo-field-wrp,
-.fi-modal-window.owwa-record-modal .owwa-iar-lines-repeater .fi-fo-field,
-.fi-modal-window.owwa-record-modal .owwa-iar-lines-repeater .fi-fo-field-wrp {
-    align-items: stretch;
-    justify-content: center;
-}
-
-.fi-modal-window.owwa-record-modal .owwa-po-lines-repeater > table > tbody > tr > td > .fi-fo-field,
-.fi-modal-window.owwa-record-modal .owwa-po-lines-repeater > table > tbody > tr > td > .fi-grid-col,
-.fi-modal-window.owwa-record-modal .owwa-iar-lines-repeater > table > tbody > tr > td > .fi-fo-field,
-.fi-modal-window.owwa-record-modal .owwa-iar-lines-repeater > table > tbody > tr > td > .fi-grid-col {
-    justify-content: center;
 }
 
 .fi-modal-window.owwa-record-modal .owwa-po-lines-repeater .owwa-acquisition-line-total,
@@ -10034,7 +9996,7 @@ body.owwa-busy-active .fi-topbar a {
 }
 
 .fi-modal-window.owwa-record-modal .owwa-acquisition-lines-repeater .owwa-acquisition-line-unit {
-    padding-inline: 0.15rem !important;
+    padding-inline: 0 !important;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -10050,9 +10012,12 @@ body.owwa-busy-active .fi-topbar a {
     font-size: 0.8125rem;
 }
 
+/* Borderless cell inputs: no inner inset so values line up with the column headers. */
 .fi-modal-window.owwa-record-modal .owwa-acquisition-lines-repeater .owwa-acquisition-line-unit-cost,
-.fi-modal-window.owwa-record-modal .owwa-acquisition-lines-repeater .owwa-acquisition-line-qty {
-    padding-inline: 0.2rem !important;
+.fi-modal-window.owwa-record-modal .owwa-acquisition-lines-repeater .owwa-acquisition-line-qty,
+.fi-modal-window.owwa-record-modal .owwa-acquisition-lines-repeater .owwa-acquisition-line-desc,
+.fi-modal-window.owwa-record-modal .owwa-acquisition-lines-repeater .fi-select-input-btn {
+    padding-inline-start: 0 !important;
 }
 
 .fi-modal-window.owwa-record-modal .owwa-acquisition-lines-repeater .owwa-acquisition-line-unit-cost::placeholder {
@@ -10063,6 +10028,7 @@ body.owwa-busy-active .fi-topbar a {
 .fi-modal-window.owwa-record-modal .owwa-acquisition-lines-repeater textarea.owwa-acquisition-line-desc,
 .fi-modal-window.owwa-record-modal .owwa-acquisition-lines-repeater .owwa-acquisition-line-desc {
     resize: none;
+    overflow: hidden;
     white-space: pre-wrap;
     word-break: break-word;
     overflow-wrap: anywhere;
@@ -11949,7 +11915,8 @@ body.owwa-busy-active .fi-topbar a {
     gap: 0.875rem !important;
 }
 
-.fi-page.owwa-account-page .owwa-account-section.fi-section {
+.fi-page.owwa-account-page .owwa-account-section.fi-section,
+.fi-page.owwa-account-page .owwa-account-mfa-section.fi-section {
     border-radius: 1rem !important;
     border: 1px solid #e2e8f0 !important;
     background: #ffffff !important;

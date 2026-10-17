@@ -4,7 +4,6 @@ namespace App\Support;
 
 use App\Models\Acquisition;
 use App\Models\Disposal;
-use App\Models\Distribution;
 use App\Models\Issuance;
 use App\Models\Item;
 use App\Models\Transfer;
@@ -55,12 +54,7 @@ class OwwaTransactionViewPresenter
             ),
         );
 
-        $visibility = IssuanceDistributionVisibility::forIssuance($record);
-        $employeeSummary = $visibility['employees'] === []
-            ? '—'
-            : collect($visibility['employees'])
-                ->map(fn (array $row): string => $row['name'].' ('.$row['quantity'].')')
-                ->implode(', ');
+        $recipients = IssuanceRecipientSummary::forIssuance($record);
 
         $hero = OwwaRecordHeroData::make(
             reference: $record->controlNumber() ?? '—',
@@ -72,9 +66,8 @@ class OwwaTransactionViewPresenter
                 ['label' => 'RIS Reference', 'value' => $record->requisition?->reference_code ?? '—'],
                 ['label' => 'Office', 'value' => $record->office?->name ?? '—'],
                 ['label' => 'Department', 'value' => $record->department?->name ?? '—'],
-                ['label' => 'Unit Consolidator', 'value' => $visibility['unit_consolidator'] ?? '—'],
-                ['label' => 'Distribution', 'value' => $visibility['distribution_status_label']],
-                ['label' => 'Employees', 'value' => $employeeSummary],
+                ['label' => 'Issued to', 'value' => $recipients['employee'] ?? $record->issuedTo?->name ?? '—'],
+                ['label' => 'Endorsed by (UC)', 'value' => $recipients['unit_consolidator'] ?? '—'],
             ],
             kpis: [
                 ['label' => 'Total quantity', 'value' => (string) $totalQuantity],
@@ -82,7 +75,6 @@ class OwwaTransactionViewPresenter
             ],
         );
         $hero['referenceLabel'] = OwwaReferenceLabels::issuanceTransaction($record);
-        $hero['distribution'] = $visibility;
 
         return $hero;
     }
@@ -172,31 +164,6 @@ class OwwaTransactionViewPresenter
             meta: $meta,
         );
         $hero['referenceLabel'] = 'Item';
-
-        return $hero;
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    public static function forDistribution(Distribution $record): array
-    {
-        $record->loadMissing(['item', 'distributedTo', 'requisition']);
-
-        $hero = OwwaRecordHeroData::make(
-            reference: $record->requisition?->reference_code ?? ('Distribution #'.$record->id),
-            statusLabel: 'Distributed',
-            statusClass: 'owwa-pc-status-badge--complete',
-            meta: [
-                ['label' => 'Item', 'value' => $record->item?->name ?? '—'],
-                ['label' => 'Date', 'value' => $record->distribution_date?->format('M j, Y') ?? '—'],
-                ['label' => 'Distributed to', 'value' => $record->distributedTo?->name ?? '—'],
-            ],
-            kpis: [
-                ['label' => 'Quantity', 'value' => (string) $record->quantity],
-            ],
-        );
-        $hero['referenceLabel'] = 'Reference';
 
         return $hero;
     }

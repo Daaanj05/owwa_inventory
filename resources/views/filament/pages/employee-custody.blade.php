@@ -1,11 +1,11 @@
 @php
-    use App\Services\EmployeeDistributionInventoryService;
+    use App\Services\EmployeeReceivedInventoryService;
     use App\Support\SemiExpendableUsefulLife;
 
     $rows = $this->getInventoryRows();
     $sortBy = $this->sortBy;
     $sortDir = $this->sortDir;
-    $categoryOptions = EmployeeDistributionInventoryService::categoryOptions();
+    $categoryOptions = EmployeeReceivedInventoryService::categoryOptions();
     $officeOptions = $this->getUcOfficeOptions();
     $departmentOptions = $this->getUcDepartmentOptions();
     $employeeOptions = $this->getEmployeeOptions();
@@ -125,7 +125,7 @@
                 @elseif (! $hasEmployee)
                     <div class="owwa-empty" style="padding: 2rem 1rem;">
                         <p class="owwa-empty-title">Select an employee</p>
-                        <p class="owwa-empty-desc">Choose an employee from the list above to view their distributed and issued items.</p>
+                        <p class="owwa-empty-desc">Choose an employee from the list above to view the items issued to them.</p>
                     </div>
                 @else
                     <div class="owwa-table-wrap">
@@ -136,15 +136,15 @@
                                         $columns = [
                                             'item_name' => 'Item',
                                             'quantity' => 'Total qty',
-                                            'distribution_date' => 'Last received',
-                                            'distribution_count' => 'Distributions',
+                                            'received_date' => 'Last received',
+                                            'receipt_count' => 'Times received',
                                         ];
                                     @endphp
                                     @foreach($columns as $col => $label)
                                         <th
                                             wire:click="sortByColumn('{{ $col }}')"
                                             style="cursor: pointer; user-select: none;"
-                                            class="{{ in_array($col, ['quantity', 'distribution_count'], true) ? 'owwa-num' : '' }}"
+                                            class="{{ in_array($col, ['quantity', 'receipt_count'], true) ? 'owwa-num' : '' }}"
                                         >
                                             {{ $label }}
                                             @if($sortBy === $col)
@@ -176,13 +176,13 @@
                                             </td>
                                             <td class="owwa-num owwa-cell-primary">{{ number_format((int) $row->total_quantity) }}</td>
                                             <td class="owwa-cell-muted">
-                                                @if (filled($row->last_distribution_date))
-                                                    {{ \Illuminate\Support\Carbon::parse($row->last_distribution_date)->format('M d, Y') }}
+                                                @if (filled($row->last_received_date))
+                                                    {{ \Illuminate\Support\Carbon::parse($row->last_received_date)->format('M d, Y') }}
                                                 @else
                                                     —
                                                 @endif
                                             </td>
-                                            <td class="owwa-num owwa-cell-muted">{{ number_format((int) $row->distribution_count) }}</td>
+                                            <td class="owwa-num owwa-cell-muted">{{ number_format((int) $row->receipt_count) }}</td>
                                             <td class="owwa-status">
                                                 @if($eulStatus === SemiExpendableUsefulLife::STATUS_EXPIRED)
                                                     <span class="owwa-status-badge owwa-status-low">Expired</span>
@@ -200,7 +200,7 @@
                                             <td class="owwa-cell-primary">
                                                 <button
                                                     type="button"
-                                                    wire:click="openDistributionLedger({{ (int) $row->item_id }})"
+                                                    wire:click="openReceivedLedger({{ (int) $row->item_id }})"
                                                     class="text-left font-medium text-primary-600 hover:text-primary-500 dark:text-primary-400 dark:hover:text-primary-300"
                                                     title="{{ $row->item_name }}"
                                                 >
@@ -209,13 +209,13 @@
                                             </td>
                                             <td class="owwa-num owwa-cell-primary">{{ number_format((int) $row->total_quantity) }}</td>
                                             <td class="owwa-cell-muted">
-                                                @if (filled($row->last_distribution_date))
-                                                    {{ \Illuminate\Support\Carbon::parse($row->last_distribution_date)->format('M d, Y') }}
+                                                @if (filled($row->last_received_date))
+                                                    {{ \Illuminate\Support\Carbon::parse($row->last_received_date)->format('M d, Y') }}
                                                 @else
                                                     —
                                                 @endif
                                             </td>
-                                            <td class="owwa-num owwa-cell-muted">{{ number_format((int) $row->distribution_count) }}</td>
+                                            <td class="owwa-num owwa-cell-muted">{{ number_format((int) $row->receipt_count) }}</td>
                                         </tr>
                                     @endif
                                 @empty
@@ -223,7 +223,7 @@
                                         <td colspan="{{ $propertyView ? 5 : 4 }}">
                                             <div class="owwa-empty">
                                                 <p class="owwa-empty-title">No items on record</p>
-                                                <p class="owwa-empty-desc">Distributions to this employee will appear here.</p>
+                                                <p class="owwa-empty-desc">Items issued to this employee will appear here.</p>
                                             </div>
                                         </td>
                                     </tr>

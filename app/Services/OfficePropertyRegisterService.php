@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Issuance;
 use App\Models\Item;
+use App\Models\PropertyActionRequest;
 use App\Models\Transfer;
 use App\Models\User;
 use App\Support\InventoryCategoryOptions;
@@ -13,13 +14,10 @@ use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Pagination\LengthAwarePaginator as Paginator;
+use Illuminate\Support\Facades\DB;
 
 class OfficePropertyRegisterService
 {
-    public function __construct(
-        protected OfficeDistributionBalanceService $balanceService,
-    ) {}
-
     /**
      * @return Builder<Issuance>
      */
@@ -184,7 +182,7 @@ class OfficePropertyRegisterService
         $slug = $item->category?->getTemplateSlug() ?? 'consumables';
 
         $issuances = Issuance::query()
-            ->with(['requisition'])
+            ->with(['requisition', 'executedReturnLines.propertyActionRequest', 'executedReturnLines.inventoryUnit'])
             ->where('office_id', $resolvedOfficeId)
             ->when($resolvedDepartmentId, fn (Builder $query): Builder => $query->where('department_id', $resolvedDepartmentId))
             ->where('item_id', $itemId)
@@ -197,8 +195,23 @@ class OfficePropertyRegisterService
         foreach ($issuances as $issuance) {
             $issuance->loadMissing(['issuedTo', 'consolidatedRequisition.requestedBy']);
             $reference = $issuance->controlNumber() ?? 'Issuance #'.$issuance->id;
-            if (filled($issuance->property_number)) {
-                $reference = trim($issuance->property_number.' — '.$reference);
+            if ($issuance->issuedPropertyNumbersLabel() !== '') {
+                $reference = trim($issuance->issuedPropertyNumbersLabel().' — '.$reference);
+            }
+
+            foreach ($issuance->executedReturnLines as $line) {
+                $returnedAt = $line->propertyActionRequest?->executed_at ?? $issuance->custody_ended_at ?? $line->updated_at;
+
+                $events->push([
+                    'sort_date' => $returnedAt?->format('Y-m-d') ?? '0000-01-01',
+                    'sort_id' => $issuance->id,
+                    'date' => $returnedAt?->format('M j, Y') ?? '—',
+                    'reference' => trim(($line->inventoryUnit?->property_number ?? '').' — '.($line->propertyActionRequest?->reference_code ?? ''), ' —'),
+                    'employee' => $issuance->issuedTo?->name ?? '—',
+                    'type' => PropertyActionRequest::receiveOutcomeLabel((string) $line->outcome),
+                    'quantity' => $line->inventory_unit_id !== null ? 1 : max(1, (int) $line->quantity),
+                    'direction' => $issuance->isEmployeeDirectIssuance() ? 0 : -1,
+                ]);
             }
 
             if ($issuance->isEmployeeDirectIssuance()) {
@@ -338,7 +351,7 @@ class OfficePropertyRegisterService
 
                 return [
                     'issuance_id' => $issuance->id,
-                    'property_number' => $issuance->property_number ?? '—',
+                    'property_number' => $issuance->issuedPropertyNumbersLabel() ?: '—',
                     'reference_code' => $issuance->controlNumber() ?? '—',
                     'issued_to' => $issuance->issuedTo?->name ?? '—',
                     'issuance_date' => $issuance->issuance_date?->format('M d, Y') ?? '—',
@@ -373,7 +386,7 @@ class OfficePropertyRegisterService
                 $status = SemiExpendableUsefulLife::statusForIssuance($issuance);
 
                 return [
-                    'property_number' => $issuance->property_number,
+                    'property_number' => $issuance->issuedPropertyNumbersLabel() ?: null,
                     'item' => $issuance->item?->name,
                     'category' => $issuance->item?->category?->name,
                     'issued_to' => $issuance->issuedTo?->name,
@@ -404,8 +417,9 @@ class OfficePropertyRegisterService
         string $direction = 'all',
         ?string $search = null,
         int $perPage = 10,
+        ?int $officeId = null,
     ): LengthAwarePaginator {
-        $officeId = (int) ($user->office_id ?? 0);
+        $officeId = $officeId ?? (int) ($user->office_id ?? 0);
 
         if ($officeId <= 0 || ! $user->isUnitConsolidator()) {
             return new Paginator([], 0, $perPage, 1);
@@ -478,9 +492,9 @@ class OfficePropertyRegisterService
      *
      * @throws AuthorizationException
      */
-    public function presentTransferForUser(User $user, int $transferId): array
+    public function presentTransferForUser(User $user, int $transferId, ?int $officeId = null): array
     {
-        $officeId = (int) ($user->office_id ?? 0);
+        $officeId = $officeId ?? (int) ($user->office_id ?? 0);
 
         if ($officeId <= 0 || ! $user->isUnitConsolidator()) {
             throw new AuthorizationException;
@@ -529,7 +543,7 @@ class OfficePropertyRegisterService
             ->where('item_id', $itemId)
             ->where('office_id', $officeId)
             ->when($departmentId, fn (Builder $query): Builder => $query->where('department_id', $departmentId))
-            ->sum('quantity');
+            ->sum(DB::raw('quantity - returned_quantity'));
 
         // Incoming transfers are office-level; only include them when no department filter is active.
         if ($departmentId === null) {

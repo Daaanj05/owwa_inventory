@@ -31,7 +31,7 @@ class PhysicalCountPropertyClassResolverTest extends TestCase
 
         $this->assertSame(ItemPropertyClass::Ict, PhysicalCountPropertyClassResolver::primaryClass($session->fresh()));
         $this->assertSame(
-            'INFORMATION & COMMUNICATION TECHNOLOGY',
+            'INFORMATION TECHNOLOGY EQUIPMENT',
             PhysicalCountPropertyClassResolver::inventoryTypeLabel($session->fresh()),
         );
     }
@@ -74,14 +74,14 @@ class PhysicalCountPropertyClassResolverTest extends TestCase
 
         $session->refresh();
         $this->assertSame(ItemPropertyClass::Ict, $session->property_class);
-        $this->assertSame('INFORMATION & COMMUNICATION TECHNOLOGY', $session->inventory_type_label);
+        $this->assertSame('INFORMATION TECHNOLOGY EQUIPMENT', $session->inventory_type_label);
     }
 
     public function test_sync_session_clears_fields_for_mixed_classes(): void
     {
         $session = $this->createRpcspSession([
             'property_class' => ItemPropertyClass::Ict,
-            'inventory_type_label' => 'INFORMATION & COMMUNICATION TECHNOLOGY',
+            'inventory_type_label' => 'INFORMATION TECHNOLOGY EQUIPMENT',
         ]);
         $ictItem = Item::factory()->ict()->create(['item_category_id' => $session->item_category_id]);
         $sportsItem = Item::factory()->sportsEquipment()->create(['item_category_id' => $session->item_category_id]);

@@ -9,7 +9,7 @@ use App\Models\Issuance;
 use App\Models\Office;
 use App\Models\PropertyActionRequest;
 use App\Models\User;
-use App\Services\EmployeeDistributionInventoryService;
+use App\Services\EmployeeReceivedInventoryService;
 use App\Support\OwwaExportBusyDispatcher;
 use Filament\Actions\Action;
 use Filament\Facades\Filament;
@@ -42,7 +42,7 @@ class EmployeeCustody extends Page
     public ?int $ucDepartmentId = null;
 
     #[Url]
-    public string $sortBy = 'distribution_date';
+    public string $sortBy = 'received_date';
 
     #[Url]
     public string $sortDir = 'desc';
@@ -51,10 +51,10 @@ class EmployeeCustody extends Page
     public string $search = '';
 
     #[Url]
-    public string $category = EmployeeDistributionInventoryService::CATEGORY_CONSUMABLES;
+    public string $category = EmployeeReceivedInventoryService::CATEGORY_CONSUMABLES;
 
     #[Url]
-    public string $custodyTab = EmployeeDistributionInventoryService::CUSTODY_TAB_ON_HAND;
+    public string $custodyTab = EmployeeReceivedInventoryService::CUSTODY_TAB_ON_HAND;
 
     #[Url]
     public ?string $fromDate = null;
@@ -73,8 +73,8 @@ class EmployeeCustody extends Page
 
     public function mount(): void
     {
-        if (! EmployeeDistributionInventoryService::isValidCategory($this->category)) {
-            $this->category = EmployeeDistributionInventoryService::CATEGORY_CONSUMABLES;
+        if (! EmployeeReceivedInventoryService::isValidCategory($this->category)) {
+            $this->category = EmployeeReceivedInventoryService::CATEGORY_CONSUMABLES;
         }
 
         $this->initializeUcListScope();
@@ -117,8 +117,8 @@ class EmployeeCustody extends Page
 
     public function updatedCategory(): void
     {
-        if (! EmployeeDistributionInventoryService::isValidCategory($this->category)) {
-            $this->category = EmployeeDistributionInventoryService::CATEGORY_CONSUMABLES;
+        if (! EmployeeReceivedInventoryService::isValidCategory($this->category)) {
+            $this->category = EmployeeReceivedInventoryService::CATEGORY_CONSUMABLES;
         }
 
         $this->resetPage();
@@ -131,8 +131,8 @@ class EmployeeCustody extends Page
 
     public function updatedCustodyTab(): void
     {
-        if (! EmployeeDistributionInventoryService::isValidCustodyTab($this->custodyTab)) {
-            $this->custodyTab = EmployeeDistributionInventoryService::CUSTODY_TAB_ON_HAND;
+        if (! EmployeeReceivedInventoryService::isValidCustodyTab($this->custodyTab)) {
+            $this->custodyTab = EmployeeReceivedInventoryService::CUSTODY_TAB_ON_HAND;
         }
 
         $this->resetPage();
@@ -160,7 +160,7 @@ class EmployeeCustody extends Page
 
     public function getSubheading(): ?string
     {
-        return 'View items distributed or issued to employees in your office.';
+        return 'View items issued to employees in your office.';
     }
 
     /**
@@ -180,7 +180,7 @@ class EmployeeCustody extends Page
             return [];
         }
 
-        return app(EmployeeDistributionInventoryService::class)->employeesForOfficeDepartment(
+        return app(EmployeeReceivedInventoryService::class)->employeesForOfficeDepartment(
             $user,
             $this->ucOfficeId,
             $this->ucDepartmentId,
@@ -267,7 +267,7 @@ class EmployeeCustody extends Page
             return ['totalItems' => 0, 'totalQuantity' => 0, 'totalQuantityThisYear' => 0];
         }
 
-        return app(EmployeeDistributionInventoryService::class)->summaryFor(
+        return app(EmployeeReceivedInventoryService::class)->summaryFor(
             $employee,
             $this->category,
             $this->custodyTab,
@@ -284,7 +284,7 @@ class EmployeeCustody extends Page
             return (new \Illuminate\Pagination\LengthAwarePaginator([], 0, 10, 1))->onEachSide(0);
         }
 
-        return app(EmployeeDistributionInventoryService::class)->paginatedGroupedInventory(
+        return app(EmployeeReceivedInventoryService::class)->paginatedGroupedInventory(
             $employee,
             filled($this->search) ? $this->search : null,
             $this->sortBy,
@@ -299,14 +299,14 @@ class EmployeeCustody extends Page
 
     public function usesPropertyIssuanceView(): bool
     {
-        return EmployeeDistributionInventoryService::usesPropertyIssuanceView($this->category);
+        return EmployeeReceivedInventoryService::usesPropertyIssuanceView($this->category);
     }
 
     public function sortByColumn(string $column): void
     {
         $allowed = $this->usesPropertyIssuanceView()
-            ? ['item_name', 'quantity', 'distribution_date', 'distribution_count', 'last_distribution_date']
-            : ['item_name', 'quantity', 'distribution_date', 'distribution_count'];
+            ? ['item_name', 'quantity', 'received_date', 'receipt_count', 'last_received_date']
+            : ['item_name', 'quantity', 'received_date', 'receipt_count'];
 
         if (! in_array($column, $allowed, true)) {
             return;
@@ -330,8 +330,8 @@ class EmployeeCustody extends Page
         }
 
         try {
-            app(EmployeeDistributionInventoryService::class)->assertUnitConsolidatorCanViewEmployee($uc, $employee);
-            app(EmployeeDistributionInventoryService::class)->assertEmployeeOwnsPropertyItem(
+            app(EmployeeReceivedInventoryService::class)->assertUnitConsolidatorCanViewEmployee($uc, $employee);
+            app(EmployeeReceivedInventoryService::class)->assertEmployeeOwnsPropertyItem(
                 $employee,
                 $itemId,
                 $this->custodyTab,
@@ -342,7 +342,7 @@ class EmployeeCustody extends Page
 
         $this->ledgerPage = 1;
 
-        if ($this->usesPropertyIssuanceView() && $this->custodyTab === EmployeeDistributionInventoryService::CUSTODY_TAB_ON_HAND) {
+        if ($this->usesPropertyIssuanceView() && $this->custodyTab === EmployeeReceivedInventoryService::CUSTODY_TAB_ON_HAND) {
             $this->mountAction('viewPropertyItemUnits', [
                 'itemId' => $itemId,
             ]);
@@ -350,7 +350,7 @@ class EmployeeCustody extends Page
             return;
         }
 
-        $this->mountAction('viewDistributionLedger', [
+        $this->mountAction('viewReceivedLedger', [
             'itemId' => $itemId,
         ]);
     }
@@ -367,15 +367,15 @@ class EmployeeCustody extends Page
 
     public function showPropertyActionCta(Issuance $issuance): bool
     {
-        if ($this->custodyTab !== EmployeeDistributionInventoryService::CUSTODY_TAB_ON_HAND) {
+        if ($this->custodyTab !== EmployeeReceivedInventoryService::CUSTODY_TAB_ON_HAND) {
             return false;
         }
 
         $slug = $issuance->item?->category?->getTemplateSlug();
 
         return in_array($slug, [
-            EmployeeDistributionInventoryService::CATEGORY_SEMI_EXPENDABLE,
-            EmployeeDistributionInventoryService::CATEGORY_PPE,
+            EmployeeReceivedInventoryService::CATEGORY_SEMI_EXPENDABLE,
+            EmployeeReceivedInventoryService::CATEGORY_PPE,
         ], true);
     }
 
@@ -384,7 +384,7 @@ class EmployeeCustody extends Page
         $this->openPropertyIssuanceLedger($itemId);
     }
 
-    public function openDistributionLedger(int $itemId): void
+    public function openReceivedLedger(int $itemId): void
     {
         $uc = Filament::auth()->user();
         $employee = $this->resolveSelectedEmployee();
@@ -394,20 +394,20 @@ class EmployeeCustody extends Page
         }
 
         try {
-            app(EmployeeDistributionInventoryService::class)->assertUnitConsolidatorCanViewEmployee($uc, $employee);
-            app(EmployeeDistributionInventoryService::class)->assertEmployeeOwnsItem($employee, $itemId);
+            app(EmployeeReceivedInventoryService::class)->assertUnitConsolidatorCanViewEmployee($uc, $employee);
+            app(EmployeeReceivedInventoryService::class)->assertEmployeeOwnsItem($employee, $itemId);
         } catch (AuthorizationException) {
             abort(403);
         }
 
         $this->ledgerPage = 1;
 
-        $this->mountAction('viewDistributionLedger', [
+        $this->mountAction('viewReceivedLedger', [
             'itemId' => $itemId,
         ]);
     }
 
-    public function employeeDistributionExportUrl(?int $itemId = null): string
+    public function employeeReceivedExportUrl(?int $itemId = null): string
     {
         $employee = $this->resolveSelectedEmployee();
 
@@ -415,7 +415,7 @@ class EmployeeCustody extends Page
             return '#';
         }
 
-        return route('owwa.export.employee-distribution', array_filter([
+        return route('owwa.export.employee-received', array_filter([
             'employee' => $employee,
             'category' => $this->category,
             'custody_tab' => $this->custodyTab,
@@ -427,7 +427,7 @@ class EmployeeCustody extends Page
 
     public function exportAllItems(): void
     {
-        $url = $this->employeeDistributionExportUrl();
+        $url = $this->employeeReceivedExportUrl();
 
         if ($url === '#') {
             return;
@@ -441,23 +441,23 @@ class EmployeeCustody extends Page
         );
     }
 
-    public function viewDistributionLedgerAction(): Action
+    public function viewReceivedLedgerAction(): Action
     {
-        return Action::make('viewDistributionLedger')
+        return Action::make('viewReceivedLedger')
             ->modalWidth(Width::FiveExtraLarge)
             ->extraModalWindowAttributes(['class' => 'owwa-view-record-modal owwa-employee-custody-ledger-modal'])
             ->modalSubmitAction(false)
             ->modalCancelActionLabel('Close')
             ->modalHeading(function (): string {
-                $ledger = $this->resolveMountedDistributionLedger();
+                $ledger = $this->resolveMountedReceivedLedger();
 
-                return $ledger['header']['item_name'].' — Distribution History';
+                return $ledger['header']['item_name'].' — Received History';
             })
             ->modalContent(fn (): HtmlString => new HtmlString(view(
-                'filament.pages.partials.employee-distribution-ledger-modal',
+                'filament.pages.partials.employee-received-ledger-modal',
                 [
-                    'ledger' => $this->resolveMountedDistributionLedger(),
-                    'hideDistributedBy' => true,
+                    'ledger' => $this->resolveMountedReceivedLedger(),
+                    'hideEndorsedBy' => true,
                 ],
             )->render()))
             ->extraModalFooterActions([
@@ -471,7 +471,7 @@ class EmployeeCustody extends Page
                             return;
                         }
 
-                        $url = $this->employeeDistributionExportUrl($itemId);
+                        $url = $this->employeeReceivedExportUrl($itemId);
 
                         if ($url === '#') {
                             return;
@@ -482,7 +482,7 @@ class EmployeeCustody extends Page
                             $livewire instanceof LivewireComponent ? $livewire : $this,
                             $url,
                             'Preparing Excel export…',
-                            'Building distribution history for this item…',
+                            'Building received history for this item…',
                         );
                     }),
             ]);
@@ -529,7 +529,7 @@ class EmployeeCustody extends Page
         }
 
         try {
-            app(EmployeeDistributionInventoryService::class)->assertUnitConsolidatorCanViewEmployee($uc, $employee);
+            app(EmployeeReceivedInventoryService::class)->assertUnitConsolidatorCanViewEmployee($uc, $employee);
         } catch (AuthorizationException) {
             return null;
         }
@@ -581,7 +581,7 @@ class EmployeeCustody extends Page
      *     paginator: \Illuminate\Contracts\Pagination\LengthAwarePaginator
      * }
      */
-    protected function resolveMountedDistributionLedger(): array
+    protected function resolveMountedReceivedLedger(): array
     {
         $employee = $this->resolveSelectedEmployee();
         $arguments = $this->mountedLedgerActionArguments();
@@ -592,7 +592,7 @@ class EmployeeCustody extends Page
         }
 
         if ($this->usesPropertyIssuanceView()) {
-            return app(EmployeeDistributionInventoryService::class)->presentPropertyIssuanceLedgerPaginated(
+            return app(EmployeeReceivedInventoryService::class)->presentPropertyIssuanceLedgerPaginated(
                 $employee,
                 $itemId,
                 max(1, $this->ledgerPage),
@@ -603,7 +603,7 @@ class EmployeeCustody extends Page
             );
         }
 
-        return app(EmployeeDistributionInventoryService::class)->presentLedgerPaginated(
+        return app(EmployeeReceivedInventoryService::class)->presentLedgerPaginated(
             $employee,
             $itemId,
             max(1, $this->ledgerPage),
@@ -658,7 +658,7 @@ class EmployeeCustody extends Page
             abort(403);
         }
 
-        return app(EmployeeDistributionInventoryService::class)->presentPropertyItemUnits(
+        return app(EmployeeReceivedInventoryService::class)->presentPropertyItemUnits(
             $employee,
             $itemId,
             $this->custodyTab,

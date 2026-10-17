@@ -260,6 +260,7 @@ class EmployeeRequisitionDraftTest extends TestCase
         $this->assertIsString($source);
         $this->assertStringContainsString('->visible(! $isEmployeeViewer)', $source);
         $this->assertStringContainsString('EmployeeRequisitionActions::tableActionGroup()', $source);
-        $this->assertStringContainsString('->visible(fn (): bool => ! $isEmployeeViewer)', $source);
+        $this->assertStringNotContainsString('DeleteBulkAction', $source);
+        $this->assertStringContainsString('! $viewer->isUnitConsolidator()', $source);
     }
 }

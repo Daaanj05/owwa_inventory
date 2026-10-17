@@ -75,7 +75,7 @@ class CustodianRequisitionActions
                 continue;
             }
 
-            $stock = $stockSnapshot->regionalStockForItem((int) $line->item_id);
+            $stock = $stockSnapshot->issuableStockForItem((int) $line->item_id);
 
             if ($stock > 0) {
                 return true;
@@ -239,10 +239,23 @@ class CustodianRequisitionActions
                 $rows,
                 (string) ($data['issuance_date'] ?? now()->toDateString()),
                 [
-                    'custodian_printed_name' => $data['custodian_printed_name'] ?? null,
-                    'custodian_designation' => $data['custodian_designation'] ?? null,
-                    'issued_to_designation' => $data['issued_to_designation'] ?? null,
-                    'accounting_staff_printed_name' => $data['accounting_staff_printed_name'] ?? null,
+                    'ris_requested_by_name' => $data['ris_requested_by_name'] ?? null,
+                    'ris_requested_by_designation' => $data['ris_requested_by_designation'] ?? null,
+                    'ris_requested_by_date' => $data['ris_requested_by_date'] ?? null,
+                    'ris_approved_by_name' => $data['ris_approved_by_name'] ?? null,
+                    'ris_approved_by_designation' => $data['ris_approved_by_designation'] ?? null,
+                    'ris_approved_by_date' => $data['ris_approved_by_date'] ?? null,
+                    'ris_issued_by_name' => $data['ris_issued_by_name'] ?? null,
+                    'ris_issued_by_designation' => $data['ris_issued_by_designation'] ?? null,
+                    'ris_issued_by_date' => $data['ris_issued_by_date'] ?? null,
+                    'ris_received_by_name' => $data['ris_received_by_name'] ?? null,
+                    'ris_received_by_designation' => $data['ris_received_by_designation'] ?? null,
+                    'ris_received_by_date' => $data['ris_received_by_date'] ?? null,
+                    'custodian_printed_name' => $data['ris_issued_by_name'] ?? null,
+                    'custodian_designation' => $data['ris_issued_by_designation'] ?? null,
+                    'issued_to_designation' => $data['ris_received_by_designation'] ?? null,
+                    'received_by_printed_name' => $data['ris_received_by_name'] ?? null,
+                    'received_from_name' => $data['ris_issued_by_name'] ?? null,
                 ],
             );
         } catch (ValidationException|InvalidArgumentException $exception) {

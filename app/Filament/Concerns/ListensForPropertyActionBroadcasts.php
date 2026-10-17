@@ -47,5 +47,6 @@ trait ListensForPropertyActionBroadcasts
     public function refreshFromPropertyActionBroadcast(): void
     {
         $this->dispatch('$refresh');
+        $this->dispatch('refresh-sidebar');
     }
 }

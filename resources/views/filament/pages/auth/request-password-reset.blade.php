@@ -1,7 +1,3 @@
-@php
-    use App\Support\FriendlyMessages;
-@endphp
-
 <div class="owwa-login-wrapper owwa-password-reset-page">
 
     @include('filament.pages.auth.partials.brand-panel')
@@ -29,11 +25,11 @@
                 </p>
             </div>
 
-            <p class="owwa-password-reset-helper">
-                Enter your registered email address. {{ FriendlyMessages::passwordResetRequestSubmitted() }}
-            </p>
+            @if (filled($this->getSubheading()))
+                <p class="owwa-password-reset-helper">{{ $this->getSubheading() }}</p>
+            @endif
 
-            <div class="owwa-password-reset-form">
+            <div class="owwa-password-reset-form" wire:key="password-reset-step-{{ $this->step }}">
                 {{ $this->content }}
             </div>
 

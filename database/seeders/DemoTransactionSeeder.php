@@ -6,7 +6,6 @@ use App\Models\Acquisition;
 use App\Models\AcquisitionPaperwork;
 use App\Models\AcquisitionPaperworkLine;
 use App\Models\Department;
-use App\Models\Distribution;
 use App\Models\Issuance;
 use App\Models\Item;
 use App\Models\Office;
@@ -188,36 +187,6 @@ class DemoTransactionSeeder extends Seeder
                     'received_by_designation' => 'Property Custodian',
                     'remarks' => 'PTR demo row for Excel/PDF cell mapping',
                     'recorded_by' => $sc->id,
-                ],
-            );
-        }
-
-        $distData = [
-            ['to' => $joe1, 'item' => 'CON-001', 'qty' => 5, 'date' => '2026-03-07', 'remarks' => 'Monthly supply'],
-            ['to' => $joe1, 'item' => 'CON-002', 'qty' => 10, 'date' => '2026-03-07', 'remarks' => 'Monthly supply'],
-            ['to' => $joe1, 'item' => 'CON-008', 'qty' => 3, 'date' => '2026-03-07', 'remarks' => 'Monthly supply'],
-            ['to' => $joe2, 'item' => 'CON-001', 'qty' => 3, 'date' => '2026-03-07', 'remarks' => 'Fieldwork allocation'],
-            ['to' => $joe2, 'item' => 'CON-006', 'qty' => 5, 'date' => '2026-03-07', 'remarks' => 'Fieldwork allocation'],
-            ['to' => $joe3, 'item' => 'CON-001', 'qty' => 4, 'date' => '2026-03-10', 'remarks' => 'Finance quarterly supply'],
-            ['to' => $joe3, 'item' => 'CON-002', 'qty' => 8, 'date' => '2026-03-10', 'remarks' => 'Finance quarterly supply'],
-            ['to' => $joe1, 'item' => 'CON-001', 'qty' => 3, 'date' => '2026-04-05', 'remarks' => 'April replenishment'],
-            ['to' => $joe1, 'item' => 'CON-006', 'qty' => 4, 'date' => '2026-04-05', 'remarks' => 'April replenishment'],
-        ];
-
-        foreach ($distData as $d) {
-            Distribution::updateOrCreate(
-                [
-                    'requisition_id' => $compiledReq->id,
-                    'item_id' => $itemMap[$d['item']]->id,
-                    'distributed_to' => $d['to']->id,
-                    'distribution_date' => Carbon::parse($d['date'])->toDateString(),
-                    'quantity' => $d['qty'],
-                ],
-                [
-                    'office_id' => $regional->id,
-                    'department_id' => $ops->id,
-                    'distributed_by' => $uc->id,
-                    'remarks' => $d['remarks'],
                 ],
             );
         }

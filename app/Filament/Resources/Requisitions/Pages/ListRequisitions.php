@@ -227,10 +227,10 @@ class ListRequisitions extends ListRecords
         if ($user?->isUnitConsolidator()) {
             $this->ucTab ??= 'received';
 
-            static $hookRegistered = false;
+            $hookKey = 'owwa.requisition.uc_toolbar.'.static::class;
 
-            if (! $hookRegistered) {
-                $hookRegistered = true;
+            if (! request()->attributes->get($hookKey)) {
+                request()->attributes->set($hookKey, true);
 
                 FilamentView::registerRenderHook(
                     TablesRenderHook::TOOLBAR_SEARCH_AFTER,
@@ -455,6 +455,12 @@ class ListRequisitions extends ListRecords
 
                     $itemRows = array_values($data['items'] ?? []);
                     unset($data['items']);
+
+                    if ($user?->isUnitConsolidator() && $sourceIds === []) {
+                        throw ValidationException::withMessages([
+                            'source_requisition_ids' => 'Select at least one employee requisition to compile.',
+                        ]);
+                    }
 
                     if ($user?->isUnitConsolidator() && $sourceIds !== []) {
                         app(RequisitionCompileService::class)->validateEndorsementLines($endorsementLinesByKey);
@@ -748,12 +754,11 @@ class ListRequisitions extends ListRecords
             return 0;
         }
 
-        return (int) $query
-            ->whereHas('requestedBy', fn (Builder $q): Builder => $q->where('role', User::ROLE_EMPLOYEE))
-            ->whereNull('compiled_into_requisition_id')
-            ->where('office_id', $this->ucOfficeId)
-            ->where('department_id', $this->ucDepartmentId)
-            ->count();
+        return (int) $this->applyUcReceivedScope(
+            $query
+                ->whereHas('requestedBy', fn (Builder $q): Builder => $q->where('role', User::ROLE_EMPLOYEE))
+                ->whereNull('compiled_into_requisition_id'),
+        )->count();
     }
 
     protected function registerRequisitionSearchRowExport(): void
@@ -807,13 +812,7 @@ class ListRequisitions extends ListRecords
                 ->whereHas('requestedBy', fn (Builder $q): Builder => $q->where('role', User::ROLE_EMPLOYEE))
                 ->whereNull('compiled_into_requisition_id');
 
-            if (! $this->ucListScopeIsComplete()) {
-                return $query->whereRaw('1 = 0');
-            }
-
-            return $query
-                ->where('office_id', $this->ucOfficeId)
-                ->where('department_id', $this->ucDepartmentId);
+            return $this->applyUcReceivedScope($query);
         }
 
         return $query;
@@ -865,59 +864,56 @@ class ListRequisitions extends ListRecords
 
     protected function initializeUcListScope(): void
     {
-        /** @var User|null $user */
-        $user = Filament::auth()->user();
-
-        if (! $user instanceof User || ! $user->isUnitConsolidator()) {
-            return;
-        }
-
-        $officeIds = $user->assignedOfficeIds();
-
-        if ($this->ucOfficeId === null) {
-            if ($user->hasSingleOfficeAssignment()) {
-                $this->ucOfficeId = $officeIds[0] ?? null;
-            } elseif ($user->office_id && in_array((int) $user->office_id, $officeIds, true)) {
-                $this->ucOfficeId = (int) $user->office_id;
-            }
-        }
-
-        if ($this->ucOfficeId === null || $this->ucOfficeId <= 0) {
-            return;
-        }
-
-        $departmentIds = $user->assignedDepartmentIdsForOffice($this->ucOfficeId);
-
-        if ($this->ucDepartmentId !== null) {
-            return;
-        }
-
-        if ($user->hasSingleDepartmentAssignmentForOffice($this->ucOfficeId)) {
-            $this->ucDepartmentId = $departmentIds[0] ?? null;
-
-            return;
-        }
-
-        if ($user->department_id && in_array((int) $user->department_id, $departmentIds, true)) {
-            $this->ucDepartmentId = (int) $user->department_id;
-        }
+        // Null office and department mean All assigned offices and departments.
+        // A notification deep-link may already have set a specific pair.
     }
 
-    public function updatedUcOfficeId(): void
+    /**
+     * @param  Builder<Requisition>  $query
+     * @return Builder<Requisition>
+     */
+    protected function applyUcReceivedScope(Builder $query): Builder
     {
         /** @var User|null $user */
         $user = Filament::auth()->user();
 
-        if ($user instanceof User
-            && $this->ucOfficeId !== null
-            && $this->ucOfficeId > 0
-            && $user->hasSingleDepartmentAssignmentForOffice($this->ucOfficeId)) {
-            $departmentIds = $user->assignedDepartmentIdsForOffice($this->ucOfficeId);
-            $this->ucDepartmentId = $departmentIds[0] ?? null;
-        } else {
-            $this->ucDepartmentId = null;
+        if (! $user instanceof User || ! $this->ucListScopeIsComplete()) {
+            return $query->whereRaw('1 = 0');
         }
 
+        $officeId = ($this->ucOfficeId !== null && $this->ucOfficeId > 0) ? $this->ucOfficeId : null;
+        $departmentId = ($this->ucDepartmentId !== null && $this->ucDepartmentId > 0) ? $this->ucDepartmentId : null;
+
+        if ($officeId !== null && $departmentId !== null) {
+            return $query
+                ->where('office_id', $officeId)
+                ->where('department_id', $departmentId);
+        }
+
+        if ($officeId !== null) {
+            $departmentIds = $user->assignedDepartmentIdsForOffice($officeId);
+
+            if ($departmentIds === []) {
+                return $query->whereRaw('1 = 0');
+            }
+
+            return $query
+                ->where('office_id', $officeId)
+                ->whereIn('department_id', $departmentIds);
+        }
+
+        $query = $user->applyUnitConsolidatorRequisitionScope($query);
+
+        if ($departmentId !== null) {
+            $query->where('department_id', $departmentId);
+        }
+
+        return $query;
+    }
+
+    public function updatedUcOfficeId(): void
+    {
+        $this->ucDepartmentId = null;
         $this->resetTable();
     }
 
@@ -933,10 +929,10 @@ class ListRequisitions extends ListRecords
 
     public function ucListScopeIsComplete(): bool
     {
-        return $this->ucOfficeId !== null
-            && $this->ucOfficeId > 0
-            && $this->ucDepartmentId !== null
-            && $this->ucDepartmentId > 0;
+        /** @var User|null $user */
+        $user = Filament::auth()->user();
+
+        return $user instanceof User && $user->assignedOfficeIds() !== [];
     }
 
     /**
@@ -973,11 +969,13 @@ class ListRequisitions extends ListRecords
         /** @var User|null $user */
         $user = Filament::auth()->user();
 
-        if (! $user instanceof User || $this->ucOfficeId === null || $this->ucOfficeId <= 0) {
+        if (! $user instanceof User) {
             return [];
         }
 
-        $departmentIds = $user->assignedDepartmentIdsForOffice($this->ucOfficeId);
+        $departmentIds = ($this->ucOfficeId !== null && $this->ucOfficeId > 0)
+            ? $user->assignedDepartmentIdsForOffice($this->ucOfficeId)
+            : $user->assignedDepartmentIds();
 
         if ($departmentIds === []) {
             return [];
@@ -985,7 +983,10 @@ class ListRequisitions extends ListRecords
 
         return Department::query()
             ->active()
-            ->where('office_id', $this->ucOfficeId)
+            ->when(
+                $this->ucOfficeId !== null && $this->ucOfficeId > 0,
+                fn ($query) => $query->where('office_id', $this->ucOfficeId),
+            )
             ->whereIn('id', $departmentIds)
             ->orderBy('name')
             ->pluck('name', 'id')

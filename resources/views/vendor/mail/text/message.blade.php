@@ -21,7 +21,7 @@
     {{-- Footer --}}
     <x-slot:footer>
         <x-mail::footer>
-            © {{ date('Y') }} {{ config('app.name') }}. @lang('All rights reserved.')
+            © {{ date('Y') }} {{ config('owwa_mail.brand_name') }} · Regional Welfare Office IV-A
         </x-mail::footer>
     </x-slot:footer>
 </x-mail::layout>

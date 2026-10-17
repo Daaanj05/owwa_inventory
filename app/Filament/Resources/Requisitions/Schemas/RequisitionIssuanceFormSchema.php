@@ -10,6 +10,7 @@ use App\Support\OfficeSignatoryDefaults;
 use App\Support\RequisitionLineDisplay;
 use Carbon\Carbon;
 use Closure;
+use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Repeater;
@@ -28,16 +29,25 @@ class RequisitionIssuanceFormSchema
     public static function defaultFormState(Requisition $record, bool $remainderOnly = false): array
     {
         $defaults = OfficeSignatoryDefaults::forIssuance((int) $record->office_id);
-        $record->loadMissing(['requestedBy.office', 'requestedBy.department']);
+        $record->loadMissing(['requestedBy.office', 'requestedBy.department', 'approvedBy']);
         $fulfillment = app(RequisitionFulfillmentService::class);
+        $requester = $record->requestedBy;
+        $requesterDesignation = $requester?->department?->name ?? $requester?->office?->name;
 
         return [
             'issuance_date' => now()->toDateString(),
-            'custodian_printed_name' => $defaults['custodian_printed_name'],
-            'custodian_designation' => $defaults['custodian_designation'],
-            'issued_to_designation' => $record->requestedBy?->department?->name
-                ?? $record->requestedBy?->office?->name,
-            'accounting_staff_printed_name' => $defaults['accounting_staff_printed_name'],
+            'ris_requested_by_name' => $requester?->name,
+            'ris_requested_by_designation' => $requesterDesignation,
+            'ris_requested_by_date' => $record->created_at?->toDateString() ?? now()->toDateString(),
+            'ris_approved_by_name' => $record->approvedBy?->name,
+            'ris_approved_by_designation' => null,
+            'ris_approved_by_date' => $record->approved_at?->toDateString(),
+            'ris_issued_by_name' => $defaults['custodian_printed_name'],
+            'ris_issued_by_designation' => $defaults['custodian_designation'],
+            'ris_issued_by_date' => now()->toDateString(),
+            'ris_received_by_name' => $requester?->name,
+            'ris_received_by_designation' => $requesterDesignation,
+            'ris_received_by_date' => now()->toDateString(),
             'lines' => $fulfillment->hasSourceEndorsements($record)
                 ? $fulfillment->defaultEndorsementIssueLines($record, $remainderOnly)
                 : self::defaultLines($record, $remainderOnly),
@@ -59,7 +69,7 @@ class RequisitionIssuanceFormSchema
 
                 if ($remainderOnly) {
                     return $remaining > 0
-                        && $stockSnapshot->regionalStockForItem((int) $line->item_id) > 0;
+                        && $stockSnapshot->issuableStockForItem((int) $line->item_id) > 0;
                 }
 
                 return $remaining > 0
@@ -67,7 +77,7 @@ class RequisitionIssuanceFormSchema
             })
             ->map(function (RequisitionItem $line) use ($fulfillment, $stockSnapshot): array {
                 $remaining = $fulfillment->remainingQuantity($line);
-                $stock = $stockSnapshot->regionalStockForItem((int) $line->item_id);
+                $stock = $stockSnapshot->issuableStockForItem((int) $line->item_id);
 
                 return [
                     'requisition_item_id' => $line->id,
@@ -309,18 +319,12 @@ class RequisitionIssuanceFormSchema
         }
 
         $fields[] = Section::make('Signatories')
-            ->description('Applied to all issuance lines created in this action. Labels follow item category on each export (RSMI / PAR / ICS).')
+            ->description('Printed on Appendix 63 RIS. The signature line stays blank for a wet signature.')
             ->schema([
-                TextInput::make('custodian_printed_name')
-                    ->label('Custodian / issued by')
-                    ->maxLength(255),
-                TextInput::make('custodian_designation')
-                    ->label('Custodian designation')
-                    ->maxLength(255),
-                TextInput::make('issued_to_designation')
-                    ->label('Recipient designation')
-                    ->maxLength(255)
-                    ->helperText('Printed on PAR/ICS as received-by designation (Unit Consolidator on consolidated RIS).'),
+                self::signatoryGroup('Requested by', 'ris_requested_by'),
+                self::signatoryGroup('Approved by', 'ris_approved_by'),
+                self::signatoryGroup('Issued by', 'ris_issued_by'),
+                self::signatoryGroup('Received by', 'ris_received_by'),
             ])
             ->columns(2)
             ->columnSpanFull();
@@ -338,6 +342,26 @@ class RequisitionIssuanceFormSchema
             ->columnSpanFull();
 
         return $fields;
+    }
+
+    protected static function signatoryGroup(string $heading, string $prefix): Section
+    {
+        return Section::make($heading)
+            ->schema([
+                TextInput::make($prefix.'_name')
+                    ->label('Printed name')
+                    ->required()
+                    ->maxLength(255),
+                TextInput::make($prefix.'_designation')
+                    ->label('Designation')
+                    ->required()
+                    ->maxLength(255),
+                DatePicker::make($prefix.'_date')
+                    ->label('Date')
+                    ->required()
+                    ->native(false),
+            ])
+            ->compact();
     }
 
     protected static function textTableColumn(string $label, string $width): TableColumn

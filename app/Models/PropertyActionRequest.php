@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\LogsUserActivity;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -31,7 +32,7 @@ class PropertyActionRequest extends Model
 
     public const OUTCOME_DISPOSE = 'dispose';
 
-    public const OUTCOME_TRANSFER = 'transfer';
+    public const OUTCOME_REPAIR = 'repair';
 
     public const OUTCOME_RETURN_TO_STOCK = 'return_to_stock';
 
@@ -137,10 +138,11 @@ class PropertyActionRequest extends Model
 
     public function propertyNumbersLabel(): string
     {
-        $this->loadMissing('lines.issuance');
+        $this->loadMissing(['lines.issuance', 'lines.inventoryUnit']);
 
         $numbers = $this->lines
-            ->map(fn (PropertyActionRequestLine $line): ?string => $line->issuance?->property_number
+            ->map(fn (PropertyActionRequestLine $line): ?string => $line->inventoryUnit?->property_number
+                ?? $line->issuance?->property_number
                 ?? $line->issuance?->reference_code)
             ->filter()
             ->values();
@@ -275,13 +277,77 @@ class PropertyActionRequest extends Model
     public function suggestedReceiveOutcome(): string
     {
         return match ($this->action_type) {
-            self::ACTION_DISPOSAL => self::OUTCOME_DISPOSE,
-            self::ACTION_RETURN => $this->reason_code === 'needs_repair'
-                ? self::OUTCOME_TRANSFER
-                : self::OUTCOME_RETURN_TO_STOCK,
-            self::ACTION_REPLACEMENT => self::OUTCOME_RETURN_TO_STOCK,
-            default => self::OUTCOME_RETURN_TO_STOCK,
+            self::ACTION_DISPOSAL, self::ACTION_REPLACEMENT => self::OUTCOME_DISPOSE,
+            default => match ($this->reason_code) {
+                'needs_repair' => self::OUTCOME_REPAIR,
+                'unserviceable' => self::OUTCOME_DISPOSE,
+                default => self::OUTCOME_RETURN_TO_STOCK,
+            },
         };
+    }
+
+    /**
+     * @return list<string>
+     */
+    public static function receiveOutcomes(): array
+    {
+        return array_keys(self::receiveOutcomeOptions());
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public static function receiveOutcomeOptions(): array
+    {
+        return [
+            self::OUTCOME_RETURN_TO_STOCK => 'Return to stock',
+            self::OUTCOME_REPAIR => 'Under repair',
+            self::OUTCOME_DISPOSE => 'Dispose',
+        ];
+    }
+
+    public static function receiveOutcomeLabel(string $outcome): string
+    {
+        return self::receiveOutcomeOptions()[$outcome] ?? $outcome;
+    }
+
+    public static function custodyEndTypeForOutcome(string $outcome): string
+    {
+        return match ($outcome) {
+            self::OUTCOME_DISPOSE => 'disposal',
+            self::OUTCOME_REPAIR => 'repair',
+            default => 'return',
+        };
+    }
+
+    /**
+     * Units this request sent to repair that the Supply Custodian has not resolved yet.
+     *
+     * @return Builder<InventoryUnit>
+     */
+    public function underRepairUnitsQuery(): Builder
+    {
+        return InventoryUnit::query()
+            ->where('status', InventoryUnit::STATUS_UNDER_REPAIR)
+            ->whereIn('repair_source_issuance_id', PropertyActionRequestLine::query()
+                ->where('property_action_request_id', $this->id)
+                ->where('outcome', self::OUTCOME_REPAIR)
+                ->select('issuance_id'))
+            ->orderBy('property_number');
+    }
+
+    /**
+     * Requests that still have at least one unit waiting for the Supply Custodian to resolve its repair.
+     */
+    public function scopeWithUnitsUnderRepair(Builder $query): Builder
+    {
+        return $query
+            ->where('status', self::STATUS_EXECUTED)
+            ->whereHas('lines', fn (Builder $lines): Builder => $lines
+                ->where('outcome', self::OUTCOME_REPAIR)
+                ->whereHas('inventoryUnit', fn (Builder $unit): Builder => $unit
+                    ->where('status', InventoryUnit::STATUS_UNDER_REPAIR)
+                    ->whereColumn('inventory_units.repair_source_issuance_id', 'property_action_request_lines.issuance_id')));
     }
 
     public function linkedDisposalId(): ?int

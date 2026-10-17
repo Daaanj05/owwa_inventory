@@ -22,12 +22,6 @@ class UserInfolist
                 ->badge()
                 ->state(fn (User $record): string => $record->hasVerifiedEmail() ? 'Verified' : 'Pending')
                 ->color(fn (User $record): string => $record->hasVerifiedEmail() ? 'success' : 'warning'),
-            TextEntry::make('pendingPasswordResetRequest.requested_at')
-                ->label('Password reset')
-                ->badge()
-                ->state(fn (User $record): string => 'Reset requested')
-                ->color('warning')
-                ->visible(fn (User $record): bool => $record->pendingPasswordResetRequest !== null),
             TextEntry::make('department.name')
                 ->label('Sub-Office/Department')
                 ->placeholder('—')

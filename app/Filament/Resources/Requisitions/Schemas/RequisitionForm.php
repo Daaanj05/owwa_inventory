@@ -47,7 +47,7 @@ class RequisitionForm
         }
 
         if ($user?->isUnitConsolidator()) {
-            return 'Select office and department first, then choose accepted employee requests to endorse.';
+            return 'Select office and department, then choose at least one accepted employee request to endorse.';
         }
 
         return 'Select a category on each line before choosing an item. Available shows stock at '.$supplyOfficeName.' (regional supply).';
@@ -242,7 +242,22 @@ class RequisitionForm
                     ->schema([
                         Hidden::make('source_requisition_ids')
                             ->default([])
-                            ->dehydrated(),
+                            ->dehydrated()
+                            ->rules([
+                                function () use ($isUnitConsolidator): Closure {
+                                    return function (string $attribute, mixed $value, Closure $fail) use ($isUnitConsolidator): void {
+                                        if (! $isUnitConsolidator) {
+                                            return;
+                                        }
+
+                                        $ids = array_filter((array) $value, fn (mixed $id): bool => (int) $id > 0);
+
+                                        if ($ids === []) {
+                                            $fail('Select at least one employee requisition to compile.');
+                                        }
+                                    };
+                                },
+                            ]),
                         Placeholder::make('source_requisitions_summary')
                             ->label('Employee requisitions to include')
                             ->content(function (Get $get): HtmlString {

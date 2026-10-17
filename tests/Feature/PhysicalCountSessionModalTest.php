@@ -388,7 +388,7 @@ class PhysicalCountSessionModalTest extends TestCase
             ->assertActionHidden(TestAction::make('preloadExpectedAssets'))
             ->assertActionHidden(TestAction::make('markComplete'))
             ->assertActionHidden(TestAction::make('edit'))
-            ->assertActionVisible(TestAction::make('printQrLabels'));
+            ->assertActionDoesNotExist(TestAction::make('printQrLabels'));
     }
 
     public function test_scan_route_returns_not_found_for_archived_session(): void

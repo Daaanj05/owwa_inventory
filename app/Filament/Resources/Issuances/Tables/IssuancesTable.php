@@ -148,7 +148,6 @@ class IssuancesTable
                         IssuanceViewActions::extendUsefulLifeAction(),
                         IssuanceViewActions::exportOwwaAction(),
                         IssuanceViewActions::exportPdfAction(),
-                        IssuanceViewActions::printQrLabelAction(),
                     ],
                     '4xl',
                     modelLabel: IssuanceResource::getModelLabel(),

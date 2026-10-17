@@ -6,7 +6,12 @@ use App\Filament\Concerns\HasSetupArchiveView;
 use App\Filament\Concerns\HasSystemAdminWizardHeading;
 use App\Filament\Resources\AiProcurementRunResource;
 use App\Models\AiProcurementRun;
+use App\Support\OwwaExportBusyDispatcher;
+use Filament\Actions\Action;
+use Filament\Forms\Components\DatePicker;
+use Filament\Forms\Components\Select;
 use Filament\Resources\Pages\ListRecords;
+use Filament\Schemas\Components\Grid;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 
@@ -36,7 +41,55 @@ class ListAiProcurementRuns extends ListRecords
 
     protected function getHeaderActions(): array
     {
-        return [];
+        return [
+            Action::make('exportHistoryPdf')
+                ->label('Export PDF')
+                ->icon('heroicon-o-document-arrow-down')
+                ->color('gray')
+                ->visible(fn (): bool => auth()->user()?->isSupplyCustodian() ?? false)
+                ->modalHeading('Export recommendation history')
+                ->modalSubmitActionLabel('Export')
+                ->fillForm(fn (): array => [
+                    'date_from' => now()->startOfYear()->toDateString(),
+                    'date_to' => now()->endOfYear()->toDateString(),
+                    'status' => null,
+                ])
+                ->schema([
+                    Grid::make(2)
+                        ->schema([
+                            DatePicker::make('date_from')
+                                ->label('From'),
+                            DatePicker::make('date_to')
+                                ->label('Until')
+                                ->afterOrEqual('date_from'),
+                            Select::make('status')
+                                ->label('Status')
+                                ->placeholder('All statuses')
+                                ->options([
+                                    'pending' => 'Pending',
+                                    'approved' => 'Approved',
+                                    'failed' => 'Failed',
+                                    'processing' => 'Processing',
+                                ])
+                                ->columnSpanFull(),
+                        ]),
+                ])
+                ->action(function (array $data): void {
+                    $url = route('ai-procurement-runs.export-history-pdf', array_filter([
+                        'date_from' => $data['date_from'] ?? null,
+                        'date_to' => $data['date_to'] ?? null,
+                        'status' => $data['status'] ?? null,
+                        'archived' => $this->showingArchived ? 1 : null,
+                    ], fn (mixed $value): bool => filled($value)));
+
+                    OwwaExportBusyDispatcher::start(
+                        $this,
+                        $url,
+                        'Preparing PDF export…',
+                        'Building the recommendation history PDF…',
+                    );
+                }),
+        ];
     }
 
     public function getSubheading(): string|\Illuminate\Contracts\Support\Htmlable|null

@@ -18,14 +18,19 @@ class InventoryUnit extends Model
 
     public const STATUS_DISPOSED = 'disposed';
 
+    /** Returned for repair: held at the supply office, not available stock, not issuable. */
+    public const STATUS_UNDER_REPAIR = 'under_repair';
+
     protected $fillable = [
         'property_number',
         'acquisition_id',
+        'stock_opening_balance_id',
         'item_id',
         'office_id',
         'unit_cost',
         'status',
         'issuance_id',
+        'repair_source_issuance_id',
         'article',
         'description',
         'stock_number',
@@ -44,6 +49,11 @@ class InventoryUnit extends Model
         return $this->belongsTo(Acquisition::class);
     }
 
+    public function stockOpeningBalance(): BelongsTo
+    {
+        return $this->belongsTo(StockOpeningBalance::class);
+    }
+
     public function item(): BelongsTo
     {
         return $this->belongsTo(Item::class);
@@ -57,6 +67,14 @@ class InventoryUnit extends Model
     public function issuance(): BelongsTo
     {
         return $this->belongsTo(Issuance::class);
+    }
+
+    /**
+     * Issuance the unit was returned from for repair (used to re-issue to the same employee).
+     */
+    public function repairSourceIssuance(): BelongsTo
+    {
+        return $this->belongsTo(Issuance::class, 'repair_source_issuance_id');
     }
 
     public function isInStock(): bool
@@ -74,6 +92,7 @@ class InventoryUnit extends Model
         return [
             self::STATUS_IN_STOCK,
             self::STATUS_ISSUED,
+            self::STATUS_UNDER_REPAIR,
         ];
     }
 }

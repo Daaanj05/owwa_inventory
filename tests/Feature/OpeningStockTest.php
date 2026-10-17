@@ -107,7 +107,7 @@ class OpeningStockTest extends TestCase
         ));
     }
 
-    public function test_ppe_opening_stock_creates_units_with_shared_property_number(): void
+    public function test_ppe_opening_stock_creates_units_with_their_own_property_numbers(): void
     {
         [$office, $item, $user] = $this->createPpeFixtures();
 
@@ -120,7 +120,7 @@ class OpeningStockTest extends TestCase
         );
 
         $this->assertCount(3, $result['units']);
-        $this->assertSame(1, collect($result['units'])->pluck('property_number')->unique()->count());
+        $this->assertSame(3, collect($result['units'])->pluck('property_number')->unique()->count());
         $this->assertTrue(collect($result['units'])->every(
             fn (InventoryUnit $unit): bool => $unit->acquisition_id === null,
         ));
@@ -149,7 +149,7 @@ class OpeningStockTest extends TestCase
         );
     }
 
-    public function test_two_units_same_property_number_have_distinct_qr_payloads(): void
+    public function test_two_ppe_units_have_distinct_property_numbers_and_qr_payloads(): void
     {
         [$office, $item, $user] = $this->createPpeFixtures();
 
@@ -164,18 +164,20 @@ class OpeningStockTest extends TestCase
         $a = $result['units'][0];
         $b = $result['units'][1];
 
-        $this->assertSame($a->property_number, $b->property_number);
+        $this->assertNotSame($a->property_number, $b->property_number);
         $this->assertNotSame(
             InventoryUnitQrPayload::encode($a),
             InventoryUnitQrPayload::encode($b),
         );
 
-        $labels = app(InventoryQrLabelService::class)->labelsForItem($item, $office->id);
-        $this->assertCount(2, $labels);
-        $this->assertNotSame($labels[0]['qr_data_uri'], $labels[1]['qr_data_uri']);
+        $labels = app(InventoryQrLabelService::class);
+        $this->assertNotSame(
+            $labels->labelsForUnit($a)->sole()['qr_data_uri'],
+            $labels->labelsForUnit($b)->sole()['qr_data_uri'],
+        );
     }
 
-    public function test_physical_count_allows_second_unit_with_same_property_number(): void
+    public function test_physical_count_lists_each_ppe_unit_on_its_own_line(): void
     {
         [$office, $item, $user] = $this->createPpeFixtures();
 
@@ -197,9 +199,9 @@ class OpeningStockTest extends TestCase
         ]);
 
         app(PhysicalCountPreloadService::class)->preloadFromCustodyRecords($session);
-        $line = PhysicalCountLine::query()->where('physical_count_session_id', $session->id)->first();
-        $this->assertNotNull($line);
-        $this->assertSame(2, (int) $line->balance_per_card);
+        $lines = PhysicalCountLine::query()->where('physical_count_session_id', $session->id)->get();
+        $this->assertCount(2, $lines);
+        $this->assertTrue($lines->every(fn (PhysicalCountLine $line): bool => (int) $line->balance_per_card === 1));
 
         $scanner = app(PhysicalCountScanService::class);
         $unitA = $result['units'][0];
@@ -213,24 +215,21 @@ class OpeningStockTest extends TestCase
 
         $second = $scanner->resolve($session->fresh(), InventoryUnitQrPayload::encode($unitB));
         $this->assertSame(PhysicalCountScanOutcome::Found, $second->outcome);
-        $this->assertSame(2, (int) $second->line?->fresh()?->on_hand_count);
+        $this->assertSame(1, (int) $second->line?->fresh()?->on_hand_count);
+        $this->assertNotSame($first->line?->id, $second->line?->id);
     }
 
-    public function test_item_qr_labels_require_custodian_and_existing_units(): void
+    public function test_unit_qr_label_reprint_requires_custodian_and_is_logged(): void
     {
         [$office, $item, $user] = $this->createPpeFixtures();
 
-        $this->actingAs($user)
-            ->get(route('owwa.qr-labels.item', $item))
-            ->assertNotFound();
-
-        $this->postOpeningStock(
+        $unit = $this->postOpeningStock(
             item: $item,
             officeId: $office->id,
             quantity: 1,
             unitCost: 75000,
             recordedBy: $user,
-        );
+        )['units'][0];
 
         $employee = User::factory()->create([
             'role' => User::ROLE_EMPLOYEE,
@@ -239,13 +238,46 @@ class OpeningStockTest extends TestCase
         ]);
 
         $this->actingAs($employee)
-            ->get(route('owwa.qr-labels.item', $item))
+            ->get(route('owwa.qr-labels.unit', $unit))
             ->assertForbidden();
 
         $this->actingAs($user)
-            ->get(route('owwa.qr-labels.item', $item))
+            ->get(route('owwa.qr-labels.unit', $unit))
             ->assertOk()
             ->assertHeader('content-type', 'application/pdf');
+
+        $this->assertDatabaseHas('user_activity_logs', [
+            'user_id' => $user->id,
+            'action' => 'reprinted_qr_label',
+            'subject_id' => $unit->id,
+        ]);
+    }
+
+    public function test_disposed_unit_qr_label_cannot_be_reprinted(): void
+    {
+        [$office, $item, $user] = $this->createPpeFixtures();
+
+        $unit = $this->postOpeningStock(
+            item: $item,
+            officeId: $office->id,
+            quantity: 1,
+            unitCost: 75000,
+            recordedBy: $user,
+        )['units'][0];
+
+        $unit->update(['status' => InventoryUnit::STATUS_DISPOSED]);
+
+        $this->actingAs($user)
+            ->get(route('owwa.qr-labels.unit', $unit))
+            ->assertNotFound();
+    }
+
+    public function test_removed_item_physical_count_and_issuance_qr_routes_are_gone(): void
+    {
+        $this->assertFalse(\Illuminate\Support\Facades\Route::has('owwa.qr-labels.item'));
+        $this->assertFalse(\Illuminate\Support\Facades\Route::has('owwa.qr-labels.physical-count'));
+        $this->assertFalse(\Illuminate\Support\Facades\Route::has('owwa.qr-labels.issuance'));
+        $this->assertFalse(\Illuminate\Support\Facades\Route::has('owwa.qr-labels.acquisition'));
     }
 
     public function test_legacy_pn_only_qr_still_resolves_for_physical_count(): void

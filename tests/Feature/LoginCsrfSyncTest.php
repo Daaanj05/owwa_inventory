@@ -72,7 +72,7 @@ class LoginCsrfSyncTest extends TestCase
         Filament::setCurrentPanel(Filament::getPanel('admin'));
 
         $office = Office::factory()->create();
-        $user = User::factory()->create([
+        $user = User::factory()->withoutMultiFactorAuthentication()->create([
             'role' => User::ROLE_SUPPLY_CUSTODIAN,
             'office_id' => $office->id,
             'email' => 'recover.login@example.com',
@@ -116,7 +116,7 @@ class LoginCsrfSyncTest extends TestCase
 
         $office = Office::factory()->create();
         $category = ItemCategory::factory()->create();
-        $user = User::factory()->create([
+        $user = User::factory()->withoutMultiFactorAuthentication()->create([
             'role' => User::ROLE_SUPPLY_CUSTODIAN,
             'office_id' => $office->id,
             'email_verified_at' => now(),
@@ -140,7 +140,7 @@ class LoginCsrfSyncTest extends TestCase
         ]);
 
         $office = Office::factory()->create();
-        $user = User::factory()->create([
+        $user = User::factory()->withoutMultiFactorAuthentication()->create([
             'role' => User::ROLE_EMPLOYEE,
             'office_id' => $office->id,
             'email_verified_at' => now(),
@@ -164,7 +164,7 @@ class LoginCsrfSyncTest extends TestCase
         ]);
 
         $office = Office::factory()->create();
-        $user = User::factory()->create([
+        $user = User::factory()->withoutMultiFactorAuthentication()->create([
             'role' => User::ROLE_SUPPLY_CUSTODIAN,
             'office_id' => $office->id,
             'email_verified_at' => now(),

@@ -54,6 +54,10 @@
 
         localStorage.setItem('collapsedGroups', JSON.stringify(collapsed));
 
+        if (window.Alpine && Alpine.store('sidebar')) {
+            Alpine.store('sidebar').collapsedGroups = collapsed.slice();
+        }
+
         collapsed.forEach(function (label) {
             var group = document.querySelector('.fi-sidebar-group[data-group-label="' + label.replace(/"/g, '\\"') + '"]');
 
@@ -78,6 +82,46 @@
             ? requisitions.querySelector(':scope > .fi-sidebar-group-btn')
             : null;
 
+        if (! window.owwaSidebarAccordion) {
+            window.owwaSidebarAccordion = true;
+
+            document.addEventListener('click', function (event) {
+                var button = event.target.closest('.fi-sidebar-group-btn');
+
+                if (! button || ! window.Alpine || ! Alpine.store('sidebar')) {
+                    return;
+                }
+
+                var group = button.closest('.fi-sidebar-group');
+                var label = group ? group.dataset.groupLabel : null;
+
+                if (! label) {
+                    return;
+                }
+
+                setTimeout(function () {
+                    var store = Alpine.store('sidebar');
+                    var collapsedNow = Array.isArray(store.collapsedGroups) ? store.collapsedGroups : [];
+
+                    if (collapsedNow.includes(label)) {
+                        return;
+                    }
+
+                    var others = [];
+
+                    document.querySelectorAll('.fi-sidebar-group[data-group-label]').forEach(function (other) {
+                        var otherLabel = other.dataset.groupLabel;
+
+                        if (otherLabel && otherLabel !== label) {
+                            others.push(otherLabel);
+                        }
+                    });
+
+                    store.collapsedGroups = others;
+                }, 0);
+            }, true);
+        }
+
         if (requisitionBadge && requisitionButton && ! requisitionButton.querySelector('.owwa-nav-group-badge')) {
             var badge = requisitionBadge.cloneNode(true);
             badge.classList.add('owwa-nav-group-badge');
@@ -90,4 +134,10 @@
             }
         }
     })();
+
+    if (window.Livewire && ! window.owwaSidebarBadgePoll) {
+        window.owwaSidebarBadgePoll = setInterval(function () {
+            Livewire.dispatch('refresh-sidebar');
+        }, {{ (int) ($pollMs ?? 5000) }});
+    }
 </script>

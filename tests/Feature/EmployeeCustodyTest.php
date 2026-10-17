@@ -5,7 +5,6 @@ namespace Tests\Feature;
 use App\Filament\Pages\EmployeeCustody;
 use App\Models\Acquisition;
 use App\Models\Department;
-use App\Models\Distribution;
 use App\Models\InventoryUnit;
 use App\Models\Issuance;
 use App\Models\Item;
@@ -14,7 +13,7 @@ use App\Models\Office;
 use App\Models\Requisition;
 use App\Models\User;
 use App\Services\AcquisitionUnitService;
-use App\Services\EmployeeDistributionInventoryService;
+use App\Services\EmployeeReceivedInventoryService;
 use App\Services\PropertyActionRequestWorkflowService;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -115,7 +114,7 @@ class EmployeeCustodyTest extends TestCase
 
     public function test_employee_custody_shows_export_all_item_and_period_filters_below_employee(): void
     {
-        [$uc, $employee] = $this->seedEmployeeDistributions();
+        [$uc, $employee] = $this->seedEmployeeIssuances();
 
         Livewire::actingAs($uc)
             ->test(EmployeeCustody::class, [
@@ -127,7 +126,7 @@ class EmployeeCustodyTest extends TestCase
             ->assertDontSee('Download all for period');
     }
 
-    public function test_distribution_history_modal_has_download_this_item_footer_only(): void
+    public function test_received_history_modal_has_download_this_item_footer_only(): void
     {
         $source = file_get_contents(app_path('Filament/Pages/EmployeeCustody.php'));
 
@@ -137,7 +136,7 @@ class EmployeeCustodyTest extends TestCase
         $this->assertStringContainsString('mountedLedgerActionArguments', $source);
         $this->assertStringNotContainsString('exportAllUrl', $source);
 
-        $modal = file_get_contents(resource_path('views/filament/pages/partials/employee-distribution-ledger-modal.blade.php'));
+        $modal = file_get_contents(resource_path('views/filament/pages/partials/employee-received-ledger-modal.blade.php'));
         $this->assertStringNotContainsString('Download all for period', $modal);
         $this->assertStringNotContainsString('Download this item', $modal);
     }
@@ -205,7 +204,7 @@ class EmployeeCustodyTest extends TestCase
 
     public function test_uc_viewing_employee_shows_grouped_inventory_totals(): void
     {
-        [$uc, $employee, $item] = $this->seedEmployeeDistributions();
+        [$uc, $employee, $item] = $this->seedEmployeeIssuances();
 
         Livewire::actingAs($uc)
             ->test(EmployeeCustody::class, ['employee' => $employee->id])
@@ -213,9 +212,9 @@ class EmployeeCustodyTest extends TestCase
             ->assertSee('8');
     }
 
-    public function test_uc_can_filter_employee_custody_by_distribution_period(): void
+    public function test_uc_can_filter_employee_custody_by_received_period(): void
     {
-        [$uc, $employee, $item] = $this->seedEmployeeDistributions();
+        [$uc, $employee, $item] = $this->seedEmployeeIssuances();
 
         /** @var Issuance $oldIssuance */
         $oldIssuance = Issuance::query()
@@ -263,29 +262,35 @@ class EmployeeCustodyTest extends TestCase
         $category = ItemCategory::factory()->create(['name' => 'Consumables']);
         $item = Item::factory()->create(['item_category_id' => $category->id]);
 
-        Distribution::factory()->create([
+        $requisition = Requisition::query()->create([
+            'office_id' => $otherOffice->id,
+            'requested_by' => $otherEmployee->id,
+            'status' => Requisition::STATUS_ACCEPTED,
+        ]);
+
+        Issuance::query()->create([
+            'requisition_id' => $requisition->id,
             'office_id' => $otherOffice->id,
             'item_id' => $item->id,
-            'distributed_to' => $otherEmployee->id,
-            'distributed_by' => $uc->id,
+            'issued_to' => $otherEmployee->id,
             'quantity' => 3,
-            'distribution_date' => now(),
+            'issuance_date' => now(),
         ]);
 
         Livewire::actingAs($uc)
             ->test(EmployeeCustody::class, ['employee' => $otherEmployee->id])
-            ->call('openDistributionLedger', $item->id)
+            ->call('openReceivedLedger', $item->id)
             ->assertStatus(403);
     }
 
-    public function test_uc_can_open_read_only_distribution_ledger_modal(): void
+    public function test_uc_can_open_read_only_received_ledger_modal(): void
     {
-        [$uc, $employee, $item] = $this->seedEmployeeDistributions();
+        [$uc, $employee, $item] = $this->seedEmployeeIssuances();
 
         Livewire::actingAs($uc)
             ->test(EmployeeCustody::class, ['employee' => $employee->id])
-            ->call('openDistributionLedger', $item->id)
-            ->assertActionMounted('viewDistributionLedger');
+            ->call('openReceivedLedger', $item->id)
+            ->assertActionMounted('viewReceivedLedger');
     }
 
     public function test_employee_custody_page_does_not_show_property_action_ctas(): void
@@ -302,7 +307,7 @@ class EmployeeCustodyTest extends TestCase
 
         $request = \App\Models\PropertyActionRequest::query()->create([
             'action_type' => \App\Models\PropertyActionRequest::ACTION_RETURN,
-            'reason_code' => 'good_condition',
+            'reason_code' => 'serviceable_not_needed',
             'requested_by' => $employee->id,
             'accountable_user_id' => $uc->id,
             'office_id' => $issuance->office_id,
@@ -324,26 +329,26 @@ class EmployeeCustodyTest extends TestCase
             User::factory()->create(['role' => User::ROLE_SUPPLY_CUSTODIAN]),
         );
 
-        $service = app(EmployeeDistributionInventoryService::class);
+        $service = app(EmployeeReceivedInventoryService::class);
 
         $onHand = $service->paginatedPropertyIssuances(
             $employee,
             null,
-            'distribution_date',
+            'received_date',
             'desc',
             10,
             'semi_expendable',
-            EmployeeDistributionInventoryService::CUSTODY_TAB_ON_HAND,
+            EmployeeReceivedInventoryService::CUSTODY_TAB_ON_HAND,
         );
 
         $history = $service->paginatedPropertyIssuances(
             $employee,
             null,
-            'distribution_date',
+            'received_date',
             'desc',
             10,
             'semi_expendable',
-            EmployeeDistributionInventoryService::CUSTODY_TAB_HISTORY,
+            EmployeeReceivedInventoryService::CUSTODY_TAB_HISTORY,
         );
 
         $this->assertSame(0, $onHand->total());
@@ -363,7 +368,7 @@ class EmployeeCustodyTest extends TestCase
             ->test(EmployeeCustody::class, [
                 'employee' => $employee->id,
                 'category' => 'semi_expendable',
-                'custodyTab' => EmployeeDistributionInventoryService::CUSTODY_TAB_ON_HAND,
+                'custodyTab' => EmployeeReceivedInventoryService::CUSTODY_TAB_ON_HAND,
             ])
             ->call('openPropertyIssuanceLedger', (int) $issuance->item_id)
             ->assertActionMounted('viewPropertyItemUnits');
@@ -373,10 +378,10 @@ class EmployeeCustodyTest extends TestCase
     {
         [$uc, $employee, $issuance] = $this->seedEmployeePropertyIssuance();
 
-        $ledger = app(EmployeeDistributionInventoryService::class)->presentPropertyItemUnits(
+        $ledger = app(EmployeeReceivedInventoryService::class)->presentPropertyItemUnits(
             $employee,
             (int) $issuance->item_id,
-            EmployeeDistributionInventoryService::CUSTODY_TAB_ON_HAND,
+            EmployeeReceivedInventoryService::CUSTODY_TAB_ON_HAND,
             $uc,
         );
 
@@ -463,7 +468,7 @@ class EmployeeCustodyTest extends TestCase
     /**
      * @return array{0: User, 1: User, 2: Item}
      */
-    protected function seedEmployeeDistributions(): array
+    protected function seedEmployeeIssuances(): array
     {
         $office = Office::factory()->create();
         $department = Department::query()->create([

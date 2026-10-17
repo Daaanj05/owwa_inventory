@@ -230,7 +230,7 @@ class StockLedgerViewService
     protected function buildHeader(Item $item, Office $office, string $slug, ?float $unitCost = null): array
     {
         $base = [
-            'entity_name' => (string) config('owwa_export_standards.entity_name', 'OWWA-4A'),
+            'entity_name' => (string) config('owwa_export_standards.entity_name'),
             'fund_cluster' => '',
             'item_name' => $item->name,
             'description' => $item->description,

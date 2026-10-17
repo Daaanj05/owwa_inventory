@@ -17,7 +17,7 @@ class TransferCustodyQueryTest extends TestCase
 
     public function test_custodian_sees_all_category_transfers_regardless_of_office(): void
     {
-        $category = ItemCategory::factory()->create();
+        $category = ItemCategory::factory()->create(['name' => 'Semi-Expendable']);
         $item = Item::factory()->create(['item_category_id' => $category->id]);
         $home = Office::factory()->create();
         $other = Office::factory()->create();

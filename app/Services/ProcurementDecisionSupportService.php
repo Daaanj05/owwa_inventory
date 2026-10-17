@@ -40,7 +40,7 @@ class ProcurementDecisionSupportService
      *   forecast_monthly_usage:float,
      *   months_cover:float|null,
      *   suggested_reorder_qty:int|null,
-     *   projected_stockout_date:string,
+     *   projected_stockout_date:string|null,
      *   latest_unit_cost:float|null,
      *   item_category_id:int,
      *   has_recent_usage:bool,
@@ -416,7 +416,7 @@ class ProcurementDecisionSupportService
                     forecastMonthly: 0.0,
                     monthsCover: null,
                     suggested: $suggested,
-                    stockoutDate: now()->toDateString(),
+                    stockoutDate: null,
                     latestUnitCosts: $latestUnitCosts,
                     hasRecentUsage: false,
                     priority: 'High',
@@ -438,7 +438,7 @@ class ProcurementDecisionSupportService
         float $forecastMonthly,
         ?float $monthsCover,
         ?int $suggested,
-        string $stockoutDate,
+        ?string $stockoutDate,
         array $latestUnitCosts,
         bool $hasRecentUsage,
         string $priority,
@@ -517,8 +517,8 @@ class ProcurementDecisionSupportService
             ? (int) max(0, ceil(($targetCoverMonths * $forecastMonthly) - $currentStock))
             : 0;
 
-        $reorderFloor = ($reorderLevel > 0 && $currentStock <= $reorderLevel)
-            ? max(1, $reorderLevel - $currentStock)
+        $reorderFloor = ($reorderLevel > 0 && $currentStock < $reorderLevel)
+            ? max(0, $reorderLevel - $currentStock)
             : 0;
 
         $suggested = max($forecastBased, $reorderFloor);

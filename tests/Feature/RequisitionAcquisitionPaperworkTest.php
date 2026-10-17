@@ -11,9 +11,11 @@ use App\Models\Office;
 use App\Models\Requisition;
 use App\Models\User;
 use App\Services\RequisitionPurchaseRequestService;
-use Filament\Actions\Testing\TestAction;
 use Filament\Facades\Filament;
+use Filament\Forms\Components\Repeater;
+use Filament\Forms\Components\TextInput;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Livewire\Features\SupportTesting\Testable;
 use Livewire\Livewire;
 use Tests\TestCase;
 
@@ -178,15 +180,14 @@ class RequisitionAcquisitionPaperworkTest extends TestCase
             'quantity' => 12,
         ]);
 
-        session()->put('active_item_category_id', $category->id);
         $this->actingAs($custodian);
 
-        $component = Livewire::test(ListAcquisitions::class)
-            ->mountAction(TestAction::make('create')->schemaComponent(true, 'content'))
-            ->fillForm([
-                'item_category_id' => $category->id,
-                'requisitions' => [$requisition->id],
-            ]);
+        $component = Livewire::withQueryParams([
+            'category' => (string) $category->id,
+            'create_from_requisition' => $requisition->id,
+        ])->test(ListAcquisitions::class);
+
+        $component->assertActionMounted('createPr');
 
         $lines = array_values($component->get('mountedActions')[0]['data']['lines'] ?? []);
 
@@ -196,8 +197,13 @@ class RequisitionAcquisitionPaperworkTest extends TestCase
         $this->assertNull($lines[0]['unit_cost'] ?? null);
 
         $component
-            ->fillForm(['purpose' => 'Restock linked requisition'])
+            ->fillForm([
+                'office_id' => $office->id,
+                'requesting_office_id' => $office->id,
+                'purpose' => 'Restock linked requisition',
+            ])
             ->callMountedAction()
+            ->assertHasNoFormErrors()
             ->assertNotified();
 
         $paperwork = AcquisitionPaperwork::query()->latest('id')->firstOrFail();
@@ -210,5 +216,189 @@ class RequisitionAcquisitionPaperworkTest extends TestCase
                 'acquisition_paperwork_line_requisition_item.quantity',
             ),
         );
+    }
+
+    public function test_pr_lines_cannot_be_added_when_requisitions_are_linked(): void
+    {
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+
+        $office = Office::factory()->create();
+        $category = ItemCategory::factory()->create();
+        $item = Item::factory()->create(['item_category_id' => $category->id]);
+        $consolidator = User::factory()->create([
+            'role' => User::ROLE_UNIT_CONSOLIDATOR,
+            'office_id' => $office->id,
+        ]);
+        $custodian = User::factory()->create([
+            'role' => User::ROLE_SUPPLY_CUSTODIAN,
+            'office_id' => $office->id,
+        ]);
+        $requisition = Requisition::query()->create([
+            'reference_code' => 'RIS-LOCKED-001',
+            'office_id' => $office->id,
+            'requested_by' => $consolidator->id,
+            'status' => Requisition::STATUS_PENDING,
+        ]);
+        $requisition->items()->create([
+            'item_id' => $item->id,
+            'quantity' => 5,
+        ]);
+
+        $this->actingAs($custodian);
+
+        $component = Livewire::withQueryParams([
+            'category' => (string) $category->id,
+            'create_from_requisition' => $requisition->id,
+        ])->test(ListAcquisitions::class)
+            ->assertActionMounted('createPr')
+            ->assertDontSee('Add line')
+            ->assertSee('Items and requested quantities come from the linked requisitions.');
+
+        $this->assertFalse($this->mountedPrLinesRepeater($component)->isAddable());
+        $this->assertFalse($this->mountedPrLinesRepeater($component)->isDeletable());
+
+        $component->fillForm(['requisitions' => []]);
+
+        $this->assertTrue($this->mountedPrLinesRepeater($component)->isAddable());
+        $this->assertTrue($this->mountedPrLinesRepeater($component)->isDeletable());
+    }
+
+    public function test_pr_requested_by_prefills_from_single_linked_requisition(): void
+    {
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+
+        [$office, $category, $item, $custodian] = $this->requesterFixtures();
+        $requisition = $this->linkableRequisition($office, $item, 'RIS-REQBY-001', 'Ana Reyes');
+
+        $this->actingAs($custodian);
+
+        $component = Livewire::withQueryParams([
+            'category' => (string) $category->id,
+            'create_from_requisition' => $requisition->id,
+        ])->test(ListAcquisitions::class)
+            ->assertActionMounted('createPr');
+
+        $this->assertSame('Ana Reyes', $component->get('mountedActions')[0]['data']['requested_by_name']);
+
+        $fallbackRequisition = $this->linkableRequisition($office, $item, 'RIS-REQBY-002', null, 'Ben Cruz');
+
+        $component->fillForm(['requisitions' => [$fallbackRequisition->id]]);
+
+        $this->assertSame('Ben Cruz', $component->get('mountedActions')[0]['data']['requested_by_name']);
+    }
+
+    public function test_pr_requested_by_stays_blank_when_linked_requisitions_have_different_requesters(): void
+    {
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+
+        [$office, $category, $item, $custodian] = $this->requesterFixtures();
+        $first = $this->linkableRequisition($office, $item, 'RIS-REQBY-101', 'Ana Reyes');
+        $second = $this->linkableRequisition($office, $item, 'RIS-REQBY-102', 'Ben Cruz');
+
+        $this->actingAs($custodian);
+
+        $component = Livewire::withQueryParams([
+            'category' => (string) $category->id,
+            'create_from_requisition' => $first->id,
+        ])->test(ListAcquisitions::class)
+            ->assertActionMounted('createPr')
+            ->fillForm(['requisitions' => [$first->id, $second->id]]);
+
+        $this->assertNull($component->get('mountedActions')[0]['data']['requested_by_name']);
+        $this->assertStringContainsString(
+            'Linked requisitions have different requesters (Ana Reyes, Ben Cruz). Enter the official requesting this consolidated PR.',
+            $this->mountedPrField($component, 'requested_by_name')->getChildSchema(TextInput::BELOW_CONTENT_SCHEMA_KEY)->toHtml(),
+        );
+    }
+
+    public function test_pr_requested_by_typed_value_is_not_overwritten_by_linked_requisition(): void
+    {
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+
+        [$office, $category, $item, $custodian] = $this->requesterFixtures();
+        $first = $this->linkableRequisition($office, $item, 'RIS-REQBY-201', 'Ana Reyes');
+        $second = $this->linkableRequisition($office, $item, 'RIS-REQBY-202', 'Ben Cruz');
+
+        $this->actingAs($custodian);
+
+        $component = Livewire::withQueryParams([
+            'category' => (string) $category->id,
+            'create_from_requisition' => $first->id,
+        ])->test(ListAcquisitions::class)
+            ->assertActionMounted('createPr')
+            ->fillForm(['requested_by_name' => 'Regional Director'])
+            ->fillForm(['requisitions' => [$second->id]]);
+
+        $this->assertSame('Regional Director', $component->get('mountedActions')[0]['data']['requested_by_name']);
+
+        $component->fillForm(['requisitions' => []]);
+
+        $this->assertSame('Regional Director', $component->get('mountedActions')[0]['data']['requested_by_name']);
+    }
+
+    /**
+     * @return array{0: Office, 1: ItemCategory, 2: Item, 3: User}
+     */
+    protected function requesterFixtures(): array
+    {
+        $office = Office::factory()->create();
+        $category = ItemCategory::factory()->create();
+        $item = Item::factory()->create(['item_category_id' => $category->id]);
+        $custodian = User::factory()->create([
+            'role' => User::ROLE_SUPPLY_CUSTODIAN,
+            'office_id' => $office->id,
+        ]);
+
+        return [$office, $category, $item, $custodian];
+    }
+
+    protected function linkableRequisition(Office $office, Item $item, string $referenceCode, ?string $risRequestedByName, string $consolidatorName = 'Unit Consolidator'): Requisition
+    {
+        $consolidator = User::factory()->create([
+            'name' => $consolidatorName,
+            'role' => User::ROLE_UNIT_CONSOLIDATOR,
+            'office_id' => $office->id,
+        ]);
+        $requisition = Requisition::query()->create([
+            'reference_code' => $referenceCode,
+            'office_id' => $office->id,
+            'requested_by' => $consolidator->id,
+            'ris_requested_by_name' => $risRequestedByName,
+            'status' => Requisition::STATUS_PENDING,
+        ]);
+        $requisition->items()->create([
+            'item_id' => $item->id,
+            'quantity' => 3,
+        ]);
+
+        return $requisition;
+    }
+
+    protected function mountedPrField(Testable $component, string $name): TextInput
+    {
+        $field = $component->instance()
+            ->getSchema('mountedActionSchema0')
+            ?->getComponent(
+                fn (mixed $schemaComponent): bool => $schemaComponent instanceof TextInput && $schemaComponent->getName() === $name,
+                withHidden: true,
+            );
+
+        $this->assertInstanceOf(TextInput::class, $field);
+
+        return $field;
+    }
+
+    protected function mountedPrLinesRepeater(Testable $component): Repeater
+    {
+        $repeater = $component->instance()
+            ->getSchema('mountedActionSchema0')
+            ?->getComponent(
+                fn (mixed $schemaComponent): bool => $schemaComponent instanceof Repeater && $schemaComponent->getName() === 'lines',
+                withHidden: true,
+            );
+
+        $this->assertInstanceOf(Repeater::class, $repeater);
+
+        return $repeater;
     }
 }

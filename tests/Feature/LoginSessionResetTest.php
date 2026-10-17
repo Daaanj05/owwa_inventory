@@ -42,7 +42,7 @@ class LoginSessionResetTest extends TestCase
         Filament::setCurrentPanel(Filament::getPanel('admin'));
 
         $office = Office::factory()->create();
-        User::factory()->create([
+        User::factory()->withoutMultiFactorAuthentication()->create([
             'role' => User::ROLE_SUPPLY_CUSTODIAN,
             'office_id' => $office->id,
             'email' => 'fresh.login@example.com',

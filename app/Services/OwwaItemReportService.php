@@ -15,7 +15,7 @@ use App\Models\Transfer;
 use App\Support\AnnexA1BlockLayout;
 use App\Support\AnnexA4Layout;
 use App\Support\ConsumableInventoryType;
-use App\Support\IssuanceDistributionVisibility;
+use App\Support\IssuanceRecipientSummary;
 use App\Support\ItemPropertyClass;
 use App\Support\OwwaCellMapping;
 use App\Support\OwwaExportFilename;
@@ -158,7 +158,15 @@ class OwwaItemReportService
         Issuance::query()
             ->with($issuanceRelations)
             ->whereIn('item_id', $itemIds)
-            ->when($normalizedOfficeIds !== [], fn ($q) => $q->whereIn('office_id', $normalizedOfficeIds))
+            ->when($normalizedOfficeIds !== [], function ($q) use ($normalizedOfficeIds) {
+                $q->where(function ($scope) use ($normalizedOfficeIds): void {
+                    $scope->whereIn('issued_from_office_id', $normalizedOfficeIds)
+                        ->orWhere(function ($legacy) use ($normalizedOfficeIds): void {
+                            $legacy->whereNull('issued_from_office_id')
+                                ->whereIn('office_id', $normalizedOfficeIds);
+                        });
+                });
+            })
             ->orderBy('issuance_date')
             ->get()
             ->each(function (Issuance $issuance) use (&$rowsByItem, $itemsById, $unitCost): void {
@@ -171,13 +179,13 @@ class OwwaItemReportService
 
                 $slug = $itemsById->get($issuance->item_id)?->category?->getTemplateSlug() ?? 'consumables';
                 $officeOfficer = in_array($slug, ['ppe', 'semi_expendable'], true)
-                    ? (IssuanceDistributionVisibility::holderLabelForIssuance($issuance)
+                    ? (IssuanceRecipientSummary::holderLabelForIssuance($issuance)
                         ?? $issuance->issuedTo?->name
                         ?? $issuance->office?->name)
                     : ($issuance->issuedTo?->name ?? $issuance->office?->name);
 
                 $rowsByItem[$issuance->item_id][] = [
-                    'office_id' => $issuance->office_id,
+                    'office_id' => $issuance->issued_from_office_id ?? $issuance->office_id,
                     'sort_date' => $issuance->issuance_date,
                     'date' => $issuance->issuance_date?->format('Y-m-d'),
                     'reference' => $issuance->controlNumber(),
@@ -416,11 +424,11 @@ class OwwaItemReportService
                     'office_id' => $issuance->office_id,
                     'date' => $issuance->issuance_date?->format('Y-m-d'),
                     'reference' => $issuance->controlNumber(),
-                    'property_number' => $issuance->property_number ?? $item?->item_code,
+                    'property_number' => $issuance->issuedPropertyNumbersLabel() ?: $item?->item_code,
                     'description' => $this->itemDescription($item),
                     'estimated_useful_life' => $issuance->estimated_useful_life ?? $item?->estimated_useful_life,
                     'issued_qty' => $issuance->quantity,
-                    'issued_office' => IssuanceDistributionVisibility::holderLabelForIssuance($issuance)
+                    'issued_office' => IssuanceRecipientSummary::holderLabelForIssuance($issuance)
                         ?? $issuance->issuedTo?->name
                         ?? $issuance->office?->name,
                     'returned_qty' => null,
@@ -476,8 +484,13 @@ class OwwaItemReportService
 
                 $rows = &$rowsByItem[$transfer->item_id];
                 foreach ($rows as $index => $row) {
-                    if (($row['property_number'] ?? null) === $propertyNumber && blank($row['returned_qty'] ?? null)) {
-                        $rows[$index]['returned_qty'] = $transfer->quantity;
+                    $rowNumbers = explode(', ', (string) ($row['property_number'] ?? ''));
+                    $returnedSoFar = (int) ($row['returned_qty'] ?? 0);
+
+                    if (filled($row['issued_qty'] ?? null)
+                        && in_array($propertyNumber, $rowNumbers, true)
+                        && $returnedSoFar < (int) $row['issued_qty']) {
+                        $rows[$index]['returned_qty'] = $returnedSoFar + (int) $transfer->quantity;
                         $rows[$index]['returned_office'] = $transfer->toOffice?->name
                             ?? $transfer->from_accountable_officer
                             ?? '—';

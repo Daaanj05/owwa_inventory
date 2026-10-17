@@ -2,9 +2,9 @@
 
 return [
 
-    'brand_name' => env('APP_NAME', 'OWWA Region IV-A Inventory System'),
+    'brand_name' => env('OWWA_MAIL_BRAND_NAME', 'OWWA IV-A Inventory'),
 
-    'tagline' => 'Overseas Workers Welfare Administration Regional Welfare Office 4A',
+    'tagline' => 'Overseas Workers Welfare Administration Regional Welfare Office IV-A',
 
     'colors' => [
         'navy' => '#003366',

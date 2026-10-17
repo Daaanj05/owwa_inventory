@@ -1,13 +1,13 @@
 <?php
 
 use App\Http\Controllers\AdminRedirectController;
+use App\Http\Controllers\AiProcurementRunExportController;
 use App\Http\Controllers\AiProcurementRunPrintController;
 use App\Http\Controllers\Api\StockCardExportController;
 use App\Http\Controllers\AuditSessionController;
 use App\Http\Controllers\ClientLayoutLogController;
 use App\Http\Controllers\CoaReportController;
 use App\Http\Controllers\EmailVerificationController;
-use App\Http\Controllers\GuestEmailVerificationController;
 use App\Http\Controllers\InventoryQrLabelController;
 use App\Http\Controllers\OwwaBulkExportController;
 use App\Http\Controllers\OwwaExportController;
@@ -16,10 +16,6 @@ use App\Http\Controllers\PublicAssetController;
 use App\Http\Controllers\StockCardExportDownloadController;
 use App\Http\Controllers\StockCardExportPrintController;
 use Illuminate\Support\Facades\Route;
-
-Route::get('/email/verify/{id}/{hash}', GuestEmailVerificationController::class)
-    ->middleware(['signed', 'throttle:6,1'])
-    ->name('verification.verify.guest');
 
 Route::get('/assets/u/{inventoryUnit}', [PublicAssetController::class, 'showUnit'])
     ->whereNumber('inventoryUnit')
@@ -84,8 +80,7 @@ Route::middleware(['auth', 'web'])->group(function () {
         Route::get('reports/owwa/inspection-acceptance-reports/{inspectionAcceptanceReport}/pdf', [OwwaExportController::class, 'inspectionAcceptanceReportPdf'])->name('owwa.export.inspection-acceptance-report.pdf');
         Route::get('reports/owwa/procurement/{acquisitionPaperwork}/po', [OwwaExportController::class, 'procurementPo'])->name('owwa.export.procurement.po');
         Route::get('reports/owwa/procurement/{acquisitionPaperwork}/iar', [OwwaExportController::class, 'procurementIar'])->name('owwa.export.procurement.iar');
-        Route::get('reports/owwa/distribution/{distribution}', [OwwaExportController::class, 'distribution'])->name('owwa.export.distribution');
-        Route::get('reports/owwa/employee-distribution/{employee}', [OwwaExportController::class, 'employeeDistribution'])->name('owwa.export.employee-distribution');
+        Route::get('reports/owwa/employee-received/{employee}', [OwwaExportController::class, 'employeeReceived'])->name('owwa.export.employee-received');
         Route::get('reports/owwa/bulk/acquisitions', [OwwaBulkExportController::class, 'acquisitions'])->name('owwa.export.bulk.acquisitions');
         Route::get('reports/owwa/bulk/annex-a1', [OwwaBulkExportController::class, 'annexA1'])->name('owwa.export.bulk.annex-a1');
         Route::get('reports/owwa/bulk/annex-a4', [OwwaBulkExportController::class, 'annexA4'])->name('owwa.export.bulk.annex-a4');
@@ -101,6 +96,8 @@ Route::middleware(['auth', 'web'])->group(function () {
         Route::get('reports/owwa/bulk/disposals/report', [OwwaBulkExportController::class, 'disposalsReport'])->name('owwa.export.bulk.disposals.report');
         Route::get('reports/owwa/bulk/requisitions', [OwwaBulkExportController::class, 'requisitions'])->name('owwa.export.bulk.requisitions');
         Route::get('reports/owwa/bulk/procurement', [OwwaBulkExportController::class, 'procurement'])->name('owwa.export.bulk.procurement');
+        Route::get('ai-procurement-runs/export/history-pdf', [AiProcurementRunExportController::class, 'history'])->name('ai-procurement-runs.export-history-pdf');
+        Route::get('ai-procurement-runs/{run}/export-pdf', [AiProcurementRunExportController::class, 'run'])->name('ai-procurement-runs.export-pdf');
     });
 
     Route::get('exports/stock-cards/{user}/{file}', StockCardExportDownloadController::class)
@@ -121,10 +118,7 @@ Route::middleware(['auth', 'web'])->group(function () {
         ->middleware('throttle:60,1')
         ->name('api.stock-card-exports.status');
 
-    Route::get('reports/owwa/acquisition/{acquisition}/qr-labels', [InventoryQrLabelController::class, 'acquisition'])->name('owwa.qr-labels.acquisition');
-    Route::get('reports/owwa/items/{item}/qr-labels', [InventoryQrLabelController::class, 'item'])->name('owwa.qr-labels.item');
-    Route::get('reports/owwa/physical-count/{physicalCountSession}/qr-labels', [InventoryQrLabelController::class, 'physicalCountSession'])->name('owwa.qr-labels.physical-count');
-    Route::get('reports/owwa/issuance/{issuance}/qr-label', [InventoryQrLabelController::class, 'issuance'])->name('owwa.qr-labels.issuance');
+    Route::get('reports/owwa/inventory-units/{inventoryUnit}/qr-label', [InventoryQrLabelController::class, 'unit'])->name('owwa.qr-labels.unit');
     Route::get('reports/owwa/acquisition-paperwork/{acquisitionPaperwork}/qr-labels', [InventoryQrLabelController::class, 'acquisitionPaperwork'])->name('owwa.qr-labels.acquisition-paperwork');
     Route::get('reports/owwa/opening-balances/{stockOpeningBalanceBatch}/qr-labels', [InventoryQrLabelController::class, 'openingBalance'])->name('owwa.qr-labels.opening-balance');
     Route::get('reports/owwa/issuance/{issuance}/print', [OwwaPrintController::class, 'issuance'])->name('owwa.print.issuance');

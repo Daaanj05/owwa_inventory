@@ -113,16 +113,6 @@ class PhysicalCountSessionActions
             });
     }
 
-    public static function printQrLabelsAction(): Action
-    {
-        return Action::make('printQrLabels')
-            ->label('Print QR labels')
-            ->icon('heroicon-o-qr-code')
-            ->visible(fn (PhysicalCountSession $record): bool => $record->supportsUnitQrScanning())
-            ->url(fn (PhysicalCountSession $record): string => route('owwa.qr-labels.physical-count', $record))
-            ->openUrlInNewTab();
-    }
-
     public static function exportOwwaAction(): Action
     {
         return Action::make('exportOwwa')
@@ -186,7 +176,6 @@ class PhysicalCountSessionActions
             self::preloadStockLinesAction(),
             self::markCompleteAction(),
             self::editAction(),
-            self::printQrLabelsAction(),
             self::exportOwwaAction(),
             self::exportPdfAction(),
         ];

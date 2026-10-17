@@ -35,7 +35,7 @@ class AcquisitionPaperworkQrLabelsTest extends TestCase
 
         $this->assertCount(3, $units);
         $this->assertTrue($units->every(fn (InventoryUnit $unit): bool => filled($unit->property_number)));
-        $this->assertSame(1, $units->pluck('property_number')->unique()->count());
+        $this->assertSame(3, $units->pluck('property_number')->unique()->count());
         $this->assertCount(
             3,
             $units->map(fn (InventoryUnit $unit): string => \App\Support\InventoryUnitQrPayload::encode($unit))->unique(),

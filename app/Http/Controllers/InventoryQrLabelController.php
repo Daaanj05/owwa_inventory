@@ -2,16 +2,14 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Acquisition;
 use App\Models\AcquisitionPaperwork;
-use App\Models\Issuance;
-use App\Models\Item;
-use App\Models\PhysicalCountSession;
+use App\Models\InventoryUnit;
 use App\Models\StockOpeningBalanceBatch;
 use App\Models\User;
-use App\Services\AcquisitionUnitService;
 use App\Services\InventoryQrLabelService;
+use App\Services\UserActivityLogger;
 use App\Support\OwwaExportFilename;
+use App\Support\ScanAssetHandoff;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Symfony\Component\HttpFoundation\Response as SymfonyResponse;
 
@@ -43,84 +41,28 @@ class InventoryQrLabelController extends Controller
         return $pdf->download(OwwaExportFilename::qrLabel('AcquisitionPaperwork', (string) $acquisitionPaperwork->reference_code));
     }
 
-    public function acquisition(Acquisition $acquisition, InventoryQrLabelService $labels): SymfonyResponse
+    public function unit(InventoryUnit $inventoryUnit, InventoryQrLabelService $labels): SymfonyResponse
     {
-        $this->authorizeSupplyCustodian();
+        $user = $this->authorizeSupplyCustodian();
 
-        $acquisition->load(['item.category', 'office', 'inventoryUnits']);
-
-        $slug = $acquisition->item?->category?->getTemplateSlug();
-        if (! in_array($slug, ['ppe', 'semi_expendable'], true)) {
-            abort(404, 'QR labels are only available for PPE and semi-expendable acquisitions.');
+        if (ScanAssetHandoff::resolveActionableUnit($inventoryUnit, $user) === null) {
+            abort(404, 'Only PPE and semi-expendable units in your office that are not disposed can be reprinted.');
         }
 
-        $labelRows = $labels->labelsForAcquisition($acquisition);
-
-        if ($labelRows->isEmpty()) {
-            app(AcquisitionUnitService::class)->generateUnitsForAcquisition($acquisition);
-            $acquisition->load(['item.category', 'office', 'inventoryUnits']);
-            $labelRows = $labels->labelsForAcquisition($acquisition);
-        }
-
-        if ($labelRows->isEmpty()) {
-            abort(404, 'No inventory units on this acquisition. Check that quantity is greater than zero.');
-        }
+        app(UserActivityLogger::class)->record(
+            $user,
+            'reprinted_qr_label',
+            'Reprinted QR label for '.$inventoryUnit->property_number,
+            $inventoryUnit,
+            ['property_number' => $inventoryUnit->property_number],
+        );
 
         $pdf = Pdf::loadView('reports.qr-labels', [
-            'title' => 'Unit QR labels — '.$acquisition->reference_code,
-            'labels' => $labelRows,
+            'title' => 'Unit QR label — '.$inventoryUnit->property_number,
+            'labels' => $labels->labelsForUnit($inventoryUnit),
         ])->setPaper('a4', 'portrait');
 
-        return $pdf->download(OwwaExportFilename::qrLabel('Acquisition', (string) $acquisition->reference_code));
-    }
-
-    public function issuance(Issuance $issuance, InventoryQrLabelService $labels): SymfonyResponse
-    {
-        $this->authorizeSupplyCustodian();
-
-        $issuance->load(['item.category', 'office']);
-
-        if (blank($issuance->property_number)) {
-            abort(404, 'This issuance has no property number for QR labeling.');
-        }
-
-        $slug = $issuance->item?->category?->getTemplateSlug();
-        if (! in_array($slug, ['ppe', 'semi_expendable'], true)) {
-            abort(404, 'QR labels are only available for PPE and semi-expendable issuances.');
-        }
-
-        $labelRows = $labels->labelsForIssuance($issuance);
-
-        $pdf = Pdf::loadView('reports.qr-labels', [
-            'title' => 'Property QR label',
-            'labels' => $labelRows,
-        ])->setPaper([0, 0, 288, 432], 'portrait');
-
-        $filename = OwwaExportFilename::qrLabel('Issuance', (string) $issuance->property_number);
-
-        return $pdf->download($filename);
-    }
-
-    public function physicalCountSession(PhysicalCountSession $physicalCountSession, InventoryQrLabelService $labels): SymfonyResponse
-    {
-        $this->authorizeSupplyCustodian();
-
-        if (! $physicalCountSession->supportsUnitQrScanning()) {
-            abort(404, 'QR labels are only available for PPE and semi-expendable count sessions.');
-        }
-
-        $labelRows = $labels->labelsForSession($physicalCountSession);
-
-        if ($labelRows->isEmpty()) {
-            abort(404, 'No property numbers on this count session. Load expected assets first.');
-        }
-
-        $pdf = Pdf::loadView('reports.qr-labels', [
-            'title' => 'Physical count QR labels — '.$physicalCountSession->reference_code,
-            'labels' => $labelRows,
-        ])->setPaper('a4', 'portrait');
-
-        return $pdf->download(OwwaExportFilename::qrLabel('PhysicalCount', (string) $physicalCountSession->reference_code));
+        return $pdf->download(OwwaExportFilename::qrLabel('Unit', (string) $inventoryUnit->property_number));
     }
 
     public function openingBalance(StockOpeningBalanceBatch $stockOpeningBalanceBatch, InventoryQrLabelService $labels): SymfonyResponse
@@ -149,38 +91,14 @@ class InventoryQrLabelController extends Controller
         return $pdf->download(OwwaExportFilename::qrLabel('OpeningBalance', (string) $stockOpeningBalanceBatch->reference_code));
     }
 
-    public function item(Item $item, InventoryQrLabelService $labels): SymfonyResponse
-    {
-        $this->authorizeSupplyCustodian();
-
-        $item->loadMissing(['category']);
-
-        $slug = $item->category?->getTemplateSlug();
-        if (! in_array($slug, ['ppe', 'semi_expendable'], true)) {
-            abort(404, 'QR labels are only available for PPE and semi-expendable items.');
-        }
-
-        $officeId = \App\Support\CustodianOfficeScope::inventoryOfficeId();
-        $labelRows = $labels->labelsForItem($item, $officeId);
-
-        if ($labelRows->isEmpty()) {
-            abort(404, 'No inventory units for this item. Set starting stock or receive an acquisition first.');
-        }
-
-        $pdf = Pdf::loadView('reports.qr-labels', [
-            'title' => 'Unit QR labels — '.$item->name,
-            'labels' => $labelRows,
-        ])->setPaper('a4', 'portrait');
-
-        return $pdf->download(OwwaExportFilename::qrLabel('Item', (string) ($item->item_code ?? $item->id)));
-    }
-
-    protected function authorizeSupplyCustodian(): void
+    protected function authorizeSupplyCustodian(): User
     {
         $user = auth()->user();
 
         if (! $user instanceof User || ! $user->isSupplyCustodian()) {
             abort(403);
         }
+
+        return $user;
     }
 }

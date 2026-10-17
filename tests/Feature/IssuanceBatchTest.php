@@ -239,6 +239,7 @@ class IssuanceBatchTest extends TestCase
                 'property_number' => 'PPE-'.$item->id,
                 'item_id' => $item->id,
                 'office_id' => $office->id,
+                'unit_cost' => 1000,
                 'status' => InventoryUnit::STATUS_IN_STOCK,
             ]);
         }

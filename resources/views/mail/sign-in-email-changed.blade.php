@@ -3,7 +3,7 @@
 
 Hello {{ $userName }},
 
-A System Admin changed the sign-in email for your **OWWA Region IV-A Inventory System** account.
+A System Admin changed the sign-in email for your **{{ config('owwa_mail.brand_name') }}** account.
 
 The new sign-in email is:
 

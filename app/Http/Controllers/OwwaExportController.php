@@ -8,7 +8,6 @@ use App\Http\Concerns\LogsExportActivity;
 use App\Models\Acquisition;
 use App\Models\AcquisitionPaperwork;
 use App\Models\Disposal;
-use App\Models\Distribution;
 use App\Models\InspectionAcceptanceReport;
 use App\Models\Issuance;
 use App\Models\Item;
@@ -17,8 +16,8 @@ use App\Models\PurchaseOrder;
 use App\Models\Requisition;
 use App\Models\Transfer;
 use App\Models\User;
-use App\Services\EmployeeDistributionExportService;
-use App\Services\EmployeeDistributionInventoryService;
+use App\Services\EmployeeReceivedExportService;
+use App\Services\EmployeeReceivedInventoryService;
 use App\Services\InspectionAcceptanceReportFastExcelExportService;
 use App\Services\InspectionAcceptanceReportFastPdfExportService;
 use App\Services\OwwaItemReportService;
@@ -55,7 +54,7 @@ class OwwaExportController extends Controller
         protected RpciFastPdfExportService $rpciFastPdfExport,
         protected RpcppeFastPdfExportService $rpcppeFastPdfExport,
         protected RpcspFastPdfExportService $rpcspFastPdfExport,
-        protected EmployeeDistributionExportService $employeeDistributionExport,
+        protected EmployeeReceivedExportService $employeeReceivedExport,
     ) {}
 
     public function acquisition(Request $request, Acquisition $acquisition): StreamedResponse|Response
@@ -324,51 +323,31 @@ class OwwaExportController extends Controller
         return $this->rpcspFastPdfExport->download($physicalCountSession);
     }
 
-    public function distribution(Request $request, Distribution $distribution): StreamedResponse|Response
-    {
-        $this->authorizeDistributionExport($distribution);
-        $distribution->load(['item.category', 'office', 'department', 'distributedTo', 'distributedBy']);
-
-        $asPdf = $request->query('format') === 'pdf';
-
-        $this->logExportActivity(
-            ($asPdf ? 'Exported OWWA distribution PDF #' : 'Exported OWWA distribution report #').$distribution->getKey(),
-            $distribution,
-            ['format' => $asPdf ? 'pdf' : 'xlsx'],
-        );
-
-        if ($asPdf) {
-            return $this->owwaExport->downloadDistributionPdf($distribution);
-        }
-
-        return $this->owwaExport->downloadDistribution($distribution);
-    }
-
-    public function employeeDistribution(Request $request, User $employee): StreamedResponse
+    public function employeeReceived(Request $request, User $employee): StreamedResponse
     {
         $user = Auth::user();
         abort_unless($user instanceof User && $user->isUnitConsolidator(), 403);
 
         try {
-            app(EmployeeDistributionInventoryService::class)->assertUnitConsolidatorCanViewEmployee($user, $employee);
+            app(EmployeeReceivedInventoryService::class)->assertUnitConsolidatorCanViewEmployee($user, $employee);
         } catch (AuthorizationException) {
             abort(403);
         }
 
-        $category = (string) $request->query('category', EmployeeDistributionInventoryService::CATEGORY_CONSUMABLES);
-        if (! EmployeeDistributionInventoryService::isValidCategory($category)) {
-            $category = EmployeeDistributionInventoryService::CATEGORY_CONSUMABLES;
+        $category = (string) $request->query('category', EmployeeReceivedInventoryService::CATEGORY_CONSUMABLES);
+        if (! EmployeeReceivedInventoryService::isValidCategory($category)) {
+            $category = EmployeeReceivedInventoryService::CATEGORY_CONSUMABLES;
         }
 
-        $custodyTab = (string) $request->query('custody_tab', EmployeeDistributionInventoryService::CUSTODY_TAB_ON_HAND);
-        if (! EmployeeDistributionInventoryService::isValidCustodyTab($custodyTab)) {
-            $custodyTab = EmployeeDistributionInventoryService::CUSTODY_TAB_ON_HAND;
+        $custodyTab = (string) $request->query('custody_tab', EmployeeReceivedInventoryService::CUSTODY_TAB_ON_HAND);
+        if (! EmployeeReceivedInventoryService::isValidCustodyTab($custodyTab)) {
+            $custodyTab = EmployeeReceivedInventoryService::CUSTODY_TAB_ON_HAND;
         }
 
         $item = $request->query('item');
         $itemId = $item !== null && $item !== '' ? (int) $item : null;
 
-        $this->logExportActivity('Exported employee distribution history '.$employee->name, $employee, [
+        $this->logExportActivity('Exported employee received items history '.$employee->name, $employee, [
             'category' => $category,
             'custody_tab' => $custodyTab,
             'from' => $request->query('from'),
@@ -376,7 +355,7 @@ class OwwaExportController extends Controller
             'item' => $itemId,
         ]);
 
-        return $this->employeeDistributionExport->download(
+        return $this->employeeReceivedExport->download(
             $employee,
             $category,
             $custodyTab,

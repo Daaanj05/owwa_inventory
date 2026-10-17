@@ -95,12 +95,22 @@ class OpeningBalanceService
             return [];
         }
 
-        return $this->unitService->mintUnitsForItem(
+        $units = $this->unitService->mintUnitsForItem(
             item: $item,
             officeId: (int) $opening->office_id,
             quantity: (int) $opening->quantity,
             unitCost: $opening->unit_cost !== null ? (float) $opening->unit_cost : null,
             acquisitionId: null,
         );
+
+        $ids = collect($units)->pluck('id')->filter()->all();
+
+        if ($ids !== []) {
+            InventoryUnit::query()
+                ->whereIn('id', $ids)
+                ->update(['stock_opening_balance_id' => $opening->id]);
+        }
+
+        return $units;
     }
 }

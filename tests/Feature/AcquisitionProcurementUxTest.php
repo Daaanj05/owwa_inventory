@@ -234,10 +234,6 @@ class AcquisitionProcurementUxTest extends TestCase
 
     public function test_bulk_procurement_export_returns_excel_for_date_range(): void
     {
-        if (! $this->acquisitionPaperworkTemplatesExist()) {
-            $this->markTestSkipped('OWWA acquisition paperwork templates are not installed.');
-        }
-
         Filament::setCurrentPanel(Filament::getPanel('admin'));
 
         $paperwork = $this->createPrDraft();
@@ -259,12 +255,6 @@ class AcquisitionProcurementUxTest extends TestCase
 
     public function test_bulk_procurement_pdf_export_returns_pdf_for_single_record(): void
     {
-        $this->skipUnlessLibreOfficeAvailable();
-
-        if (! $this->acquisitionPaperworkTemplatesExist()) {
-            $this->markTestSkipped('OWWA acquisition paperwork templates are not installed.');
-        }
-
         Filament::setCurrentPanel(Filament::getPanel('admin'));
 
         $paperwork = $this->createPrDraft();
@@ -287,12 +277,6 @@ class AcquisitionProcurementUxTest extends TestCase
 
     public function test_bulk_procurement_pdf_export_merges_multiple_records_into_one_pdf(): void
     {
-        $this->skipUnlessLibreOfficeAvailable();
-
-        if (! $this->acquisitionPaperworkTemplatesExist()) {
-            $this->markTestSkipped('OWWA acquisition paperwork templates are not installed.');
-        }
-
         Filament::setCurrentPanel(Filament::getPanel('admin'));
 
         $first = $this->createPrDraft();
@@ -389,7 +373,7 @@ class AcquisitionProcurementUxTest extends TestCase
             ->test(\App\Filament\Resources\Acquisitions\InspectionAcceptanceReports\Pages\ListInspectionAcceptanceReports::class, [
                 'category' => $category->id,
             ])
-            ->callAction(\Filament\Actions\Testing\TestAction::make('exportProcurementReport')->schemaComponent(true, 'content'), [
+            ->callAction('exportProcurementReport', [
                 'document_type' => 'iar',
                 'export_format' => 'xlsx',
                 'date_from' => now()->subDay()->toDateString(),
@@ -648,20 +632,5 @@ class AcquisitionProcurementUxTest extends TestCase
         $iarService->approve($iar->fresh());
 
         return $iar->fresh(['lines']);
-    }
-
-    protected function acquisitionPaperworkTemplatesExist(): bool
-    {
-        $service = app(\App\Services\OwwaTemplateExportService::class);
-        $category = ItemCategory::query()->first() ?? ItemCategory::factory()->create(['name' => 'Consumables']);
-
-        try {
-            $filename = $service->getTemplatePathForCategory('acquisition_paperwork', $category, 'pr');
-            $service->requireTemplateAbsolutePath($filename);
-
-            return true;
-        } catch (\Throwable) {
-            return false;
-        }
     }
 }

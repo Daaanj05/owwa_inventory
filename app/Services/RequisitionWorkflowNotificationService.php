@@ -140,18 +140,6 @@ class RequisitionWorkflowNotificationService
         );
     }
 
-    public function handleDistributed(User $employee, Requisition $requisition): void
-    {
-        $requisition->loadMissing(['office']);
-
-        $this->notifyUser(
-            $employee,
-            'Items distributed to you',
-            $this->bodyFor($requisition),
-            $requisition,
-        );
-    }
-
     /**
      * @param  array<int, array<string, mixed>>  $endorsementLines
      */

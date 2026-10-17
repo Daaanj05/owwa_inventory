@@ -387,7 +387,7 @@ class LowStockWidgetTest extends TestCase
 
         PropertyActionRequest::query()->create([
             'action_type' => PropertyActionRequest::ACTION_RETURN,
-            'reason_code' => 'good_condition',
+            'reason_code' => 'serviceable_not_needed',
             'requested_by' => $consolidator->id,
             'accountable_user_id' => $consolidator->id,
             'office_id' => $office->id,

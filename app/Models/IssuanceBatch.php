@@ -24,6 +24,7 @@ class IssuanceBatch extends Model
         'custodian_printed_name',
         'custodian_designation',
         'issued_to_designation',
+        'received_by_printed_name',
         'accounting_staff_printed_name',
         'received_from_name',
     ];

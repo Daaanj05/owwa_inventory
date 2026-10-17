@@ -265,28 +265,24 @@ class IssuanceForm
                                 ? 'Required for semi-expendable requisitions — identifies the requesting unit on the RIS. Inventory item no. is assigned at acquisition (office code).'
                                 : null),
                         Select::make('issued_to')
-                            ->label(fn (): string => $isUnitConsolidator ? 'Issued to (employee)' : 'Issued to (Unit Consolidator)')
+                            ->label('Issued to (employee)')
                             ->relationship(
                                 'issuedTo',
                                 'name',
                                 function (Builder $query) use ($isUnitConsolidator, $user): Builder {
+                                    $query->where('role', User::ROLE_EMPLOYEE);
+
                                     if ($isUnitConsolidator && $user instanceof User) {
-                                        return $query
-                                            ->whereIn('office_id', $user->assignedOfficeIds())
-                                            ->where('role', User::ROLE_EMPLOYEE);
+                                        $query->whereIn('office_id', $user->assignedOfficeIds());
                                     }
 
-                                    // Supply Custodian issues stock to the UC first; UC distributes later.
-                                    return $query->where('role', User::ROLE_UNIT_CONSOLIDATOR);
+                                    return $query;
                                 }
                             )
                             ->searchable()
                             ->preload()
                             ->required(fn (): bool => ! $isUnitConsolidator)
-                            ->placeholder('—')
-                            ->helperText(fn (): ?string => $isUnitConsolidator
-                                ? null
-                                : 'Issue to the Unit Consolidator. Employees receive stock via Distribution.'),
+                            ->placeholder('—'),
                     ])
                     ->columns(2),
 

@@ -84,7 +84,7 @@ class PropertyActionRequestListTest extends TestCase
                 'item_category_id' => $category->id,
                 'action_type' => PropertyActionRequest::ACTION_RETURN,
                 'lines' => [
-                    ['issuance_id' => $issuance->id],
+                    ['inventory_unit_id' => InventoryUnit::query()->where('issuance_id', $issuance->id)->value('id')],
                 ],
             ])
             ->callMountedAction()
@@ -107,7 +107,7 @@ class PropertyActionRequestListTest extends TestCase
                 'item_category_id' => $category->id,
                 'action_type' => PropertyActionRequest::ACTION_RETURN,
                 'lines' => [
-                    ['issuance_id' => $issuance->id],
+                    ['inventory_unit_id' => InventoryUnit::query()->where('issuance_id', $issuance->id)->value('id')],
                 ],
             ])
             ->callMountedAction(['workflow' => PropertyActionRequestEmployeeActions::WORKFLOW_SUBMIT])
@@ -128,7 +128,7 @@ class PropertyActionRequestListTest extends TestCase
                 'action_type' => PropertyActionRequest::ACTION_RETURN,
                 'reason_code' => 'needs_repair',
                 'lines' => [
-                    ['issuance_id' => $issuance->id],
+                    ['inventory_unit_id' => InventoryUnit::query()->where('issuance_id', $issuance->id)->value('id')],
                 ],
             ])
             ->callMountedAction(['workflow' => PropertyActionRequestEmployeeActions::WORKFLOW_SUBMIT])
@@ -145,7 +145,7 @@ class PropertyActionRequestListTest extends TestCase
 
         $request = PropertyActionRequest::query()->create([
             'action_type' => PropertyActionRequest::ACTION_RETURN,
-            'reason_code' => 'good_condition',
+            'reason_code' => 'serviceable_not_needed',
             'requested_by' => $employee->id,
             'accountable_user_id' => $employee->id,
             'office_id' => $issuance->office_id,
@@ -205,7 +205,7 @@ class PropertyActionRequestListTest extends TestCase
         $requestA = PropertyActionRequest::query()->create([
             'reference_code' => 'PAREQ-A',
             'action_type' => PropertyActionRequest::ACTION_RETURN,
-            'reason_code' => 'good_condition',
+            'reason_code' => 'serviceable_not_needed',
             'requested_by' => $employeeA->id,
             'accountable_user_id' => $uc->id,
             'office_id' => $officeA->id,
@@ -215,7 +215,7 @@ class PropertyActionRequestListTest extends TestCase
         $requestB = PropertyActionRequest::query()->create([
             'reference_code' => 'PAREQ-B',
             'action_type' => PropertyActionRequest::ACTION_RETURN,
-            'reason_code' => 'good_condition',
+            'reason_code' => 'serviceable_not_needed',
             'requested_by' => $employeeB->id,
             'accountable_user_id' => $uc->id,
             'office_id' => $officeB->id,
@@ -258,7 +258,7 @@ class PropertyActionRequestListTest extends TestCase
         $active = PropertyActionRequest::query()->create([
             'reference_code' => 'PAREQ-ACTIVE',
             'action_type' => PropertyActionRequest::ACTION_RETURN,
-            'reason_code' => 'good_condition',
+            'reason_code' => 'serviceable_not_needed',
             'requested_by' => $employee->id,
             'accountable_user_id' => $uc->id,
             'office_id' => $office->id,
@@ -268,7 +268,7 @@ class PropertyActionRequestListTest extends TestCase
         $archived = PropertyActionRequest::query()->create([
             'reference_code' => 'PAREQ-ARCHIVED',
             'action_type' => PropertyActionRequest::ACTION_RETURN,
-            'reason_code' => 'good_condition',
+            'reason_code' => 'serviceable_not_needed',
             'requested_by' => $employee->id,
             'accountable_user_id' => $uc->id,
             'office_id' => $office->id,
@@ -336,7 +336,7 @@ class PropertyActionRequestListTest extends TestCase
         $pending = PropertyActionRequest::query()->create([
             'reference_code' => 'PAREQ-PENDING',
             'action_type' => PropertyActionRequest::ACTION_RETURN,
-            'reason_code' => 'good_condition',
+            'reason_code' => 'serviceable_not_needed',
             'requested_by' => $employee->id,
             'accountable_user_id' => $uc->id,
             'office_id' => $office->id,
@@ -347,7 +347,7 @@ class PropertyActionRequestListTest extends TestCase
         $endorsed = PropertyActionRequest::query()->create([
             'reference_code' => 'PAREQ-SENT',
             'action_type' => PropertyActionRequest::ACTION_RETURN,
-            'reason_code' => 'good_condition',
+            'reason_code' => 'serviceable_not_needed',
             'requested_by' => $employee->id,
             'accountable_user_id' => $uc->id,
             'office_id' => $office->id,
@@ -381,7 +381,7 @@ class PropertyActionRequestListTest extends TestCase
         $pending = PropertyActionRequest::query()->create([
             'reference_code' => 'PAREQ-COMPILE-CREATE',
             'action_type' => PropertyActionRequest::ACTION_RETURN,
-            'reason_code' => 'good_condition',
+            'reason_code' => 'serviceable_not_needed',
             'requested_by' => $employee->id,
             'accountable_user_id' => $employee->id,
             'office_id' => $issuance->office_id,
@@ -451,7 +451,7 @@ class PropertyActionRequestListTest extends TestCase
         $pending = PropertyActionRequest::query()->create([
             'reference_code' => 'PAREQ-ENDORSE',
             'action_type' => PropertyActionRequest::ACTION_RETURN,
-            'reason_code' => 'good_condition',
+            'reason_code' => 'serviceable_not_needed',
             'requested_by' => $employee->id,
             'accountable_user_id' => $uc->id,
             'office_id' => $issuance->office_id,
@@ -518,7 +518,7 @@ class PropertyActionRequestListTest extends TestCase
         $request = PropertyActionRequest::query()->create([
             'reference_code' => 'PAREQ-SC',
             'action_type' => PropertyActionRequest::ACTION_RETURN,
-            'reason_code' => 'good_condition',
+            'reason_code' => 'serviceable_not_needed',
             'requested_by' => $uc->id,
             'accountable_user_id' => $uc->id,
             'office_id' => $issuance->office_id,

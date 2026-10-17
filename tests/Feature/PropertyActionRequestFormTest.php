@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Filament\Resources\PropertyActionRequests\Pages\ListPropertyActionRequests;
+use App\Filament\Resources\PropertyActionRequests\Schemas\PropertyActionRequestForm;
 use App\Models\Acquisition;
 use App\Models\Department;
 use App\Models\InventoryUnit;
@@ -61,7 +62,7 @@ class PropertyActionRequestFormTest extends TestCase
         $this->assertIsArray($lines);
         $this->assertCount(1, array_values($lines));
         $first = array_values($lines)[0];
-        $this->assertTrue(blank($first['issuance_id'] ?? null));
+        $this->assertTrue(blank($first['inventory_unit_id'] ?? null));
     }
 
     public function test_create_rejects_submission_without_category(): void
@@ -75,7 +76,7 @@ class PropertyActionRequestFormTest extends TestCase
                 'action_type' => PropertyActionRequest::ACTION_RETURN,
                 'reason_code' => 'needs_repair',
                 'lines' => [
-                    ['issuance_id' => $issuance->id],
+                    ['inventory_unit_id' => $this->unitIdFor($issuance)],
                 ],
             ])
             ->callMountedAction()
@@ -94,8 +95,8 @@ class PropertyActionRequestFormTest extends TestCase
                 'action_type' => PropertyActionRequest::ACTION_RETURN,
                 'reason_code' => 'needs_repair',
                 'lines' => [
-                    ['issuance_id' => $issuanceOne->id],
-                    ['issuance_id' => $issuanceTwo->id],
+                    ['inventory_unit_id' => $this->unitIdFor($issuanceOne)],
+                    ['inventory_unit_id' => $this->unitIdFor($issuanceTwo)],
                 ],
             ])
             ->callMountedAction()
@@ -104,6 +105,10 @@ class PropertyActionRequestFormTest extends TestCase
         $request = PropertyActionRequest::query()->latest('id')->first();
         $this->assertNotNull($request);
         $this->assertSame(2, $request->lines()->count());
+        $this->assertEqualsCanonicalizing(
+            [$issuanceOne->id, $issuanceTwo->id],
+            $request->lines()->pluck('issuance_id')->map(fn (mixed $id): int => (int) $id)->all(),
+        );
         $this->assertSame(PropertyActionRequest::STATUS_DRAFT, $request->status);
     }
 
@@ -119,7 +124,7 @@ class PropertyActionRequestFormTest extends TestCase
                 'action_type' => PropertyActionRequest::ACTION_RETURN,
                 'reason_code' => 'needs_repair',
                 'lines' => [
-                    ['issuance_id' => $issuance->id],
+                    ['inventory_unit_id' => $this->unitIdFor($issuance)],
                 ],
             ])
             ->callMountedAction()
@@ -130,7 +135,7 @@ class PropertyActionRequestFormTest extends TestCase
         $this->assertSame(PropertyActionRequest::STATUS_DRAFT, $request->status);
     }
 
-    public function test_create_rejects_duplicate_issuance_in_lines(): void
+    public function test_create_rejects_duplicate_unit_in_lines(): void
     {
         [$employee, $issuance, $category] = $this->seedEmployeeIssuance();
 
@@ -142,12 +147,42 @@ class PropertyActionRequestFormTest extends TestCase
                 'action_type' => PropertyActionRequest::ACTION_RETURN,
                 'reason_code' => 'needs_repair',
                 'lines' => [
-                    ['issuance_id' => $issuance->id],
-                    ['issuance_id' => $issuance->id],
+                    ['inventory_unit_id' => $this->unitIdFor($issuance)],
+                    ['inventory_unit_id' => $this->unitIdFor($issuance)],
                 ],
             ])
             ->callMountedAction()
             ->assertHasActionErrors(['lines']);
+    }
+
+    public function test_unit_already_on_an_open_request_is_not_offered_again(): void
+    {
+        [$employee, $issuance, $category] = $this->seedEmployeeIssuance();
+        $unitId = $this->unitIdFor($issuance);
+
+        $this->assertArrayHasKey($unitId, PropertyActionRequestForm::returnableUnitOptions($employee, $category->id));
+
+        $open = PropertyActionRequest::query()->create([
+            'action_type' => PropertyActionRequest::ACTION_RETURN,
+            'reason_code' => 'needs_repair',
+            'requested_by' => $employee->id,
+            'accountable_user_id' => $employee->id,
+            'office_id' => $issuance->office_id,
+            'status' => PropertyActionRequest::STATUS_PENDING_UC,
+        ]);
+        $open->lines()->create([
+            'issuance_id' => $issuance->id,
+            'inventory_unit_id' => $unitId,
+            'quantity' => 1,
+            'sort_order' => 0,
+        ]);
+
+        $this->assertArrayNotHasKey($unitId, PropertyActionRequestForm::returnableUnitOptions($employee, $category->id));
+    }
+
+    private function unitIdFor(Issuance $issuance): int
+    {
+        return (int) InventoryUnit::query()->where('issuance_id', $issuance->id)->value('id');
     }
 
     /**

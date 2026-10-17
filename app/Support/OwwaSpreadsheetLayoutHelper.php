@@ -60,13 +60,13 @@ class OwwaSpreadsheetLayoutHelper
             }
         }
 
-        for ($row = $ledgerStart; $row <= $lastDataRow; $row++) {
-            $sheet->getStyle('A'.$row.':'.$highestColumn.$row)
-                ->getFont()
-                ->setName($fontName)
-                ->setSize($fontSize)
-                ->setBold(false);
+        $sheet->getStyle('A'.$ledgerStart.':'.$highestColumn.$lastRow)
+            ->getFont()
+            ->setName($fontName)
+            ->setSize($fontSize)
+            ->setBold(false);
 
+        for ($row = $ledgerStart; $row <= $lastDataRow; $row++) {
             foreach ($columns as $column) {
                 $coordinate = $column.$row;
 

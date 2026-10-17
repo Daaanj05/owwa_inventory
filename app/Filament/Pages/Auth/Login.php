@@ -3,17 +3,28 @@
 namespace App\Filament\Pages\Auth;
 
 use App\Models\User;
+use App\Services\TrustedDeviceService;
 use App\Support\FriendlyMessages;
 use App\Support\LoginRememberedEmail;
+use DanHarrin\LivewireRateLimiting\Exceptions\TooManyRequestsException;
 use Filament\Auth\Http\Responses\Contracts\LoginResponse;
+use Filament\Auth\MultiFactor\Contracts\HasBeforeChallengeHook;
+use Filament\Auth\MultiFactor\Contracts\MultiFactorAuthenticationProvider;
 use Filament\Auth\Pages\Login as BaseLogin;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\Checkbox;
 use Filament\Forms\Components\TextInput;
+use Filament\Models\Contracts\FilamentUser;
 use Filament\Schemas\Components\Component;
+use Filament\Schemas\Components\Group;
+use Filament\Schemas\Components\Utilities\Get;
+use Filament\Schemas\Schema;
+use Illuminate\Auth\SessionGuard;
+use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Session;
 use Illuminate\Support\Str;
@@ -49,7 +60,6 @@ class Login extends BaseLogin
     {
         $query = request()->query();
 
-        // Browsers/PHP may expose "data.email" as "data_email" after a native GET submit.
         $hasCredentialQuery = array_key_exists('data.email', $query)
             || array_key_exists('data.password', $query)
             || array_key_exists('data_email', $query)
@@ -78,11 +88,8 @@ class Login extends BaseLogin
 
     public function authenticate(): ?LoginResponse
     {
-        // Always send users back to the current panel's dashboard,
-        // not to any previously stored "intended" URL.
         Session::forget('url.intended');
 
-        // Checkbox means "remember email" only — never Laravel stay-logged-in.
         $rememberEmailOnly = (bool) ($this->data['remember'] ?? false);
 
         $this->form->fill(array_merge(
@@ -100,7 +107,7 @@ class Login extends BaseLogin
         $this->throwIfEmailUnverified();
 
         try {
-            $response = parent::authenticate();
+            $response = $this->authenticateWithTrustedDeviceSupport();
         } catch (ValidationException $exception) {
             RateLimiter::hit($this->throttleKey(), $this->loginDecaySeconds());
 
@@ -114,6 +121,142 @@ class Login extends BaseLogin
         }
 
         return $response;
+    }
+
+    protected function authenticateWithTrustedDeviceSupport(): ?LoginResponse
+    {
+        try {
+            $this->rateLimit(5);
+        } catch (TooManyRequestsException $exception) {
+            $this->getRateLimitedNotification($exception)?->send();
+
+            return null;
+        }
+
+        $data = $this->form->getState();
+
+        /** @var SessionGuard $authGuard */
+        $authGuard = Filament::auth();
+
+        $authProvider = $authGuard->getProvider(); /** @phpstan-ignore-line */
+        $credentials = $this->getCredentialsFromFormData($data);
+
+        $user = $authProvider->retrieveByCredentials($credentials);
+
+        if ((! $user) || (! $authProvider->validateCredentials($user, $credentials))) {
+            $this->userUndertakingMultiFactorAuthentication = null;
+
+            $this->fireFailedEvent($authGuard, $user, $credentials);
+            $this->throwFailureValidationException();
+        }
+
+        $trustedDevices = app(TrustedDeviceService::class);
+        $completedMultiFactorChallenge = false;
+
+        if (
+            filled($this->userUndertakingMultiFactorAuthentication) &&
+            (decrypt($this->userUndertakingMultiFactorAuthentication) === $user->getAuthIdentifier())
+        ) {
+            if ($this->isMultiFactorChallengeRateLimited($user)) {
+                return null;
+            }
+
+            $this->multiFactorChallengeForm->validate();
+            $completedMultiFactorChallenge = true;
+        } elseif (
+            $this->userHasEnabledMultiFactorProvider($user)
+            && (! $user instanceof User || ! $trustedDevices->isCurrentDeviceTrusted($user))
+        ) {
+            foreach (Filament::getMultiFactorAuthenticationProviders() as $multiFactorAuthenticationProvider) {
+                if (! $multiFactorAuthenticationProvider->isEnabled($user)) {
+                    continue;
+                }
+
+                $this->userUndertakingMultiFactorAuthentication = encrypt($user->getAuthIdentifier());
+
+                if ($multiFactorAuthenticationProvider instanceof HasBeforeChallengeHook) {
+                    $multiFactorAuthenticationProvider->beforeChallenge($user);
+                }
+
+                break;
+            }
+
+            if (filled($this->userUndertakingMultiFactorAuthentication)) {
+                $this->multiFactorChallengeForm->fill();
+
+                return null;
+            }
+        }
+
+        if (! $authGuard->attemptWhen($credentials, function (Authenticatable $user): bool {
+            if (! ($user instanceof FilamentUser)) {
+                return true;
+            }
+
+            return $user->canAccessPanel(Filament::getCurrentOrDefaultPanel());
+        }, false)) {
+            $this->fireFailedEvent($authGuard, $user, $credentials);
+            $this->throwFailureValidationException();
+        }
+
+        if (
+            $completedMultiFactorChallenge
+            && (bool) ($this->data['multiFactor']['rememberDevice'] ?? false)
+            && $user instanceof User
+        ) {
+            $trustedDevices->trustCurrentDevice($user);
+        }
+
+        session()->regenerate();
+
+        return app(LoginResponse::class);
+    }
+
+    public function defaultMultiFactorChallengeForm(Schema $schema): Schema
+    {
+        return $schema
+            ->components(function (): array {
+                if (blank($this->userUndertakingMultiFactorAuthentication)) {
+                    return [];
+                }
+
+                $authProvider = Filament::auth()->getProvider(); /** @phpstan-ignore-line */
+                $user = $authProvider->retrieveById(decrypt($this->userUndertakingMultiFactorAuthentication));
+
+                $enabledMultiFactorAuthenticationProviders = array_filter(
+                    Filament::getMultiFactorAuthenticationProviders(),
+                    fn (MultiFactorAuthenticationProvider $multiFactorAuthenticationProvider): bool => $multiFactorAuthenticationProvider->isEnabled($user)
+                );
+
+                $days = app(TrustedDeviceService::class)->days();
+
+                return [
+                    ...Arr::wrap($this->getMultiFactorProviderFormComponent()),
+                    ...collect($enabledMultiFactorAuthenticationProviders)
+                        ->map(fn (MultiFactorAuthenticationProvider $multiFactorAuthenticationProvider): Component => Group::make($multiFactorAuthenticationProvider->getChallengeFormComponents($user))
+                            ->statePath($multiFactorAuthenticationProvider->getId())
+                            ->when(
+                                count($enabledMultiFactorAuthenticationProviders) > 1,
+                                fn (Group $group) => $group->visible(fn (Get $get): bool => $get('provider') === $multiFactorAuthenticationProvider->getId())
+                            ))
+                        ->all(),
+                    Checkbox::make('rememberDevice')
+                        ->label("Remember this device for {$days} days")
+                        ->helperText('Skip the verification code on this browser until the period ends. You will still need your password.'),
+                ];
+            })
+            ->statePath('data.multiFactor');
+    }
+
+    protected function userHasEnabledMultiFactorProvider(Authenticatable $user): bool
+    {
+        foreach (Filament::getMultiFactorAuthenticationProviders() as $provider) {
+            if ($provider->isEnabled($user)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     protected function syncRememberedEmailCookie(bool $rememberEmailOnly): void
@@ -186,7 +329,7 @@ class Login extends BaseLogin
             && $user->canAccessPanel(Filament::getCurrentOrDefaultPanel())
         ) {
             throw ValidationException::withMessages([
-                'data.email' => FriendlyMessages::emailNotVerifiedLogin(),
+                'data.email' => FriendlyMessages::emailNotVerifiedLogin(User::panelSetupUrlFor($user)),
             ]);
         }
     }

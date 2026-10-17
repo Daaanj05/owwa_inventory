@@ -24,6 +24,20 @@ class RequisitionStockSnapshotService
         return max(0, $this->stockService->getStock($itemId, $supplyOfficeId));
     }
 
+    /**
+     * Quantity Review & issue may hand out: supply quantity, capped by in-stock units for semi-expendable and PPE.
+     */
+    public function issuableStockForItem(int $itemId): int
+    {
+        $supplyOfficeId = $this->supplyOfficeResolver->resolve();
+
+        if ($supplyOfficeId === null) {
+            return 0;
+        }
+
+        return $this->stockService->issuableQuantity($itemId, $supplyOfficeId);
+    }
+
     public function snapshotLine(RequisitionItem $line): void
     {
         $line->update([

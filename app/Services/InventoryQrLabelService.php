@@ -5,9 +5,6 @@ namespace App\Services;
 use App\Models\Acquisition;
 use App\Models\AcquisitionPaperwork;
 use App\Models\InventoryUnit;
-use App\Models\Issuance;
-use App\Models\Item;
-use App\Models\PhysicalCountSession;
 use App\Models\StockOpeningBalance;
 use App\Models\StockOpeningBalanceBatch;
 use App\Support\InventoryUnitQrPayload;
@@ -116,49 +113,15 @@ class InventoryQrLabelService
     }
 
     /**
+     * Reprint of a single unit's tag (worn or lost label).
+     *
      * @return Collection<int, array<string, string|null>>
      */
-    public function labelsForIssuance(Issuance $issuance): Collection
+    public function labelsForUnit(InventoryUnit $unit): Collection
     {
-        $issuance->loadMissing([
-            'item.category',
-            'office',
-            'department',
-            'issuedTo',
-            'inventoryUnit.item',
-            'inventoryUnit.acquisition',
-            'inventoryUnit.issuance.issuedTo',
-            'inventoryUnit.issuance.department',
-        ]);
+        $unit->loadMissing(['office', 'item.category', 'acquisition', 'issuance.issuedTo', 'issuance.department']);
 
-        if ($issuance->inventoryUnit !== null) {
-            return collect([
-                $this->labelRowFromUnit(
-                    $issuance->inventoryUnit,
-                    $issuance->office?->name ?? '',
-                    $issuance->department?->name,
-                    $issuance,
-                ),
-            ]);
-        }
-
-        if (blank($issuance->property_number)) {
-            return collect();
-        }
-
-        return collect([
-            $this->labelRow(
-                propertyNumber: (string) $issuance->property_number,
-                itemName: $issuance->item?->name ?? 'Item',
-                officeName: $issuance->office?->name ?? '',
-                categorySlug: $issuance->item?->category?->getTemplateSlug(),
-                description: $issuance->item?->description,
-                departmentName: $issuance->department?->name,
-                endUser: $issuance->issuedTo?->name,
-                acquisitionCost: null,
-                dateAcquired: null,
-            ),
-        ]);
+        return collect([$this->labelRowFromUnit($unit, $unit->office?->name ?? '')]);
     }
 
     public function supportsOpeningBalanceQrLabels(StockOpeningBalanceBatch $batch): bool
@@ -211,85 +174,30 @@ class InventoryQrLabelService
 
         $units = InventoryUnit::query()
             ->with(['item.category', 'acquisition', 'issuance.issuedTo', 'issuance.department'])
-            ->where('item_id', $line->item_id)
-            ->where('office_id', $line->office_id)
-            ->whereNull('acquisition_id')
-            ->where('unit_cost', UnitCostKey::normalize($line->unit_cost !== null ? (float) $line->unit_cost : null))
+            ->where('stock_opening_balance_id', $line->id)
             ->orderBy('id')
-            ->limit($quantity)
             ->get();
+
+        if ($units->count() < $quantity) {
+            $linkedIds = $units->pluck('id');
+            $fallback = InventoryUnit::query()
+                ->with(['item.category', 'acquisition', 'issuance.issuedTo', 'issuance.department'])
+                ->where('item_id', $line->item_id)
+                ->where('office_id', $line->office_id)
+                ->whereNull('acquisition_id')
+                ->whereNull('stock_opening_balance_id')
+                ->where('unit_cost', UnitCostKey::normalize($line->unit_cost !== null ? (float) $line->unit_cost : null))
+                ->when($linkedIds->isNotEmpty(), fn ($query) => $query->whereNotIn('id', $linkedIds))
+                ->orderBy('id')
+                ->limit($quantity - $units->count())
+                ->get();
+
+            $units = $units->concat($fallback)->values();
+        }
 
         return $units
             ->map(fn (InventoryUnit $unit) => $this->labelRowFromUnit($unit, $officeName))
             ->values();
-    }
-
-    /**
-     * @return Collection<int, array<string, string|null>>
-     */
-    public function labelsForItem(Item $item, ?int $officeId = null): Collection
-    {
-        $item->loadMissing(['category']);
-
-        $slug = $item->category?->getTemplateSlug();
-        if (! in_array($slug, ['ppe', 'semi_expendable'], true)) {
-            return collect();
-        }
-
-        $units = InventoryUnit::query()
-            ->with(['item.category', 'office', 'acquisition', 'issuance.issuedTo', 'issuance.department'])
-            ->where('item_id', $item->id)
-            ->when($officeId !== null, fn ($q) => $q->where('office_id', $officeId))
-            ->orderBy('id')
-            ->get();
-
-        return $units
-            ->map(fn (InventoryUnit $unit) => $this->labelRowFromUnit(
-                $unit,
-                $unit->office?->name ?? '',
-            ))
-            ->values();
-    }
-
-    /**
-     * @return Collection<int, array<string, string|null>>
-     */
-    public function labelsForSession(PhysicalCountSession $session): Collection
-    {
-        $session->loadMissing(['office', 'lines.item.category']);
-
-        $labels = collect();
-
-        foreach ($session->lines as $line) {
-            if (blank($line->property_number)) {
-                continue;
-            }
-
-            $units = InventoryUnit::query()
-                ->with(['item.category', 'acquisition', 'issuance.issuedTo', 'issuance.department'])
-                ->where('property_number', $line->property_number)
-                ->when($session->office_id, fn ($q) => $q->where('office_id', $session->office_id))
-                ->orderBy('id')
-                ->get();
-
-            if ($units->isNotEmpty()) {
-                foreach ($units as $unit) {
-                    $labels->push($this->labelRowFromUnit($unit, $session->office?->name ?? ''));
-                }
-
-                continue;
-            }
-
-            $labels->push($this->labelRow(
-                propertyNumber: (string) $line->property_number,
-                itemName: $line->article ?? $line->item?->name ?? 'Item',
-                officeName: $session->office?->name ?? '',
-                categorySlug: $line->item?->category?->getTemplateSlug(),
-                description: $line->item?->description,
-            ));
-        }
-
-        return $labels->values();
     }
 
     /**
@@ -299,11 +207,10 @@ class InventoryQrLabelService
         InventoryUnit $unit,
         string $officeName,
         ?string $departmentName = null,
-        ?Issuance $issuanceOverride = null,
     ): array {
         $unit->loadMissing(['item.category', 'acquisition', 'issuance.issuedTo', 'issuance.department']);
 
-        $issuance = $issuanceOverride ?? $unit->issuance;
+        $issuance = $unit->issuance;
         $department = $departmentName
             ?? $issuance?->department?->name
             ?? null;
@@ -314,13 +221,13 @@ class InventoryQrLabelService
             propertyNumber: (string) $unit->property_number,
             itemName: $unit->article ?? $unit->item?->name ?? 'Item',
             officeName: $officeName,
+            qrPayload: InventoryUnitQrPayload::encode($unit),
             categorySlug: $unit->item?->category?->getTemplateSlug(),
             description: $unit->description ?: $unit->item?->description,
             departmentName: $department,
             endUser: $issuance?->issuedTo?->name,
             acquisitionCost: $cost !== null ? (string) $cost : null,
             dateAcquired: $dateAcquired,
-            qrPayload: InventoryUnitQrPayload::encode($unit),
         );
     }
 
@@ -331,23 +238,14 @@ class InventoryQrLabelService
         string $propertyNumber,
         string $itemName,
         string $officeName,
+        string $qrPayload,
         ?string $categorySlug = null,
         ?string $description = null,
         ?string $departmentName = null,
         ?string $endUser = null,
         ?string $acquisitionCost = null,
         ?string $dateAcquired = null,
-        ?string $qrPayload = null,
     ): array {
-        if ($qrPayload === null) {
-            $unit = InventoryUnit::query()->where('property_number', $propertyNumber)->first();
-            $qrPayload = $unit !== null
-                ? InventoryUnitQrPayload::encode($unit)
-                : (config('inventory.qr_public_lookup', true)
-                    ? InventoryUnitQrPayload::publicUrl($propertyNumber)
-                    : $propertyNumber);
-        }
-
         $unitSection = trim($officeName.($departmentName ? ' - '.$departmentName : ''));
 
         return [

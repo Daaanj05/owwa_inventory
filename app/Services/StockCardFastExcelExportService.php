@@ -94,7 +94,7 @@ class StockCardFastExcelExportService
      */
     protected function fillCardSheet(Worksheet $sheet, array $card): void
     {
-        $entityName = (string) config('owwa_export_standards.entity_name', 'OWWA-4A');
+        $entityName = (string) config('owwa_export_standards.entity_name');
         $entityLine = filled($card['office_name'] ?? null)
             ? (string) $card['office_name']
             : $entityName;

@@ -23,7 +23,7 @@
 {{-- Footer --}}
 <x-slot:footer>
 <x-mail::footer>
-© {{ date('Y') }} {{ config('owwa_mail.brand_name') }} · Regional Welfare Office 4A
+© {{ date('Y') }} {{ config('owwa_mail.brand_name') }} · Regional Welfare Office IV-A
 </x-mail::footer>
 </x-slot:footer>
 </x-mail::layout>

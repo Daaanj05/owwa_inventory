@@ -673,6 +673,34 @@
     text-decoration: underline;
 }
 
+.owwa-login-forgot-sep {
+    margin: 0 0.35rem;
+    color: #94a3b8;
+}
+
+.owwa-mfa-challenge-form,
+.owwa-mfa-setup-form {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.owwa-mfa-challenge-form .fi-sc-form,
+.owwa-mfa-setup-form .fi-sc-form {
+    gap: 1.25rem !important;
+}
+
+.fi-body:has(.owwa-mfa-setup-page) .fi-simple-layout-header,
+.fi-body:has(.owwa-verify-email-page) .fi-simple-layout-header {
+    display: none;
+}
+
+.owwa-mfa-setup-page .fi-simple-page,
+.owwa-verify-email-page .fi-simple-page {
+    max-width: none;
+    padding: 0;
+}
+
 .owwa-login-remember {
     display: flex;
     align-items: center;

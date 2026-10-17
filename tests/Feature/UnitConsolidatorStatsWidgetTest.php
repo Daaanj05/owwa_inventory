@@ -133,7 +133,8 @@ class UnitConsolidatorStatsWidgetTest extends TestCase
         $component = Livewire::test(UnitConsolidatorStatsWidget::class)
             ->assertSee('Pending employee requests')
             ->assertSee('Property nearing EUL')
-            ->assertSee('Items issued')
+            ->assertSee('Item Received')
+            ->assertSee('Quantity Supply issued to your offices this year')
             ->assertDontSee('Low stock')
             ->assertDontSee('Issued this month')
             ->mountAction('viewPendingEmployeeRequests')
@@ -153,12 +154,14 @@ class UnitConsolidatorStatsWidgetTest extends TestCase
         $this->assertStringContainsString('SEMI-001', $eulHtml);
 
         $component->unmountAction()
-            ->mountAction('viewItemsDistributed')
-            ->assertActionMounted('viewItemsDistributed');
+            ->mountAction('viewItemsReceived')
+            ->assertActionMounted('viewItemsReceived');
 
         $distributedHtml = (string) $component->instance()->getMountedAction()?->getModalContent();
         $this->assertStringContainsString('Bond Paper A4', $distributedHtml);
-        $this->assertStringContainsString('Juan Employee', $distributedHtml);
+        $this->assertStringContainsString($office->name, $distributedHtml);
+        $this->assertStringContainsString('8 units received across 1 record', $distributedHtml);
+        $this->assertStringNotContainsString('Office Chair', $distributedHtml);
     }
 
     public function test_pending_employee_requests_include_every_assigned_department(): void

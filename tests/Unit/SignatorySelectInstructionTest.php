@@ -27,7 +27,7 @@ class SignatorySelectInstructionTest extends TestCase
             'custodian_iirup' => 'Name of the Accountable Officer.',
             'approved_consumables' => 'Name of the Head / Authorized Representative.',
             'approved_iirup' => 'Name of the Head / Authorized Representative.',
-            'inspection_officer' => 'Name of the Inspection Officer.',
+            'inspection_officer' => 'Name of the inspection officer on the disposal report.',
             'witness' => 'Name of the person who witnessed the disposal.',
         ];
 

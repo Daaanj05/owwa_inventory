@@ -16,6 +16,10 @@ class UserActivityLogger
         'remember_token',
         'two_factor_secret',
         'two_factor_recovery_codes',
+        'app_authentication_secret',
+        'app_authentication_recovery_codes',
+        'email_verification_code_hash',
+        'reset_code_hash',
     ];
 
     public function record(

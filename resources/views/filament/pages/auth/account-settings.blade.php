@@ -1,7 +1,8 @@
 @php
     $user = $this->profileUser();
     $verification = $this->verificationBadge();
-    $hasPendingReset = $user->pendingPasswordResetRequest !== null;
+    $trustedDevices = $this->activeTrustedDevices();
+    $trustedDays = app(\App\Services\TrustedDeviceService::class)->days();
 @endphp
 
 <x-filament-panels::page>
@@ -20,7 +21,7 @@
                             @if ($user->hasVerifiedEmail())
                                 Your email address is verified and can be used to sign in.
                             @else
-                                Verify your email to secure your account and receive system notifications.
+                                Finish account setup from the link in your email before signing in on other devices.
                             @endif
                         </p>
                     </div>
@@ -32,25 +33,6 @@
                     </div>
                 </div>
             </section>
-
-            @if ($hasPendingReset)
-                <section class="owwa-settings-card">
-                    <div class="owwa-settings-row">
-                        <div class="owwa-settings-row-icon" aria-hidden="true">
-                            <svg fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" width="20" height="20">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
-                            </svg>
-                        </div>
-                        <div class="owwa-settings-row-copy">
-                            <h3 class="owwa-settings-row-title">Password reset</h3>
-                            <p class="owwa-settings-row-text">Reset requested — awaiting System Admin.</p>
-                        </div>
-                        <div class="owwa-settings-row-action">
-                            <span class="owwa-account-badge owwa-account-badge--neutral">Pending</span>
-                        </div>
-                    </div>
-                </section>
-            @endif
 
             <section class="owwa-settings-card">
                 <div class="owwa-settings-row">
@@ -65,6 +47,51 @@
                     </div>
                     <div class="owwa-settings-row-action">
                         {{ $this->changePasswordAction }}
+                    </div>
+                </div>
+            </section>
+
+            <section class="owwa-settings-card">
+                <div class="owwa-settings-row">
+                    <div class="owwa-settings-row-icon" aria-hidden="true">
+                        <svg fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" width="20" height="20">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M9 17.25v1.007a3 3 0 01-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0115 18.257V17.25m6-12V15a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 15V5.25A2.25 2.25 0 015.25 3h13.5A2.25 2.25 0 0121 5.25z" />
+                        </svg>
+                    </div>
+                    <div class="owwa-settings-row-copy" style="flex:1;">
+                        <h3 class="owwa-settings-row-title">Trusted devices</h3>
+                        <p class="owwa-settings-row-text">
+                            Browsers you marked “Remember this device” can skip the verification code for {{ $trustedDays }} days.
+                        </p>
+                        @if ($trustedDevices->isEmpty())
+                            <p class="owwa-settings-row-text" style="margin-top:.5rem;">No trusted devices right now.</p>
+                        @else
+                            <ul style="margin:.75rem 0 0;padding:0;list-style:none;display:grid;gap:.5rem;">
+                                @foreach ($trustedDevices as $device)
+                                    <li style="display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;padding:.65rem .75rem;border:1px solid rgba(15,23,42,.08);border-radius:.5rem;">
+                                        <div>
+                                            <div style="font-size:.875rem;font-weight:600;color:#0f172a;">
+                                                {{ $device->label ?: 'Trusted browser' }}
+                                            </div>
+                                            <div style="font-size:.75rem;color:#64748b;margin-top:.15rem;">
+                                                Expires {{ $device->expires_at->timezone(config('app.timezone'))->format('M j, Y g:i A') }}
+                                                @if ($device->last_used_at)
+                                                    · Last used {{ $device->last_used_at->diffForHumans() }}
+                                                @endif
+                                            </div>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            class="fi-btn fi-size-sm fi-btn-color-gray fi-outlined"
+                                            wire:click="revokeTrustedDevice({{ $device->id }})"
+                                            wire:confirm="Remove this trusted device? You will need a verification code next time on that browser."
+                                        >
+                                            Remove
+                                        </button>
+                                    </li>
+                                @endforeach
+                            </ul>
+                        @endif
                     </div>
                 </div>
             </section>

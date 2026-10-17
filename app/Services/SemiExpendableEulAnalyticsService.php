@@ -86,8 +86,12 @@ class SemiExpendableEulAnalyticsService
     {
         $issuances = $this->reviewIssuances($officeIds, max($limit * 4, 50));
 
-        return $issuances
+        $rows = $issuances
             ->map(function (Issuance $issuance): ?object {
+                if ($issuance->useful_life_condition === Issuance::USEFUL_LIFE_STILL_USABLE) {
+                    return null;
+                }
+
                 $status = SemiExpendableUsefulLife::statusForIssuance($issuance);
                 if (! in_array($status, [SemiExpendableUsefulLife::STATUS_NEARING, SemiExpendableUsefulLife::STATUS_EXPIRED], true)) {
                     return null;
@@ -99,7 +103,6 @@ class SemiExpendableEulAnalyticsService
                 $unissuedStock = ($itemId > 0 && $officeId !== null)
                     ? $this->stockService->getActiveRestockStock($itemId, $officeId)
                     : 0;
-                [$action, $actionLabel] = $this->replacementAction($issuance, $unissuedStock);
 
                 return (object) [
                     'issuance_id' => (int) $issuance->id,
@@ -117,8 +120,9 @@ class SemiExpendableEulAnalyticsService
                     'status_label' => SemiExpendableUsefulLife::statusLabel($status),
                     'days_until_expiry' => SemiExpendableUsefulLife::daysUntilExpiry($issuance),
                     'unissued_stock' => $unissuedStock,
-                    'action' => $action,
-                    'action_label' => $actionLabel,
+                    'action' => self::ACTION_AWAITING_REVIEW,
+                    'action_label' => 'Awaiting review',
+                    'useful_life_condition' => $issuance->useful_life_condition,
                 ];
             })
             ->filter()
@@ -126,8 +130,37 @@ class SemiExpendableEulAnalyticsService
                 fn (object $row): int => $row->status === SemiExpendableUsefulLife::STATUS_EXPIRED ? 0 : 1,
                 fn (object $row): string => $row->eul_expires_at ?? '9999-12-31',
             ])
-            ->values()
-            ->take($limit);
+            ->values();
+
+        $remainingStock = [];
+
+        $allocated = $rows->map(function (object $row) use (&$remainingStock): object {
+            if ($row->useful_life_condition !== Issuance::USEFUL_LIFE_NEEDS_REPLACEMENT) {
+                unset($row->useful_life_condition);
+
+                return $row;
+            }
+
+            $poolKey = $row->item_id.'_'.($row->office_id ?? 0);
+            if (! array_key_exists($poolKey, $remainingStock)) {
+                $remainingStock[$poolKey] = (int) $row->unissued_stock;
+            }
+
+            if ($remainingStock[$poolKey] > 0) {
+                $remainingStock[$poolKey]--;
+                $row->action = self::ACTION_ISSUE_FROM_STOCK;
+                $row->action_label = 'Issue from stock';
+            } else {
+                $row->action = self::ACTION_PURCHASE;
+                $row->action_label = 'Purchase';
+            }
+
+            unset($row->useful_life_condition);
+
+            return $row;
+        });
+
+        return $allocated->take($limit)->values();
     }
 
     /**
@@ -161,7 +194,7 @@ class SemiExpendableEulAnalyticsService
         }
 
         if ($unissuedStock > 0) {
-            return [self::ACTION_ISSUE_FROM_STOCK, 'Issue from stock ('.number_format($unissuedStock).' on hand)'];
+            return [self::ACTION_ISSUE_FROM_STOCK, 'Issue from stock'];
         }
 
         return [self::ACTION_PURCHASE, 'Purchase'];

@@ -5,7 +5,6 @@
     $selectedRange = $this->getSelectedDateRange();
     $rangeKey = $selectedRange['from'].'_'.$selectedRange['to'];
     $atRiskRows = $this->getAtRiskPreviewRows();
-    $activePreset = $this->getActivePeriodPreset();
     $allAtRiskCount = $this->getAtRiskPreviewCount();
     $stockoutCount = $this->getStockoutPreviewCount();
     $hasSummaryOutput = $loading || filled($recommendation);
@@ -17,30 +16,9 @@
 @endphp
 
 <x-filament-panels::page>
-    {{-- Filter bar --}}
-    <div class="owwa-pa-context-bar">
-        <div class="owwa-pa-filters-left">
-            <div class="owwa-pa-presets" role="group" aria-label="Period presets">
-                <button type="button" wire:click="applyPeriodPreset('3m')" class="owwa-pa-preset-btn {{ $activePreset === '3m' ? 'is-active' : '' }}">Last 3 months</button>
-                <button type="button" wire:click="applyPeriodPreset('6m')" class="owwa-pa-preset-btn {{ $activePreset === '6m' ? 'is-active' : '' }}">Last 6 months</button>
-                <button type="button" wire:click="applyPeriodPreset('12m')" class="owwa-pa-preset-btn {{ $activePreset === '12m' ? 'is-active' : '' }}">Last 12 months</button>
-                <button type="button" wire:click="applyPeriodPreset('ytd')" class="owwa-pa-preset-btn {{ $activePreset === 'ytd' ? 'is-active' : '' }}">Year to date</button>
-            </div>
-            <div class="owwa-pa-filters-left">
-                <div class="owwa-pa-filter">
-                    <label for="pa-from" class="owwa-pa-filter-label">From</label>
-                    <input type="date" id="pa-from" wire:model.live="from" class="owwa-pa-filter-select" />
-                </div>
-                <div class="owwa-pa-filter">
-                    <label for="pa-to" class="owwa-pa-filter-label">To</label>
-                    <input type="date" id="pa-to" wire:model.live="to" class="owwa-pa-filter-select" />
-                </div>
-            </div>
-        </div>
-    </div>
-
     <div class="owwa-pa-filter-chips" aria-label="Active filters">
         <span class="owwa-pa-chip">{{ $this->getFilterSummary() }}</span>
+        <p class="owwa-pa-period-note">Suggestions use the last 12 months through today.</p>
         <details class="owwa-pa-how-it-works">
             <summary>How this works</summary>
             <p>
@@ -55,8 +33,8 @@
     {{-- KPIs --}}
     <div class="owwa-pa-widgets owwa-pa-widgets--stack" wire:key="pa-coverage-{{ $rangeKey }}">
         @livewire(\App\Filament\Widgets\CoverageOverviewWidget::class, [
-            'from' => $this->from,
-            'to' => $this->to,
+            'from' => $selectedRange['from'],
+            'to' => $selectedRange['to'],
             'categoryId' => null,
         ], key('coverage-overview-'.$rangeKey))
     </div>

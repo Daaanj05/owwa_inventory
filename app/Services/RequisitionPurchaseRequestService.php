@@ -224,7 +224,31 @@ class RequisitionPurchaseRequestService
             'purpose' => $requisition->purpose,
             'requisitions' => [(int) $requisition->id],
             'lines' => $lines,
+            'requested_by_name' => $this->requesterNames([(int) $requisition->id])->first(),
         ];
+    }
+
+    /**
+     * Distinct RIS requester names (printed RIS name, else the requesting user) for the given requisitions.
+     *
+     * @param  array<int, int>  $requisitionIds
+     * @return Collection<int, string>
+     */
+    public function requesterNames(array $requisitionIds): Collection
+    {
+        if ($requisitionIds === []) {
+            return collect();
+        }
+
+        return Requisition::query()
+            ->with('requestedBy')
+            ->whereIn('id', $requisitionIds)
+            ->orderBy('id')
+            ->get()
+            ->map(fn (Requisition $requisition): string => trim((string) ($requisition->ris_requested_by_name ?: $requisition->requestedBy?->name)))
+            ->filter()
+            ->unique()
+            ->values();
     }
 
     /**

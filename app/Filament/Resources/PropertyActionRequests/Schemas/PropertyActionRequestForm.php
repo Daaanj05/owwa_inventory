@@ -9,11 +9,10 @@ use App\Models\ItemCategory;
 use App\Models\Office;
 use App\Models\PropertyActionRequest;
 use App\Models\User;
-use App\Services\OfficePropertyRegisterService;
 use App\Services\PropertyActionRequestCompileService;
+use App\Services\PropertyReturnService;
 use App\Support\InventoryCategoryOptions;
 use App\Support\OwwaReferenceLabels;
-use App\Support\SemiExpendableUsefulLife;
 use Closure;
 use Filament\Actions\Action;
 use Filament\Facades\Filament;
@@ -32,14 +31,13 @@ use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
 use Filament\Support\Enums\Alignment;
 use Filament\Support\Enums\GridDirection;
-use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\HtmlString;
 use Illuminate\Support\Str;
 
 class PropertyActionRequestForm
 {
-    /** @var array<int, Issuance> */
-    protected static array $issuanceCache = [];
+    /** @var array<int, InventoryUnit> */
+    protected static array $unitCache = [];
 
     public static function configure(Schema $schema): Schema
     {
@@ -87,7 +85,7 @@ class PropertyActionRequestForm
                             ->afterStateUpdated(function (Set $set, Get $get) use ($user): void {
                                 $set('source_property_action_request_ids', []);
                                 $set('lines', [
-                                    ['issuance_id' => null, 'inventory_unit_id' => null, 'quantity' => 1],
+                                    ['inventory_unit_id' => null],
                                 ]);
 
                                 if (! $user instanceof User) {
@@ -155,7 +153,7 @@ class PropertyActionRequestForm
                             ->afterStateUpdated(function (Set $set): void {
                                 $set('source_property_action_request_ids', []);
                                 $set('lines', [
-                                    ['issuance_id' => null, 'inventory_unit_id' => null, 'quantity' => 1],
+                                    ['inventory_unit_id' => null],
                                 ]);
                             }),
                         Select::make('item_category_id')
@@ -166,7 +164,7 @@ class PropertyActionRequestForm
                             ->dehydrated(false)
                             ->visible(fn (string $operation): bool => $operation === 'create' && $isEmployee)
                             ->afterStateUpdated(fn (callable $set): mixed => $set('lines', [
-                                ['issuance_id' => null, 'inventory_unit_id' => null, 'quantity' => 1],
+                                ['inventory_unit_id' => null],
                             ])),
                         ...($isEmployee ? [
                             Hidden::make('action_type')
@@ -193,13 +191,8 @@ class PropertyActionRequestForm
                                 $actionType = $isEmployee
                                     ? PropertyActionRequest::ACTION_RETURN
                                     : ($get('action_type') ?: PropertyActionRequest::ACTION_RETURN);
-                                $options = config('property_action_reasons.'.$actionType, []);
 
-                                if ($actionType === PropertyActionRequest::ACTION_RETURN) {
-                                    unset($options['good_condition']);
-                                }
-
-                                return $options;
+                                return config('property_action_reasons.'.$actionType, []);
                             })
                             ->markAsRequired()
                             ->visible(fn (Get $get): bool => $isEmployee
@@ -211,13 +204,7 @@ class PropertyActionRequestForm
                                 TableColumn::make('Item')
                                     ->markAsRequired()
                                     ->alignment(Alignment::Start)
-                                    ->width('28%'),
-                                TableColumn::make('Available')
-                                    ->alignment(Alignment::End)
-                                    ->width('5rem'),
-                                TableColumn::make('Qty')
-                                    ->alignment(Alignment::End)
-                                    ->width('4rem'),
+                                    ->width('40%'),
                                 TableColumn::make(self::assetIdentifierColumnLabel(
                                     self::intOrNull($get('item_category_id')),
                                 ))
@@ -233,17 +220,17 @@ class PropertyActionRequestForm
                             ->minItems(1)
                             ->defaultItems(1)
                             ->default([
-                                ['issuance_id' => null, 'inventory_unit_id' => null, 'quantity' => 1],
+                                ['inventory_unit_id' => null],
                             ])
                             ->addActionLabel('Add Item')
                             ->reorderable(false)
                             ->deleteAction(self::repeaterDeleteVisibleExceptFirst())
                             ->visible(fn (string $operation): bool => $operation === 'create' && $isEmployee)
                             ->schema([
-                                Select::make('issuance_id')
+                                Select::make('inventory_unit_id')
                                     ->label('Item')
                                     ->hiddenLabel()
-                                    ->options(fn (Get $get): array => self::issuanceOptions(
+                                    ->options(fn (Get $get): array => self::returnableUnitOptions(
                                         $user,
                                         self::intOrNull($get('../../item_category_id')),
                                     ))
@@ -252,70 +239,28 @@ class PropertyActionRequestForm
                                             return 'Select a category first';
                                         }
 
-                                        return 'Select an item';
+                                        return 'Select a property';
                                     })
                                     ->disabled(fn (Get $get): bool => blank($get('../../item_category_id')))
                                     ->required()
                                     ->searchable()
                                     ->selectablePlaceholder(false)
-                                    ->live()
-                                    ->afterStateUpdated(function ($state, callable $set): void {
-                                        if (! $state) {
-                                            $set('inventory_unit_id', null);
-                                            $set('quantity', 1);
-
-                                            return;
-                                        }
-
-                                        $issuance = self::resolveIssuance((int) $state);
-
-                                        if (! $issuance) {
-                                            return;
-                                        }
-
-                                        $set('inventory_unit_id', $issuance->inventoryUnit?->id);
-                                        $set('quantity', max(1, (int) ($issuance->quantity ?? 1)));
-                                    }),
-                                Placeholder::make('available_qty_display')
-                                    ->hiddenLabel()
-                                    ->dehydrated(false)
-                                    ->content(function (Get $get): string {
-                                        $issuance = self::resolveIssuance(self::intOrNull($get('issuance_id')));
-                                        if ($issuance === null) {
-                                            return '—';
-                                        }
-
-                                        return (string) max(1, (int) ($issuance->quantity ?? 1));
-                                    }),
-                                TextInput::make('quantity')
-                                    ->hiddenLabel()
-                                    ->numeric()
-                                    ->required()
-                                    ->minValue(1)
-                                    ->default(1)
-                                    ->maxValue(function (Get $get): ?int {
-                                        $issuance = self::resolveIssuance(self::intOrNull($get('issuance_id')));
-                                        if ($issuance === null) {
-                                            return null;
-                                        }
-
-                                        return max(1, (int) ($issuance->quantity ?? 1));
-                                    }),
+                                    ->live(),
                                 Placeholder::make('asset_identifier_display')
                                     ->hiddenLabel()
                                     ->dehydrated(false)
-                                    ->content(fn (Get $get): string => self::issuanceIdentifierLabel(
-                                        self::intOrNull($get('issuance_id')),
-                                    )),
+                                    ->content(fn (Get $get): string => self::resolveUnit(
+                                        self::intOrNull($get('inventory_unit_id')),
+                                    )?->property_number ?? '—'),
                                 Placeholder::make('issued_date_display')
                                     ->label('Issued')
                                     ->hiddenLabel()
                                     ->dehydrated(false)
-                                    ->content(fn (Get $get): string => self::issuanceDateLabel(
-                                        self::intOrNull($get('issuance_id')),
-                                    )),
-                                Hidden::make('inventory_unit_id'),
+                                    ->content(fn (Get $get): string => self::resolveUnit(
+                                        self::intOrNull($get('inventory_unit_id')),
+                                    )?->issuance?->issuance_date?->format('M d, Y') ?? '—'),
                             ])
+                            ->mutateRelationshipDataBeforeCreateUsing(fn (array $data): array => self::withUnitIssuance($data))
                             ->rules([
                                 function (Get $get): \Closure {
                                     return function (string $attribute, mixed $value, \Closure $fail) use ($get): void {
@@ -326,13 +271,13 @@ class PropertyActionRequestForm
                                         }
 
                                         $lines = is_array($value) ? $value : [];
-                                        $issuanceIds = collect($lines)
-                                            ->pluck('issuance_id')
+                                        $unitIds = collect($lines)
+                                            ->pluck('inventory_unit_id')
                                             ->filter()
                                             ->map(fn (mixed $id): int => (int) $id)
                                             ->all();
 
-                                        if (count($issuanceIds) !== count(array_unique($issuanceIds))) {
+                                        if (count($unitIds) !== count(array_unique($unitIds))) {
                                             $fail('Each property may only be added once.');
                                         }
                                     };
@@ -478,7 +423,7 @@ class PropertyActionRequestForm
         }
 
         if ($reasonCodes->count() === 1) {
-            $set('reason_code', $reasonCodes->first() === 'good_condition' ? 'needs_repair' : $reasonCodes->first());
+            $set('reason_code', $reasonCodes->first());
         }
     }
 
@@ -524,16 +469,13 @@ class PropertyActionRequestForm
     }
 
     /**
+     * One option per issued unit still returnable by the employee (label: item — inventory item / property no. — ICS/PAR no.).
+     *
      * @return array<int, string>
      */
-    public static function issuanceOptions(
-        ?User $user,
-        ?int $categoryId = null,
-        ?int $employeeId = null,
-        ?int $officeId = null,
-        ?int $departmentId = null,
-    ): array {
-        if (! $user instanceof User) {
+    public static function returnableUnitOptions(?User $user, ?int $categoryId = null): array
+    {
+        if (! $user instanceof User || ! $user->isEmployee()) {
             return [];
         }
 
@@ -541,92 +483,44 @@ class PropertyActionRequestForm
             return [];
         }
 
-        if ($user->isEmployee()) {
-            $query = Issuance::query()
-                ->with(['item.category', 'inventoryUnit'])
-                ->where('issued_to', $user->id)
-                ->whereHas('item.category', fn ($q) => $q->whereIn('name', app(OfficePropertyRegisterService::class)->propertyCategoryNames()))
-                ->whereHas('item', fn ($q) => $q->where('item_category_id', $categoryId));
-        } elseif ($user->isUnitConsolidator()) {
-            if ($employeeId === null || $employeeId <= 0) {
-                return [];
-            }
+        $units = app(PropertyReturnService::class)
+            ->returnableUnitsQuery((int) $user->id, $categoryId)
+            ->with(['item', 'issuance.batch'])
+            ->orderBy('issuance_id')
+            ->orderBy('id')
+            ->limit(500)
+            ->get();
 
-            $query = Issuance::query()
-                ->with(['item.category', 'inventoryUnit'])
-                ->where('issued_to', $employeeId)
-                ->whereNull('custody_ended_at')
-                ->where(function (Builder $scope): void {
-                    $scope
-                        ->whereDoesntHave('inventoryUnit')
-                        ->orWhereHas(
-                            'inventoryUnit',
-                            fn (Builder $unitQuery): Builder => $unitQuery->where('status', InventoryUnit::STATUS_ISSUED),
-                        );
-                })
-                ->whereHas('item.category', fn ($q) => $q->whereIn('name', app(OfficePropertyRegisterService::class)->propertyCategoryNames()))
-                ->whereHas('item', fn ($q) => $q->where('item_category_id', $categoryId));
-
-            if ($officeId !== null && $officeId > 0) {
-                $query->where('office_id', $officeId);
-            }
-
-            if ($departmentId !== null && $departmentId > 0) {
-                $query->where('department_id', $departmentId);
-            }
-        } else {
-            return [];
+        foreach ($units as $unit) {
+            self::$unitCache[$unit->id] = $unit;
         }
 
-        if ($user->isUnitConsolidator()) {
-            $issuances = $query
-                ->orderByRaw('case when eul_expires_at is null then 1 else 0 end')
-                ->orderBy('eul_expires_at')
-                ->orderByDesc('issuance_date')
-                ->limit(200)
-                ->get();
-        } else {
-            $issuances = $query
-                ->latest('issuance_date')
-                ->limit(200)
-                ->get();
-        }
+        return $units
+            ->mapWithKeys(fn (InventoryUnit $unit): array => [
+                $unit->id => collect([
+                    $unit->item?->name ?? 'Unknown item',
+                    $unit->property_number,
+                    $unit->issuance?->controlNumber(),
+                ])->filter()->implode(' — '),
+            ])
+            ->all();
+    }
 
-        foreach ($issuances as $issuance) {
-            self::$issuanceCache[$issuance->id] = $issuance;
-        }
-
-        $nameCounts = $issuances
-            ->groupBy(fn (Issuance $issuance): string => $issuance->item?->name ?? '')
-            ->map(fn ($group): int => $group->count());
-
-        return $issuances
-            ->mapWithKeys(function (Issuance $issuance) use ($nameCounts, $user): array {
-                $name = $issuance->item?->name ?? 'Unknown item';
-                $label = $name;
-
-                $identifier = $issuance->property_number ?? $issuance->reference_code ?? '';
-
-                if ($identifier !== '' && (($nameCounts[$name] ?? 0) > 1 || ($user?->isUnitConsolidator() ?? false))) {
-                    $suffix = strlen($identifier) > 12
-                        ? '…'.substr($identifier, -6)
-                        : $identifier;
-                    $label = "{$name} — {$suffix}";
-                }
-
-                if ($user?->isUnitConsolidator() ?? false) {
-                    $eulStatus = SemiExpendableUsefulLife::statusForIssuance($issuance);
-                    $eulLabel = SemiExpendableUsefulLife::statusLabel($eulStatus);
-
-                    if ($eulLabel !== '—') {
-                        $label .= " ({$eulLabel})";
-                    } elseif ($issuance->eul_expires_at !== null) {
-                        $label .= ' (EUL '.$issuance->eul_expires_at->format('M d, Y').')';
-                    }
-                }
-
-                return [$issuance->id => $label];
-            })
+    /**
+     * Prefill lines with every returnable unit of one issuance (e.g. "Return" from My Inventory).
+     *
+     * @return list<array{inventory_unit_id: int}>
+     */
+    public static function linesForIssuance(User $user, Issuance $issuance): array
+    {
+        return app(PropertyReturnService::class)
+            ->returnableUnitsQuery((int) $user->id)
+            ->where('issuance_id', $issuance->id)
+            ->orderBy('id')
+            ->pluck('id')
+            ->map(fn (mixed $unitId): array => [
+                'inventory_unit_id' => (int) $unitId,
+            ])
             ->all();
     }
 
@@ -645,66 +539,39 @@ class PropertyActionRequestForm
         return OwwaReferenceLabels::assetIdentifierLabel($category->getTemplateSlug());
     }
 
-    public static function resolveIssuance(?int $issuanceId): ?Issuance
+    /**
+     * A line's issuance always comes from its selected unit, never from client state; each line is one unit.
+     *
+     * @param  array<string, mixed>  $line
+     * @return array<string, mixed>
+     */
+    public static function withUnitIssuance(array $line): array
     {
-        if ($issuanceId === null || $issuanceId <= 0) {
+        $line['issuance_id'] = self::resolveUnit(self::intOrNull($line['inventory_unit_id'] ?? null))?->issuance_id;
+        $line['quantity'] = 1;
+
+        return $line;
+    }
+
+    public static function resolveUnit(?int $unitId): ?InventoryUnit
+    {
+        if ($unitId === null || $unitId <= 0) {
             return null;
         }
 
-        if (isset(self::$issuanceCache[$issuanceId])) {
-            return self::$issuanceCache[$issuanceId];
+        if (isset(self::$unitCache[$unitId])) {
+            return self::$unitCache[$unitId];
         }
 
-        $issuance = Issuance::query()
-            ->with(['item', 'inventoryUnit'])
-            ->find($issuanceId);
+        $unit = InventoryUnit::query()
+            ->with(['item', 'issuance'])
+            ->find($unitId);
 
-        if ($issuance) {
-            self::$issuanceCache[$issuanceId] = $issuance;
+        if ($unit) {
+            self::$unitCache[$unitId] = $unit;
         }
 
-        return $issuance;
-    }
-
-    public static function issuanceIdentifierLabel(?int $issuanceId): string
-    {
-        $issuance = self::resolveIssuance($issuanceId);
-
-        if (! $issuance) {
-            return '—';
-        }
-
-        return $issuance->property_number
-            ?? $issuance->reference_code
-            ?? '—';
-    }
-
-    public static function issuanceDateLabel(?int $issuanceId): string
-    {
-        $issuance = self::resolveIssuance($issuanceId);
-
-        if (! $issuance) {
-            return '—';
-        }
-
-        return $issuance->issuance_date?->format('M d, Y') ?? '—';
-    }
-
-    public static function issuanceQuantityLabel(?int $issuanceId): string
-    {
-        $issuance = self::resolveIssuance($issuanceId);
-
-        if (! $issuance) {
-            return '—';
-        }
-
-        $quantity = $issuance->quantity;
-
-        if ($quantity === null) {
-            return '—';
-        }
-
-        return (string) (int) $quantity;
+        return $unit;
     }
 
     protected static function repeaterDeleteVisibleExceptFirst(): Closure
@@ -740,7 +607,7 @@ class PropertyActionRequestForm
 
         $lines = $data['lines'] ?? [];
         $firstIssuanceId = collect(is_array($lines) ? $lines : [])
-            ->pluck('issuance_id')
+            ->map(fn (mixed $line): mixed => is_array($line) ? self::withUnitIssuance($line)['issuance_id'] ?? null : null)
             ->filter()
             ->first();
 

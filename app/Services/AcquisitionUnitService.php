@@ -55,7 +55,7 @@ class AcquisitionUnitService
     }
 
     /**
-     * Mint inventory units with a shared catalog property number.
+     * Mint inventory units, each with its own property or inventory item number.
      *
      * @return array<int, InventoryUnit>
      */
@@ -76,14 +76,10 @@ class AcquisitionUnitService
         $units = [];
 
         DB::transaction(function () use ($item, $officeId, $quantity, $unitCost, $acquisitionId, $slug, &$units): void {
-            $sharedPropertyNumber = $slug === 'ppe'
-                ? $this->resolveCatalogPropertyNumberForItem($item, $slug, $unitCost)
-                : null;
-
             for ($i = 0; $i < $quantity; $i++) {
                 $propertyNumber = $slug === 'semi_expendable'
                     ? $this->mintNextSemiUnitNumber($item, $unitCost)
-                    : $sharedPropertyNumber;
+                    : $this->mintNextPpeUnitNumber($item);
 
                 $units[] = InventoryUnit::query()->create([
                     'property_number' => $propertyNumber,
@@ -126,19 +122,30 @@ class AcquisitionUnitService
         return $number;
     }
 
-    protected function resolveCatalogPropertyNumberForItem(Item $item, string $slug, ?float $unitCost): string
+    /**
+     * First unit uses the catalog Property No. Each later unit takes the next yearly PPE sequence.
+     */
+    protected function mintNextPpeUnitNumber(Item $item): string
     {
-        if ($slug === 'semi_expendable') {
-            return $this->mintNextSemiUnitNumber($item, $unitCost);
+        $catalogNumber = (string) ($item->ppe_property_number ?? '');
+
+        if ($catalogNumber === '') {
+            $catalogNumber = $this->catalogNumbers->mintPpe($item);
+            $item->forceFill(['ppe_property_number' => $catalogNumber])->saveQuietly();
+
+            return $catalogNumber;
         }
 
-        $number = $item->ppe_property_number;
-        if (blank($number)) {
-            $number = $this->catalogNumbers->mintPpe($item);
-            $item->forceFill(['ppe_property_number' => $number])->saveQuietly();
+        $catalogNumberInUse = InventoryUnit::query()
+            ->where('item_id', $item->id)
+            ->where('property_number', $catalogNumber)
+            ->exists();
+
+        if (! $catalogNumberInUse) {
+            return $catalogNumber;
         }
 
-        return (string) $number;
+        return $this->catalogNumbers->mintPpeForUnit($item);
     }
 
     public function supportsUnitGeneration(?Item $item): bool

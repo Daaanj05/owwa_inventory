@@ -878,33 +878,11 @@ select.owwa-search-bar {
     overflow: auto;
 }
 
-.owwa-pa-presets {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.35rem;
-}
-
-.owwa-pa-preset-btn {
-    border: 1px solid #d1d5db;
-    border-radius: 9999px;
-    padding: 0.2rem 0.65rem;
+.owwa-pa-period-note {
+    margin: 0;
     font-size: 0.75rem;
-    font-weight: 500;
-    color: #374151;
-    background: #fff;
-    cursor: pointer;
-}
-
-.owwa-pa-preset-btn:hover {
-    border-color: #1e6fbe;
-    color: #1e6fbe;
-}
-
-.owwa-pa-preset-btn.is-active {
-    background: #eff6ff;
-    border-color: #93c5fd;
-    color: #1e6fbe;
-    font-weight: 600;
+    line-height: 1.4;
+    color: #64748b;
 }
 
 .owwa-pa-chip--inline {
@@ -1876,27 +1854,6 @@ select.owwa-search-bar {
 .fi-resource-list-records-page .fi-ta-header-toolbar > div:has(.fi-ta-search-field) {
     order: 1;
     width: 100%;
-}
-
-/* UC Distributions: category left of search (Office Property Register pattern) */
-.fi-page.owwa-distributions-uc-toolbar .fi-ta-ctn .fi-ta-header-toolbar > div:has(.fi-ta-search-field) {
-    display: flex !important;
-    flex-wrap: wrap !important;
-    align-items: center !important;
-    gap: 0.75rem !important;
-}
-
-.fi-page.owwa-distributions-uc-toolbar .fi-ta-ctn .fi-ta-header-toolbar > div:has(.fi-ta-search-field) .owwa-distributions-category-select {
-    flex: 0 0 auto !important;
-    width: 16rem !important;
-    max-width: 100% !important;
-}
-
-.fi-page.owwa-distributions-uc-toolbar .fi-ta-ctn .fi-ta-header-toolbar > div:has(.fi-ta-search-field) .fi-ta-search-field {
-    flex: 0 0 auto !important;
-    width: 18rem !important;
-    max-width: 100% !important;
-    margin-right: auto !important;
 }
 
 .owwa-consolidated-totals-summary {

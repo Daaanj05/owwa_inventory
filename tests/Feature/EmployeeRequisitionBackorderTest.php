@@ -34,6 +34,7 @@ class EmployeeRequisitionBackorderTest extends TestCase
             'requested_by' => $employee->id,
             'status' => Requisition::STATUS_DRAFT,
             'transaction_number' => '2026-01-EMP-99',
+            'purpose' => 'Office use',
         ]);
 
         RequisitionItem::query()->create([

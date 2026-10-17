@@ -5,7 +5,6 @@ namespace App\Services;
 use App\Models\InventoryUnit;
 use App\Models\Issuance;
 use App\Models\Item;
-use App\Support\SupplyOfficeResolver;
 use App\Support\UnitCostKey;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -29,14 +28,9 @@ class IssuanceUnitAssignmentService
         }
 
         $needed = max(1, (int) $issuance->quantity);
-        $supplyOfficeId = app(SupplyOfficeResolver::class)->resolve();
-        $requestingOfficeId = (int) ($issuance->office_id ?? 0);
+        $issuingOfficeId = (int) ($issuance->issued_from_office_id ?? $issuance->office_id ?? 0);
 
-        $unitIds = $this->inStockUnitIds($issuance, $needed, $supplyOfficeId, $requestingOfficeId, matchUnitCost: true);
-
-        if ($unitIds->count() < $needed && $issuance->unit_cost !== null) {
-            $unitIds = $this->inStockUnitIds($issuance, $needed, $supplyOfficeId, $requestingOfficeId, matchUnitCost: false);
-        }
+        $unitIds = $this->inStockUnitIds($issuance, $needed, $issuingOfficeId);
 
         if ($unitIds->count() < $needed) {
             throw ValidationException::withMessages([
@@ -72,6 +66,11 @@ class IssuanceUnitAssignmentService
                 ]);
 
             $issuance->property_number = $reserved->first()?->property_number;
+            $issuance->issued_property_numbers = $reserved
+                ->pluck('property_number')
+                ->filter()
+                ->values()
+                ->all();
             $issuance->reservedInventoryUnitIds = $reserved
                 ->pluck('id')
                 ->map(fn (mixed $id): int => (int) $id)
@@ -80,27 +79,22 @@ class IssuanceUnitAssignmentService
     }
 
     /**
+     * In-stock units at the issuing office whose unit cost matches the lot the issuance deducts.
+     *
      * @return Collection<int, int>
      */
-    protected function inStockUnitIds(
-        Issuance $issuance,
-        int $needed,
-        ?int $supplyOfficeId,
-        int $requestingOfficeId,
-        bool $matchUnitCost,
-    ): Collection {
-        $query = InventoryUnit::query()
+    protected function inStockUnitIds(Issuance $issuance, int $needed, int $issuingOfficeId): Collection
+    {
+        $costKey = UnitCostKey::normalize($issuance->unit_cost !== null ? (float) $issuance->unit_cost : null);
+
+        return InventoryUnit::query()
             ->where('item_id', $issuance->item_id)
-            ->where('status', InventoryUnit::STATUS_IN_STOCK);
-
-        if ($matchUnitCost && $issuance->unit_cost !== null) {
-            $query->where('unit_cost', UnitCostKey::normalize((float) $issuance->unit_cost));
-        }
-
-        return $query
-            ->orderByRaw(
-                'CASE office_id WHEN ? THEN 0 WHEN ? THEN 1 ELSE 2 END',
-                [$supplyOfficeId ?? 0, $requestingOfficeId],
+            ->where('office_id', $issuingOfficeId)
+            ->where('status', InventoryUnit::STATUS_IN_STOCK)
+            ->when(
+                $costKey === UnitCostKey::NULL_SENTINEL,
+                fn ($query) => $query->where(fn ($inner) => $inner->whereNull('unit_cost')->orWhere('unit_cost', 0)),
+                fn ($query) => $query->where('unit_cost', $costKey),
             )
             ->orderBy('id')
             ->limit($needed)

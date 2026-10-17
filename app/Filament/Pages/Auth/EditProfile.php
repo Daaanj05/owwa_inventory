@@ -92,7 +92,19 @@ class EditProfile extends BaseEditProfile
             ->components([
                 View::make('filament.pages.auth.partials.profile-hero'),
                 $this->getFormContentComponent(),
+                ...Arr::wrap($this->getMultiFactorAuthenticationContentComponent()),
             ]);
+    }
+
+    public function getMultiFactorAuthenticationContentComponent(): ?\Filament\Schemas\Components\Component
+    {
+        $component = parent::getMultiFactorAuthenticationContentComponent();
+
+        if ($component === null) {
+            return null;
+        }
+
+        return $component->extraAttributes(['class' => 'owwa-account-section owwa-account-mfa-section']);
     }
 
     public function defaultForm(Schema $schema): Schema

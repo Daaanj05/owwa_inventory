@@ -15,7 +15,7 @@ use App\Models\PropertyActionRequestLine;
 use App\Models\Requisition;
 use App\Models\User;
 use App\Services\AcquisitionUnitService;
-use App\Services\EmployeeDistributionInventoryService;
+use App\Services\EmployeeReceivedInventoryService;
 use App\Services\PropertyActionRequestWorkflowService;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -40,26 +40,26 @@ class PropertyCustodyHistoryTest extends TestCase
 
         app(PropertyActionRequestWorkflowService::class)->execute($request, $custodian);
 
-        $service = app(EmployeeDistributionInventoryService::class);
+        $service = app(EmployeeReceivedInventoryService::class);
 
         $onHand = $service->paginatedGroupedInventory(
             $employee,
             null,
-            'distribution_date',
+            'received_date',
             'desc',
             10,
             'semi_expendable',
-            EmployeeDistributionInventoryService::CUSTODY_TAB_ON_HAND,
+            EmployeeReceivedInventoryService::CUSTODY_TAB_ON_HAND,
         );
 
         $history = $service->paginatedGroupedInventory(
             $employee,
             null,
-            'distribution_date',
+            'received_date',
             'desc',
             10,
             'semi_expendable',
-            EmployeeDistributionInventoryService::CUSTODY_TAB_HISTORY,
+            EmployeeReceivedInventoryService::CUSTODY_TAB_HISTORY,
         );
 
         $this->assertSame(0, $onHand->total());
@@ -75,13 +75,13 @@ class PropertyCustodyHistoryTest extends TestCase
 
         app(PropertyActionRequestWorkflowService::class)->execute($request, $custodian);
 
-        $ledger = app(EmployeeDistributionInventoryService::class)
+        $ledger = app(EmployeeReceivedInventoryService::class)
             ->presentPropertyCustodyLedger($employee, $issuance->id);
 
         $types = collect($ledger['rows'])->pluck('type')->all();
 
         $this->assertContains('Issued', $types);
-        $this->assertContains('Returned', $types);
+        $this->assertContains('Returned ('.$unit->property_number.')', $types);
         $this->assertSame('0', $ledger['header']['total_on_hand']);
     }
 
@@ -105,14 +105,14 @@ class PropertyCustodyHistoryTest extends TestCase
         Livewire::actingAs($employee)
             ->test(MyInventory::class, ['category' => 'semi_expendable'])
             ->call('openPropertyIssuanceLedger', $issuance->item_id)
-            ->assertActionMounted('viewDistributionLedger');
+            ->assertActionMounted('viewReceivedLedger');
     }
 
     public function test_property_issuance_ledger_uses_category_specific_control_labels(): void
     {
         [$employee, , , $semiIssuance] = $this->seedPropertyContext();
 
-        $semiLedger = app(EmployeeDistributionInventoryService::class)
+        $semiLedger = app(EmployeeReceivedInventoryService::class)
             ->presentPropertyIssuanceLedger($employee, $semiIssuance->item_id);
 
         $semiControl = $semiLedger['columns']['ics_par_no'];
@@ -123,7 +123,7 @@ class PropertyCustodyHistoryTest extends TestCase
 
         [$ppeEmployee, , , $ppeIssuance] = $this->seedPpePropertyContext();
 
-        $ppeLedger = app(EmployeeDistributionInventoryService::class)
+        $ppeLedger = app(EmployeeReceivedInventoryService::class)
             ->presentPropertyIssuanceLedger($ppeEmployee, $ppeIssuance->item_id);
 
         $ppeControl = $ppeLedger['columns']['ics_par_no'];
@@ -140,8 +140,8 @@ class PropertyCustodyHistoryTest extends TestCase
         $request = $this->createReturnRequest($employee, $custodian, $issuance, $unit);
         app(PropertyActionRequestWorkflowService::class)->execute($request, $custodian);
 
-        $ledger = app(EmployeeDistributionInventoryService::class)
-            ->presentPropertyIssuanceLedger($employee, $issuance->item_id, EmployeeDistributionInventoryService::CUSTODY_TAB_HISTORY);
+        $ledger = app(EmployeeReceivedInventoryService::class)
+            ->presentPropertyIssuanceLedger($employee, $issuance->item_id, EmployeeReceivedInventoryService::CUSTODY_TAB_HISTORY);
 
         $this->assertArrayHasKey('ics_par_no', $ledger['columns']);
         $this->assertArrayNotHasKey('eul_status_label', $ledger['columns']);
@@ -202,10 +202,10 @@ class PropertyCustodyHistoryTest extends TestCase
             'issuance_id' => $secondIssuance->id,
         ]);
 
-        $rows = app(EmployeeDistributionInventoryService::class)->paginatedGroupedInventory(
+        $rows = app(EmployeeReceivedInventoryService::class)->paginatedGroupedInventory(
             $employee,
             null,
-            'distribution_date',
+            'received_date',
             'desc',
             10,
             'semi_expendable',
@@ -213,9 +213,9 @@ class PropertyCustodyHistoryTest extends TestCase
 
         $this->assertSame(1, $rows->total());
         $this->assertSame(2, (int) $rows->first()->total_quantity);
-        $this->assertSame(2, (int) $rows->first()->distribution_count);
+        $this->assertSame(2, (int) $rows->first()->receipt_count);
 
-        $ledger = app(EmployeeDistributionInventoryService::class)->presentPropertyIssuanceLedger(
+        $ledger = app(EmployeeReceivedInventoryService::class)->presentPropertyIssuanceLedger(
             $employee,
             $itemId,
         );
@@ -364,7 +364,7 @@ class PropertyCustodyHistoryTest extends TestCase
     ): PropertyActionRequest {
         $request = PropertyActionRequest::query()->create([
             'action_type' => PropertyActionRequest::ACTION_RETURN,
-            'reason_code' => 'good_condition',
+            'reason_code' => 'serviceable_not_needed',
             'requested_by' => $employee->id,
             'accountable_user_id' => $custodian->id,
             'office_id' => $issuance->office_id,

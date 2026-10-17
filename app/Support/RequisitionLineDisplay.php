@@ -2,7 +2,6 @@
 
 namespace App\Support;
 
-use App\Models\Distribution;
 use App\Models\Issuance;
 use App\Models\Requisition;
 use App\Models\RequisitionItem;
@@ -93,20 +92,6 @@ class RequisitionLineDisplay
         $summaries = self::relatedIssuanceSummaries($requisition);
 
         return $summaries->isNotEmpty() ? $summaries->implode("\n") : null;
-    }
-
-    public static function distributedQuantity(RequisitionItem $line): int
-    {
-        $line->loadMissing('requisition');
-
-        if (! $line->requisition) {
-            return 0;
-        }
-
-        return (int) Distribution::query()
-            ->where('requisition_id', $line->requisition->id)
-            ->where('item_id', $line->item_id)
-            ->sum('quantity');
     }
 
     public static function mixedCategoriesNotice(): string

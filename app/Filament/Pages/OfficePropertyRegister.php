@@ -263,6 +263,7 @@ class OfficePropertyRegister extends Page
             $this->transfersCategoryFilterId(),
             $this->direction,
             filled($this->search) ? $this->search : null,
+            officeId: (int) ($this->ucOfficeId ?? 0),
         );
     }
 
@@ -275,7 +276,11 @@ class OfficePropertyRegister extends Page
         }
 
         try {
-            app(OfficePropertyRegisterService::class)->presentTransferForUser($user, $transferId);
+            app(OfficePropertyRegisterService::class)->presentTransferForUser(
+                $user,
+                $transferId,
+                (int) ($this->ucOfficeId ?? 0),
+            );
         } catch (AuthorizationException) {
             abort(403);
         }
@@ -514,7 +519,11 @@ class OfficePropertyRegister extends Page
         }
 
         try {
-            return app(OfficePropertyRegisterService::class)->presentTransferForUser($user, $transferId);
+            return app(OfficePropertyRegisterService::class)->presentTransferForUser(
+                $user,
+                $transferId,
+                (int) ($this->ucOfficeId ?? 0),
+            );
         } catch (AuthorizationException) {
             abort(403);
         }

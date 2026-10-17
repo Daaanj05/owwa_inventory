@@ -9,6 +9,7 @@ use App\Models\RequisitionItem;
 use App\Models\RequisitionSourceEndorsement;
 use App\Models\User;
 use App\Support\SemiExpendableUsefulLife;
+use App\Support\SupplyOfficeResolver;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
@@ -62,7 +63,7 @@ class RequisitionFulfillmentService
 
                 if ($remainderOnly) {
                     return $remaining > 0
-                        && $stockSnapshot->regionalStockForItem((int) $endorsement->item_id) > 0;
+                        && $stockSnapshot->issuableStockForItem((int) $endorsement->item_id) > 0;
                 }
 
                 return $remaining > 0 || $this->endorsementIssuedQuantity($endorsement) === 0;
@@ -71,7 +72,7 @@ class RequisitionFulfillmentService
                 $remaining = $this->endorsementRemainingQuantity($endorsement);
                 $issued = $this->endorsementIssuedQuantity($endorsement);
                 $itemId = (int) $endorsement->item_id;
-                $stock = $stockSnapshot->regionalStockForItem($itemId);
+                $stock = $stockSnapshot->issuableStockForItem($itemId);
                 $employee = $endorsement->sourceRequisition?->requestedBy;
                 $transactionNumber = $endorsement->sourceRequisition?->transaction_number
                     ?? ('#'.$endorsement->source_requisition_id);
@@ -151,6 +152,8 @@ class RequisitionFulfillmentService
         $categoryCounts = [];
 
         DB::transaction(function () use ($requisition, $custodian, $rows, $issuanceDate, $signatories, &$created, &$acknowledged, &$categoryCounts): void {
+            $this->persistRisSignatories($requisition, $signatories);
+
             /** @var Collection<int, array{line: RequisitionItem, qty: int, remarks: ?string}> $issueQueue */
             $issueQueue = collect();
 
@@ -297,6 +300,8 @@ class RequisitionFulfillmentService
         $employeeRequisitionsToClose = [];
 
         DB::transaction(function () use ($consolidated, $custodian, $rows, $issuanceDate, $signatories, &$created, &$acknowledged, &$categoryCounts, &$employeeRequisitionsToClose): void {
+            $this->persistRisSignatories($consolidated, $signatories);
+
             /** @var Collection<int, array{endorsement: RequisitionSourceEndorsement, qty: int, remarks: ?string}> $issueQueue */
             $issueQueue = collect();
 
@@ -458,9 +463,30 @@ class RequisitionFulfillmentService
         return $this->finalizeIssueResult($consolidated, $custodian, $created, $acknowledged, $categoryCounts);
     }
 
+    /**
+     * @param  array<string, mixed>  $signatories
+     */
+    protected function persistRisSignatories(Requisition $requisition, array $signatories): void
+    {
+        $requisition->update([
+            'ris_requested_by_name' => $signatories['ris_requested_by_name'] ?? null,
+            'ris_requested_by_designation' => $signatories['ris_requested_by_designation'] ?? null,
+            'ris_requested_by_date' => $signatories['ris_requested_by_date'] ?? null,
+            'ris_approved_by_name' => $signatories['ris_approved_by_name'] ?? null,
+            'ris_approved_by_designation' => $signatories['ris_approved_by_designation'] ?? null,
+            'ris_approved_by_date' => $signatories['ris_approved_by_date'] ?? null,
+            'ris_issued_by_name' => $signatories['ris_issued_by_name'] ?? null,
+            'ris_issued_by_designation' => $signatories['ris_issued_by_designation'] ?? null,
+            'ris_issued_by_date' => $signatories['ris_issued_by_date'] ?? null,
+            'ris_received_by_name' => $signatories['ris_received_by_name'] ?? null,
+            'ris_received_by_designation' => $signatories['ris_received_by_designation'] ?? null,
+            'ris_received_by_date' => $signatories['ris_received_by_date'] ?? null,
+        ]);
+    }
+
     protected function issuableStock(int $itemId): int
     {
-        return app(RequisitionStockSnapshotService::class)->regionalStockForItem($itemId);
+        return app(RequisitionStockSnapshotService::class)->issuableStockForItem($itemId);
     }
 
     /**
@@ -484,7 +510,7 @@ class RequisitionFulfillmentService
             'issued_by' => $custodian->id,
         ];
 
-        foreach (['custodian_printed_name', 'custodian_designation', 'issued_to_designation', 'accounting_staff_printed_name', 'received_from_name'] as $signatoryField) {
+        foreach (['custodian_printed_name', 'custodian_designation', 'issued_to_designation', 'received_by_printed_name', 'received_from_name'] as $signatoryField) {
             if (filled($signatories[$signatoryField] ?? null)) {
                 $batchPayload[$signatoryField] = (string) $signatories[$signatoryField];
             }
@@ -494,6 +520,8 @@ class RequisitionFulfillmentService
     }
 
     /**
+     * Issue a line from regional supply, one issuance row per lot used (oldest lot first).
+     *
      * @param  array<string, mixed>  $signatories
      */
     protected function createIssuanceRecord(
@@ -510,31 +538,64 @@ class RequisitionFulfillmentService
         ?int $consolidatedRequisitionId = null,
         ?int $sourceEndorsementId = null,
     ): void {
-        $issuancePayload = [
+        $supplyOfficeId = app(SupplyOfficeResolver::class)->resolve();
+
+        if ($supplyOfficeId === null) {
+            throw new InvalidArgumentException('Regional supply office is not configured.');
+        }
+
+        $lots = app(InventoryStockService::class)->availableLotsForIssue((int) $line->item_id, $supplyOfficeId);
+        $available = array_sum(array_column($lots, 'quantity'));
+
+        if ($available < $qtyToIssue) {
+            $itemName = $line->item?->name ?? "Item #{$line->item_id}";
+
+            throw new InvalidArgumentException(
+                "Only {$available} of {$itemName} can be issued from regional supply (requested {$qtyToIssue})."
+            );
+        }
+
+        $basePayload = [
             'issuance_batch_id' => $batch->id,
             'requisition_id' => $requisition->id,
             'consolidated_requisition_id' => $consolidatedRequisitionId,
             'source_endorsement_id' => $sourceEndorsementId,
             'office_id' => $requisition->office_id,
+            'issued_from_office_id' => $supplyOfficeId,
             'department_id' => $requisition->department_id,
             'item_id' => $line->item_id,
-            'quantity' => $qtyToIssue,
             'issuance_date' => $issuanceDate,
             'issued_to' => $issuedToUserId,
             'issued_by' => $custodian->id,
         ];
 
         if ($line->item?->category?->getTemplateSlug() === 'semi_expendable') {
-            $issuancePayload['estimated_useful_life'] = SemiExpendableUsefulLife::resolveForItem($line->item);
+            $basePayload['estimated_useful_life'] = SemiExpendableUsefulLife::resolveForItem($line->item);
         }
 
-        foreach (['custodian_printed_name', 'custodian_designation', 'issued_to_designation', 'accounting_staff_printed_name', 'received_from_name'] as $signatoryField) {
+        foreach (['custodian_printed_name', 'custodian_designation', 'issued_to_designation', 'received_by_printed_name', 'received_from_name'] as $signatoryField) {
             if (filled($signatories[$signatoryField] ?? null)) {
-                $issuancePayload[$signatoryField] = (string) $signatories[$signatoryField];
+                $basePayload[$signatoryField] = (string) $signatories[$signatoryField];
             }
         }
 
-        Issuance::create($issuancePayload);
+        $left = $qtyToIssue;
+
+        foreach ($lots as $lot) {
+            if ($left <= 0) {
+                break;
+            }
+
+            $take = min($left, $lot['quantity']);
+
+            Issuance::create([
+                ...$basePayload,
+                'unit_cost' => $lot['unit_cost'],
+                'quantity' => $take,
+            ]);
+
+            $left -= $take;
+        }
 
         $line->update([
             'quantity_issued' => (int) ($line->quantity_issued ?? 0) + $qtyToIssue,

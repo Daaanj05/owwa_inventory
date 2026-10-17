@@ -34,7 +34,6 @@ class UserResource extends Resource
     public static function getEloquentQuery(): Builder
     {
         $query = parent::getEloquentQuery()->with([
-            'pendingPasswordResetRequest',
             'assignments.office',
             'assignments.department',
         ]);

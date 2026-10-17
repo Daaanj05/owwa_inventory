@@ -156,6 +156,8 @@ return [
 
     'login_decay_seconds' => (int) env('LOGIN_DECAY_SECONDS', 60),
 
+    'trusted_device_days' => (int) env('TRUSTED_DEVICE_DAYS', 15),
+
     /*
     |--------------------------------------------------------------------------
     | System health & capacity

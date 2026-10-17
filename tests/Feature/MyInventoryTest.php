@@ -4,7 +4,6 @@ namespace Tests\Feature;
 
 use App\Filament\Pages\MyInventory;
 use App\Models\Department;
-use App\Models\Distribution;
 use App\Models\Issuance;
 use App\Models\Item;
 use App\Models\ItemCategory;
@@ -12,7 +11,7 @@ use App\Models\Office;
 use App\Models\Requisition;
 use App\Models\User;
 use App\Notifications\StillUsableUsefulLifeNotification;
-use App\Services\EmployeeDistributionInventoryService;
+use App\Services\EmployeeReceivedInventoryService;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Notification;
@@ -34,16 +33,16 @@ class MyInventoryTest extends TestCase
         $this->assertSame('My Inventory', MyInventory::getNavigationLabel());
     }
 
-    public function test_distribution_ledger_is_paginated(): void
+    public function test_received_ledger_is_paginated(): void
     {
-        $distributions = [];
+        $issuances = [];
         for ($i = 1; $i <= 12; $i++) {
-            $distributions[] = ['quantity' => 1, 'date' => sprintf('2026-01-%02d', min($i, 28))];
+            $issuances[] = ['quantity' => 1, 'date' => sprintf('2026-01-%02d', min($i, 28))];
         }
 
-        [$employee, $item] = $this->seedEmployeeDistributions($distributions);
+        [$employee, $item] = $this->seedEmployeeIssuances($issuances);
 
-        $service = app(EmployeeDistributionInventoryService::class);
+        $service = app(EmployeeReceivedInventoryService::class);
         $page1 = $service->presentLedgerPaginated($employee, $item->id, 1, 10);
         $page2 = $service->presentLedgerPaginated($employee, $item->id, 2, 10);
 
@@ -53,25 +52,25 @@ class MyInventoryTest extends TestCase
         $this->assertSame(2, $page1['paginator']->lastPage());
     }
 
-    public function test_distribution_ledger_modal_resets_to_first_page(): void
+    public function test_received_ledger_modal_resets_to_first_page(): void
     {
-        $distributions = [];
+        $issuances = [];
         for ($i = 1; $i <= 12; $i++) {
-            $distributions[] = ['quantity' => 1, 'date' => sprintf('2026-01-%02d', min($i, 28))];
+            $issuances[] = ['quantity' => 1, 'date' => sprintf('2026-01-%02d', min($i, 28))];
         }
 
-        [$employee, $item] = $this->seedEmployeeDistributions($distributions);
+        [$employee, $item] = $this->seedEmployeeIssuances($issuances);
 
         Livewire::actingAs($employee)
             ->test(MyInventory::class)
             ->set('ledgerPage', 2)
-            ->call('openDistributionLedger', $item->id)
+            ->call('openReceivedLedger', $item->id)
             ->assertSet('ledgerPage', 1);
     }
 
     public function test_grouped_inventory_merges_same_item_rows(): void
     {
-        [$employee, $item] = $this->seedEmployeeDistributions([
+        [$employee, $item] = $this->seedEmployeeIssuances([
             ['quantity' => 5, 'date' => '2026-03-07'],
             ['quantity' => 3, 'date' => '2026-04-05'],
         ]);
@@ -81,48 +80,48 @@ class MyInventoryTest extends TestCase
             ->assertSee('Test Item')
             ->assertSee('8');
 
-        $rows = app(EmployeeDistributionInventoryService::class)
-            ->paginatedGroupedInventory($employee, null, 'distribution_date', 'desc');
+        $rows = app(EmployeeReceivedInventoryService::class)
+            ->paginatedGroupedInventory($employee, null, 'received_date', 'desc');
 
         $this->assertSame(1, $rows->total());
         $this->assertSame(8, (int) $rows->first()->total_quantity);
-        $this->assertSame(2, (int) $rows->first()->distribution_count);
+        $this->assertSame(2, (int) $rows->first()->receipt_count);
     }
 
     public function test_summary_kpis_match_merged_totals(): void
     {
-        [$employee] = $this->seedEmployeeDistributions([
+        [$employee] = $this->seedEmployeeIssuances([
             ['quantity' => 5, 'date' => '2026-03-07'],
             ['quantity' => 3, 'date' => '2026-04-05'],
         ]);
 
-        $summary = app(EmployeeDistributionInventoryService::class)->summaryFor($employee);
+        $summary = app(EmployeeReceivedInventoryService::class)->summaryFor($employee);
 
         $this->assertSame(1, $summary['totalItems']);
         $this->assertSame(8, $summary['totalQuantity']);
         $this->assertSame(8, $summary['totalQuantityThisYear']);
     }
 
-    public function test_employee_can_open_distribution_ledger_modal(): void
+    public function test_employee_can_open_received_ledger_modal(): void
     {
-        [$employee, $item] = $this->seedEmployeeDistributions([
+        [$employee, $item] = $this->seedEmployeeIssuances([
             ['quantity' => 5, 'date' => '2026-03-07'],
         ]);
 
         Livewire::actingAs($employee)
             ->test(MyInventory::class)
-            ->call('openDistributionLedger', $item->id)
-            ->assertActionMounted('viewDistributionLedger');
+            ->call('openReceivedLedger', $item->id)
+            ->assertActionMounted('viewReceivedLedger');
     }
 
     public function test_ledger_includes_running_balances(): void
     {
-        [$employee, $item] = $this->seedEmployeeDistributions([
+        [$employee, $item] = $this->seedEmployeeIssuances([
             ['quantity' => 5, 'date' => '2026-03-07'],
             ['quantity' => 3, 'date' => '2026-04-05'],
         ]);
 
-        $ledger = app(EmployeeDistributionInventoryService::class)->presentLedger($employee, $item->id);
+        $ledger = app(EmployeeReceivedInventoryService::class)->presentLedger($employee, $item->id);
 
         $balances = collect($ledger['rows'])->pluck('balance')->map(fn ($b) => (int) $b)->all();
 
@@ -131,9 +130,9 @@ class MyInventoryTest extends TestCase
         $this->assertSame('8', $ledger['header']['total_on_hand']);
     }
 
-    public function test_open_distribution_ledger_rejects_item_not_distributed_to_employee(): void
+    public function test_open_received_ledger_rejects_item_not_issued_to_employee(): void
     {
-        [$employee, $item] = $this->seedEmployeeDistributions([
+        [$employee, $item] = $this->seedEmployeeIssuances([
             ['quantity' => 5, 'date' => '2026-03-07'],
         ]);
 
@@ -143,19 +142,19 @@ class MyInventoryTest extends TestCase
 
         Livewire::actingAs($employee)
             ->test(MyInventory::class)
-            ->call('openDistributionLedger', $otherItem->id)
+            ->call('openReceivedLedger', $otherItem->id)
             ->assertStatus(403);
     }
 
     public function test_ledger_item_url_param_auto_mounts_modal(): void
     {
-        [$employee, $item] = $this->seedEmployeeDistributions([
+        [$employee, $item] = $this->seedEmployeeIssuances([
             ['quantity' => 5, 'date' => '2026-03-07'],
         ]);
 
         Livewire::actingAs($employee)
             ->test(MyInventory::class, ['ledgerItem' => $item->id])
-            ->assertActionMounted('viewDistributionLedger');
+            ->assertActionMounted('viewReceivedLedger');
     }
 
     public function test_category_dropdown_filters_inventory_and_kpis(): void
@@ -181,17 +180,8 @@ class MyInventoryTest extends TestCase
 
         /** @var User $employee */
         $employee = User::factory()->create(['role' => User::ROLE_EMPLOYEE]);
-        /** @var User $distributor */
-        $distributor = User::factory()->create(['role' => User::ROLE_UNIT_CONSOLIDATOR]);
-
-        Distribution::factory()->create([
-            'office_id' => $office->id,
-            'item_id' => $consumableItem->id,
-            'distributed_to' => $employee->id,
-            'distributed_by' => $distributor->id,
-            'quantity' => 5,
-            'distribution_date' => '2026-03-07',
-        ]);
+        /** @var User $issuer */
+        $issuer = User::factory()->create(['role' => User::ROLE_SUPPLY_CUSTODIAN]);
 
         $requisition = Requisition::query()->create([
             'reference_code' => 'REQ-PPE-1',
@@ -202,25 +192,36 @@ class MyInventoryTest extends TestCase
 
         Issuance::query()->create([
             'requisition_id' => $requisition->id,
+            'reference_code' => 'RIS-CON-1',
+            'office_id' => $office->id,
+            'item_id' => $consumableItem->id,
+            'issued_to' => $employee->id,
+            'issued_by' => $issuer->id,
+            'quantity' => 5,
+            'issuance_date' => '2026-03-07',
+        ]);
+
+        Issuance::query()->create([
+            'requisition_id' => $requisition->id,
             'reference_code' => 'PAR-PPE-1',
             'office_id' => $office->id,
             'item_id' => $ppeItem->id,
             'quantity' => 1,
             'issuance_date' => '2026-03-08',
-            'issued_by' => $distributor->id,
+            'issued_by' => $issuer->id,
             'issued_to' => $employee->id,
             'property_number' => 'PPE-EMP-001',
         ]);
 
-        $service = app(EmployeeDistributionInventoryService::class);
+        $service = app(EmployeeReceivedInventoryService::class);
 
         $this->assertSame(
             ['consumables', 'semi_expendable', 'ppe'],
-            array_keys(EmployeeDistributionInventoryService::categoryOptions()),
+            array_keys(EmployeeReceivedInventoryService::categoryOptions()),
         );
 
-        $consumableRows = $service->paginatedGroupedInventory($employee, null, 'distribution_date', 'desc', 10, 'consumables');
-        $ppeRows = $service->paginatedGroupedInventory($employee, null, 'distribution_date', 'desc', 10, 'ppe');
+        $consumableRows = $service->paginatedGroupedInventory($employee, null, 'received_date', 'desc', 10, 'consumables');
+        $ppeRows = $service->paginatedGroupedInventory($employee, null, 'received_date', 'desc', 10, 'ppe');
 
         $this->assertSame(1, $consumableRows->total());
         $this->assertSame('Bond Paper', $consumableRows->first()->item_name);
@@ -242,28 +243,28 @@ class MyInventoryTest extends TestCase
             ->assertDontSee('Bond Paper');
     }
 
-    public function test_semi_inventory_table_shows_distribution_columns(): void
+    public function test_semi_inventory_table_shows_received_columns(): void
     {
         [$employee] = $this->seedSemiPropertyIssuance();
 
-        $rows = app(EmployeeDistributionInventoryService::class)->paginatedGroupedInventory(
+        $rows = app(EmployeeReceivedInventoryService::class)->paginatedGroupedInventory(
             $employee,
             null,
-            'distribution_date',
+            'received_date',
             'desc',
             10,
             'semi_expendable',
         );
 
         $this->assertSame(1, $rows->total());
-        $this->assertSame(1, (int) $rows->first()->distribution_count);
-        $this->assertNotNull($rows->first()->last_distribution_date);
+        $this->assertSame(1, (int) $rows->first()->receipt_count);
+        $this->assertNotNull($rows->first()->last_received_date);
 
         Livewire::actingAs($employee)
             ->test(MyInventory::class, ['category' => 'semi_expendable'])
             ->assertSee('Total qty')
             ->assertSee('Last received')
-            ->assertSee('Distributions');
+            ->assertSee('Times received');
     }
 
     public function test_consumable_ledger_uses_ris_number_column(): void
@@ -272,26 +273,26 @@ class MyInventoryTest extends TestCase
         $category = ItemCategory::factory()->create(['name' => 'Consumables']);
         $item = Item::factory()->create(['item_category_id' => $category->id]);
         $employee = User::factory()->create(['role' => User::ROLE_EMPLOYEE]);
-        $distributor = User::factory()->create(['role' => User::ROLE_UNIT_CONSOLIDATOR]);
+        $uc = User::factory()->create(['role' => User::ROLE_UNIT_CONSOLIDATOR]);
 
         $requisition = Requisition::query()->create([
             'reference_code' => '2026-07-0100',
             'office_id' => $office->id,
-            'requested_by' => $distributor->id,
+            'requested_by' => $uc->id,
             'status' => Requisition::STATUS_ACCEPTED,
         ]);
 
-        Distribution::factory()->create([
+        Issuance::query()->create([
+            'reference_code' => 'RIS-CON-2',
             'office_id' => $office->id,
             'item_id' => $item->id,
             'requisition_id' => $requisition->id,
-            'distributed_to' => $employee->id,
-            'distributed_by' => $distributor->id,
+            'issued_to' => $employee->id,
             'quantity' => 2,
-            'distribution_date' => now(),
+            'issuance_date' => now(),
         ]);
 
-        $ledger = app(EmployeeDistributionInventoryService::class)->presentLedger($employee, $item->id);
+        $ledger = app(EmployeeReceivedInventoryService::class)->presentLedger($employee, $item->id);
 
         $referenceColumn = $ledger['columns']['reference'];
         $this->assertSame('RIS No.', is_array($referenceColumn) ? $referenceColumn['label'] : $referenceColumn);
@@ -299,7 +300,7 @@ class MyInventoryTest extends TestCase
         $this->assertSame($item->item_code, $ledger['header']['stock_no']);
     }
 
-    public function test_consumable_ledger_shows_unit_consolidator_as_distributed_by(): void
+    public function test_consumable_ledger_shows_unit_consolidator_as_endorsed_by(): void
     {
         $office = Office::factory()->create();
         $category = ItemCategory::factory()->create(['name' => 'Consumables']);
@@ -308,18 +309,26 @@ class MyInventoryTest extends TestCase
         $uc = User::factory()->create(['role' => User::ROLE_UNIT_CONSOLIDATOR, 'name' => 'Unit Consolidator One']);
         User::factory()->create(['role' => User::ROLE_SUPPLY_CUSTODIAN, 'name' => 'Supply Custodian']);
 
-        Distribution::factory()->create([
+        $requisition = Requisition::query()->create([
+            'reference_code' => '2026-07-0110',
             'office_id' => $office->id,
-            'item_id' => $item->id,
-            'distributed_to' => $employee->id,
-            'distributed_by' => $uc->id,
-            'quantity' => 1,
-            'distribution_date' => now(),
+            'requested_by' => $uc->id,
+            'status' => Requisition::STATUS_ACCEPTED,
         ]);
 
-        $ledger = app(EmployeeDistributionInventoryService::class)->presentLedger($employee, $item->id);
+        Issuance::query()->create([
+            'reference_code' => 'RIS-CON-3',
+            'office_id' => $office->id,
+            'item_id' => $item->id,
+            'requisition_id' => $requisition->id,
+            'issued_to' => $employee->id,
+            'quantity' => 1,
+            'issuance_date' => now(),
+        ]);
 
-        $this->assertSame('Unit Consolidator One', collect($ledger['rows'])->first()['distributed_by']);
+        $ledger = app(EmployeeReceivedInventoryService::class)->presentLedger($employee, $item->id);
+
+        $this->assertSame('Unit Consolidator One', collect($ledger['rows'])->first()['endorsed_by']);
     }
 
     public function test_property_ledger_shows_unit_consolidator_not_supply_custodian(): void
@@ -353,10 +362,10 @@ class MyInventoryTest extends TestCase
             'property_number' => '2026-0001',
         ]);
 
-        $ledger = app(EmployeeDistributionInventoryService::class)->presentPropertyIssuanceLedger($employee, $item->id);
+        $ledger = app(EmployeeReceivedInventoryService::class)->presentPropertyIssuanceLedger($employee, $item->id);
 
-        $this->assertSame('UC Maria', collect($ledger['rows'])->first()['distributed_by']);
-        $this->assertNotSame('SC Pedro', collect($ledger['rows'])->first()['distributed_by']);
+        $this->assertSame('UC Maria', collect($ledger['rows'])->first()['endorsed_by']);
+        $this->assertNotSame('SC Pedro', collect($ledger['rows'])->first()['endorsed_by']);
     }
 
     public function test_semi_property_ledger_shows_endorsing_uc_from_compiled_request(): void
@@ -406,9 +415,9 @@ class MyInventoryTest extends TestCase
             'property_number' => 'SPLV-2026-OE-106-01-001',
         ]);
 
-        $ledger = app(EmployeeDistributionInventoryService::class)->presentPropertyIssuanceLedger($employee, $item->id);
+        $ledger = app(EmployeeReceivedInventoryService::class)->presentPropertyIssuanceLedger($employee, $item->id);
 
-        $this->assertSame('UC Compiled', collect($ledger['rows'])->first()['distributed_by']);
+        $this->assertSame('UC Compiled', collect($ledger['rows'])->first()['endorsed_by']);
     }
 
     public function test_property_ledger_shows_dash_when_only_supply_custodian_on_chain(): void
@@ -441,9 +450,9 @@ class MyInventoryTest extends TestCase
             'property_number' => '2026-0002',
         ]);
 
-        $ledger = app(EmployeeDistributionInventoryService::class)->presentPropertyIssuanceLedger($employee, $item->id);
+        $ledger = app(EmployeeReceivedInventoryService::class)->presentPropertyIssuanceLedger($employee, $item->id);
 
-        $this->assertSame('—', collect($ledger['rows'])->first()['distributed_by']);
+        $this->assertSame('—', collect($ledger['rows'])->first()['endorsed_by']);
     }
 
     /**
@@ -543,10 +552,10 @@ class MyInventoryTest extends TestCase
     }
 
     /**
-     * @param  array<int, array{quantity: int, date: string}>  $distributions
+     * @param  array<int, array{quantity: int, date: string}>  $issuances
      * @return array{0: User, 1: Item}
      */
-    protected function seedEmployeeDistributions(array $distributions): array
+    protected function seedEmployeeIssuances(array $issuances): array
     {
         $office = Office::factory()->create();
         $category = ItemCategory::factory()->create(['name' => 'Consumables']);
@@ -558,17 +567,25 @@ class MyInventoryTest extends TestCase
         /** @var User $employee */
         $employee = User::factory()->create(['role' => User::ROLE_EMPLOYEE]);
 
-        /** @var User $distributor */
-        $distributor = User::factory()->create(['role' => User::ROLE_UNIT_CONSOLIDATOR]);
+        /** @var User $issuer */
+        $issuer = User::factory()->create(['role' => User::ROLE_SUPPLY_CUSTODIAN]);
 
-        foreach ($distributions as $distribution) {
-            Distribution::factory()->create([
+        $requisition = Requisition::query()->create([
+            'office_id' => $office->id,
+            'requested_by' => $employee->id,
+            'status' => Requisition::STATUS_ACCEPTED,
+        ]);
+
+        foreach ($issuances as $index => $issuance) {
+            Issuance::query()->create([
+                'requisition_id' => $requisition->id,
+                'reference_code' => 'RIS-SEED-'.($index + 1),
                 'office_id' => $office->id,
                 'item_id' => $item->id,
-                'distributed_to' => $employee->id,
-                'distributed_by' => $distributor->id,
-                'quantity' => $distribution['quantity'],
-                'distribution_date' => $distribution['date'],
+                'issued_to' => $employee->id,
+                'issued_by' => $issuer->id,
+                'quantity' => $issuance['quantity'],
+                'issuance_date' => $issuance['date'],
             ]);
         }
 

@@ -6,7 +6,7 @@ use App\Filament\Resources\PropertyActionRequests\PropertyActionRequestResource;
 use App\Models\Issuance;
 use App\Models\PropertyActionRequest;
 use App\Models\User;
-use App\Services\EmployeeDistributionInventoryService;
+use App\Services\EmployeeReceivedInventoryService;
 use App\Services\UsefulLifeConditionReportService;
 use App\Support\SemiExpendableUsefulLife;
 use BackedEnum;
@@ -39,7 +39,7 @@ class MyInventory extends Page
     protected string $view = 'filament.pages.my-inventory';
 
     #[Url]
-    public string $sortBy = 'distribution_date';
+    public string $sortBy = 'received_date';
 
     #[Url]
     public string $sortDir = 'desc';
@@ -48,10 +48,10 @@ class MyInventory extends Page
     public string $search = '';
 
     #[Url]
-    public string $category = EmployeeDistributionInventoryService::CATEGORY_CONSUMABLES;
+    public string $category = EmployeeReceivedInventoryService::CATEGORY_CONSUMABLES;
 
     #[Url]
-    public string $custodyTab = EmployeeDistributionInventoryService::CUSTODY_TAB_ON_HAND;
+    public string $custodyTab = EmployeeReceivedInventoryService::CUSTODY_TAB_ON_HAND;
 
     #[Url]
     public ?int $ledgerItem = null;
@@ -63,19 +63,19 @@ class MyInventory extends Page
 
     public function mount(): void
     {
-        if (! EmployeeDistributionInventoryService::isValidCategory($this->category)) {
-            $this->category = EmployeeDistributionInventoryService::CATEGORY_CONSUMABLES;
+        if (! EmployeeReceivedInventoryService::isValidCategory($this->category)) {
+            $this->category = EmployeeReceivedInventoryService::CATEGORY_CONSUMABLES;
         }
 
         if ($this->ledgerItem !== null) {
-            $this->openDistributionLedger($this->ledgerItem);
+            $this->openReceivedLedger($this->ledgerItem);
         }
     }
 
     public function updatedCategory(): void
     {
-        if (! EmployeeDistributionInventoryService::isValidCategory($this->category)) {
-            $this->category = EmployeeDistributionInventoryService::CATEGORY_CONSUMABLES;
+        if (! EmployeeReceivedInventoryService::isValidCategory($this->category)) {
+            $this->category = EmployeeReceivedInventoryService::CATEGORY_CONSUMABLES;
         }
 
         $this->resetPage();
@@ -83,8 +83,8 @@ class MyInventory extends Page
 
     public function updatedCustodyTab(): void
     {
-        if (! EmployeeDistributionInventoryService::isValidCustodyTab($this->custodyTab)) {
-            $this->custodyTab = EmployeeDistributionInventoryService::CUSTODY_TAB_ON_HAND;
+        if (! EmployeeReceivedInventoryService::isValidCustodyTab($this->custodyTab)) {
+            $this->custodyTab = EmployeeReceivedInventoryService::CUSTODY_TAB_ON_HAND;
         }
 
         $this->resetPage();
@@ -126,8 +126,8 @@ class MyInventory extends Page
     public function sortByColumn(string $column): void
     {
         $allowed = $this->usesPropertyIssuanceView()
-            ? ['item_name', 'quantity', 'distribution_date', 'distribution_count', 'last_distribution_date']
-            : ['item_name', 'quantity', 'distribution_date', 'distribution_count'];
+            ? ['item_name', 'quantity', 'received_date', 'receipt_count', 'last_received_date']
+            : ['item_name', 'quantity', 'received_date', 'receipt_count'];
 
         if (! in_array($column, $allowed, true)) {
             return;
@@ -149,7 +149,7 @@ class MyInventory extends Page
             return ['totalItems' => 0, 'totalQuantity' => 0, 'totalQuantityThisYear' => 0];
         }
 
-        return app(EmployeeDistributionInventoryService::class)->summaryFor($user, $this->category, $this->custodyTab);
+        return app(EmployeeReceivedInventoryService::class)->summaryFor($user, $this->category, $this->custodyTab);
     }
 
     public function getInventoryRows(): LengthAwarePaginator
@@ -159,7 +159,7 @@ class MyInventory extends Page
             return (new \Illuminate\Pagination\LengthAwarePaginator([], 0, 10, 1))->onEachSide(0);
         }
 
-        return app(EmployeeDistributionInventoryService::class)->paginatedGroupedInventory(
+        return app(EmployeeReceivedInventoryService::class)->paginatedGroupedInventory(
             $user,
             filled($this->search) ? $this->search : null,
             $this->sortBy,
@@ -172,7 +172,7 @@ class MyInventory extends Page
 
     public function usesPropertyIssuanceView(): bool
     {
-        return EmployeeDistributionInventoryService::usesPropertyIssuanceView($this->category);
+        return EmployeeReceivedInventoryService::usesPropertyIssuanceView($this->category);
     }
 
     public function reportStillUsable(int $issuanceId): void
@@ -224,7 +224,7 @@ class MyInventory extends Page
 
     protected function issuanceForUsefulLifeReport(User $user, int $issuanceId): Issuance
     {
-        app(EmployeeDistributionInventoryService::class)->assertEmployeeOwnsIssuance($user, $issuanceId);
+        app(EmployeeReceivedInventoryService::class)->assertEmployeeOwnsIssuance($user, $issuanceId);
 
         $issuance = Issuance::query()->with('item.category')->findOrFail($issuanceId);
 
@@ -253,7 +253,7 @@ class MyInventory extends Page
 
     public function showPropertyActionCta(Issuance $issuance): bool
     {
-        if ($this->custodyTab !== EmployeeDistributionInventoryService::CUSTODY_TAB_ON_HAND) {
+        if ($this->custodyTab !== EmployeeReceivedInventoryService::CUSTODY_TAB_ON_HAND) {
             return false;
         }
 
@@ -268,7 +268,7 @@ class MyInventory extends Page
         return in_array($status, [SemiExpendableUsefulLife::STATUS_NEARING, SemiExpendableUsefulLife::STATUS_EXPIRED], true);
     }
 
-    public function openDistributionLedger(int $itemId): void
+    public function openReceivedLedger(int $itemId): void
     {
         $user = Filament::auth()->user();
         if (! $user instanceof User) {
@@ -276,33 +276,33 @@ class MyInventory extends Page
         }
 
         try {
-            app(EmployeeDistributionInventoryService::class)->assertEmployeeOwnsItem($user, $itemId);
+            app(EmployeeReceivedInventoryService::class)->assertEmployeeOwnsItem($user, $itemId);
         } catch (AuthorizationException) {
             abort(403);
         }
 
         $this->ledgerPage = 1;
 
-        $this->mountAction('viewDistributionLedger', [
+        $this->mountAction('viewReceivedLedger', [
             'itemId' => $itemId,
         ]);
     }
 
-    public function viewDistributionLedgerAction(): Action
+    public function viewReceivedLedgerAction(): Action
     {
-        return Action::make('viewDistributionLedger')
+        return Action::make('viewReceivedLedger')
             ->modalWidth(Width::FiveExtraLarge)
             ->extraModalWindowAttributes(['class' => 'owwa-view-record-modal'])
             ->modalSubmitAction(false)
             ->modalCancelActionLabel('Close')
             ->modalHeading(function (): string {
-                $ledger = $this->resolveMountedDistributionLedger();
+                $ledger = $this->resolveMountedReceivedLedger();
 
-                return $ledger['header']['item_name'].' — Distribution History';
+                return $ledger['header']['item_name'].' — Received History';
             })
             ->modalContent(fn (): HtmlString => new HtmlString(view(
-                'filament.pages.partials.employee-distribution-ledger-modal',
-                ['ledger' => $this->resolveMountedDistributionLedger()],
+                'filament.pages.partials.employee-received-ledger-modal',
+                ['ledger' => $this->resolveMountedReceivedLedger()],
             )->render()));
     }
 
@@ -314,7 +314,7 @@ class MyInventory extends Page
         }
 
         try {
-            app(EmployeeDistributionInventoryService::class)->assertEmployeeOwnsPropertyItem(
+            app(EmployeeReceivedInventoryService::class)->assertEmployeeOwnsPropertyItem(
                 $user,
                 $itemId,
                 $this->custodyTab,
@@ -325,7 +325,7 @@ class MyInventory extends Page
 
         $this->ledgerPage = 1;
 
-        $this->mountAction('viewDistributionLedger', [
+        $this->mountAction('viewReceivedLedger', [
             'itemId' => $itemId,
         ]);
     }
@@ -343,7 +343,7 @@ class MyInventory extends Page
      *     paginator: \Illuminate\Contracts\Pagination\LengthAwarePaginator
      * }
      */
-    protected function resolveMountedDistributionLedger(): array
+    protected function resolveMountedReceivedLedger(): array
     {
         $user = Filament::auth()->user();
         $arguments = $this->getMountedAction()?->getArguments() ?? [];
@@ -354,7 +354,7 @@ class MyInventory extends Page
         }
 
         if ($this->usesPropertyIssuanceView()) {
-            return app(EmployeeDistributionInventoryService::class)->presentPropertyIssuanceLedgerPaginated(
+            return app(EmployeeReceivedInventoryService::class)->presentPropertyIssuanceLedgerPaginated(
                 $user,
                 $itemId,
                 max(1, $this->ledgerPage),
@@ -363,7 +363,7 @@ class MyInventory extends Page
             );
         }
 
-        return app(EmployeeDistributionInventoryService::class)->presentLedgerPaginated(
+        return app(EmployeeReceivedInventoryService::class)->presentLedgerPaginated(
             $user,
             $itemId,
             max(1, $this->ledgerPage),

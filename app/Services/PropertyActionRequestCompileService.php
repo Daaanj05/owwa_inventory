@@ -95,15 +95,19 @@ class PropertyActionRequestCompileService
     }
 
     /**
+     * One combined request per action type + reason, so each reaches SC with its own receive outcome.
+     * The UC's action type / reason override only applies when the selection forms a single group.
+     *
      * @param  Collection<int, PropertyActionRequest>|SupportCollection<int, PropertyActionRequest>|array<int, int|PropertyActionRequest>  $sources
+     * @return SupportCollection<int, PropertyActionRequest>
      */
-    public function createCompiledSubmission(
+    public function createCompiledSubmissions(
         User $unitConsolidator,
         Collection|SupportCollection|array $sources,
         ?string $remarks = null,
         ?string $actionType = null,
         ?string $reasonCode = null,
-    ): PropertyActionRequest {
+    ): SupportCollection {
         if (! $unitConsolidator->isUnitConsolidator()) {
             throw new InvalidArgumentException('Only Unit Consolidators can compile property returns.');
         }
@@ -133,108 +137,116 @@ class PropertyActionRequestCompileService
             throw new InvalidArgumentException('Selected property returns are outside your office/department coverage.');
         }
 
-        return DB::transaction(function () use ($unitConsolidator, $eligible, $officeId, $departmentId, $remarks, $actionType, $reasonCode): PropertyActionRequest {
-            $actionTypes = $eligible->pluck('action_type')->unique()->values();
-            $reasonCodes = $eligible->pluck('reason_code')->unique()->values();
+        $groups = $eligible->groupBy(fn (PropertyActionRequest $source): string => $source->action_type.'|'.$source->reason_code);
+        $isSingleGroup = $groups->count() === 1;
 
-            $resolvedActionType = filled($actionType)
-                ? (string) $actionType
-                : (string) ($actionTypes->count() === 1
-                    ? $actionTypes->first()
-                    : PropertyActionRequest::ACTION_RETURN);
+        return DB::transaction(fn (): SupportCollection => $groups
+            ->map(fn (Collection $group): PropertyActionRequest => $this->compileGroup(
+                $unitConsolidator,
+                $group,
+                $officeId,
+                $departmentId,
+                $remarks,
+                $isSingleGroup && filled($actionType) ? (string) $actionType : (string) $group->first()->action_type,
+                $isSingleGroup && filled($reasonCode) ? (string) $reasonCode : (string) $group->first()->reason_code,
+            ))
+            ->values()
+            ->toBase());
+    }
 
-            if (filled($reasonCode)) {
-                $resolvedReasonCode = (string) $reasonCode;
-            } elseif ($reasonCodes->count() === 1) {
-                $resolvedReasonCode = (string) $reasonCodes->first();
-            } else {
-                $resolvedReasonCode = $resolvedActionType === PropertyActionRequest::ACTION_RETURN
-                    ? 'needs_repair'
-                    : (string) ($reasonCodes->first() ?? 'needs_repair');
-            }
+    /**
+     * @param  Collection<int, PropertyActionRequest>  $eligible
+     */
+    protected function compileGroup(
+        User $unitConsolidator,
+        Collection $eligible,
+        int $officeId,
+        int $departmentId,
+        ?string $remarks,
+        string $resolvedActionType,
+        string $resolvedReasonCode,
+    ): PropertyActionRequest {
+        $batch = PropertyActionRequest::query()->create([
+            'action_type' => $resolvedActionType,
+            'reason_code' => $resolvedReasonCode,
+            'reason_detail' => $this->buildCompiledReasonDetail($eligible, $remarks),
+            'requested_by' => $unitConsolidator->id,
+            'accountable_user_id' => $unitConsolidator->id,
+            'office_id' => $officeId,
+            'department_id' => $departmentId,
+            'status' => PropertyActionRequest::STATUS_PENDING_SC,
+            'uc_approved_by' => $unitConsolidator->id,
+            'uc_approved_at' => now(),
+            'uc_remarks' => $remarks,
+        ]);
 
-            $batch = PropertyActionRequest::query()->create([
-                'action_type' => $resolvedActionType,
-                'reason_code' => $resolvedReasonCode,
-                'reason_detail' => $this->buildCompiledReasonDetail($eligible, $remarks),
-                'requested_by' => $unitConsolidator->id,
-                'accountable_user_id' => $unitConsolidator->id,
-                'office_id' => $officeId,
-                'department_id' => $departmentId,
-                'status' => PropertyActionRequest::STATUS_PENDING_SC,
-                'uc_approved_by' => $unitConsolidator->id,
-                'uc_approved_at' => now(),
-                'uc_remarks' => $remarks,
-            ]);
+        $sort = 0;
 
-            $sort = 0;
+        foreach ($eligible as $source) {
+            $source->loadMissing('lines');
 
-            foreach ($eligible as $source) {
-                $source->loadMissing('lines');
-
-                foreach ($source->lines as $line) {
-                    PropertyActionRequestLine::query()->create([
-                        'property_action_request_id' => $batch->id,
-                        'issuance_id' => $line->issuance_id,
-                        'inventory_unit_id' => $line->inventory_unit_id,
-                        'quantity' => $line->quantity,
-                        'sort_order' => $sort++,
-                    ]);
-                }
-
-                $source->update([
-                    'compiled_into_property_action_request_id' => $batch->id,
-                    'uc_approved_by' => $unitConsolidator->id,
-                    'uc_approved_at' => $source->uc_approved_at ?? now(),
-                    'uc_remarks' => $remarks ?? $source->uc_remarks,
-                    'status' => PropertyActionRequest::STATUS_PENDING_SC,
+            foreach ($source->lines as $line) {
+                PropertyActionRequestLine::query()->create([
+                    'property_action_request_id' => $batch->id,
+                    'issuance_id' => $line->issuance_id,
+                    'inventory_unit_id' => $line->inventory_unit_id,
+                    'quantity' => $line->quantity,
+                    'sort_order' => $sort++,
                 ]);
             }
 
-            app(UserActivityLogger::class)->record(
-                $unitConsolidator,
-                'compiled',
-                'Compiled property return '.$batch->reference_code.' from '.$eligible->count().' employee return'.($eligible->count() === 1 ? '' : 's'),
-                $batch,
-                [
-                    'source_count' => $eligible->count(),
-                    'line_count' => $sort,
-                ],
-            );
+            $source->update([
+                'compiled_into_property_action_request_id' => $batch->id,
+                'uc_approved_by' => $unitConsolidator->id,
+                'uc_approved_at' => $source->uc_approved_at ?? now(),
+                'uc_remarks' => $remarks ?? $source->uc_remarks,
+                'status' => PropertyActionRequest::STATUS_PENDING_SC,
+            ]);
+        }
 
-            $custodians = app(NotificationRecipientResolver::class)->supplyCustodiansForRegionalOffice();
+        app(UserActivityLogger::class)->record(
+            $unitConsolidator,
+            'compiled',
+            'Compiled property return '.$batch->reference_code.' from '.$eligible->count().' employee return'.($eligible->count() === 1 ? '' : 's'),
+            $batch,
+            [
+                'source_count' => $eligible->count(),
+                'line_count' => $sort,
+            ],
+        );
 
-            foreach ($custodians as $custodian) {
-                $custodian->notify(new RequisitionWorkflowDatabaseNotification(
-                    'Property return awaiting SC approval',
+        $custodians = app(NotificationRecipientResolver::class)->supplyCustodiansForRegionalOffice();
+
+        foreach ($custodians as $custodian) {
+            $custodian->notify(new RequisitionWorkflowDatabaseNotification(
+                'Property return awaiting SC approval',
+                sprintf(
+                    '%s — consolidated from %d employee return%s.',
+                    $batch->reference_code,
+                    $eligible->count(),
+                    $eligible->count() === 1 ? '' : 's',
+                ),
+                propertyActionRequestId: (int) $batch->id,
+            ));
+        }
+
+        foreach ($eligible as $source) {
+            $requester = $source->requestedBy;
+
+            if ($requester instanceof User) {
+                $requester->notify(new RequisitionWorkflowDatabaseNotification(
+                    'Property return status updated',
                     sprintf(
-                        '%s — consolidated from %d employee return%s.',
+                        '%s was compiled and submitted to Supply Custodian as %s.',
+                        $source->reference_code,
                         $batch->reference_code,
-                        $eligible->count(),
-                        $eligible->count() === 1 ? '' : 's',
                     ),
-                    propertyActionRequestId: (int) $batch->id,
+                    propertyActionRequestId: (int) $source->id,
                 ));
             }
+        }
 
-            foreach ($eligible as $source) {
-                $requester = $source->requestedBy;
-
-                if ($requester instanceof User) {
-                    $requester->notify(new RequisitionWorkflowDatabaseNotification(
-                        'Property return status updated',
-                        sprintf(
-                            '%s was compiled and submitted to Supply Custodian as %s.',
-                            $source->reference_code,
-                            $batch->reference_code,
-                        ),
-                        propertyActionRequestId: (int) $source->id,
-                    ));
-                }
-            }
-
-            return $batch->fresh(['lines']);
-        });
+        return $batch->fresh(['lines']);
     }
 
     /**

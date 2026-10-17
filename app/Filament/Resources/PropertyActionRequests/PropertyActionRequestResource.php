@@ -38,6 +38,39 @@ class PropertyActionRequestResource extends Resource
 
     protected static ?int $navigationSort = 25;
 
+    public static function getNavigationBadge(): ?string
+    {
+        try {
+            /** @var User|null $user */
+            $user = Filament::auth()->user();
+
+            if (! $user instanceof User) {
+                return null;
+            }
+
+            $status = match (true) {
+                $user->isSupplyCustodian() => PropertyActionRequest::STATUS_PENDING_SC,
+                $user->isUnitConsolidator(), $user->isEmployee() => PropertyActionRequest::STATUS_PENDING_UC,
+                default => null,
+            };
+
+            if ($status === null) {
+                return null;
+            }
+
+            $pending = static::getEloquentQuery()->where('status', $status)->count();
+
+            return $pending > 0 ? (string) $pending : null;
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    public static function getNavigationBadgeColor(): string|array|null
+    {
+        return 'warning';
+    }
+
     public static function getEloquentQuery(): Builder
     {
         $query = parent::getEloquentQuery()

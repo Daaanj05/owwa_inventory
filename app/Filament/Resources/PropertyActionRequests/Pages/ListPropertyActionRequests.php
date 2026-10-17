@@ -125,9 +125,7 @@ class ListPropertyActionRequests extends ListRecords
                 $data = [
                     'action_type' => $arguments['action_type'] ?? PropertyActionRequest::ACTION_RETURN,
                     'lines' => [[
-                        'issuance_id' => null,
                         'inventory_unit_id' => null,
-                        'quantity' => 1,
                     ]],
                     'source_property_action_request_ids' => [],
                 ];
@@ -155,9 +153,7 @@ class ListPropertyActionRequests extends ListRecords
                     }
 
                     if ($reasonCodes->count() === 1) {
-                        $data['reason_code'] = $reasonCodes->first() === 'good_condition'
-                            ? 'needs_repair'
-                            : $reasonCodes->first();
+                        $data['reason_code'] = $reasonCodes->first();
                     }
 
                     return $data;
@@ -169,19 +165,18 @@ class ListPropertyActionRequests extends ListRecords
                     return $data;
                 }
 
-                $issuance = Issuance::query()->with(['inventoryUnit', 'item'])->find($issuanceId);
+                $user = Filament::auth()->user();
+                $issuance = Issuance::query()->with('item')->find($issuanceId);
 
-                if (! $issuance) {
+                if (! $issuance || ! $user instanceof User) {
                     return $data;
                 }
 
+                $lines = PropertyActionRequestForm::linesForIssuance($user, $issuance);
+
                 return array_merge($data, [
                     'item_category_id' => $issuance->item?->item_category_id,
-                    'lines' => [[
-                        'issuance_id' => $issuance->id,
-                        'inventory_unit_id' => $issuance->inventoryUnit?->id,
-                        'quantity' => max(1, (int) ($issuance->quantity ?? 1)),
-                    ]],
+                    'lines' => $lines !== [] ? $lines : $data['lines'],
                 ]);
             })
             ->mutateDataUsing(function (array $data): array {
@@ -214,13 +209,13 @@ class ListPropertyActionRequests extends ListRecords
                     }
 
                     try {
-                        return app(PropertyActionRequestCompileService::class)->createCompiledSubmission(
+                        return app(PropertyActionRequestCompileService::class)->createCompiledSubmissions(
                             $user,
                             $sourceIds,
                             $data['reason_detail'] ?? null,
                             $data['action_type'] ?? null,
                             $data['reason_code'] ?? null,
-                        );
+                        )->first();
                     } catch (\InvalidArgumentException $exception) {
                         throw ValidationException::withMessages([
                             'source_property_action_request_ids' => $exception->getMessage(),
@@ -302,9 +297,7 @@ class ListPropertyActionRequests extends ListRecords
                         }
 
                         if ($reasonCodes->count() === 1) {
-                            $fill['reason_code'] = $reasonCodes->first() === 'good_condition'
-                                ? 'needs_repair'
-                                : $reasonCodes->first();
+                            $fill['reason_code'] = $reasonCodes->first();
                         }
                     }
 

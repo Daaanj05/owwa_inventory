@@ -1,7 +1,7 @@
 <?php
 
 return [
-    'entity_name' => 'OWWA-4A',
+    'entity_name' => 'OWWA Regional Welfare Office IV-A',
 
     'currency' => [
         'excel_format_code' => '"₱"#,##0.00',

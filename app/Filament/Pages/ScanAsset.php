@@ -6,12 +6,15 @@ use App\Models\InventoryUnit;
 use App\Models\User;
 use App\Services\PhysicalCountScanService;
 use App\Support\InventoryCategoryTasks;
+use App\Support\InventoryUnitQrPayload;
 use App\Support\ScanAssetHandoff;
 use BackedEnum;
+use Filament\Actions\Action;
 use Filament\Facades\Filament;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Illuminate\Contracts\Support\Htmlable;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\HtmlString;
 use UnitEnum;
@@ -50,6 +53,20 @@ class ScanAsset extends Page
 
     public ?string $resolvedPublicUrl = null;
 
+    public bool $resolvedIsClaimed = false;
+
+    /**
+     * @var array{description?: string, unit_cost?: string, source?: string, holder?: string}
+     */
+    public array $resolvedDetails = [];
+
+    /**
+     * Typed Inventory Item No. matched several (legacy duplicate) units; the SC must pick one.
+     *
+     * @var array<int, string>
+     */
+    public array $duplicateUnitOptions = [];
+
     public static function canAccess(): bool
     {
         if (! config('inventory.qr_public_lookup', true)) {
@@ -75,7 +92,7 @@ class ScanAsset extends Page
 
     public function getSubheading(): ?string
     {
-        return 'Look up PPE and semi-expendable property tags, then open Disposal, Incident report, or Transfer.';
+        return 'Look up PPE and semi-expendable property tags, then open Disposal, Incident report, or Transfer, or reprint a worn QR label.';
     }
 
     /**
@@ -90,9 +107,9 @@ class ScanAsset extends Page
     {
         $this->clearResolvedAsset();
 
-        $unit = $this->findUnitFromScan($code);
+        $units = $this->findUnitsFromScan($code);
 
-        if ($unit === null) {
+        if ($units->isEmpty()) {
             Notification::make()
                 ->title('Asset not found')
                 ->body('No PPE or semi-expendable inventory unit matched that code.')
@@ -102,6 +119,40 @@ class ScanAsset extends Page
             return;
         }
 
+        if ($units->count() > 1) {
+            $this->duplicateUnitOptions = $units
+                ->mapWithKeys(fn (InventoryUnit $unit): array => [
+                    $unit->id => implode(' · ', array_filter([
+                        $unit->property_number,
+                        $unit->article ?? $unit->item?->name,
+                        $unit->office?->name,
+                        str_replace('_', ' ', (string) $unit->status),
+                    ])),
+                ])
+                ->all();
+
+            return;
+        }
+
+        $this->showUnit($units->first());
+    }
+
+    public function selectDuplicateUnit(int $unitId): void
+    {
+        if (! array_key_exists($unitId, $this->duplicateUnitOptions)) {
+            return;
+        }
+
+        $unit = InventoryUnit::query()->with(['item.category', 'office', 'issuance', 'acquisition'])->find($unitId);
+        $this->clearResolvedAsset();
+
+        if ($unit !== null) {
+            $this->showUnit($unit);
+        }
+    }
+
+    protected function showUnit(InventoryUnit $unit): void
+    {
         $resolved = ScanAssetHandoff::resolveActionableUnit($unit);
 
         if ($resolved === null) {
@@ -120,23 +171,90 @@ class ScanAsset extends Page
             return;
         }
 
-        if (ScanAssetHandoff::isUnitClaimed($resolved['unit'])) {
-            ScanAssetHandoff::notifyBlocked(
-                'Unit already claimed',
-                'This inventory unit is already linked to a disposal or incident report draft.',
-            );
+        $unit = $resolved['unit'];
 
-            return;
-        }
-
-        $this->resolvedUnitId = $resolved['unit']->id;
-        $this->resolvedPropertyNumber = (string) $resolved['unit']->property_number;
-        $this->resolvedItemName = (string) ($resolved['unit']->article ?? $resolved['unit']->item?->name ?? '—');
-        $this->resolvedOfficeName = (string) ($resolved['unit']->office?->name ?? '—');
-        $this->resolvedStatus = str_replace('_', ' ', (string) $resolved['unit']->status);
+        $this->resolvedUnitId = $unit->id;
+        $this->resolvedPropertyNumber = (string) $unit->property_number;
+        $this->resolvedItemName = (string) ($unit->article ?? $unit->item?->name ?? '—');
+        $this->resolvedOfficeName = (string) ($unit->office?->name ?? '—');
+        $this->resolvedStatus = str_replace('_', ' ', (string) $unit->status);
         $this->resolvedCategorySlug = $resolved['categorySlug'];
         $this->resolvedCategoryId = $resolved['categoryId'];
-        $this->resolvedPublicUrl = route('inventory.assets.unit.show', ['inventoryUnit' => $resolved['unit']->id]);
+        $this->resolvedPublicUrl = route('inventory.assets.unit.show', ['inventoryUnit' => $unit->id]);
+        $this->resolvedIsClaimed = ScanAssetHandoff::isUnitClaimed($unit);
+        $this->resolvedDetails = $this->unitDetails($unit);
+    }
+
+    /**
+     * @return array{description: string, unit_cost: string, source: string, holder: string}
+     */
+    protected function unitDetails(InventoryUnit $unit): array
+    {
+        $unit->loadMissing([
+            'acquisition.inspectionAcceptanceReport',
+            'stockOpeningBalance.batch',
+            'issuance.issuedTo',
+        ]);
+
+        $cost = $unit->unit_cost ?? $unit->acquisition?->unit_cost;
+
+        $source = match (true) {
+            $unit->acquisition !== null => trim(sprintf(
+                'IAR %s · %s',
+                $unit->acquisition->inspectionAcceptanceReport?->number ?? $unit->acquisition->reference_code,
+                $unit->acquisition->acquisition_date?->format('M j, Y') ?? '',
+            ), ' ·'),
+            $unit->stockOpeningBalance !== null => trim(sprintf(
+                'Opening balance %s · %s',
+                $unit->stockOpeningBalance->batch?->reference_code ?? '',
+                $unit->stockOpeningBalance->recorded_at?->format('M j, Y') ?? '',
+            ), ' ·'),
+            default => '—',
+        };
+
+        $holder = match ($unit->status) {
+            InventoryUnit::STATUS_ISSUED => trim(sprintf(
+                '%s · %s',
+                $unit->issuance?->issuedTo?->name ?? '—',
+                $unit->issuance?->controlNumber() ?? '',
+            ), ' ·'),
+            InventoryUnit::STATUS_UNDER_REPAIR => 'Supply office (under repair)',
+            default => 'Supply office stock',
+        };
+
+        return [
+            'description' => (string) ($unit->description ?: ($unit->item?->description ?? '—')),
+            'unit_cost' => $cost !== null ? '₱'.number_format((float) $cost, 2) : '—',
+            'source' => $source,
+            'holder' => $holder,
+        ];
+    }
+
+    public function reprintQrLabelAction(): Action
+    {
+        return Action::make('reprintQrLabel')
+            ->label('Reprint QR label')
+            ->icon('heroicon-o-printer')
+            ->color('gray')
+            ->requiresConfirmation()
+            ->modalHeading(fn (): string => 'Reprint label for '.$this->resolvedPropertyNumber.'?')
+            ->modalDescription('Check that the details on the card match the physical item before attaching the new tag.')
+            ->modalSubmitActionLabel('Reprint')
+            ->visible(fn (): bool => $this->resolvedUnitId !== null)
+            ->action(function (): void {
+                $unit = $this->resolvedUnitId
+                    ? InventoryUnit::query()->with(['item.category', 'office'])->find($this->resolvedUnitId)
+                    : null;
+
+                if (ScanAssetHandoff::resolveActionableUnit($unit) === null) {
+                    ScanAssetHandoff::notifyBlocked('Scan expired', 'Scan the property tag again to continue.');
+                    $this->clearResolvedAsset();
+
+                    return;
+                }
+
+                $this->redirect(route('owwa.qr-labels.unit', ['inventoryUnit' => $unit->id]), navigate: false);
+            });
     }
 
     public function submitManualCode(): void
@@ -159,6 +277,9 @@ class ScanAsset extends Page
         $this->resolvedCategorySlug = null;
         $this->resolvedCategoryId = null;
         $this->resolvedPublicUrl = null;
+        $this->resolvedIsClaimed = false;
+        $this->resolvedDetails = [];
+        $this->duplicateUnitOptions = [];
     }
 
     public function startDisposal(): void
@@ -217,9 +338,14 @@ class ScanAsset extends Page
         $this->redirect($url, navigate: false);
     }
 
-    protected function findUnitFromScan(string $code): ?InventoryUnit
+    /**
+     * Exact matches only: the scanned unit ID, or every unit carrying the typed Inventory Item No.
+     *
+     * @return Collection<int, InventoryUnit>
+     */
+    protected function findUnitsFromScan(string $code): Collection
     {
-        $payload = \App\Support\InventoryUnitQrPayload::resolve($code);
+        $payload = InventoryUnitQrPayload::resolve($code);
 
         if ($payload?->inventoryUnitId !== null) {
             $unit = InventoryUnit::query()
@@ -227,20 +353,20 @@ class ScanAsset extends Page
                 ->find($payload->inventoryUnitId);
 
             if ($unit !== null) {
-                return $unit;
+                return new Collection([$unit]);
             }
         }
 
         $propertyNumber = app(PhysicalCountScanService::class)->normalizePropertyNumber($code);
 
         if (blank($propertyNumber)) {
-            return null;
+            return new Collection;
         }
 
         return InventoryUnit::query()
             ->with(['item.category', 'office', 'issuance', 'acquisition'])
             ->where('property_number', $propertyNumber)
             ->orderBy('id')
-            ->first();
+            ->get();
     }
 }

@@ -137,10 +137,16 @@ class InventoryPlanReminderServiceTest extends TestCase
 
     protected function createApprovedLine(string $plannedDate, ?string $lastReminderType = null): PhysicalInventoryPlanLine
     {
-        return PhysicalInventoryPlanLine::factory()->create([
+        $line = PhysicalInventoryPlanLine::factory()->create([
             'planned_date' => $plannedDate,
             'last_reminder_type' => $lastReminderType,
             'physical_inventory_plan_id' => PhysicalInventoryPlan::factory()->approved()->create()->id,
         ]);
+
+        User::query()
+            ->where('role', User::ROLE_SUPPLY_CUSTODIAN)
+            ->update(['office_id' => $line->office_id]);
+
+        return $line;
     }
 }

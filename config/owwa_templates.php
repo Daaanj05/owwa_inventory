@@ -246,27 +246,6 @@ return [
         ],
     ],
 
-    'distribution' => [
-        'consumables' => [
-            'default' => [
-                'file' => 'Consumable/Issuances/Appendix 64 - RSMI.xls',
-                'label' => 'Appendix 64 - RSMI (distribution acknowledgment)',
-            ],
-        ],
-        'ppe' => [
-            'default' => [
-                'file' => 'ppe/Issuances/Appendix 71 - PAR.xls',
-                'label' => 'Appendix 71 - PAR (distribution acknowledgment)',
-            ],
-        ],
-        'semi_expendable' => [
-            'default' => [
-                'file' => 'Semi-Expendable/Issuances/Appendix 59 - ICS.xls',
-                'label' => 'Appendix 59 - ICS (distribution acknowledgment)',
-            ],
-        ],
-    ],
-
     'acquisition_paperwork' => [
         'consumables' => [
             'pr' => [

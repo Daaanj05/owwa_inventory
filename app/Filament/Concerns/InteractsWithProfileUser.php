@@ -18,7 +18,7 @@ trait InteractsWithProfileUser
                 'department',
                 'assignments.office',
                 'assignments.department',
-                'pendingPasswordResetRequest',
+                'trustedDevices',
             ]);
         }
     }

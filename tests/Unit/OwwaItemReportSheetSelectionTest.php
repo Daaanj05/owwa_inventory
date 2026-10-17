@@ -7,6 +7,7 @@ use App\Models\ItemCategory;
 use App\Models\PhysicalCountSession;
 use App\Services\OwwaItemReportService;
 use App\Support\ItemPropertyClass;
+use Illuminate\Database\Eloquent\Collection;
 use Tests\TestCase;
 
 class OwwaItemReportSheetSelectionTest extends TestCase
@@ -42,6 +43,7 @@ class OwwaItemReportSheetSelectionTest extends TestCase
             'count_type' => PhysicalCountSession::TYPE_RPCSP,
             'property_class' => ItemPropertyClass::MedicalEquipment,
         ]);
+        $session->setRelation('lines', new Collection);
 
         $sheet = app(OwwaItemReportService::class)->resolvePhysicalCountSheet($session);
 

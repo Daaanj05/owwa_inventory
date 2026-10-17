@@ -31,6 +31,7 @@ use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
 use Filament\Support\Enums\Width;
 use Filament\Support\Icons\Heroicon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\HtmlString;
 
 class AcquisitionPaperworkForm
@@ -84,7 +85,9 @@ class AcquisitionPaperworkForm
                     ->columns(2)
                     ->schema(self::prIdentityFields()),
                 Section::make('Line items')
-                    ->description('Add items and quantities for this purchase request. Unit costs are entered when the purchase order is prepared.')
+                    ->description(fn (Get $get): string => filled($get('requisitions'))
+                        ? 'Items and requested quantities come from the linked requisitions. To change them, update the linked requisitions. Unit costs are entered when the purchase order is prepared.'
+                        : 'Add items and quantities for this purchase request. Unit costs are entered when the purchase order is prepared.')
                     ->visible(fn (string $operation, ?AcquisitionPaperwork $record): bool => $operation === 'create'
                         || ! ($record?->isPrApproved() ?? false))
                     ->columns(2)
@@ -286,6 +289,7 @@ class AcquisitionPaperworkForm
                             ->values()
                             ->all();
 
+                        self::fillRequestedByFromRequisitions($ids, $schemaGet('requisitions'), $schemaGet, $schemaSet);
                         $schemaSet('requisitions', $ids);
 
                         if ($ids === []) {
@@ -347,6 +351,8 @@ class AcquisitionPaperworkForm
                         ->values()
                         ->all();
 
+                    self::fillRequestedByFromRequisitions($ids, $old, $get, $set);
+
                     if ($ids === []) {
                         if (($old ?? []) !== []) {
                             $set('lines', [[
@@ -389,13 +395,65 @@ class AcquisitionPaperworkForm
                 ->helperText('Enter at least 8 characters.')
                 ->disabled(fn (?AcquisitionPaperwork $record): bool => ! self::isPrEditable($record))
                 ->columnSpanFull(),
-            SignatorySelect::make('requested_by_name', ProcurementSignatoryName::ROLE_REQUESTED)
+            TextInput::make('requested_by_name')
                 ->label('Requested By')
+                ->maxLength(255)
+                ->datalist(fn (): array => ProcurementSignatoryName::suggestionsForRole(ProcurementSignatoryName::ROLE_REQUESTED))
+                ->helperText(function (Get $get): ?string {
+                    $requesters = self::linkedRequesterNames($get('requisitions'));
+
+                    if ($requesters->count() > 1) {
+                        return 'Linked requisitions have different requesters ('.$requesters->implode(', ').'). Enter the official requesting this consolidated PR.';
+                    }
+
+                    return SignatorySelect::roleInstruction(ProcurementSignatoryName::ROLE_REQUESTED);
+                })
                 ->disabled(fn (?AcquisitionPaperwork $record): bool => ! self::isPrEditable($record)),
             SignatorySelect::make('approved_by_name', ProcurementSignatoryName::ROLE_APPROVED)
                 ->label('Approve By')
                 ->disabled(fn (?AcquisitionPaperwork $record): bool => ! self::isPrEditable($record)),
         ];
+    }
+
+    /**
+     * Requested By follows the linked RIS requester while it is blank or still the previous auto-filled name:
+     * one shared requester fills it, mixed requesters clear it, and unlinking everything keeps it.
+     *
+     * @param  array<int, int>  $requisitionIds
+     */
+    protected static function fillRequestedByFromRequisitions(array $requisitionIds, mixed $previousRequisitionIds, Get $get, Set $set): void
+    {
+        $current = trim((string) $get('requested_by_name'));
+        $previousRequesters = self::linkedRequesterNames($previousRequisitionIds);
+        $isAutoFilled = $current === ''
+            || ($previousRequesters->count() === 1 && $previousRequesters->first() === $current);
+
+        if (! $isAutoFilled) {
+            return;
+        }
+
+        $requesters = self::linkedRequesterNames($requisitionIds);
+
+        if ($requesters->count() === 1) {
+            $set('requested_by_name', $requesters->first());
+        } elseif ($requesters->count() > 1) {
+            $set('requested_by_name', null);
+        }
+    }
+
+    /**
+     * @return Collection<int, string>
+     */
+    protected static function linkedRequesterNames(mixed $requisitionIds): Collection
+    {
+        $ids = collect(is_array($requisitionIds) ? $requisitionIds : [])
+            ->map(fn (mixed $id): int => (int) $id)
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+
+        return app(RequisitionPurchaseRequestService::class)->requesterNames($ids);
     }
 
     protected static function prLineItemsRepeater(callable $scopeActive): Repeater
@@ -407,8 +465,8 @@ class AcquisitionPaperworkForm
                 'class' => 'owwa-acquisition-lines-repeater owwa-pr-lines-repeater owwa-line-table fi-fixed-positioning-context',
             ])
             ->hintIcon(Heroicon::QuestionMarkCircle, 'Pick the catalog item by name. Stock No. / Inventory item no. / Property No. fills from the Items register and is used on PR/PO/IAR Column A.')
-            ->addable(fn (?AcquisitionPaperwork $record): bool => self::isPrEditable($record))
-            ->deletable(fn (?AcquisitionPaperwork $record): bool => self::isPrEditable($record))
+            ->addable(fn (Get $get, ?AcquisitionPaperwork $record): bool => self::isPrEditable($record) && blank($get('requisitions')))
+            ->deletable(fn (Get $get, ?AcquisitionPaperwork $record): bool => self::isPrEditable($record) && blank($get('requisitions')))
             ->table(function (Get $get, ?AcquisitionPaperwork $record): array {
                 $showsCosts = self::showsLineCostFields($record)
                     || self::showsLineCostFieldsFromGet($get);
@@ -416,20 +474,20 @@ class AcquisitionPaperworkForm
                 $columns = [
                     TableColumn::make('Item')
                         ->markAsRequired()
-                        ->width($showsCosts ? '16%' : '18%'),
+                        ->width($showsCosts ? '22%' : '30%'),
                     TableColumn::make(self::lineIdentifierColumnLabel((int) $get('item_category_id')))
                         ->wrapHeader()
-                        ->width($showsCosts ? '22%' : '36%'),
-                    TableColumn::make('Description')->width($showsCosts ? '16%' : '28%'),
-                    TableColumn::make('Unit')->width($showsCosts ? '9%' : '9%'),
+                        ->width($showsCosts ? '12%' : '14%'),
+                    TableColumn::make('Description')->width($showsCosts ? '22%' : '34%'),
+                    TableColumn::make('Unit')->width($showsCosts ? '8%' : '10%'),
                     TableColumn::make(filled($get('requisitions')) ? 'Requested qty' : 'Qty')
                         ->markAsRequired()
-                        ->width($showsCosts ? '7%' : '10%'),
+                        ->width($showsCosts ? '8%' : '12%'),
                 ];
 
                 if ($showsCosts) {
                     $columns[] = TableColumn::make('Unit cost')->markAsRequired()->width('14%');
-                    $columns[] = TableColumn::make('Total')->width('12%');
+                    $columns[] = TableColumn::make('Total')->width('14%');
                 }
 
                 return $columns;

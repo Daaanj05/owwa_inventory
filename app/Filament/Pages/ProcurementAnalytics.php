@@ -55,12 +55,6 @@ class ProcurementAnalytics extends Page
     public string $categoryId = '';
 
     #[Url]
-    public string $from = '';
-
-    #[Url]
-    public string $to = '';
-
-    #[Url]
     public string $atRiskView = 'all';
 
     public string $analyticsSlide = 'reorders';
@@ -88,14 +82,6 @@ class ProcurementAnalytics extends Page
 
     public function mount(): void
     {
-        if ($this->from === '') {
-            $this->from = now()->subMonths(11)->startOfMonth()->toDateString();
-        }
-
-        if ($this->to === '') {
-            $this->to = now()->endOfMonth()->toDateString();
-        }
-
         if (! in_array($this->atRiskView, ['all', 'stockouts'], true)) {
             $this->atRiskView = 'all';
         }
@@ -202,23 +188,16 @@ class ProcurementAnalytics extends Page
     }
 
     /**
+     * Suggested reorders always use the last 12 calendar months through today.
+     *
      * @return array{from: Carbon, to: Carbon}
      */
     protected function resolveDateRange(): array
     {
-        $from = $this->from !== ''
-            ? Carbon::parse($this->from)->startOfDay()
-            : now()->subMonths(11)->startOfMonth();
-
-        $to = $this->to !== ''
-            ? Carbon::parse($this->to)->endOfDay()
-            : now()->endOfMonth();
-
-        if ($from->gt($to)) {
-            [$from, $to] = [$to->copy()->startOfDay(), $from->copy()->endOfDay()];
-        }
-
-        return ['from' => $from, 'to' => $to];
+        return [
+            'from' => now()->subMonths(11)->startOfMonth()->startOfDay(),
+            'to' => now()->endOfDay(),
+        ];
     }
 
     /**
@@ -232,27 +211,6 @@ class ProcurementAnalytics extends Page
             'from' => $from->toDateString(),
             'to' => $to->toDateString(),
         ];
-    }
-
-    public function applyPeriodPreset(string $preset): void
-    {
-        $dates = $this->presetDateRange($preset);
-        if ($dates === null) {
-            return;
-        }
-
-        $this->clearGeneratedSummary();
-        [$this->from, $this->to] = $dates;
-    }
-
-    public function updatedFrom(): void
-    {
-        $this->clearGeneratedSummary();
-    }
-
-    public function updatedTo(): void
-    {
-        $this->clearGeneratedSummary();
     }
 
     public function updatedCategoryId(): void
@@ -283,52 +241,6 @@ class ProcurementAnalytics extends Page
         $this->lastAiRunId = null;
         $this->processingRunId = null;
         $this->loading = false;
-    }
-
-    /**
-     * @return array{0: string, 1: string}|null
-     */
-    protected function presetDateRange(string $preset): ?array
-    {
-        $today = now();
-
-        return match ($preset) {
-            '3m' => [
-                $today->copy()->subMonths(2)->startOfMonth()->toDateString(),
-                $today->copy()->endOfMonth()->toDateString(),
-            ],
-            '6m' => [
-                $today->copy()->subMonths(5)->startOfMonth()->toDateString(),
-                $today->copy()->endOfMonth()->toDateString(),
-            ],
-            '12m' => [
-                $today->copy()->subMonths(11)->startOfMonth()->toDateString(),
-                $today->copy()->endOfMonth()->toDateString(),
-            ],
-            'ytd' => [
-                $today->copy()->startOfYear()->toDateString(),
-                $today->copy()->endOfMonth()->toDateString(),
-            ],
-            default => null,
-        };
-    }
-
-    public function getActivePeriodPreset(): ?string
-    {
-        ['from' => $from, 'to' => $to] = $this->resolveDateRange();
-
-        foreach (['3m', '6m', '12m', 'ytd'] as $preset) {
-            $dates = $this->presetDateRange($preset);
-            if ($dates === null) {
-                continue;
-            }
-
-            if ($from->toDateString() === $dates[0] && $to->toDateString() === $dates[1]) {
-                return $preset;
-            }
-        }
-
-        return null;
     }
 
     /**
@@ -963,7 +875,7 @@ class ProcurementAnalytics extends Page
         ['from' => $from, 'to' => $to] = $this->resolveDateRange();
 
         return [
-            'label' => $from->format('M j, Y').' – '.$to->format('M j, Y'),
+            'label' => 'Last 12 months through today',
             'from' => $from->toDateString(),
             'to' => $to->toDateString(),
         ];

@@ -3,7 +3,6 @@
 namespace Tests\Feature;
 
 use App\Models\Department;
-use App\Models\Distribution;
 use App\Models\Item;
 use App\Models\Office;
 use App\Models\Requisition;
@@ -13,6 +12,7 @@ use App\Services\RequisitionCompileService;
 use App\Support\EmployeeRequisitionFulfillment;
 use App\Support\EmployeeRequisitionStatus;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class EmployeeRequisitionStatusTest extends TestCase
@@ -117,7 +117,7 @@ class EmployeeRequisitionStatusTest extends TestCase
         $this->assertSame($consolidated->id, $employeeRequisition->compiled_into_requisition_id);
     }
 
-    public function test_closed_partial_distribution_shows_partially_distributed_closed_label(): void
+    public function test_closed_partial_issuance_shows_partially_issued_closed_label(): void
     {
         $office = Office::factory()->create();
         $employee = User::factory()->create([
@@ -225,7 +225,7 @@ class EmployeeRequisitionStatusTest extends TestCase
         $this->assertSame('Fully issued', EmployeeRequisitionFulfillment::label($employeeRequisition));
     }
 
-    public function test_endorsed_employee_requisition_with_partial_distribution_shows_partially_issued(): void
+    public function test_endorsed_employee_requisition_with_partial_issuance_shows_partially_issued(): void
     {
         $office = Office::factory()->create();
         $employee = User::factory()->create([
@@ -259,14 +259,19 @@ class EmployeeRequisitionStatusTest extends TestCase
 
         $employeeRequisition->refresh();
 
-        Distribution::query()->create([
+        DB::table('issuances')->insert([
+            'reference_code' => 'ISS-PARTIAL-1',
             'office_id' => $office->id,
+            'department_id' => $department->id,
             'requisition_id' => $employeeRequisition->id,
+            'consolidated_requisition_id' => $consolidated->id,
             'item_id' => $item->id,
             'quantity' => 2,
-            'distributed_to' => $employee->id,
-            'distributed_by' => $uc->id,
-            'distribution_date' => now()->toDateString(),
+            'issuance_date' => now()->toDateString(),
+            'issued_to' => $employee->id,
+            'issued_by' => $uc->id,
+            'created_at' => now(),
+            'updated_at' => now(),
         ]);
 
         $this->assertSame($consolidated->id, $employeeRequisition->compiled_into_requisition_id);

@@ -263,7 +263,8 @@ class OpeningBalanceBatchesTable
                     ->hiddenLabel()
                     ->required()
                     ->searchable()
-                    ->options(fn (): array => self::eligibleItemOptions($categoryId, $includeItemIds)),
+                    ->options(fn (): array => self::eligibleItemOptions($categoryId, $includeItemIds))
+                    ->disableOptionsWhenSelectedInSiblingRepeaterItems(),
                 TextInput::make('quantity')
                     ->hiddenLabel()
                     ->numeric()

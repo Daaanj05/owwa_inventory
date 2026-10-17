@@ -8,10 +8,9 @@ use App\Filament\Resources\Users\UserResource;
 use App\Filament\Support\OwwaFormModalDefaults;
 use App\Filament\Support\UserAssignmentActionHooks;
 use App\Models\User;
-use App\Notifications\UserWelcomeNotification;
-use App\Services\PasswordResetRequestService;
+use App\Services\EmailVerificationCodeService;
+use App\Services\PasswordResetCodeService;
 use App\Support\FriendlyMessages;
-use App\Support\MailDelivery;
 use App\Support\TemporaryPassword;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ListRecords;
@@ -43,7 +42,7 @@ class ListUsers extends ListRecords
     {
         parent::mount();
 
-        app(PasswordResetRequestService::class)->pruneExpired();
+        app(PasswordResetCodeService::class)->pruneExpiredRequests();
     }
 
     public function getTabs(): array
@@ -70,7 +69,6 @@ class ListUsers extends ListRecords
 
     protected function getHeaderActions(): array
     {
-        $generatedPassword = null;
         $welcomeMailResult = null;
         $pendingAssignments = [];
 
@@ -78,11 +76,10 @@ class ListUsers extends ListRecords
             OwwaFormModalDefaults::createActionForResource(UserResource::class, OwwaFormModalDefaults::WIDTH_MEDIUM)
                 ->label('New Users')
                 ->extraModalWindowAttributes(['class' => OwwaFormModalDefaults::MODAL_WINDOW_CLASS.' owwa-user-form-modal'])
-                ->mutateDataUsing(function (array $data) use (&$generatedPassword, &$pendingAssignments): array {
-                    $generatedPassword = TemporaryPassword::generate();
-                    $data['password'] = $generatedPassword;
+                ->mutateDataUsing(function (array $data) use (&$pendingAssignments): array {
+                    $data['password'] = TemporaryPassword::generate();
                     $data['email_verified_at'] = null;
-                    $data['must_change_password'] = true;
+                    $data['must_change_password'] = false;
 
                     $data = UserAssignmentActionHooks::prepareCreateData($data);
                     $pendingAssignments = $data['_assignments'] ?? [];
@@ -90,25 +87,19 @@ class ListUsers extends ListRecords
 
                     return $data;
                 })
-                ->after(function (User $record) use (&$generatedPassword, &$welcomeMailResult, &$pendingAssignments): void {
+                ->after(function (User $record) use (&$welcomeMailResult, &$pendingAssignments): void {
                     if ($record->isUnitConsolidator() && $pendingAssignments !== []) {
                         $record->syncOfficeAssignments($pendingAssignments);
                     }
 
-                    $welcomeMailResult = MailDelivery::notify($record, new UserWelcomeNotification(
-                        $generatedPassword ?? '',
-                        User::panelLoginUrlFor($record),
-                        User::guestEmailVerificationUrlFor($record),
-                    ));
+                    $welcomeMailResult = app(EmailVerificationCodeService::class)->sendSetupInvite($record);
                 })
-                ->successNotification(function (Model $record) use (&$generatedPassword, &$welcomeMailResult): Notification {
-                    $password = $generatedPassword ?? '—';
-
+                ->successNotification(function (Model $record) use (&$welcomeMailResult): Notification {
                     if ($welcomeMailResult?->success && $welcomeMailResult->wasQueued) {
                         return Notification::make()
                             ->title('User created')
                             ->success()
-                            ->body(FriendlyMessages::welcomeEmailQueued($record->email, $password))
+                            ->body(FriendlyMessages::welcomeEmailQueued($record->email))
                             ->seconds(16);
                     }
 
@@ -116,14 +107,14 @@ class ListUsers extends ListRecords
                         return Notification::make()
                             ->title('User created')
                             ->success()
-                            ->body(FriendlyMessages::welcomeEmailSent($record->email, $password))
+                            ->body(FriendlyMessages::welcomeEmailSent($record->email))
                             ->seconds(12);
                     }
 
                     return Notification::make()
                         ->title('User created')
                         ->warning()
-                        ->body(FriendlyMessages::welcomeEmailFailed($record->email, $password))
+                        ->body(FriendlyMessages::welcomeEmailFailed($record->email))
                         ->seconds(24);
                 }),
         ];

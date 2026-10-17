@@ -5,6 +5,7 @@ namespace App\Filament\Resources\PropertyActionRequests\Schemas;
 use App\Filament\Resources\Disposals\DisposalResource;
 use App\Filament\Resources\Transfers\TransferResource;
 use App\Models\PropertyActionRequest;
+use App\Models\PropertyActionRequestLine;
 use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\RepeatableEntry\TableColumn;
 use Filament\Infolists\Components\TextEntry;
@@ -156,31 +157,33 @@ class PropertyActionRequestInfolistSchema
             ->schema([
                 RepeatableEntry::make('lines')
                     ->hiddenLabel()
-                    ->table([
+                    ->table(fn (PropertyActionRequest $record): array => array_values(array_filter([
                         TableColumn::make('Item'),
                         TableColumn::make('Property No.'),
                         TableColumn::make('Issued'),
-                        TableColumn::make('Qty'),
-                    ])
+                        $record->status === PropertyActionRequest::STATUS_EXECUTED ? TableColumn::make('Outcome') : null,
+                    ])))
                     ->schema([
                         TextEntry::make('issuance.item.name')
                             ->label('Item')
                             ->placeholder('—'),
                         TextEntry::make('asset_identifier')
                             ->label('Property No.')
-                            ->state(function (\App\Models\PropertyActionRequestLine $record): string {
-                                return $record->issuance?->property_number
-                                    ?? $record->issuance?->reference_code
-                                    ?? '—';
-                            })
+                            ->state(fn (PropertyActionRequestLine $record): string => $record->inventoryUnit?->property_number
+                                ?? $record->issuance?->property_number
+                                ?? $record->issuance?->reference_code
+                                ?? '—')
                             ->placeholder('—'),
                         TextEntry::make('issuance.issuance_date')
                             ->label('Issued')
                             ->date('M d, Y')
                             ->placeholder('—'),
-                        TextEntry::make('quantity')
-                            ->label('Qty')
-                            ->placeholder('—'),
+                        TextEntry::make('outcome')
+                            ->label('Outcome')
+                            ->badge()
+                            ->state(fn (PropertyActionRequestLine $record): string => $record->outcomeLabel())
+                            ->color(fn (PropertyActionRequestLine $record): string => $record->outcomeColor())
+                            ->visible(fn (PropertyActionRequestLine $record): bool => $record->propertyActionRequest?->status === PropertyActionRequest::STATUS_EXECUTED),
                     ]),
             ]);
     }

@@ -38,7 +38,7 @@ class PurchaseRequestFastPdfExportTest extends TestCase
         $this->assertSame('Bond paper A4', $pages[0]['lines'][0]['description']);
         $this->assertTrue($pages[0]['include_footer']);
 
-        $entityName = (string) config('owwa_export_standards.entity_name', 'OWWA-4A');
+        $entityName = (string) config('owwa_export_standards.entity_name');
         $this->assertStringContainsString($entityName, $html);
         $this->assertStringContainsString('2026-01-0042', $html);
         $this->assertStringContainsString('Bond paper A4', $html);

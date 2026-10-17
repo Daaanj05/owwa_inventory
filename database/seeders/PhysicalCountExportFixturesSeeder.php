@@ -168,15 +168,6 @@ class PhysicalCountExportFixturesSeeder extends Seeder
             );
 
             app(AcquisitionUnitService::class)->generateUnitsForAcquisition($acquisition->fresh(['item.category', 'office']));
-
-            // RPCPPE export testing needs one physical-count line per unit. Catalog PPE
-            // numbers are shared per item, so uniquify export fixture unit labels only.
-            $units = $acquisition->fresh()->inventoryUnits()->orderBy('id')->get();
-            foreach ($units as $index => $unit) {
-                $unit->update([
-                    'property_number' => $type['code'].'-'.str_pad((string) ($index + 1), 3, '0', STR_PAD_LEFT),
-                ]);
-            }
         }
     }
 
@@ -223,6 +214,7 @@ class PhysicalCountExportFixturesSeeder extends Seeder
             ['reference_code' => 'PC-EXPORT-RPCSP-2026'],
             $this->sessionDefaults($category, $office, $custodian, PhysicalCountSession::TYPE_RPCSP, [
                 'book_list_loaded' => false,
+                ...$this->openForPreload(),
             ]),
         );
 
@@ -238,6 +230,7 @@ class PhysicalCountExportFixturesSeeder extends Seeder
         }
 
         PhysicalCountPropertyClassResolver::syncSession($session->fresh(['lines.item']));
+        $this->markComplete($session);
     }
 
     protected function seedRpcppeSession(ItemCategory $category, Office $office, User $custodian): void
@@ -246,6 +239,7 @@ class PhysicalCountExportFixturesSeeder extends Seeder
             ['reference_code' => 'PC-EXPORT-RPCPPE-2026'],
             $this->sessionDefaults($category, $office, $custodian, PhysicalCountSession::TYPE_RPCPPE, [
                 'book_list_loaded' => false,
+                ...$this->openForPreload(),
             ]),
         );
 
@@ -259,6 +253,29 @@ class PhysicalCountExportFixturesSeeder extends Seeder
                 'on_hand_count' => max(0, (int) $line->balance_per_card - $shortfall),
             ]);
         }
+
+        $this->markComplete($session);
+    }
+
+    /**
+     * Expected assets can only be loaded while the session is still open.
+     *
+     * @return array{status: string, completed_at: null}
+     */
+    protected function openForPreload(): array
+    {
+        return [
+            'status' => PhysicalCountSession::STATUS_IN_PROGRESS,
+            'completed_at' => null,
+        ];
+    }
+
+    protected function markComplete(PhysicalCountSession $session): void
+    {
+        $session->update([
+            'status' => PhysicalCountSession::STATUS_COMPLETE,
+            'completed_at' => now(),
+        ]);
     }
 
     /**

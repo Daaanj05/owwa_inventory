@@ -129,12 +129,12 @@ class OwwaAnnexA4BulkExportTest extends TestCase
         try {
             $spreadsheet = IOFactory::load($tmp);
             $this->assertNull($spreadsheet->getSheetByName('RegSPI'));
-            $ictSheet = $spreadsheet->getSheetByName('ICT');
+            $ictSheet = $spreadsheet->getSheetByName('IT');
             $officeSheet = $spreadsheet->getSheetByName('OFFICE EQUIPMENT');
             $this->assertNotNull($ictSheet);
             $this->assertNotNull($officeSheet);
             $this->assertStringContainsString('RWO IV-A', (string) $ictSheet->getCell('A6')->getValue());
-            $this->assertStringContainsString('INFORMATION & COMMUNICATION TECHNOLOGY', (string) $ictSheet->getCell('A7')->getValue());
+            $this->assertStringContainsString('INFORMATION TECHNOLOGY EQUIPMENT', (string) $ictSheet->getCell('A7')->getValue());
             $this->assertSame('2026-01-0401', $ictSheet->getCell('B12')->getValue());
             $this->assertSame('SEM-100-001', $ictSheet->getCell('C12')->getValue());
             $this->assertNotNull($ictSheet->getCell('A12')->getValue());
@@ -209,12 +209,12 @@ class OwwaAnnexA4BulkExportTest extends TestCase
     public static function propertyClassSheetProvider(): array
     {
         return [
-            'ict' => [ItemPropertyClass::Ict, 'ICT', 'INFORMATION & COMMUNICATION TECHNOLOGY'],
+            'information_technology' => [ItemPropertyClass::InformationTechnology, 'IT', 'INFORMATION TECHNOLOGY EQUIPMENT'],
             'office_equipment' => [ItemPropertyClass::OfficeEquipment, 'OFFICE EQUIPMENT', 'OFFICE EQUIPMENT'],
-            'furnitures_fixtures' => [ItemPropertyClass::FurnituresFixtures, 'F&F', 'FURNITURES & FIXTURES'],
-            'sports_equipment' => [ItemPropertyClass::SportsEquipment, 'SPORTS EQUIPMENT', 'SPORTS EQUIPMENT'],
+            'furniture_fixtures' => [ItemPropertyClass::FurnitureFixtures, 'F&F', 'FURNITURE AND FIXTURES'],
+            'machinery_equipment' => [ItemPropertyClass::MachineryEquipment, 'MACHINERY AND EQUIPMENT', 'MACHINERY AND EQUIPMENT'],
             'medical_equipment' => [ItemPropertyClass::MedicalEquipment, 'MEDICAL EQUIPMENT', 'MEDICAL EQUIPMENT'],
-            'vehicle_equipment' => [ItemPropertyClass::VehicleEquipment, 'VEHICLE EQUIPMENT', 'VEHICLE EQUIPMENT'],
+            'transportation_equipment' => [ItemPropertyClass::TransportationEquipment, 'TRANSPORTATION EQUIPMENT', 'TRANSPORTATION EQUIPMENT'],
         ];
     }
 
