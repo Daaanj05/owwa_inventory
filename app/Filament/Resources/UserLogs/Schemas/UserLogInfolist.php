@@ -28,16 +28,10 @@ class UserLogInfolist
                     TextEntry::make('session_duration')
                         ->label('Duration')
                         ->state(fn (UserLog $record): string => $record->sessionDurationLabel()),
-                    TextEntry::make('where')
-                        ->label('Where')
-                        ->state(fn (UserLog $record): string => UserLogDisplay::whereLabel($record->path, $record->panel))
-                        ->badge()
-                        ->placeholder('—'),
                     TextEntry::make('user_agent')
                         ->label('Browser')
                         ->state(fn (UserLog $record): string => UserLogDisplay::browserLabel($record->user_agent))
-                        ->placeholder('—')
-                        ->columnSpan(fn (UserLog $record): int => $record->isOpen() ? 3 : 2),
+                        ->placeholder('—'),
                     TextEntry::make('logout_reason')
                         ->label('Logout reason')
                         ->formatStateUsing(fn (?string $state, UserLog $record): string => UserLog::logoutReasonLabel($record->logout_reason))

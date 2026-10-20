@@ -173,6 +173,34 @@ class UserActivityLogDisplayTest extends TestCase
             'subject_type' => $line->getMorphClass(),
             'subject_id' => $line->id,
         ]);
+        UserActivityLog::query()->create([
+            'user_id' => $employee->id,
+            'user_log_id' => $log->id,
+            'action' => 'updated',
+            'summary' => 'Updated User Test Custodian',
+            'subject_type' => $employee->getMorphClass(),
+            'subject_id' => $employee->id,
+            'properties' => [
+                'changed' => ['password'],
+                'old' => ['password' => 'old-hash'],
+                'new' => ['password' => 'new-hash'],
+            ],
+        ]);
+        UserActivityLog::query()->create([
+            'user_id' => $employee->id,
+            'user_log_id' => $log->id,
+            'action' => 'updated',
+            'summary' => 'Updated User Jerome Caya',
+            'subject_type' => $employee->getMorphClass(),
+            'subject_id' => $employee->id,
+            'properties' => [
+                'changed' => ['name'],
+                'old' => ['name' => 'Supply Custodian'],
+                'new' => ['name' => 'Jerome Caya'],
+            ],
+        ]);
+
+        $this->assertSame(2, $log->sessionActivitiesCount());
 
         $this->actingAs($admin);
 
@@ -201,9 +229,21 @@ class UserActivityLogDisplayTest extends TestCase
         $this->assertStringNotContainsString('Created Requisition Item #'.$line->id, $html);
         $this->assertStringNotContainsString('Welfare Programs', $html);
         $this->assertStringNotContainsString('Requisition item', $html);
+        $this->assertStringNotContainsString('Updated User Test Custodian', $html);
+        $this->assertStringContainsString('Updated User Jerome Caya', $html);
 
-        $activity = UserActivityLog::query()->where('user_log_id', $log->id)->first();
+        $activity = UserActivityLog::query()
+            ->where('user_log_id', $log->id)
+            ->where('action', 'created')
+            ->first();
         $this->assertNotNull($activity);
+
+        $page->mountAction(TestAction::make('view')->table($log))
+            ->assertMountedActionModalSee('Browser')
+            ->assertMountedActionModalSee('Last activity')
+            ->assertMountedActionModalDontSee('Where')
+            ->assertMountedActionModalDontSee('Updated User Test Custodian')
+            ->unmountAction();
 
         $page->mountAction([
             TestAction::make('view')->table($log),

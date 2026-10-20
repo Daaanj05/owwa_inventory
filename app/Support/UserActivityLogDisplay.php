@@ -162,6 +162,15 @@ class UserActivityLogDisplay
         ]);
     }
 
+    public static function isListedInSession(UserActivityLog $activity): bool
+    {
+        if ((string) $activity->action !== 'updated') {
+            return true;
+        }
+
+        return self::changeLines($activity) !== [];
+    }
+
     public static function summary(UserActivityLog $activity): string
     {
         $subject = $activity->subject;

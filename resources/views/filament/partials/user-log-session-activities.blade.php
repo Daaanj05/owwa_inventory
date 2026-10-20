@@ -7,8 +7,9 @@
     }
 
     $perPage = 25;
-    $activities = $record->sessionActivities()->limit(200)->get();
-    $totalCount = $record->sessionActivitiesCount();
+    $visible = $record->listedSessionActivities();
+    $totalCount = $visible->count();
+    $activities = $visible->take(200);
     \App\Support\UserActivityLogDisplay::hydrateSummaries($activities);
 @endphp
 

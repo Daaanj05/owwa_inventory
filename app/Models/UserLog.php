@@ -2,7 +2,9 @@
 
 namespace App\Models;
 
+use App\Support\UserActivityLogDisplay;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -85,9 +87,23 @@ class UserLog extends Model
             ->orderByDesc('created_at');
     }
 
+    /**
+     * @return Collection<int, UserActivityLog>
+     */
+    public function listedSessionActivities(): Collection
+    {
+        return $this->sessionActivities()
+            ->get()
+            ->filter(fn (UserActivityLog $activity): bool => UserActivityLogDisplay::isListedInSession($activity))
+            ->values();
+    }
+
     public function sessionActivitiesCount(): int
     {
-        return $this->sessionActivities()->count();
+        return $this->sessionActivities()
+            ->get(['id', 'action', 'properties'])
+            ->filter(fn (UserActivityLog $activity): bool => UserActivityLogDisplay::isListedInSession($activity))
+            ->count();
     }
 
     public function sessionDurationLabel(): string
