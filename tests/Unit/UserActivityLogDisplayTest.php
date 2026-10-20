@@ -22,6 +22,7 @@ use App\Models\UserLog;
 use App\Services\UserActivityLogger;
 use App\Support\OwwaTransactionViewPresenter;
 use App\Support\UserActivityLogDisplay;
+use Filament\Actions\Testing\TestAction;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
@@ -190,15 +191,24 @@ class UserActivityLogDisplayTest extends TestCase
         $html = view('filament.partials.user-log-session-activities', ['record' => $log])->render();
         $this->assertStringContainsString('Bond Paper × 2', $html);
         $this->assertStringContainsString((string) $requisition->transaction_number, $html);
-        $this->assertStringContainsString('loadActivityDetails', $html);
+        $this->assertStringContainsString("mountAction('activityDetail'", $html);
         $this->assertStringNotContainsString('Created Requisition Item #'.$line->id, $html);
         $this->assertStringNotContainsString('Welfare Programs', $html);
+        $this->assertStringNotContainsString('Requisition item', $html);
 
         $activity = UserActivityLog::query()->where('user_log_id', $log->id)->first();
         $this->assertNotNull($activity);
-        $lines = collect($page->instance()->loadActivityDetails((int) $activity->id));
-        $this->assertSame('Welfare Programs', $lines->firstWhere('label', 'Sub-Office/Department')['value'] ?? null);
-        $this->assertStringContainsString('Bond Paper', (string) ($lines->firstWhere('label', 'Item')['value'] ?? ''));
+
+        $page->mountAction([
+            TestAction::make('view')->table($log),
+            TestAction::make('activityDetail')->arguments(['activityId' => $activity->id]),
+        ])
+            ->assertActionMounted([
+                TestAction::make('view')->table($log),
+                TestAction::make('activityDetail')->arguments(['activityId' => $activity->id]),
+            ])
+            ->assertMountedActionModalSee('Requisition item')
+            ->assertMountedActionModalSee('Bond Paper');
     }
 
     public function test_logger_stores_the_transaction_number(): void

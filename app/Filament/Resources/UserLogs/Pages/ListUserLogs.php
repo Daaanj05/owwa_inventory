@@ -5,9 +5,6 @@ namespace App\Filament\Resources\UserLogs\Pages;
 use App\Filament\Concerns\HasSetupActiveTabToolbar;
 use App\Filament\Concerns\HasSystemAdminWizardHeading;
 use App\Filament\Resources\UserLogs\UserLogResource;
-use App\Models\User;
-use App\Models\UserActivityLog;
-use App\Support\UserActivityLogDisplay;
 use Filament\Resources\Pages\ListRecords;
 use Filament\Schemas\Components\EmbeddedTable;
 use Filament\Schemas\Components\RenderHook;
@@ -30,28 +27,6 @@ class ListUserLogs extends ListRecords
     public function getRecord(): mixed
     {
         return null;
-    }
-
-    /**
-     * Detail lines for one activity row inside an open session.
-     *
-     * @return list<array{label: string, value: string}>
-     */
-    public function loadActivityDetails(int $activityId): array
-    {
-        $actor = auth()->user();
-
-        if (! $actor instanceof User || ! $actor->isSystemAdmin()) {
-            abort(403);
-        }
-
-        $activity = UserActivityLog::query()->find($activityId);
-
-        if (! $activity instanceof UserActivityLog) {
-            return [];
-        }
-
-        return UserActivityLogDisplay::detailsFor($activity);
     }
 
     public function getTabs(): array

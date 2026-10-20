@@ -3220,11 +3220,6 @@
     color: #64748b;
     font-size: 1rem;
     line-height: 1.25rem;
-    transition: transform 0.15s ease;
-}
-
-.owwa-user-log-session-row.is-open .owwa-user-log-summary-chevron {
-    transform: rotate(90deg);
 }
 
 .owwa-user-log-detail {
@@ -3233,14 +3228,6 @@
     border: 1px solid #e2e8f0;
     border-radius: 0.5rem;
     background: #f8fafc;
-}
-
-.owwa-user-log-detail[x-cloak] {
-    display: none !important;
-}
-
-.owwa-user-log-detail-line {
-    display: contents;
 }
 
 .owwa-user-log-detail dl {

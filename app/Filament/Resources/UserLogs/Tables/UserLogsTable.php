@@ -7,10 +7,14 @@ use App\Filament\Resources\UserLogs\UserLogResource;
 use App\Filament\Support\ConfiguresOwwaViewAction;
 use App\Filament\Support\OwwaModalSchema;
 use App\Models\User;
+use App\Models\UserActivityLog;
 use App\Models\UserLog;
 use App\Support\OwwaTransactionViewPresenter;
+use App\Support\UserActivityLogDisplay;
+use Filament\Actions\Action;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
+use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Builder;
 
 class UserLogsTable
@@ -82,9 +86,68 @@ class UserLogsTable
                         UserLogInfolist::modalDetailSections(),
                     ),
                     modelLabel: UserLogResource::getModelLabel(),
-                ),
+                )->registerModalActions([
+                    self::activityDetailAction(),
+                ]),
             ])
             ->recordUrl(null)
             ->recordAction('view');
+    }
+
+    protected static function activityDetailAction(): Action
+    {
+        return Action::make('activityDetail')
+            ->modalHeading(function (array $arguments): string {
+                $activity = self::activityFromArguments($arguments);
+
+                return $activity instanceof UserActivityLog
+                    ? UserActivityLogDisplay::summary($activity)
+                    : 'Activity details';
+            })
+            ->modalDescription(function (array $arguments): ?string {
+                $activity = self::activityFromArguments($arguments);
+
+                if (! $activity instanceof UserActivityLog) {
+                    return null;
+                }
+
+                $when = $activity->created_at?->format('M j, Y g:i A') ?? '—';
+                $action = str_replace('_', ' ', (string) $activity->action);
+
+                return "{$when} · {$action}";
+            })
+            ->modalSubmitAction(false)
+            ->modalCancelActionLabel('Close')
+            ->modalWidth('2xl')
+            ->overlayParentActions()
+            ->modalContent(function (array $arguments): View {
+                $activity = self::activityFromArguments($arguments);
+
+                return view('filament.partials.user-log-activity-detail', [
+                    'lines' => $activity instanceof UserActivityLog
+                        ? UserActivityLogDisplay::detailsFor($activity)
+                        : [],
+                ]);
+            });
+    }
+
+    /**
+     * @param  array<string, mixed>  $arguments
+     */
+    protected static function activityFromArguments(array $arguments): ?UserActivityLog
+    {
+        $actor = auth()->user();
+
+        if (! $actor instanceof User || ! $actor->isSystemAdmin()) {
+            abort(403);
+        }
+
+        $activityId = (int) ($arguments['activityId'] ?? 0);
+
+        if ($activityId <= 0) {
+            return null;
+        }
+
+        return UserActivityLog::query()->find($activityId);
     }
 }
