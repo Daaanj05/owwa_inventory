@@ -179,8 +179,14 @@ class UserActivityLogDisplayTest extends TestCase
         $page = Livewire::test(ListUserLogs::class)
             ->assertCanSeeTableRecords([$log])
             ->assertSee('Employee')
+            ->assertSee('Logged In At')
+            ->assertSee('Logged Out At')
+            ->assertSee('Actions')
             ->assertDontSee('Regional Welfare Office')
-            ->assertDontSee('Welfare Programs');
+            ->assertDontSee('Welfare Programs')
+            ->assertDontSee('Logout Reason')
+            ->assertDontSee('IP Address')
+            ->assertDontSee('Panel');
 
         $hero = OwwaTransactionViewPresenter::forUserLog($log);
         $meta = collect($hero['meta'] ?? []);

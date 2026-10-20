@@ -51,28 +51,10 @@ class UserLogsTable
                         ? 'Active'
                         : ($record->logged_out_at?->format('M j, Y g:i A') ?? '—'))
                     ->sortable(),
-                TextColumn::make('logout_reason')
-                    ->label('Logout Reason')
-                    ->formatStateUsing(fn (?string $state): string => UserLog::logoutReasonLabel($state))
-                    ->badge()
-                    ->toggleable(),
                 TextColumn::make('session_actions_count')
                     ->label('Actions')
                     ->state(fn (UserLog $record): int => $record->sessionActivitiesCount())
                     ->sortable(false),
-                TextColumn::make('ip_address')
-                    ->label('IP Address')
-                    ->sortable()
-                    ->toggleable(),
-                TextColumn::make('panel')
-                    ->label('Panel')
-                    ->formatStateUsing(fn (?string $state): string => match ($state) {
-                        'system-admin' => 'System Admin',
-                        'admin' => 'Admin',
-                        default => filled($state) ? str($state)->replace(['-', '_'], ' ')->title()->toString() : '—',
-                    })
-                    ->sortable()
-                    ->badge(),
                 TextColumn::make('archived_at')
                     ->label('Archived')
                     ->dateTime()
