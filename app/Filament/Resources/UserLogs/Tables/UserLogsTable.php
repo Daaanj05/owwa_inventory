@@ -18,12 +18,7 @@ class UserLogsTable
     public static function configure(Table $table): Table
     {
         return $table
-            ->modifyQueryUsing(fn (Builder $query): Builder => $query->with([
-                'user.office',
-                'user.department',
-                'user.assignments.office',
-                'user.assignments.department',
-            ]))
+            ->modifyQueryUsing(fn (Builder $query): Builder => $query->with(['user']))
             ->columns([
                 TextColumn::make('user.name')
                     ->label('User')
@@ -42,14 +37,6 @@ class UserLogsTable
                         default => 'gray',
                     })
                     ->sortable(),
-                TextColumn::make('office_summary')
-                    ->label('Office')
-                    ->state(fn (UserLog $record): string => $record->user?->assignmentOfficesSummary() ?: '—')
-                    ->wrap(),
-                TextColumn::make('department_summary')
-                    ->label('Sub-Office/Department')
-                    ->state(fn (UserLog $record): string => $record->user?->assignmentDepartmentsSummary() ?: '—')
-                    ->wrap(),
                 TextColumn::make('logged_in_at')
                     ->label('Logged In At')
                     ->dateTime('M j, Y g:i A')
