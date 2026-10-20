@@ -6,22 +6,50 @@ use App\Filament\Resources\UserLogs\Schemas\UserLogInfolist;
 use App\Filament\Resources\UserLogs\UserLogResource;
 use App\Filament\Support\ConfiguresOwwaViewAction;
 use App\Filament\Support\OwwaModalSchema;
+use App\Models\User;
 use App\Models\UserLog;
 use App\Support\OwwaTransactionViewPresenter;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 
 class UserLogsTable
 {
     public static function configure(Table $table): Table
     {
         return $table
+            ->modifyQueryUsing(fn (Builder $query): Builder => $query->with([
+                'user.office',
+                'user.department',
+                'user.assignments.office',
+                'user.assignments.department',
+            ]))
             ->columns([
                 TextColumn::make('user.name')
                     ->label('User')
                     ->sortable()
                     ->searchable()
                     ->weight(\Filament\Support\Enums\FontWeight::Medium),
+                TextColumn::make('user.role')
+                    ->label('Role')
+                    ->badge()
+                    ->placeholder('—')
+                    ->formatStateUsing(fn (?string $state, UserLog $record): string => $record->user?->roleLabel() ?? '—')
+                    ->color(fn (UserLog $record): string => match ($record->user?->role) {
+                        User::ROLE_SYSTEM_ADMIN => 'danger',
+                        User::ROLE_SUPPLY_CUSTODIAN => 'primary',
+                        User::ROLE_UNIT_CONSOLIDATOR => 'info',
+                        default => 'gray',
+                    })
+                    ->sortable(),
+                TextColumn::make('office_summary')
+                    ->label('Office')
+                    ->state(fn (UserLog $record): string => $record->user?->assignmentOfficesSummary() ?: '—')
+                    ->wrap(),
+                TextColumn::make('department_summary')
+                    ->label('Sub-Office/Department')
+                    ->state(fn (UserLog $record): string => $record->user?->assignmentDepartmentsSummary() ?: '—')
+                    ->wrap(),
                 TextColumn::make('logged_in_at')
                     ->label('Logged In At')
                     ->dateTime('M j, Y g:i A')

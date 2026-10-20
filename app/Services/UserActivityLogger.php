@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\User;
 use App\Models\UserActivityLog;
+use App\Support\UserActivityLogDisplay;
 use Filament\Facades\Filament;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Str;
@@ -158,44 +159,6 @@ class UserActivityLogger
 
     protected function buildModelSummary(Model $model, string $action): string
     {
-        $label = $this->modelLabel($model);
-        $reference = $this->modelReference($model);
-
-        $verb = match ($action) {
-            'created' => 'Created',
-            'updated' => 'Updated',
-            'deleted' => 'Deleted',
-            'approved' => 'Approved',
-            'rejected' => 'Rejected',
-            'fulfilled' => 'Fulfilled',
-            'archived' => 'Archived',
-            'restored' => 'Restored',
-            'status_changed' => 'Changed status of',
-            default => ucfirst(str_replace('_', ' ', $action)),
-        };
-
-        if ($reference !== null && $reference !== '') {
-            return "{$verb} {$label} {$reference}";
-        }
-
-        return "{$verb} {$label}";
-    }
-
-    protected function modelLabel(Model $model): string
-    {
-        return Str::headline(class_basename($model));
-    }
-
-    protected function modelReference(Model $model): ?string
-    {
-        foreach (['reference_code', 'item_code', 'name', 'email'] as $attribute) {
-            if (! empty($model->getAttribute($attribute))) {
-                return (string) $model->getAttribute($attribute);
-            }
-        }
-
-        $key = $model->getKey();
-
-        return $key !== null ? '#'.$key : null;
+        return UserActivityLogDisplay::describe($model, $action);
     }
 }

@@ -487,6 +487,19 @@ class User extends Authenticatable implements FilamentUser, HasAppAuthentication
         return $this->hasMany(TrustedDevice::class)->latest('last_used_at');
     }
 
+    public function roleLabel(): string
+    {
+        return match ($this->role) {
+            self::ROLE_SYSTEM_ADMIN => 'System Admin',
+            self::ROLE_SUPPLY_CUSTODIAN => 'Supply Custodian',
+            self::ROLE_UNIT_CONSOLIDATOR => 'Unit Consolidator',
+            self::ROLE_EMPLOYEE => 'Employee',
+            default => filled($this->role)
+                ? ucwords(str_replace('_', ' ', (string) $this->role))
+                : '—',
+        };
+    }
+
     public function isSupplyCustodian(): bool
     {
         return $this->role === self::ROLE_SUPPLY_CUSTODIAN;

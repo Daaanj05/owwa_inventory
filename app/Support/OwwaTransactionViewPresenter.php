@@ -253,7 +253,12 @@ class OwwaTransactionViewPresenter
      */
     public static function forUserLog(UserLog $record): array
     {
-        $record->loadMissing(['user']);
+        $record->loadMissing([
+            'user.office',
+            'user.department',
+            'user.assignments.office',
+            'user.assignments.department',
+        ]);
 
         $statusLabel = $record->isOpen()
             ? 'Active session'
@@ -264,6 +269,9 @@ class OwwaTransactionViewPresenter
             statusLabel: $statusLabel,
             statusClass: $record->isOpen() ? 'owwa-pc-status-badge--progress' : 'owwa-pc-status-badge--completed',
             meta: [
+                ['label' => 'Role', 'value' => $record->user?->roleLabel() ?? '—'],
+                ['label' => 'Office', 'value' => $record->user?->assignmentOfficesSummary() ?: '—'],
+                ['label' => 'Sub-Office/Department', 'value' => $record->user?->assignmentDepartmentsSummary() ?: '—'],
                 ['label' => 'Logged in', 'value' => $record->logged_in_at?->format('M j, Y g:i A') ?? '—'],
                 ['label' => 'Logged out', 'value' => $record->isOpen()
                     ? 'Still active'

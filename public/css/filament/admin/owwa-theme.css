@@ -11047,6 +11047,93 @@ body.owwa-busy-active .fi-topbar a {
     text-transform: capitalize;
 }
 
+.owwa-user-log-session-hint {
+    margin: -0.35rem 0 0.75rem;
+    font-size: 0.75rem;
+    color: #64748b;
+}
+
+.owwa-user-log-session-row {
+    cursor: pointer;
+}
+
+.owwa-user-log-session-row:hover td {
+    background: #f8fafc;
+}
+
+.owwa-user-log-session-row:focus-visible {
+    outline: 2px solid #2563eb;
+    outline-offset: -2px;
+}
+
+.owwa-user-log-summary {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.5rem;
+}
+
+.owwa-user-log-summary-chevron {
+    flex: none;
+    color: #64748b;
+    font-size: 1rem;
+    line-height: 1.25rem;
+    transition: transform 0.15s ease;
+}
+
+.owwa-user-log-session-row.is-open .owwa-user-log-summary-chevron {
+    transform: rotate(90deg);
+}
+
+.owwa-user-log-detail {
+    margin-top: 0.5rem;
+    padding: 0.625rem 0.75rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.5rem;
+    background: #f8fafc;
+}
+
+.owwa-user-log-detail[x-cloak] {
+    display: none !important;
+}
+
+.owwa-user-log-detail-line {
+    display: contents;
+}
+
+.owwa-user-log-detail dl {
+    display: grid;
+    grid-template-columns: minmax(9rem, 12rem) minmax(0, 1fr);
+    gap: 0.35rem 0.75rem;
+    margin: 0;
+}
+
+.owwa-user-log-detail dt {
+    color: #64748b;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.owwa-user-log-detail dd {
+    margin: 0;
+    color: #0f172a;
+    font-size: 0.8125rem;
+    white-space: pre-line;
+}
+
+.dark .owwa-user-log-session-row:hover td {
+    background: #1f2937;
+}
+
+.dark .owwa-user-log-detail {
+    border-color: #374151;
+    background: #111827;
+}
+
+.dark .owwa-user-log-detail dd {
+    color: #f3f4f6;
+}
+
 /* AI procurement run — compact view modal */
 .fi-modal-window.owwa-ai-run-modal .fi-section {
     margin-bottom: 0.75rem;

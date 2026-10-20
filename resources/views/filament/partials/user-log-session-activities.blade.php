@@ -9,6 +9,7 @@
     $perPage = 25;
     $activities = $record->sessionActivities()->limit(200)->get();
     $totalCount = $record->sessionActivitiesCount();
+    \App\Support\UserActivityLogDisplay::hydrateSummaries($activities);
 @endphp
 
 <div
@@ -17,11 +18,10 @@
         page: 1,
         perPage: {{ $perPage }},
         total: {{ $activities->count() }},
+        openId: null,
+        loadingId: null,
+        details: {},
         get lastPage() { return Math.max(1, Math.ceil(this.total / this.perPage)); },
-        get visible() {
-            const start = (this.page - 1) * this.perPage;
-            return Array.from(this.$refs.rows?.querySelectorAll('tr') ?? []).slice(start, start + this.perPage);
-        },
         showPage() {
             const rows = Array.from(this.$refs.rows?.querySelectorAll('tr') ?? []);
             const start = (this.page - 1) * this.perPage;
@@ -30,8 +30,28 @@
                 row.style.display = (index >= start && index < end) ? '' : 'none';
             });
         },
-        prev() { this.page = Math.max(1, this.page - 1); this.showPage(); },
-        next() { this.page = Math.min(this.lastPage, this.page + 1); this.showPage(); },
+        prev() { this.page = Math.max(1, this.page - 1); this.openId = null; this.showPage(); },
+        next() { this.page = Math.min(this.lastPage, this.page + 1); this.openId = null; this.showPage(); },
+        async toggle(id) {
+            if (this.openId === id) {
+                this.openId = null;
+                return;
+            }
+            this.openId = id;
+            if (this.details[id]) {
+                return;
+            }
+            this.loadingId = id;
+            try {
+                const lines = await $wire.loadActivityDetails(id);
+                this.details = { ...this.details, [id]: lines ?? [] };
+            } catch (error) {
+                this.details = { ...this.details, [id]: [{ label: 'Details', value: 'Could not load this row.' }] };
+            }
+            if (this.loadingId === id) {
+                this.loadingId = null;
+            }
+        },
     }"
     x-init="showPage()"
 >
@@ -44,6 +64,7 @@
                 (showing latest {{ $activities->count() }})
             @endif
         </p>
+        <p class="owwa-user-log-session-hint">Click a row to see the record details.</p>
         <div class="owwa-user-log-session-table-wrap">
             <table class="owwa-user-log-session-table">
                 <thead>
@@ -55,10 +76,44 @@
                 </thead>
                 <tbody x-ref="rows">
                     @foreach ($activities as $activity)
-                        <tr>
+                        @php
+                            $summary = \App\Support\UserActivityLogDisplay::summary($activity);
+                            $activityId = (int) $activity->id;
+                        @endphp
+                        <tr
+                            class="owwa-user-log-session-row"
+                            tabindex="0"
+                            role="button"
+                            :aria-expanded="openId === {{ $activityId }} ? 'true' : 'false'"
+                            :class="{ 'is-open': openId === {{ $activityId }} }"
+                            @click="toggle({{ $activityId }})"
+                            @keydown.enter.prevent="toggle({{ $activityId }})"
+                            @keydown.space.prevent="toggle({{ $activityId }})"
+                        >
                             <td>{{ $activity->created_at?->format('M j, g:i A') }}</td>
                             <td><span class="owwa-user-log-action-badge">{{ str_replace('_', ' ', $activity->action) }}</span></td>
-                            <td>{{ $activity->summary }}</td>
+                            <td>
+                                <div class="owwa-user-log-summary">
+                                    <span>{{ $summary }}</span>
+                                    <span class="owwa-user-log-summary-chevron" aria-hidden="true">›</span>
+                                </div>
+                                <div
+                                    class="owwa-user-log-detail"
+                                    x-show="openId === {{ $activityId }}"
+                                    x-cloak
+                                    @click.stop
+                                >
+                                    <p class="owwa-user-log-session-hint" x-show="loadingId === {{ $activityId }}">Loading details…</p>
+                                    <dl x-show="details[{{ $activityId }}]">
+                                        <template x-for="line in details[{{ $activityId }}] ?? []" :key="line.label">
+                                            <div class="owwa-user-log-detail-line">
+                                                <dt x-text="line.label"></dt>
+                                                <dd x-text="line.value"></dd>
+                                            </div>
+                                        </template>
+                                    </dl>
+                                </div>
+                            </td>
                         </tr>
                     @endforeach
                 </tbody>
