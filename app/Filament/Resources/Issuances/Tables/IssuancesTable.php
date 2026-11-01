@@ -2,7 +2,6 @@
 
 namespace App\Filament\Resources\Issuances\Tables;
 
-use App\Filament\Concerns\OwwaListExportActions;
 use App\Filament\Resources\Acquisitions\Concerns\AcquisitionDateRangeFilter;
 use App\Filament\Resources\Issuances\Actions\IssuanceViewActions;
 use App\Filament\Resources\Issuances\IssuanceResource;
@@ -155,9 +154,6 @@ class IssuancesTable
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
-                    OwwaListExportActions::bulkAction('owwa.export.bulk.issuances')
-                        ->label('Export Issuances')
-                        ->visible(fn (): bool => ! (bool) ($table->getLivewire()->showingArchived ?? false)),
                     DeleteBulkAction::make()
                         ->label('Archive selected')
                         ->action(function (Collection $records): void {

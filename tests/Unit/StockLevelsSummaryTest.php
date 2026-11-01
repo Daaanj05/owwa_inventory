@@ -22,7 +22,7 @@ class StockLevelsSummaryTest extends TestCase
     {
         Filament::setCurrentPanel(Filament::getPanel('admin'));
 
-        $office = Office::factory()->create();
+        $office = Office::factory()->create(['is_regional_supply' => true]);
         $category = ItemCategory::factory()->create(['name' => 'Semi-Expendable']);
         $user = User::factory()->create([
             'role' => User::ROLE_SUPPLY_CUSTODIAN,

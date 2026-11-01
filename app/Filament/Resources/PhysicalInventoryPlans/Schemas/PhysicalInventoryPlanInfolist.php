@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\PhysicalInventoryPlans\Schemas;
 
 use App\Models\PhysicalInventoryPlan;
+use App\Support\OwwaReferenceLabels;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
@@ -80,7 +81,7 @@ class PhysicalInventoryPlanInfolist
             ->columnSpanFull()
             ->columns(2)
             ->schema([
-                TextEntry::make('reference_code')->label('Reference'),
+                TextEntry::make('reference_code')->label(OwwaReferenceLabels::inventoryPlan()),
                 TextEntry::make('status')
                     ->badge()
                     ->formatStateUsing(fn (?string $state): string => match ($state) {

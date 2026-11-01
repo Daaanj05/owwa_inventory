@@ -432,6 +432,7 @@ class OwwaBulkExportController extends Controller
         abort_unless($dateFrom <= $dateTo, 422);
 
         $categoryId = (int) $request->query('category', 0);
+        $selectedIds = $this->idsFromRequest($request);
         $maxRecords = $format === 'pdf'
             ? StockLevelExportService::FAST_MAX
             : self::MAX_IDS;
@@ -455,13 +456,23 @@ class OwwaBulkExportController extends Controller
             $query->whereHas('item', fn (Builder $builder): Builder => $builder->where('item_category_id', $categoryId));
         }
 
+        if ($selectedIds !== []) {
+            $query->whereKey($selectedIds);
+        }
+
         $records = $query->limit($maxRecords + 1)->get();
 
-        abort_if($records->isEmpty(), 404, 'No issuances found for the selected date range.');
+        abort_if(
+            $records->isEmpty(),
+            404,
+            $selectedIds !== []
+                ? 'No selected issuances match the date range.'
+                : 'No issuances found for the selected date range.',
+        );
         abort_if(
             $records->count() > $maxRecords,
             422,
-            'Too many records (max '.$maxRecords.'). Narrow the date range.',
+            'Too many records (max '.$maxRecords.'). Narrow the date range or selection.',
         );
 
         if ($format === 'pdf') {

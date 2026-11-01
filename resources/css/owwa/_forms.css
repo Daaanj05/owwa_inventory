@@ -370,11 +370,6 @@ button[type="submit"].fi-btn:hover {
     white-space: nowrap !important;
 }
 
-.fi-page.owwa-items-list-page .fi-ta-cell {
-    padding-top: 0.5rem !important;
-    padding-bottom: 0.5rem !important;
-}
-
 .fi-page.owwa-items-list-page.owwa-icd--property-plant-and-equipment .fi-ta-header-cell:has(.owwa-item-name-column),
 .fi-page.owwa-items-list-page.owwa-icd--property-plant-and-equipment .fi-ta-cell:has(.owwa-item-name-column) {
     width: 16rem !important;
@@ -716,6 +711,7 @@ button[type="submit"].fi-btn:hover {
 
 .fi-page.owwa-search-row-toolbar.owwa-setup-archive-toggle .fi-ta-header-toolbar {
     display: grid !important;
+    /* Search | flex space | Bulk + Archive cluster (two auto cols, tight gap). */
     grid-template-columns: auto 1fr auto auto !important;
     align-items: center !important;
     column-gap: 0.5rem !important;
@@ -755,6 +751,7 @@ button[type="submit"].fi-btn:hover {
     justify-self: end !important;
     order: unset !important;
     margin-left: 0 !important;
+    margin-right: 0 !important;
 }
 
 .fi-page.owwa-setup-archive-toggle .owwa-setup-archive-view-toggle {

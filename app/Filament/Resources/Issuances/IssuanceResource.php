@@ -10,7 +10,6 @@ use App\Filament\Resources\Issuances\Schemas\IssuanceForm;
 use App\Filament\Resources\Issuances\Tables\IssuancesTable;
 use App\Models\Issuance;
 use App\Models\User;
-use App\Support\IssuanceRecipientSummary;
 use App\Support\OwwaReferenceLabels;
 use App\Support\SemiExpendableUsefulLife;
 use BackedEnum;
@@ -172,29 +171,14 @@ class IssuanceResource extends Resource
                         ]),
                 ])
                 ->columnSpanFull(),
-            Section::make('Assignment')
+            Section::make('Remarks')
                 ->schema([
-                    TextEntry::make('issuedTo.name')->label('Issued to')->placeholder('—'),
-                    TextEntry::make('endorsed_by')
-                        ->label('Endorsed by (UC)')
-                        ->state(fn (Issuance $record): ?string => IssuanceRecipientSummary::resolveUnitConsolidatorName($record))
-                        ->placeholder('—'),
-                    TextEntry::make('asset_identifier')
-                        ->label(fn (Issuance $record): string => OwwaReferenceLabels::assetIdentifierLabel(
-                            $record->item?->category?->getTemplateSlug()
-                        ))
-                        ->state(fn (Issuance $record): ?string => OwwaReferenceLabels::assetIdentifierForIssuance($record))
-                        ->placeholder('—')
-                        ->visible(fn (Issuance $record): bool => $record->batchLines()->count() === 1),
                     TextEntry::make('remarks')->label('Remarks')->placeholder('—')->columnSpanFull(),
                 ])
-                ->columns(2)
-                ->columnSpanFull(),
+                ->columnSpanFull()
+                ->visible(fn (Issuance $record): bool => filled($record->remarks)),
             Section::make('Useful life')
                 ->schema([
-                    TextEntry::make('estimated_useful_life')
-                        ->label('Estimated useful life')
-                        ->placeholder('—'),
                     TextEntry::make('eul_expires_at')
                         ->label('Useful life expires')
                         ->date('M d, Y')
@@ -205,7 +189,7 @@ class IssuanceResource extends Resource
                             SemiExpendableUsefulLife::statusForIssuance($record)
                         )),
                 ])
-                ->columns(3)
+                ->columns(2)
                 ->columnSpanFull()
                 ->visible(fn (Issuance $record): bool => $record->item?->category?->getTemplateSlug() === 'semi_expendable'
                     && $record->batchLines()->count() === 1),

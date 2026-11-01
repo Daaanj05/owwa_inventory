@@ -442,9 +442,10 @@ select.owwa-search-bar {
     max-width: none;
 }
 
-/* Issuances list: one-row toolbar (search + optional pills + bulk) */
-.fi-page.owwa-issuances-list--consumables .fi-ta-header-toolbar,
-.fi-page.owwa-issuances-list--property .fi-ta-header-toolbar {
+/* Issuances list: one-row toolbar (search + optional pills + bulk).
+   Skip when search-row-toolbar is on — that layout uses the archive grid in _forms.css. */
+.fi-page.owwa-issuances-list--consumables:not(.owwa-search-row-toolbar) .fi-ta-header-toolbar,
+.fi-page.owwa-issuances-list--property:not(.owwa-search-row-toolbar) .fi-ta-header-toolbar {
     display: flex !important;
     flex-direction: row !important;
     flex-wrap: wrap !important;
@@ -457,8 +458,8 @@ select.owwa-search-bar {
     margin: 0 !important;
 }
 
-.fi-page.owwa-issuances-list--consumables .fi-ta-header-toolbar > div:has(.fi-ta-search-field),
-.fi-page.owwa-issuances-list--property .fi-ta-header-toolbar > div:has(.fi-ta-search-field) {
+.fi-page.owwa-issuances-list--consumables:not(.owwa-search-row-toolbar) .fi-ta-header-toolbar > div:has(.fi-ta-search-field),
+.fi-page.owwa-issuances-list--property:not(.owwa-search-row-toolbar) .fi-ta-header-toolbar > div:has(.fi-ta-search-field) {
     display: flex !important;
     flex-wrap: wrap !important;
     align-items: center !important;
@@ -519,15 +520,44 @@ select.owwa-search-bar {
     line-height: 1.1;
 }
 
-.fi-page.owwa-issuances-list--consumables .fi-ta-actions,
-.fi-page.owwa-issuances-list--property .fi-ta-actions,
-.fi-page.owwa-issuances-list--consumables .fi-ta-header-toolbar .fi-ta-actions,
-.fi-page.owwa-issuances-list--property .fi-ta-header-toolbar .fi-ta-actions {
+.fi-page.owwa-issuances-list--consumables:not(.owwa-search-row-toolbar) .fi-ta-actions,
+.fi-page.owwa-issuances-list--property:not(.owwa-search-row-toolbar) .fi-ta-actions,
+.fi-page.owwa-issuances-list--consumables:not(.owwa-search-row-toolbar) .fi-ta-header-toolbar .fi-ta-actions,
+.fi-page.owwa-issuances-list--property:not(.owwa-search-row-toolbar) .fi-ta-header-toolbar .fi-ta-actions {
     order: 2 !important;
     margin-left: auto !important;
     justify-content: flex-end !important;
     width: auto !important;
     flex: 0 0 auto !important;
+}
+
+/* Issuances: Bulk + Active/Archive share .fi-ta-actions (one right cluster under Export Report). */
+.fi-page.owwa-issuances-list.owwa-search-row-toolbar.owwa-setup-archive-toggle .fi-ta-header-toolbar {
+    grid-template-columns: auto 1fr auto !important;
+    column-gap: 0.5rem !important;
+}
+
+.fi-page.owwa-issuances-list.owwa-search-row-toolbar.owwa-setup-archive-toggle .fi-ta-header-toolbar > .fi-ta-actions {
+    grid-column: 3 !important;
+    grid-row: 2 !important;
+    width: max-content !important;
+    max-width: none !important;
+    justify-self: end !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    gap: 0.35rem !important;
+}
+
+.fi-page.owwa-issuances-list.owwa-search-row-toolbar .owwa-search-row-actions {
+    grid-column: 3 !important;
+    grid-row: 1 !important;
+}
+
+.fi-page.owwa-issuances-list.owwa-search-row-toolbar.owwa-setup-archive-toggle .fi-ta-actions .owwa-setup-archive-view-toggle {
+    grid-column: unset !important;
+    grid-row: unset !important;
+    margin: 0 !important;
+    order: unset !important;
 }
 
 .fi-page.owwa-issuances-list--consumables .fi-ta-selection-indicator,

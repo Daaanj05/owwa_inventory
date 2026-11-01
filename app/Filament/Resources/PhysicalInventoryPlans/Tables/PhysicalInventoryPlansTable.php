@@ -8,6 +8,7 @@ use App\Filament\Resources\PhysicalInventoryPlans\Schemas\PhysicalInventoryPlanM
 use App\Filament\Support\ConfiguresOwwaViewAction;
 use App\Filament\Support\OwwaFormModalDefaults;
 use App\Models\PhysicalInventoryPlan;
+use App\Support\OwwaReferenceLabels;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\RestoreBulkAction;
@@ -23,7 +24,7 @@ class PhysicalInventoryPlansTable
             ->deselectAllRecordsWhenFiltered(false)
             ->columns([
                 TextColumn::make('reference_code')
-                    ->label('Reference')
+                    ->label(OwwaReferenceLabels::inventoryPlan())
                     ->searchable()
                     ->sortable()
                     ->weight(FontWeight::Medium),

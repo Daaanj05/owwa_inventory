@@ -43,6 +43,10 @@
     padding-left: 3.4rem;
     color: #fff !important;
     font-weight: 700 !important;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-user-drag: none;
+    -webkit-touch-callout: none;
 }
 
 .fi-topbar .fi-logo::before {
@@ -55,6 +59,10 @@
     background-image: url('/images/owwa-4a_logo_transparent.png');
     background-size: cover;
     background-position: center;
+    pointer-events: none;
+    -webkit-user-drag: none;
+    -webkit-user-select: none;
+    user-select: none;
 }
 
 /* ═══════════════════════════════════════════════════════════

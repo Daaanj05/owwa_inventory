@@ -328,6 +328,13 @@ class OwwaItemReportService
             $grouped[$officeId][] = $row;
         }
 
+        $item = Item::query()->with('category')->find($itemId);
+        $propertyTracked = in_array(
+            $item?->category?->getTemplateSlug(),
+            ['ppe', 'semi_expendable'],
+            true,
+        );
+
         $finalized = [];
         foreach ($grouped as $officeId => $officeRows) {
             usort($officeRows, fn (array $a, array $b): int => ($a['sort_date'] ?? '') <=> ($b['sort_date'] ?? ''));
@@ -335,11 +342,23 @@ class OwwaItemReportService
             $balance = $this->openingQuantityForLedger($itemId, $officeId, $unitCost);
 
             foreach ($officeRows as $index => $txn) {
-                if ($txn['receipt_qty']) {
-                    $balance += (int) $txn['receipt_qty'];
-                }
-                if ($txn['issue_qty']) {
-                    $balance -= (int) $txn['issue_qty'];
+                $type = (string) ($txn['type'] ?? '');
+                $locationOnly = $propertyTracked && in_array($type, [
+                    'transfer_in',
+                    'transfer_out',
+                    'donation',
+                    'relocate',
+                    'reassignment',
+                    'others',
+                ], true);
+
+                if (! $locationOnly) {
+                    if ($txn['receipt_qty']) {
+                        $balance += (int) $txn['receipt_qty'];
+                    }
+                    if ($txn['issue_qty']) {
+                        $balance -= (int) $txn['issue_qty'];
+                    }
                 }
                 $officeRows[$index]['balance'] = max(0, $balance);
             }

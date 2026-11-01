@@ -11,16 +11,16 @@ class IssuanceSignatoryLabels
     {
         return match ($slug) {
             'ppe' => [
-                'custodian' => 'Issued by (PAR)',
-                'custodian_designation' => 'Issued-by designation (PAR row 48)',
-                'issued_to_designation' => 'Received-by designation (PAR row 48)',
+                'custodian' => "Issuing officer's name",
+                'custodian_designation' => "Issuing officer's designation",
+                'issued_to_designation' => "Receiver's designation",
                 'accounting_staff' => 'Accounting staff',
                 'section_description' => 'Printed names for Appendix 71 PAR signature block (rows 45–50).',
             ],
             'semi_expendable' => [
-                'custodian' => 'Issued by / custodian (ICS)',
+                'custodian' => "Custodian's name",
                 'custodian_designation' => 'Custodian designation (ICS row 49)',
-                'issued_to_designation' => 'Received-by designation (ICS row 49)',
+                'issued_to_designation' => "Receiver's designation",
                 'accounting_staff' => 'Accounting staff',
                 'section_description' => 'Printed names for Appendix 59 ICS signature block (rows 44–51).',
             ],

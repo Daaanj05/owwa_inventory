@@ -14,8 +14,6 @@ class OwwaReferenceLabels
 {
     public const RIS = 'RIS No.';
 
-    public const RSMI = 'RSMI No.';
-
     /** RSMI Appendix 64 header label — maps to issuance {@see Issuance::$reference_code}, not item serial metadata. */
     public const SERIAL = 'Serial No.';
 
@@ -42,6 +40,22 @@ class OwwaReferenceLabels
     public const INVENTORY_ITEM_NO = 'Inventory item no.';
 
     public const TRANSACTION_NO = 'Transaction No.';
+
+    public const REQUEST_NO = 'Request No.';
+
+    public const TRACKING_NO = 'Tracking No.';
+
+    public const SOURCE_DOCUMENT = 'Source document';
+
+    public const PLAN_NO = 'Plan No.';
+
+    public const CASE_NO = 'Case No.';
+
+    public const RPCI_NO = 'RPCI No.';
+
+    public const RPCPPE_NO = 'RPCPPE No.';
+
+    public const RPCSP_NO = 'RPCSP No.';
 
     public static function requisition(): string
     {
@@ -111,13 +125,27 @@ class OwwaReferenceLabels
 
     public static function issuanceTransaction(Issuance $issuance): string
     {
-        $issuance->loadMissing('item.category');
+        return self::forIssuance($issuance);
+    }
 
-        return match ($issuance->item?->category?->getTemplateSlug()) {
-            'ppe' => self::PAR,
-            'semi_expendable' => self::ICS,
-            default => self::RSMI,
-        };
+    public static function propertyActionRequest(): string
+    {
+        return self::REQUEST_NO;
+    }
+
+    public static function openingBalanceTracking(): string
+    {
+        return self::TRACKING_NO;
+    }
+
+    public static function openingBalanceSourceDocument(): string
+    {
+        return self::SOURCE_DOCUMENT;
+    }
+
+    public static function inventoryPlan(): string
+    {
+        return self::PLAN_NO;
     }
 
     public static function usesPropertyNumber(?string $categorySlug): bool
@@ -277,16 +305,16 @@ class OwwaReferenceLabels
     public static function physicalCount(?string $countType = null): string
     {
         return match ($countType) {
-            PhysicalCountSession::TYPE_RPCI => 'RPCI reference',
-            PhysicalCountSession::TYPE_RPCPPE => 'RPCPPE reference',
-            PhysicalCountSession::TYPE_RPCSP => 'RPCSP reference',
-            default => 'Reference',
+            PhysicalCountSession::TYPE_RPCI => self::RPCI_NO,
+            PhysicalCountSession::TYPE_RPCPPE => self::RPCPPE_NO,
+            PhysicalCountSession::TYPE_RPCSP => self::RPCSP_NO,
+            default => self::STOCK_CARD_REFERENCE,
         };
     }
 
     public static function acquisitionPaperwork(): string
     {
-        return 'Acquisition paperwork reference';
+        return self::CASE_NO;
     }
 
     /** @deprecated Use acquisitionPaperwork() */

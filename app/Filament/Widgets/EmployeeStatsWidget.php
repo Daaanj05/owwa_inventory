@@ -292,12 +292,13 @@ class EmployeeStatsWidget extends StatsOverviewWidget implements HasActions
             'empty_desc' => 'Nothing to show.',
             'columns' => $pendingOnly
                 ? [
-                    'reference' => 'Reference',
+                    'transaction_number' => OwwaReferenceLabels::employeeRequisitionTransaction(),
                     'purpose' => 'Purpose',
                     'created' => 'Submitted',
                 ]
                 : [
-                    'reference' => 'Reference',
+                    'transaction_number' => OwwaReferenceLabels::employeeRequisitionTransaction(),
+                    'ris_number' => OwwaReferenceLabels::requisition(),
                     'status' => 'Status',
                     'purpose' => 'Purpose',
                     'created' => 'Submitted',

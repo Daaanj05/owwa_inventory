@@ -5,6 +5,7 @@ namespace App\Filament\Resources\Acquisitions\Paperwork\Schemas;
 use App\Filament\Resources\Requisitions\RequisitionResource;
 use App\Models\AcquisitionPaperwork;
 use App\Support\AcquisitionPaperworkViewPresenter;
+use App\Support\OwwaReferenceLabels;
 use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Components\Section;
@@ -37,7 +38,7 @@ class AcquisitionPaperworkInfolist
                         ->badge()
                         ->formatStateUsing(fn (AcquisitionPaperwork $record): string => $record->phaseStatusLabel(AcquisitionPaperwork::PHASE_PR)),
                     TextEntry::make('pr_date')->label('PR date')->date('M d, Y')->placeholder('—'),
-                    TextEntry::make('reference_code')->label('Case reference')->placeholder('—'),
+                    TextEntry::make('reference_code')->label(OwwaReferenceLabels::acquisitionPaperwork())->placeholder('—'),
                     TextEntry::make('itemCategory.name')->label('Category')->placeholder('—'),
                     TextEntry::make('office.name')->label('Office')->placeholder('—'),
                     TextEntry::make('requestingOffice.name')->label('Requesting office')->placeholder('—'),

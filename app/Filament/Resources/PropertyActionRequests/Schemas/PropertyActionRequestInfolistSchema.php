@@ -6,6 +6,7 @@ use App\Filament\Resources\Disposals\DisposalResource;
 use App\Filament\Resources\Transfers\TransferResource;
 use App\Models\PropertyActionRequest;
 use App\Models\PropertyActionRequestLine;
+use App\Support\OwwaReferenceLabels;
 use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\RepeatableEntry\TableColumn;
 use Filament\Infolists\Components\TextEntry;
@@ -34,7 +35,7 @@ class PropertyActionRequestInfolistSchema
     {
         return [
             TextEntry::make('reference_code')
-                ->label('Reference')
+                ->label(OwwaReferenceLabels::propertyActionRequest())
                 ->placeholder('—')
                 ->visible(self::hideOnEmployeeRequest()),
             TextEntry::make('action_type')

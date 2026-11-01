@@ -7,8 +7,8 @@
     <style>
         @page {
             size: A4 portrait;
-            /* Extra bottom margin so expanding detail/recap rows stop above the fixed Generated on footer. */
-            margin: 12mm 12mm 20mm 12mm;
+            /* Stock Card Fast default margins; slightly larger bottom for Generated on footer band. */
+            margin: 14mm 12mm 16mm 12mm;
         }
         * {
             box-sizing: border-box;
@@ -29,10 +29,11 @@
         }
         .generated-on {
             position: fixed;
-            bottom: 8mm;
+            bottom: -12mm;
             right: 0;
             left: 0;
-            width: 100%;
+            height: 10mm;
+            line-height: 10mm;
             text-align: right;
             font-size: 10px;
             font-family: "Times New Roman", Times, serif;
@@ -111,6 +112,8 @@
         }
         .meta .meta-right {
             width: 45%;
+            text-align: right;
+            white-space: nowrap;
         }
         .meta .line {
             display: inline-block;
@@ -118,9 +121,11 @@
             font-weight: bold;
             min-width: 58%;
             padding: 0 2px 1px 4px;
+            text-align: left;
         }
         .meta .line-short {
             min-width: 48%;
+            text-align: left;
         }
         .form-table {
             width: 100%;
@@ -147,6 +152,7 @@
         .col-amount { width: 12%; }
         .form-table .banner {
             font-weight: bold;
+            font-style: italic;
             font-size: 9px;
             text-align: center;
             height: 18px;
@@ -192,13 +198,68 @@
             border-bottom: none;
             text-align: center;
             vertical-align: bottom;
-            height: 22px;
+            height: 26px;
             font-weight: bold;
+        }
+        .form-table .sig-underline {
+            display: inline-block;
+            border-bottom: 1px solid #000;
+            min-width: 88%;
+            padding: 0 4px 1px 4px;
+            font-weight: bold;
+            text-align: center;
+        }
+        .form-table .sig-posted-inner {
+            width: 100%;
+            border-collapse: collapse;
+            table-layout: fixed;
+        }
+        .form-table .sig-posted-inner td {
+            border: none;
+            padding: 0 2px;
+            vertical-align: bottom;
+            text-align: center;
+            font-size: 8px;
+            font-weight: normal;
+        }
+        .form-table .sig-posted-inner .sig-posted-staff {
+            width: 68%;
+        }
+        .form-table .sig-posted-inner .sig-posted-date {
+            width: 32%;
+        }
+        .form-table .sig-posted-inner .sig-underline {
+            min-width: 0;
+            width: 92%;
+            font-weight: bold;
+            font-size: 9px;
+        }
+        .form-table .sig-posted-inner .sig-posted-caption {
+            vertical-align: top;
+            font-size: 7px;
+            line-height: 1.15;
+            padding-top: 1px;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
         }
         .form-table .sig-caption {
             border-top: none;
             text-align: center;
             font-size: 8px;
+            vertical-align: top;
+        }
+        .form-table .sig-posted-block,
+        .form-table .sig-caption-posted {
+            border-top: none;
+            border-bottom: none;
+            padding: 0 2px;
+            overflow: hidden;
+        }
+        .form-table .sig-posted-block {
+            vertical-align: bottom;
+            height: 26px;
+        }
+        .form-table .sig-caption-posted {
             vertical-align: top;
         }
     </style>
@@ -222,7 +283,7 @@
         : null;
 
     $minRows = (int) ($minRows ?? 21);
-    $minRecapRows = (int) ($minRecapRows ?? 16);
+    $minRecapRows = (int) ($minRecapRows ?? 14);
 @endphp
 @if ($showGeneratedOn)
     <div class="generated-on">Generated on {{ $generatedOn }}</div>
@@ -369,19 +430,31 @@
                 </tr>
                 <tr>
                     <td colspan="5" class="sig-line">
-                        {{ filled($custodianName) ? $custodianName : '_____________________________________________' }}
+                        <span class="sig-underline">{{ $custodianName }}&nbsp;</span>
                     </td>
-                    <td colspan="2" class="sig-line">
-                        {{ filled($accountingName) ? $accountingName : '__________________________' }}
-                    </td>
-                    <td class="sig-line">
-                        {{ filled($postedDate) ? $postedDate : '______________' }}
+                    <td colspan="3" class="sig-posted-block">
+                        <table class="sig-posted-inner">
+                            <tr>
+                                <td class="sig-posted-staff">
+                                    <span class="sig-underline">{{ $accountingName }}&nbsp;</span>
+                                </td>
+                                <td class="sig-posted-date">
+                                    <span class="sig-underline">{{ $postedDate }}&nbsp;</span>
+                                </td>
+                            </tr>
+                        </table>
                     </td>
                 </tr>
                 <tr>
                     <td colspan="5" class="sig-caption">Signature over Printed Name of Supply and/or Property Custodian</td>
-                    <td colspan="2" class="sig-caption">Signature over Printed Name of Designated Accounting Staff</td>
-                    <td class="sig-caption">Date</td>
+                    <td colspan="3" class="sig-caption-posted">
+                        <table class="sig-posted-inner">
+                            <tr>
+                                <td class="sig-posted-staff sig-posted-caption">Signature over Printed Name of Designated Accounting Staff</td>
+                                <td class="sig-posted-date sig-posted-caption">Date</td>
+                            </tr>
+                        </table>
+                    </td>
                 </tr>
             @endif
         </table>

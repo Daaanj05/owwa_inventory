@@ -17,9 +17,9 @@ class TransferTypeStockEffectTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_outgoing_types_deduct_the_from_office_and_receipt_the_destination(): void
+    public function test_location_transfers_do_not_move_semi_expendable_stock_quantity(): void
     {
-        $from = Office::factory()->create(['name' => 'Laguna']);
+        $from = Office::factory()->create(['name' => 'Laguna', 'is_regional_supply' => true]);
         $to = Office::factory()->create(['name' => 'Cavite']);
         $next = Office::factory()->create(['name' => 'Batangas']);
         $category = ItemCategory::factory()->create(['name' => 'Semi-Expendable']);
@@ -37,9 +37,9 @@ class TransferTypeStockEffectTest extends TestCase
         $stock = app(InventoryStockService::class);
         $stock->forgetMovementTotalsCache();
 
-        $this->assertSame(2, $stock->getStock($item->id, $from->id));
-        $this->assertSame(1, $stock->getStock($item->id, $to->id));
-        $this->assertSame(2, $stock->getStock($item->id, $next->id));
+        $this->assertSame(5, $stock->getStock($item->id, $from->id));
+        $this->assertSame(0, $stock->getStock($item->id, $to->id));
+        $this->assertSame(0, $stock->getStock($item->id, $next->id));
 
         $fromCard = app(StockLedgerViewService::class)->present($item, $from);
         $toCard = app(StockLedgerViewService::class)->present($item, $to);
@@ -47,6 +47,10 @@ class TransferTypeStockEffectTest extends TestCase
         $this->assertTrue(collect($fromCard['rows'])->contains(
             fn (array $row): bool => $row['type_label'] === 'Donation' && (int) $row['issue_qty'] === 3,
         ));
+        $donationBalance = collect($fromCard['rows'])->first(
+            fn (array $row): bool => $row['type_label'] === 'Donation' && (int) $row['issue_qty'] === 3,
+        );
+        $this->assertSame(5, (int) ($donationBalance['balance'] ?? 0));
         $this->assertTrue(collect($toCard['rows'])->contains(
             fn (array $row): bool => $row['type_label'] === 'Donation' && (int) $row['receipt_qty'] === 3,
         ));

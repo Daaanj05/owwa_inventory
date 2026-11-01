@@ -177,7 +177,7 @@ class PhysicalCountStockReconciliationTest extends TestCase
         $this->assertTrue($lines->every(fn ($line): bool => (int) $line->balance_per_card === 1));
     }
 
-    public function test_preload_excludes_units_at_satellite_office(): void
+    public function test_preload_includes_units_at_field_office_location(): void
     {
         [$office, $category, $item, $user] = $this->createSemiFixtures();
         $satellite = Office::factory()->create(['name' => 'Satellite A']);
@@ -210,7 +210,11 @@ class PhysicalCountStockReconciliationTest extends TestCase
 
         app(PhysicalCountPreloadService::class)->preloadFromCustodyRecords($session);
 
-        $this->assertSame(1, $session->fresh()->lines()->count());
+        $lines = $session->fresh()->lines;
+        $this->assertSame(2, $lines->count());
+        $this->assertTrue($lines->contains(
+            fn ($line): bool => str_contains((string) $line->remarks, 'Satellite A'),
+        ));
     }
 
     /**

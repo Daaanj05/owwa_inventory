@@ -34,7 +34,7 @@ class OwwaTransactionViewPresenter
                 ['label' => 'Unit cost', 'value' => '₱'.number_format((float) $record->unit_cost, 2)],
             ],
         );
-        $hero['referenceLabel'] = 'Reference';
+        $hero['referenceLabel'] = OwwaReferenceLabels::acquisition();
 
         return $hero;
     }
@@ -44,16 +44,8 @@ class OwwaTransactionViewPresenter
      */
     public static function forIssuance(Issuance $record): array
     {
-        $record->loadMissing(['item', 'office', 'department', 'requisition', 'batch']);
+        $record->loadMissing(['item.category', 'office', 'department', 'requisition', 'batch']);
         $lines = $record->batchLines();
-        $totalQuantity = (int) $lines->sum('quantity');
-        $totalAmount = (float) $lines->sum(
-            fn (Issuance $line): float => (float) (
-                $line->amount
-                ?? ((float) ($line->unit_cost ?? 0) * (int) $line->quantity)
-            ),
-        );
-
         $recipients = IssuanceRecipientSummary::forIssuance($record);
 
         $hero = OwwaRecordHeroData::make(
@@ -61,20 +53,17 @@ class OwwaTransactionViewPresenter
             statusLabel: 'Issued',
             statusClass: 'owwa-pc-status-badge--complete',
             meta: [
-                ['label' => 'Items', 'value' => $lines->count() === 1 ? ($record->item?->name ?? '—') : $lines->count().' item lines'],
                 ['label' => 'Date', 'value' => $record->issuance_date?->format('M j, Y') ?? '—'],
-                ['label' => 'RIS Reference', 'value' => $record->requisition?->reference_code ?? '—'],
+                ['label' => OwwaReferenceLabels::RIS, 'value' => $record->requisition?->reference_code ?? '—'],
                 ['label' => 'Office', 'value' => $record->office?->name ?? '—'],
                 ['label' => 'Department', 'value' => $record->department?->name ?? '—'],
                 ['label' => 'Issued to', 'value' => $recipients['employee'] ?? $record->issuedTo?->name ?? '—'],
                 ['label' => 'Endorsed by (UC)', 'value' => $recipients['unit_consolidator'] ?? '—'],
+                ['label' => 'Items', 'value' => $lines->count() === 1 ? ($record->item?->name ?? '—') : $lines->count().' item lines'],
             ],
-            kpis: [
-                ['label' => 'Total quantity', 'value' => (string) $totalQuantity],
-                ['label' => 'Total amount', 'value' => '₱'.number_format($totalAmount, 2)],
-            ],
+            kpis: [],
         );
-        $hero['referenceLabel'] = OwwaReferenceLabels::issuanceTransaction($record);
+        $hero['referenceLabel'] = OwwaReferenceLabels::forIssuance($record);
 
         return $hero;
     }
@@ -99,7 +88,7 @@ class OwwaTransactionViewPresenter
                 ['label' => 'Quantity', 'value' => (string) $record->quantity],
             ],
         );
-        $hero['referenceLabel'] = 'Reference';
+        $hero['referenceLabel'] = OwwaReferenceLabels::transfer();
 
         return $hero;
     }
@@ -109,9 +98,11 @@ class OwwaTransactionViewPresenter
      */
     public static function forDisposal(Disposal $record): array
     {
-        $record->loadMissing(['item', 'office', 'batch']);
+        $record->loadMissing(['item.category', 'office', 'batch']);
 
         $confirmed = $record->isConfirmed();
+        $categorySlug = $record->item?->category?->getTemplateSlug()
+            ?? $record->batch?->category_slug;
 
         $hero = OwwaRecordHeroData::make(
             reference: $record->reference_code ?? '—',
@@ -131,7 +122,7 @@ class OwwaTransactionViewPresenter
             ],
             kpis: [],
         );
-        $hero['referenceLabel'] = 'Reference';
+        $hero['referenceLabel'] = OwwaReferenceLabels::disposal($categorySlug);
 
         return $hero;
     }

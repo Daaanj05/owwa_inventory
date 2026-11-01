@@ -13,6 +13,7 @@ use App\Filament\Resources\Pages\ListRecordsWithoutFilterUrl;
 use App\Models\ItemCategory;
 use App\Support\CategoryWizardBreadcrumb;
 use Filament\Tables\Table;
+use Filament\Tables\View\TablesRenderHook;
 use Illuminate\Database\Eloquent\Builder;
 use Livewire\Attributes\Url;
 
@@ -76,6 +77,14 @@ class ListIssuances extends ListRecordsWithoutFilterUrl
     protected function setupArchiveViewArchivedCount(): int
     {
         return IssuanceResource::getEloquentQuery()->onlyTrashed()->count();
+    }
+
+    /**
+     * Mount Active/Archive inside .fi-ta-actions (after Bulk) so they share one flex cluster.
+     */
+    protected function setupArchiveViewRenderHook(): string
+    {
+        return TablesRenderHook::TOOLBAR_GROUPING_SELECTOR_AFTER;
     }
 
     protected function applySetupArchiveQuery(Builder $query): Builder
@@ -156,8 +165,21 @@ class ListIssuances extends ListRecordsWithoutFilterUrl
         $data = $this->mountedRsmiExportFormData();
         $dateFrom = (string) ($data['date_from'] ?? '');
         $dateTo = (string) ($data['date_to'] ?? '');
+        $scope = (string) ($data['export_scope'] ?? IssuanceRsmiExportAction::defaultExportScope($this));
 
         if (blank($dateFrom) || blank($dateTo) || $dateFrom > $dateTo) {
+            $this->rsmiExportCount = 0;
+            $this->rsmiExportCountReady = true;
+            $this->bumpMountedRsmiExportSizeStamp();
+
+            return;
+        }
+
+        $selectedIds = $scope === 'selected'
+            ? IssuanceRsmiExportAction::selectedIssuanceIds($this)
+            : null;
+
+        if ($scope === 'selected' && ($selectedIds ?? []) === []) {
             $this->rsmiExportCount = 0;
             $this->rsmiExportCountReady = true;
             $this->bumpMountedRsmiExportSizeStamp();
@@ -169,19 +191,34 @@ class ListIssuances extends ListRecordsWithoutFilterUrl
             $dateFrom,
             $dateTo,
             $this->activeItemCategoryId(),
+            $selectedIds,
         );
         $this->rsmiExportCountReady = true;
         $this->bumpMountedRsmiExportSizeStamp();
     }
 
-    public function countRsmiExportLines(string $dateFrom, string $dateTo, int $categoryId = 0): int
-    {
+    /**
+     * @param  list<int>|null  $selectedIds
+     */
+    public function countRsmiExportLines(
+        string $dateFrom,
+        string $dateTo,
+        int $categoryId = 0,
+        ?array $selectedIds = null,
+    ): int {
         $query = IssuanceResource::getEloquentQuery()
             ->whereDate('issuance_date', '>=', $dateFrom)
             ->whereDate('issuance_date', '<=', $dateTo);
 
         if ($categoryId > 0) {
             $query->whereHas('item', fn (Builder $builder): Builder => $builder->where('item_category_id', $categoryId));
+        }
+
+        if ($selectedIds !== null) {
+            if ($selectedIds === []) {
+                return 0;
+            }
+            $query->whereKey($selectedIds);
         }
 
         return (int) $query->count();

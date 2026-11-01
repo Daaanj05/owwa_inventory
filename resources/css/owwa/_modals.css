@@ -301,12 +301,22 @@
     background: #f9fafb;
 }
 
+.owwa-stock-ledger-header--property {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
 .owwa-stock-ledger-header-item {
     margin: 0;
 }
 
 .owwa-stock-ledger-header-item--wide {
     grid-column: 1 / -1;
+}
+
+@media (max-width: 640px) {
+    .owwa-stock-ledger-header--property {
+        grid-template-columns: 1fr;
+    }
 }
 
 .owwa-employee-received-ledger-header {

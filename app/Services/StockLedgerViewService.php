@@ -7,6 +7,7 @@ use App\Models\InventoryUnit;
 use App\Models\Issuance;
 use App\Models\Item;
 use App\Models\Office;
+use App\Support\ItemPropertyClass;
 use App\Support\OwwaReferenceLabels;
 use App\Support\UnitCostKey;
 use Filament\Facades\Filament;
@@ -246,12 +247,29 @@ class StockLedgerViewService
             ];
         }
 
+        $stockService = app(InventoryStockService::class);
+        $stockQty = $stockService->getStock((int) $item->id, (int) $office->id);
+        $avgCost = $unitCost ?? $stockService->weightedAverageUnitCost((int) $item->id, (int) $office->id);
+        $latestCosts = $stockService->latestUnitCostsForStockRows(collect([(object) [
+            'item_id' => $item->id,
+            'office_id' => $office->id,
+        ]]));
+        $latestCost = $latestCosts[$item->id.'_'.$office->id] ?? $avgCost;
+        $stockValue = $avgCost !== null ? $avgCost * $stockQty : null;
+        $propertyClass = filled($item->property_class)
+            ? (ItemPropertyClass::options()[$item->property_class] ?? (string) $item->property_class)
+            : 'Not set';
+
         return [
             ...$base,
             'category_slug' => $slug,
             'asset_identifier_label' => OwwaReferenceLabels::assetIdentifierHeaderLabel($slug),
             'property_number' => $this->resolveAccountablePropertyNumber($item, $slug, $unitCost) ?? '—',
             'unit_cost' => $unitCost !== null ? '₱'.number_format($unitCost, 2) : null,
+            'avg_unit_cost' => $avgCost !== null ? '₱'.number_format($avgCost, 2) : null,
+            'latest_unit_cost' => $latestCost !== null ? '₱'.number_format((float) $latestCost, 2) : null,
+            'stock_value' => $stockValue !== null ? '₱'.number_format($stockValue, 2) : null,
+            'property_class' => $slug === 'semi_expendable' ? $propertyClass : null,
         ];
     }
 

@@ -23,7 +23,8 @@ RUN mkdir -p storage/framework/views \
     vendor/laravel/framework/src/Illuminate/Pagination/resources/views \
     && npm run build
 
-FROM dunglas/frankenphp:1-php8.4-bookworm AS app
+# FrankenPHP 1.13.2 ships PHP 8.4.27 (CVE-2026-109618 and CVE-2026-109619).
+FROM dunglas/frankenphp:1.13.2-php8.4-bookworm AS app
 
 RUN install-php-extensions \
     pdo_pgsql \

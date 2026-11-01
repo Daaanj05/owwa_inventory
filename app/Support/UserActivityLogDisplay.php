@@ -68,8 +68,8 @@ class UserActivityLogDisplay
         'user_id' => 'User',
         'recorded_by' => 'Recorded by',
         'supplier_id' => 'Supplier',
-        'reference_code' => 'Reference no.',
-        'transaction_number' => 'Transaction no.',
+        'reference_code' => 'Reference',
+        'transaction_number' => 'Transaction No.',
         'status' => 'Status',
         'purpose' => 'Purpose',
         'quantity' => 'Quantity',
@@ -503,11 +503,11 @@ class UserActivityLogDisplay
         ];
 
         if (filled($requisition->transaction_number)) {
-            $lines[] = ['label' => 'Transaction no.', 'value' => (string) $requisition->transaction_number];
+            $lines[] = ['label' => OwwaReferenceLabels::TRANSACTION_NO, 'value' => (string) $requisition->transaction_number];
         }
 
         if (filled($requisition->reference_code)) {
-            $lines[] = ['label' => 'RIS no.', 'value' => (string) $requisition->reference_code];
+            $lines[] = ['label' => OwwaReferenceLabels::RIS, 'value' => (string) $requisition->reference_code];
         }
 
         if (filled($requisition->status)) {
@@ -816,9 +816,9 @@ class UserActivityLogDisplay
      */
     protected static function issuanceFacts(Issuance $issuance): array
     {
-        $issuance->loadMissing(['batch', 'item', 'office', 'department', 'requisition', 'issuedTo']);
+        $issuance->loadMissing(['batch', 'item.category', 'office', 'department', 'requisition', 'issuedTo']);
         $lines = self::record('Issuance');
-        self::addLine($lines, 'Control no.', $issuance->controlNumber());
+        self::addLine($lines, OwwaReferenceLabels::forIssuance($issuance), $issuance->controlNumber());
         self::addLine($lines, 'Item', self::namedItem($issuance->item, true));
         self::addLine($lines, 'Quantity', $issuance->quantity);
         self::addLine($lines, 'Office', $issuance->office?->name);
@@ -826,7 +826,7 @@ class UserActivityLogDisplay
         self::addLine($lines, 'Date', self::dateText($issuance->issuance_date));
         self::addLine($lines, 'Issued to', $issuance->issuedTo?->name ?: $issuance->received_by_printed_name);
         self::addLine($lines, 'Property no.', $issuance->issuedPropertyNumbersLabel() ?: $issuance->property_number);
-        self::addLine($lines, 'Requisition', $issuance->requisition instanceof Requisition ? self::requisitionReference($issuance->requisition) : null);
+        self::addLine($lines, OwwaReferenceLabels::RIS, $issuance->requisition instanceof Requisition ? self::requisitionReference($issuance->requisition) : null);
         self::addLine($lines, 'Remarks', $issuance->remarks);
 
         return $lines;
@@ -839,7 +839,7 @@ class UserActivityLogDisplay
     {
         $batch->loadMissing(['office', 'department', 'requisition']);
         $lines = self::record('Issuance batch');
-        self::addLine($lines, 'Control no.', $batch->reference_code);
+        self::addLine($lines, OwwaReferenceLabels::issuanceControl($batch->category_slug), $batch->reference_code);
         self::addLine($lines, 'Category', self::headline($batch->category_slug));
         self::addLine($lines, 'Office', $batch->office?->name);
         self::addLine($lines, 'Sub-Office/Department', $batch->department?->name);
@@ -855,9 +855,11 @@ class UserActivityLogDisplay
      */
     protected static function disposalFacts(Disposal $disposal): array
     {
-        $disposal->loadMissing(['batch', 'item', 'office', 'department']);
+        $disposal->loadMissing(['batch', 'item.category', 'office', 'department']);
+        $categorySlug = $disposal->item?->category?->getTemplateSlug()
+            ?? $disposal->batch?->category_slug;
         $lines = self::record('Disposal');
-        self::addLine($lines, 'Control no.', $disposal->controlNumber());
+        self::addLine($lines, OwwaReferenceLabels::disposal($categorySlug), $disposal->controlNumber());
         self::addLine($lines, 'Item', self::namedItem($disposal->item, true));
         self::addLine($lines, 'Quantity', $disposal->quantity);
         self::addLine($lines, 'Office', $disposal->office?->name);
@@ -873,7 +875,7 @@ class UserActivityLogDisplay
     {
         $batch->loadMissing(['office', 'department']);
         $lines = self::record('Disposal batch');
-        self::addLine($lines, 'Control no.', $batch->reference_code);
+        self::addLine($lines, OwwaReferenceLabels::disposal($batch->category_slug), $batch->reference_code);
         self::addLine($lines, 'Category', self::headline($batch->category_slug));
         self::addLine($lines, 'Type', self::headline($batch->disposal_type));
         self::addLine($lines, 'Mode', self::headline($batch->disposal_mode));
@@ -892,7 +894,7 @@ class UserActivityLogDisplay
     {
         $acquisition->loadMissing(['item', 'office']);
         $lines = self::record('Acquisition');
-        self::addLine($lines, 'Reference no.', $acquisition->reference_code);
+        self::addLine($lines, OwwaReferenceLabels::acquisition(), $acquisition->reference_code);
         self::addLine($lines, 'Item', self::namedItem($acquisition->item, true));
         self::addLine($lines, 'Quantity', $acquisition->quantity);
         self::addLine($lines, 'Office', $acquisition->office?->name);
@@ -910,8 +912,8 @@ class UserActivityLogDisplay
     {
         $paperwork->loadMissing(['office', 'department']);
         $lines = self::record('Purchase request');
-        self::addLine($lines, 'Reference no.', $paperwork->reference_code);
-        self::addLine($lines, 'PR no.', $paperwork->pr_number);
+        self::addLine($lines, OwwaReferenceLabels::acquisitionPaperwork(), $paperwork->reference_code);
+        self::addLine($lines, 'PR No.', $paperwork->pr_number);
         self::addLine($lines, 'Office', $paperwork->office?->name);
         self::addLine($lines, 'Sub-Office/Department', $paperwork->department?->name);
         self::addLine($lines, 'Purpose', $paperwork->purpose);
@@ -959,7 +961,7 @@ class UserActivityLogDisplay
     {
         $transfer->loadMissing(['item', 'fromOffice', 'toOffice']);
         $lines = self::record('Transfer');
-        self::addLine($lines, 'Reference no.', $transfer->reference_code);
+        self::addLine($lines, OwwaReferenceLabels::transfer(), $transfer->reference_code);
         self::addLine($lines, 'Item', self::namedItem($transfer->item, true));
         self::addLine($lines, 'Quantity', $transfer->quantity);
         self::addLine($lines, 'From office', $transfer->fromOffice?->name);
@@ -981,7 +983,7 @@ class UserActivityLogDisplay
     {
         $request->loadMissing(['office', 'department']);
         $lines = self::record('Property action');
-        self::addLine($lines, 'Reference no.', $request->reference_code);
+        self::addLine($lines, OwwaReferenceLabels::propertyActionRequest(), $request->reference_code);
         self::addLine($lines, 'Action', self::headline($request->action_type));
         self::addLine($lines, 'Status', self::headline($request->status));
         self::addLine($lines, 'Office', $request->office?->name);
@@ -998,7 +1000,7 @@ class UserActivityLogDisplay
     {
         $session->loadMissing(['office', 'itemCategory']);
         $lines = self::record('Physical count');
-        self::addLine($lines, 'Reference no.', $session->reference_code);
+        self::addLine($lines, OwwaReferenceLabels::physicalCount($session->count_type), $session->reference_code);
         self::addLine($lines, 'Count type', self::headline($session->count_type));
         self::addLine($lines, 'Status', self::headline($session->status));
         self::addLine($lines, 'Office', $session->office?->name);
@@ -1014,7 +1016,7 @@ class UserActivityLogDisplay
     {
         $plan->loadMissing('itemCategory');
         $lines = self::record('Inventory plan');
-        self::addLine($lines, 'Reference no.', $plan->reference_code);
+        self::addLine($lines, OwwaReferenceLabels::inventoryPlan(), $plan->reference_code);
         self::addLine($lines, 'Title', $plan->title);
         self::addLine($lines, 'Period', $plan->period_label);
         self::addLine($lines, 'Status', self::headline($plan->status));
@@ -1196,6 +1198,59 @@ class UserActivityLogDisplay
         return $lines;
     }
 
+    protected static function referenceLabelFor(Model $model): string
+    {
+        if ($model instanceof Issuance) {
+            return OwwaReferenceLabels::forIssuance($model);
+        }
+
+        if ($model instanceof IssuanceBatch) {
+            return OwwaReferenceLabels::issuanceControl($model->category_slug);
+        }
+
+        if ($model instanceof Transfer) {
+            return OwwaReferenceLabels::transfer();
+        }
+
+        if ($model instanceof Disposal) {
+            $model->loadMissing(['item.category', 'batch']);
+
+            return OwwaReferenceLabels::disposal(
+                $model->item?->category?->getTemplateSlug() ?? $model->batch?->category_slug
+            );
+        }
+
+        if ($model instanceof DisposalBatch) {
+            return OwwaReferenceLabels::disposal($model->category_slug);
+        }
+
+        if ($model instanceof Requisition) {
+            return OwwaReferenceLabels::requisition();
+        }
+
+        if ($model instanceof Acquisition) {
+            return OwwaReferenceLabels::acquisition();
+        }
+
+        if ($model instanceof AcquisitionPaperwork) {
+            return OwwaReferenceLabels::acquisitionPaperwork();
+        }
+
+        if ($model instanceof PropertyActionRequest) {
+            return OwwaReferenceLabels::propertyActionRequest();
+        }
+
+        if ($model instanceof PhysicalCountSession) {
+            return OwwaReferenceLabels::physicalCount($model->count_type);
+        }
+
+        if ($model instanceof PhysicalInventoryPlan) {
+            return OwwaReferenceLabels::inventoryPlan();
+        }
+
+        return OwwaReferenceLabels::STOCK_CARD_REFERENCE;
+    }
+
     /**
      * @return list<array{label: string, value: string}>
      */
@@ -1208,7 +1263,7 @@ class UserActivityLogDisplay
         $reference = self::reference($model);
 
         if (filled($reference)) {
-            $lines[] = ['label' => 'Reference', 'value' => (string) $reference];
+            $lines[] = ['label' => self::referenceLabelFor($model), 'value' => (string) $reference];
         }
 
         if (filled($model->getAttribute('status')) && is_scalar($model->getAttribute('status'))) {

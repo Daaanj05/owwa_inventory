@@ -62,6 +62,10 @@ Route::middleware(['auth', 'web'])->group(function () {
         Route::get('reports/owwa/acquisition/{acquisition}', [OwwaExportController::class, 'acquisition'])->name('owwa.export.acquisition');
         Route::get('reports/owwa/issuance/{issuance}', [OwwaExportController::class, 'issuance'])->name('owwa.export.issuance');
         Route::get('reports/owwa/issuance/{issuance}/rsmi-fast-pdf', [OwwaExportController::class, 'issuanceRsmiFastPdf'])->name('owwa.export.issuance.rsmi-fast-pdf');
+        Route::get('reports/owwa/issuance/{issuance}/ics-fast-pdf', [OwwaExportController::class, 'issuanceIcsFastPdf'])->name('owwa.export.issuance.ics-fast-pdf');
+        Route::get('reports/owwa/issuance/{issuance}/ics-fast-xlsx', [OwwaExportController::class, 'issuanceIcsFastExcel'])->name('owwa.export.issuance.ics-fast-xlsx');
+        Route::get('reports/owwa/issuance/{issuance}/par-fast-pdf', [OwwaExportController::class, 'issuanceParFastPdf'])->name('owwa.export.issuance.par-fast-pdf');
+        Route::get('reports/owwa/issuance/{issuance}/par-fast-xlsx', [OwwaExportController::class, 'issuanceParFastExcel'])->name('owwa.export.issuance.par-fast-xlsx');
         Route::get('reports/owwa/transfer/{transfer}', [OwwaExportController::class, 'transfer'])->name('owwa.export.transfer');
         Route::get('reports/owwa/disposal/{disposal}', [OwwaExportController::class, 'disposal'])->name('owwa.export.disposal');
         Route::get('reports/owwa/requisition/{requisition}', [OwwaExportController::class, 'requisition'])->name('owwa.export.requisition');

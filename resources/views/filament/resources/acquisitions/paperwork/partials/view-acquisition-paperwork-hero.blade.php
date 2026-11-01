@@ -9,7 +9,7 @@
     <div class="owwa-pc-view-hero-main">
         <div class="owwa-pc-view-hero-top">
             <div>
-                <p class="owwa-pc-stat-label">Case reference</p>
+                <p class="owwa-pc-stat-label">{{ \App\Support\OwwaReferenceLabels::acquisitionPaperwork() }}</p>
                 <h2 class="owwa-pc-view-reference">{{ $paperwork->reference_code ?? '—' }}</h2>
             </div>
             <span @class(['owwa-pc-status-badge', $statusClass])>

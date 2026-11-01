@@ -41,12 +41,12 @@ class TransferForm
             ->components([
                 Placeholder::make('transfer_workflow_hint')
                     ->hiddenLabel()
-                    ->content('Transfers move stock between offices. To issue items to a department or employee within your office, use Issuance.')
+                    ->content('Transfers change where property is located. Stock stays with the regional office. To issue items to a department or employee, use Issuance.')
                     ->columnSpanFull()
                     ->extraAttributes(['class' => 'owwa-transfer-workflow-hint']),
 
                 Section::make('Step 1 — Offices')
-                    ->description('Choose where stock is leaving and where it is going.')
+                    ->description('Choose the current location and the new location.')
                     ->columnSpanFull()
                     ->schema([
                         Select::make('from_office_id')
@@ -454,7 +454,7 @@ class TransferForm
                     ->columnSpanFull()
                     ->schema([
                         SignatorySelect::make('approved_by_printed_name', ProcurementSignatoryName::ROLE_TRANSFER_APPROVED)
-                            ->label('Approve By')
+                            ->label("Approver's name")
                             ->helperText('Name of the Approver')
                             ->placeholder('Full name')
                             ->live()
@@ -468,7 +468,7 @@ class TransferForm
                             ->label('Designation')
                             ->helperText('Designation of the selected person'),
                         SignatorySelect::make('released_by_printed_name', ProcurementSignatoryName::ROLE_TRANSFER_RELEASED)
-                            ->label('Released By')
+                            ->label("Releasing officer's name")
                             ->helperText('Name of the Issuer')
                             ->placeholder('Full name')
                             ->live()
@@ -482,7 +482,7 @@ class TransferForm
                             ->label('Designation')
                             ->helperText('Designation of the selected person'),
                         SignatorySelect::make('received_by_printed_name', ProcurementSignatoryName::ROLE_TRANSFER_RECEIVED)
-                            ->label('Received By')
+                            ->label("Receiving officer's name")
                             ->helperText('Name of the Receiver')
                             ->placeholder('Full name')
                             ->live()

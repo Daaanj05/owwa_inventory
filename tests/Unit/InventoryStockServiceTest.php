@@ -107,7 +107,7 @@ class InventoryStockServiceTest extends TestCase
 
     public function test_transfer_in_shows_stock_at_destination_without_local_acquisition(): void
     {
-        $category = ItemCategory::factory()->create();
+        $category = ItemCategory::factory()->create(['name' => 'Consumables']);
         $item = Item::factory()->create(['item_category_id' => $category->id]);
         $fromOffice = Office::factory()->create(['code' => 'SRC']);
         $toOffice = Office::factory()->create(['code' => 'DST']);
@@ -121,6 +121,23 @@ class InventoryStockServiceTest extends TestCase
         $this->assertNotNull($destination);
         $this->assertSame(8, $destination->stock);
         $this->assertFalse($list->contains(fn ($row) => $row->office_id === $toOffice->id && $row->stock === 0 && ! $this->service->hasInventoryActivity($item->id, $toOffice->id)));
+    }
+
+    public function test_semi_expendable_transfer_keeps_stock_at_source_office(): void
+    {
+        $category = ItemCategory::factory()->create(['name' => 'Semi-Expendable']);
+        $item = Item::factory()->create(['item_category_id' => $category->id]);
+        $fromOffice = Office::factory()->create(['code' => 'REG', 'is_regional_supply' => true]);
+        $toOffice = Office::factory()->create(['code' => 'BAT']);
+
+        $this->createAcquisition($item->id, $fromOffice->id, 20, 100.00);
+        $this->createTransfer($item->id, $fromOffice->id, $toOffice->id, 8, 100.00);
+
+        $this->assertSame(20, $this->service->getStock($item->id, $fromOffice->id));
+        $this->assertSame(0, $this->service->getStock($item->id, $toOffice->id));
+        $this->assertNull(
+            $this->service->getStockLevelsList()->first(fn ($row) => $row->office_id === $toOffice->id),
+        );
     }
 
     public function test_low_stock_count_ignores_catalog_only_pairs(): void

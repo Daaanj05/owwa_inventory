@@ -108,7 +108,6 @@ class ProcurementSignatoryName extends Model
     public static function roleStoresDesignation(string $role): bool
     {
         return in_array($role, [
-            self::ROLE_REQUESTED,
             self::ROLE_APPROVED,
             self::ROLE_TRANSFER_APPROVED,
             self::ROLE_TRANSFER_RELEASED,

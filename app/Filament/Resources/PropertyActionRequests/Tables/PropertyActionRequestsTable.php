@@ -40,7 +40,7 @@ class PropertyActionRequestsTable
             ->modifyQueryUsing(fn (Builder $query): Builder => $query->with(['lines.issuance', 'lines.inventoryUnit']))
             ->columns([
                 TextColumn::make('reference_code')
-                    ->label('Reference')
+                    ->label(OwwaReferenceLabels::propertyActionRequest())
                     ->searchable()
                     ->sortable(),
                 TextColumn::make('action_type')

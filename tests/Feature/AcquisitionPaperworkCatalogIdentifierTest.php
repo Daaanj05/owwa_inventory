@@ -57,7 +57,7 @@ class AcquisitionPaperworkCatalogIdentifierTest extends TestCase
         ]);
 
         $this->assertSame($item->fresh()->semi_expendable_property_number, $line->stockNumber());
-        $this->assertDatabaseHas(ProcurementSignatoryName::class, [
+        $this->assertDatabaseMissing(ProcurementSignatoryName::class, [
             'name' => 'Maria Santos',
             'role' => ProcurementSignatoryName::ROLE_REQUESTED,
         ]);

@@ -131,17 +131,16 @@ class SignatorySelect
     public static function roleOptions(): array
     {
         return [
-            ProcurementSignatoryName::ROLE_REQUESTED => 'Requested By',
-            ProcurementSignatoryName::ROLE_APPROVED => 'Approve By',
+            ProcurementSignatoryName::ROLE_APPROVED => 'Approver',
             ProcurementSignatoryName::ROLE_INSPECTION_OFFICER => 'Inspection officer',
             ProcurementSignatoryName::ROLE_CUSTODIAN => 'Custodian / accountable officer',
-            ProcurementSignatoryName::ROLE_TRANSFER_APPROVED => 'Transfer — Approved by',
-            ProcurementSignatoryName::ROLE_TRANSFER_RELEASED => 'Transfer — Released by',
-            ProcurementSignatoryName::ROLE_TRANSFER_RECEIVED => 'Transfer — Received by',
+            ProcurementSignatoryName::ROLE_TRANSFER_APPROVED => 'Transfer approver',
+            ProcurementSignatoryName::ROLE_TRANSFER_RELEASED => 'Transfer releasing officer',
+            ProcurementSignatoryName::ROLE_TRANSFER_RECEIVED => 'Transfer receiving officer',
             ProcurementSignatoryName::ROLE_PHYSICAL_COUNT_ACCOUNTABLE => 'Physical count — Accountable Officer',
-            ProcurementSignatoryName::ROLE_PHYSICAL_COUNT_CERTIFIED => 'Physical count — Certified Correct by',
-            ProcurementSignatoryName::ROLE_PHYSICAL_COUNT_APPROVED => 'Physical count — Approved by',
-            ProcurementSignatoryName::ROLE_PHYSICAL_COUNT_VERIFIED => 'Physical count — Verified by',
+            ProcurementSignatoryName::ROLE_PHYSICAL_COUNT_CERTIFIED => 'Certifying officer',
+            ProcurementSignatoryName::ROLE_PHYSICAL_COUNT_APPROVED => 'Approving officer',
+            ProcurementSignatoryName::ROLE_PHYSICAL_COUNT_VERIFIED => 'COA representative',
             ProcurementSignatoryName::ROLE_DISPOSAL_ACCOUNTABLE_OFFICER => 'Disposal — Accountable officer',
             ProcurementSignatoryName::ROLE_DISPOSAL_AUTHORIZED_OFFICIAL => 'Disposal — Authorized official',
             ProcurementSignatoryName::ROLE_DISPOSAL_INSPECTION_OFFICER => 'Disposal — Inspection officer name',
@@ -158,7 +157,6 @@ class SignatorySelect
     {
         return [
             'pr_iar' => [
-                ProcurementSignatoryName::ROLE_REQUESTED,
                 ProcurementSignatoryName::ROLE_APPROVED,
                 ProcurementSignatoryName::ROLE_INSPECTION_OFFICER,
                 ProcurementSignatoryName::ROLE_CUSTODIAN,

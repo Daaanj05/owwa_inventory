@@ -18,10 +18,14 @@ use App\Models\Transfer;
 use App\Models\User;
 use App\Services\EmployeeReceivedExportService;
 use App\Services\EmployeeReceivedInventoryService;
+use App\Services\IcsFastExcelExportService;
+use App\Services\IcsFastPdfExportService;
 use App\Services\InspectionAcceptanceReportFastExcelExportService;
 use App\Services\InspectionAcceptanceReportFastPdfExportService;
 use App\Services\OwwaItemReportService;
 use App\Services\OwwaTemplateExportService;
+use App\Services\ParFastExcelExportService;
+use App\Services\ParFastPdfExportService;
 use App\Services\PurchaseOrderFastExcelExportService;
 use App\Services\PurchaseOrderFastPdfExportService;
 use App\Services\PurchaseRequestFastExcelExportService;
@@ -51,6 +55,10 @@ class OwwaExportController extends Controller
         protected InspectionAcceptanceReportFastPdfExportService $inspectionAcceptanceReportFastPdfExport,
         protected InspectionAcceptanceReportFastExcelExportService $inspectionAcceptanceReportFastExcelExport,
         protected RsmiFastPdfExportService $rsmiFastPdfExport,
+        protected IcsFastPdfExportService $icsFastPdfExport,
+        protected IcsFastExcelExportService $icsFastExcelExport,
+        protected ParFastPdfExportService $parFastPdfExport,
+        protected ParFastExcelExportService $parFastExcelExport,
         protected RpciFastPdfExportService $rpciFastPdfExport,
         protected RpcppeFastPdfExportService $rpcppeFastPdfExport,
         protected RpcspFastPdfExportService $rpcspFastPdfExport,
@@ -113,7 +121,23 @@ class OwwaExportController extends Controller
                 return $this->rsmiFastPdfExport->download($issuance);
             }
 
+            if ($formLabel === 'ICS' && $issuance->item?->category?->getTemplateSlug() === 'semi_expendable') {
+                return $this->icsFastPdfExport->download($issuance);
+            }
+
+            if ($formLabel === 'PAR' && $issuance->item?->category?->getTemplateSlug() === 'ppe') {
+                return $this->parFastPdfExport->download($issuance);
+            }
+
             return $this->owwaExport->downloadIssuancePdf($issuance, null, $formSlug);
+        }
+
+        if ($formLabel === 'ICS' && $issuance->item?->category?->getTemplateSlug() === 'semi_expendable') {
+            return $this->icsFastExcelExport->download($issuance);
+        }
+
+        if ($formLabel === 'PAR' && $issuance->item?->category?->getTemplateSlug() === 'ppe') {
+            return $this->parFastExcelExport->download($issuance);
         }
 
         return $this->owwaExport->downloadIssuance($issuance, null, $formSlug);
@@ -137,6 +161,86 @@ class OwwaExportController extends Controller
         );
 
         return $this->rsmiFastPdfExport->download($issuance);
+    }
+
+    public function issuanceIcsFastPdf(Issuance $issuance): Response
+    {
+        $this->authorizeIssuanceExport($issuance);
+        $issuance->loadMissing(['item.category', 'office', 'department', 'issuedBy', 'issuedTo', 'batch']);
+
+        abort_unless(
+            $issuance->item?->category?->getTemplateSlug() === 'semi_expendable',
+            422,
+            'Fast ICS PDF is only available for semi-expendable issuances.',
+        );
+
+        $this->logExportActivity(
+            'Exported ICS PDF for issuance '.$issuance->reference_code,
+            $issuance,
+            ['form' => null, 'format' => 'pdf', 'mode' => 'fast'],
+        );
+
+        return $this->icsFastPdfExport->download($issuance);
+    }
+
+    public function issuanceIcsFastExcel(Issuance $issuance): StreamedResponse
+    {
+        $this->authorizeIssuanceExport($issuance);
+        $issuance->loadMissing(['item.category', 'office', 'department', 'issuedBy', 'issuedTo', 'batch']);
+
+        abort_unless(
+            $issuance->item?->category?->getTemplateSlug() === 'semi_expendable',
+            422,
+            'Fast ICS Excel is only available for semi-expendable issuances.',
+        );
+
+        $this->logExportActivity(
+            'Exported ICS Excel for issuance '.$issuance->reference_code,
+            $issuance,
+            ['form' => null, 'format' => 'xlsx', 'mode' => 'fast'],
+        );
+
+        return $this->icsFastExcelExport->download($issuance);
+    }
+
+    public function issuanceParFastPdf(Issuance $issuance): Response
+    {
+        $this->authorizeIssuanceExport($issuance);
+        $issuance->loadMissing(['item.category', 'office', 'department', 'issuedBy', 'issuedTo', 'batch']);
+
+        abort_unless(
+            $issuance->item?->category?->getTemplateSlug() === 'ppe',
+            422,
+            'Fast PAR PDF is only available for PPE issuances.',
+        );
+
+        $this->logExportActivity(
+            'Exported PAR PDF for issuance '.$issuance->reference_code,
+            $issuance,
+            ['form' => null, 'format' => 'pdf', 'mode' => 'fast'],
+        );
+
+        return $this->parFastPdfExport->download($issuance);
+    }
+
+    public function issuanceParFastExcel(Issuance $issuance): StreamedResponse
+    {
+        $this->authorizeIssuanceExport($issuance);
+        $issuance->loadMissing(['item.category', 'office', 'department', 'issuedBy', 'issuedTo', 'batch']);
+
+        abort_unless(
+            $issuance->item?->category?->getTemplateSlug() === 'ppe',
+            422,
+            'Fast PAR Excel is only available for PPE issuances.',
+        );
+
+        $this->logExportActivity(
+            'Exported PAR Excel for issuance '.$issuance->reference_code,
+            $issuance,
+            ['form' => null, 'format' => 'xlsx', 'mode' => 'fast'],
+        );
+
+        return $this->parFastExcelExport->download($issuance);
     }
 
     public function transfer(Request $request, Transfer $transfer): StreamedResponse|Response

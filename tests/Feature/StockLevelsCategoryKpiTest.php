@@ -75,7 +75,7 @@ class StockLevelsCategoryKpiTest extends TestCase
             ->test(StockLevels::class, ['category' => $category->id])
             ->assertSee('Total items')
             ->assertSee('In stock')
-            ->assertSee('Total stock')
+            ->assertSee('Region total')
             ->assertDontSee('Low stock')
             ->assertDontSee('Useful Life Due');
     }

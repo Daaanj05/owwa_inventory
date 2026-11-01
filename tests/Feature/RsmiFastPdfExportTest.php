@@ -8,7 +8,7 @@ use App\Models\ItemCategory;
 use App\Models\Office;
 use App\Models\Requisition;
 use App\Models\User;
-use App\Services\OwwaTemplateExportService;
+use App\Services\ParFastPdfExportService;
 use App\Services\RsmiFastPdfExportService;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -46,7 +46,21 @@ class RsmiFastPdfExportTest extends TestCase
         $this->assertSame('Bond Paper A4', $pages[0]['lines'][0]['item']);
         $this->assertSame('CON-001', $pages[0]['lines'][0]['stock_no']);
         $this->assertSame('2026-09-0100', $pages[0]['lines'][0]['ris_no']);
-        $this->assertNotEmpty($pages[0]['recap_lines']);
+        $this->assertSame([
+            [
+                'stock_no' => 'CON-001',
+                'quantity' => '16',
+                'unit_cost' => '',
+                'total_cost' => '',
+                'uacs' => '',
+            ],
+        ], $pages[0]['recap_lines']);
+        $this->assertSame('', $pages[0]['lines'][0]['unit_cost']);
+        $this->assertSame('', $pages[0]['lines'][0]['amount']);
+        $this->assertSame('', $pages[0]['accounting_staff_name']);
+        $this->assertSame('', $pages[0]['posted_date']);
+        $this->assertSame(14, $service->minRecapRows());
+        $this->assertSame(14, $pages[0]['min_recap_rows']);
 
         $entityName = (string) config('owwa_export_standards.entity_name');
         $this->assertStringContainsString($entityName, $html);
@@ -58,11 +72,20 @@ class RsmiFastPdfExportTest extends TestCase
         $this->assertStringContainsString('CON-001', $html);
         $this->assertStringContainsString('Recapitulation:', $html);
         $this->assertStringContainsString('UACS Object Code', $html);
+        $this->assertStringContainsString('Posted by:', $html);
         $this->assertStringContainsString('I hereby certify to the correctness of the above information.', $html);
+        $this->assertStringContainsString('To be filled up by the Accounting Division/Unit', $html);
+        $this->assertStringNotContainsString('185.00', $html);
+        $this->assertStringNotContainsString('2,960.00', $html);
+        $this->assertStringContainsString('text-align: right', $html);
+        $this->assertStringContainsString('.meta .line', $html);
+        $this->assertMatchesRegularExpression('/\.meta \.line\s*\{[^}]*text-align:\s*left/s', $html);
+        $this->assertStringContainsString('sig-underline', $html);
+        $this->assertStringContainsString('sig-posted-block', $html);
         $this->assertStringContainsString('Generated on', $html);
         $this->assertStringContainsString('position: fixed', $html);
-        $this->assertStringContainsString('bottom: 8mm', $html);
-        $this->assertStringContainsString('margin: 12mm 12mm 20mm 12mm', $html);
+        $this->assertStringContainsString('bottom: -12mm', $html);
+        $this->assertStringContainsString('margin: 14mm 12mm 16mm 12mm', $html);
         $this->assertStringContainsString('owwa-form-logo.png', $html);
         $this->assertStringContainsString('bagong-pilipinas-form-logo.png', $html);
         $this->assertStringNotContainsString('Appendix 64', $html);
@@ -118,11 +141,15 @@ class RsmiFastPdfExportTest extends TestCase
         $this->assertTrue($pages[0]['include_footer']);
         $this->assertCount($lineCount, $pages[0]['lines']);
         $this->assertCount($lineCount, $pages[0]['recap_lines']);
+        $this->assertSame('CON-001', $pages[0]['recap_lines'][0]['stock_no']);
+        $this->assertSame('1', $pages[0]['recap_lines'][0]['quantity']);
         $this->assertSame($lineCount, $pages[0]['min_detail_rows']);
-        $this->assertSame($lineCount, $pages[0]['min_recap_rows']);
+        $this->assertSame(max(14, $lineCount), $pages[0]['min_recap_rows']);
         $this->assertStringNotContainsString('(Cont. 2)', $html);
         $this->assertStringContainsString('Line '.$lineCount.' item', $html);
         $this->assertStringContainsString('Line 1 item', $html);
+        $this->assertStringContainsString('Recapitulation:', $html);
+        $this->assertStringContainsString('CON-'.str_pad((string) $lineCount, 3, '0', STR_PAD_LEFT), $html);
     }
 
     public function test_consumable_issuance_pdf_route_returns_fast_pdf(): void
@@ -174,6 +201,7 @@ class RsmiFastPdfExportTest extends TestCase
             'date_to' => now()->addDay()->toDateString(),
             'format' => 'pdf',
             'category' => $issuance->item->item_category_id,
+            'ids' => (string) $issuance->getKey(),
         ]));
 
         $response->assertOk();
@@ -218,12 +246,12 @@ class RsmiFastPdfExportTest extends TestCase
             $mock->shouldNotReceive('download');
         });
 
-        $this->mock(OwwaTemplateExportService::class, function ($mock): void {
-            $mock->shouldReceive('downloadIssuancePdf')
+        $this->mock(ParFastPdfExportService::class, function ($mock): void {
+            $mock->shouldReceive('download')
                 ->once()
-                ->andReturn(new Response('%PDF-1.4 official', 200, [
+                ->andReturn(new Response('%PDF-1.4 par-fast', 200, [
                     'Content-Type' => 'application/pdf',
-                    'Content-Disposition' => 'attachment; filename="PAR-2026-09-0601.pdf"',
+                    'Content-Disposition' => 'attachment; filename="PAR-fast-2026-09-0601.pdf"',
                 ]));
         });
 
@@ -231,9 +259,9 @@ class RsmiFastPdfExportTest extends TestCase
             ->get(route('owwa.export.issuance', $issuance).'?format=pdf');
 
         $response->assertOk();
-        $this->assertSame('%PDF-1.4 official', $response->getContent());
+        $this->assertSame('%PDF-1.4 par-fast', $response->getContent());
         $this->assertStringContainsString(
-            'PAR-2026-09-0601.pdf',
+            'PAR-fast-2026-09-0601.pdf',
             (string) $response->headers->get('content-disposition'),
         );
     }

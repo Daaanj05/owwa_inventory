@@ -23,8 +23,8 @@ class TransferInventoryUnitService
         }
 
         DB::transaction(function () use ($transfer): void {
-            // Catalog property / inventory item numbers are shared across units of the same item.
-            // Prefer quantity-based moves; only honor a stored unit id when present.
+            // Location only: move office_id so physical count knows where the tag is.
+            // Regional stock quantity ignores relocate / reassignment transfers.
             if (filled($transfer->inventory_unit_id) && (int) $transfer->quantity === 1) {
                 $this->moveUnitById($transfer);
 

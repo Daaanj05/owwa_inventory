@@ -286,7 +286,7 @@ class RequisitionInfolistSchema
                     ->hiddenLabel()
                     ->table([
                         TableColumn::make('Employee'),
-                        TableColumn::make('Transaction'),
+                        TableColumn::make(OwwaReferenceLabels::TRANSACTION_NO),
                         TableColumn::make('Department'),
                         TableColumn::make('Item'),
                         TableColumn::make('Requested'),
@@ -297,7 +297,7 @@ class RequisitionInfolistSchema
                     ->schema([
                         TextEntry::make('requestedBy.name')->label('Employee')->placeholder('—'),
                         TextEntry::make('sourceRequisition.transaction_number')
-                            ->label('Transaction')
+                            ->label(OwwaReferenceLabels::employeeRequisitionTransaction())
                             ->placeholder('—'),
                         TextEntry::make('sourceRequisition.department.name')
                             ->label('Department')

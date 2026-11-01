@@ -143,9 +143,9 @@ class PhysicalCountPreloadService
 
         DB::transaction(function () use ($session, $categorySlug, &$created, &$updated, &$skipped): void {
             $issuances = Issuance::query()
-                ->with(['item.category'])
-                ->where('office_id', $session->office_id)
+                ->with(['item.category', 'office'])
                 ->whereNotNull('property_number')
+                ->whereNull('custody_ended_at')
                 ->whereHas('item.category', function ($query): void {
                     $query->whereNull('archived_at');
                 })
@@ -234,9 +234,9 @@ class PhysicalCountPreloadService
         $skipped = 0;
 
         DB::transaction(function () use ($session, $categorySlug, &$created, &$updated, &$skipped): void {
+            // Region-wide book list: location may be a field office; stock stays regional.
             $units = InventoryUnit::query()
-                ->with(['item.category'])
-                ->where('office_id', $session->office_id)
+                ->with(['item.category', 'office'])
                 ->whereIn('status', InventoryUnit::accountableStatuses())
                 ->whereHas('item.category', function ($query): void {
                     $query->whereNull('archived_at');
@@ -335,6 +335,8 @@ class PhysicalCountPreloadService
     protected function lineDataFromUnit(InventoryUnit $unit): array
     {
         $item = $unit->item;
+        $location = $unit->office?->name;
+        $remarks = filled($location) ? 'Location: '.$location : null;
 
         return [
             'item_id' => $item?->id ?? $unit->item_id,
@@ -342,6 +344,7 @@ class PhysicalCountPreloadService
             'description' => $unit->description ?? $item?->description,
             'stock_number' => $unit->stock_number ?? $item?->item_code,
             'unit_of_measure' => $unit->unit_of_measure ?? $item?->unit,
+            'remarks' => $remarks,
         ];
     }
 
@@ -351,6 +354,8 @@ class PhysicalCountPreloadService
     protected function lineDataFromIssuance(Issuance $issuance): array
     {
         $item = $issuance->item;
+        $location = $issuance->office?->name;
+        $remarks = filled($location) ? 'Location: '.$location : null;
 
         return [
             'item_id' => $item?->id ?? $issuance->item_id,
@@ -358,6 +363,7 @@ class PhysicalCountPreloadService
             'description' => $item?->description,
             'stock_number' => $item?->item_code,
             'unit_of_measure' => $item?->unit,
+            'remarks' => $remarks,
         ];
     }
 

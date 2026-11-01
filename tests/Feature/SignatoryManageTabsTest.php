@@ -116,18 +116,18 @@ class SignatoryManageTabsTest extends TestCase
             ->set('activeTab', 'transfer')
             ->callAction('create', [
                 'form' => 'pr_iar',
-                'role' => ProcurementSignatoryName::ROLE_REQUESTED,
-                'name' => 'Requester From Transfer Tab',
+                'role' => ProcurementSignatoryName::ROLE_APPROVED,
+                'name' => 'Approver From Transfer Tab',
                 'designation' => 'Supply Officer',
             ])
             ->assertHasNoFormErrors();
 
         $this->assertDatabaseHas(ProcurementSignatoryName::class, [
-            'role' => ProcurementSignatoryName::ROLE_REQUESTED,
-            'name' => 'Requester From Transfer Tab',
+            'role' => ProcurementSignatoryName::ROLE_APPROVED,
+            'name' => 'Approver From Transfer Tab',
             'designation' => 'Supply Officer',
         ]);
-        $this->assertSame('pr_iar', SignatorySelect::tabForRole(ProcurementSignatoryName::ROLE_REQUESTED));
+        $this->assertSame('pr_iar', SignatorySelect::tabForRole(ProcurementSignatoryName::ROLE_APPROVED));
     }
 
     public function test_role_options_for_tab_are_scoped(): void
@@ -141,7 +141,7 @@ class SignatoryManageTabsTest extends TestCase
         $this->assertArrayNotHasKey(ProcurementSignatoryName::ROLE_TRANSFER_APPROVED_DESIGNATION, $transferOptions);
 
         $prOptions = SignatorySelect::roleOptionsForTab('pr_iar');
-        $this->assertArrayHasKey(ProcurementSignatoryName::ROLE_REQUESTED, $prOptions);
+        $this->assertArrayNotHasKey(ProcurementSignatoryName::ROLE_REQUESTED, $prOptions);
         $this->assertArrayHasKey(ProcurementSignatoryName::ROLE_APPROVED, $prOptions);
         $this->assertArrayNotHasKey(ProcurementSignatoryName::ROLE_REQUESTED_DESIGNATION, $prOptions);
         $this->assertArrayNotHasKey(ProcurementSignatoryName::ROLE_APPROVED_DESIGNATION, $prOptions);
@@ -288,13 +288,13 @@ class SignatoryManageTabsTest extends TestCase
             ->set('activeTab', 'pr_iar')
             ->callAction('create', [
                 'form' => 'pr_iar',
-                'role' => ProcurementSignatoryName::ROLE_REQUESTED,
-                'name' => 'Requester Without Title',
+                'role' => ProcurementSignatoryName::ROLE_APPROVED,
+                'name' => 'Approver Without Title',
             ])
             ->assertHasFormErrors(['designation' => 'required']);
 
         $this->assertDatabaseMissing(ProcurementSignatoryName::class, [
-            'name' => 'Requester Without Title',
+            'name' => 'Approver Without Title',
         ]);
     }
 

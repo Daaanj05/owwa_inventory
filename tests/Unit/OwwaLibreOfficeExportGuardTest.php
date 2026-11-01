@@ -39,6 +39,18 @@ class OwwaLibreOfficeExportGuardTest extends TestCase
             'https://example.test/reports/owwa/issuance/64/rsmi-fast-pdf',
         ));
         $this->assertFalse(OwwaLibreOfficeExportGuard::urlNeedsLibreOffice(
+            'https://example.test/reports/owwa/issuance/64/ics-fast-pdf',
+        ));
+        $this->assertFalse(OwwaLibreOfficeExportGuard::urlNeedsLibreOffice(
+            'https://example.test/reports/owwa/issuance/64/ics-fast-xlsx',
+        ));
+        $this->assertFalse(OwwaLibreOfficeExportGuard::urlNeedsLibreOffice(
+            'https://example.test/reports/owwa/issuance/64/par-fast-pdf',
+        ));
+        $this->assertFalse(OwwaLibreOfficeExportGuard::urlNeedsLibreOffice(
+            'https://example.test/reports/owwa/issuance/64/par-fast-xlsx',
+        ));
+        $this->assertFalse(OwwaLibreOfficeExportGuard::urlNeedsLibreOffice(
             'https://example.test/reports/owwa/bulk/issuances/rsmi?format=pdf&date_from=2026-01-01&date_to=2026-12-31',
         ));
         $this->assertFalse(OwwaLibreOfficeExportGuard::urlNeedsLibreOffice(

@@ -10,11 +10,11 @@
         <div class="owwa-login-logos-row">
             <div class="owwa-login-logo">
                 <img src="{{ asset('images/owwa-4a_logo_transparent.png') }}" alt="OWWA-4A Logo"
-                    class="owwa-login-logo-img">
+                    class="owwa-login-logo-img" draggable="false">
             </div>
             <div class="owwa-login-logo">
                 <img src="{{ asset('images/Bagong_Pilipinas_logo.png') }}" alt="Bagong Pilipinas"
-                    class="owwa-login-logo-img owwa-login-logo-img--dark">
+                    class="owwa-login-logo-img owwa-login-logo-img--dark" draggable="false">
             </div>
         </div>
 

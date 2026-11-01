@@ -71,17 +71,8 @@ class PhysicalCountScanService
             );
         }
 
-        if ($payload?->officeId !== null && (int) $payload->officeId !== (int) $session->office_id) {
-            return $this->recordEvent(
-                $session,
-                $propertyNumber,
-                PhysicalCountScanOutcome::NotFound,
-                null,
-                $userId,
-                "Property {$propertyNumber} belongs to a different office.",
-                $inventoryUnitId,
-            );
-        }
+        // Regional PPE / semi counts accept tags at any field-office location.
+        // QR office is location only; reject only when the unit is outside this region session's category list.
 
         $resolvedUnit = null;
         if ($inventoryUnitId !== null) {
@@ -172,8 +163,8 @@ class PhysicalCountScanService
 
         $issuance = Issuance::query()
             ->with(['item.category'])
-            ->where('office_id', $session->office_id)
             ->where('property_number', $propertyNumber)
+            ->whereNull('custody_ended_at')
             ->first();
 
         if ($issuance !== null && $this->issuanceMatchesSession($issuance, $session)) {
@@ -217,10 +208,6 @@ class PhysicalCountScanService
         $slug = $unit->item?->category?->getTemplateSlug();
 
         if ($slug !== $session->templateSlug()) {
-            return false;
-        }
-
-        if ((int) $unit->office_id !== (int) $session->office_id) {
             return false;
         }
 

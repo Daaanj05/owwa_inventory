@@ -125,12 +125,16 @@ class IssuanceViewActions
     protected static function startExport(Issuance $record, Action $action, bool $asPdf): void
     {
         $record->loadMissing('item.category');
-        $isConsumableRsmiPdf = $asPdf
-            && $record->item?->category?->getTemplateSlug() === 'consumables';
+        $slug = $record->item?->category?->getTemplateSlug();
 
-        $url = $isConsumableRsmiPdf
-            ? route('owwa.export.issuance.rsmi-fast-pdf', $record)
-            : route('owwa.export.issuance', $record).($asPdf ? '?format=pdf' : '');
+        $url = match (true) {
+            $asPdf && $slug === 'consumables' => route('owwa.export.issuance.rsmi-fast-pdf', $record),
+            $asPdf && $slug === 'semi_expendable' => route('owwa.export.issuance.ics-fast-pdf', $record),
+            ! $asPdf && $slug === 'semi_expendable' => route('owwa.export.issuance.ics-fast-xlsx', $record),
+            $asPdf && $slug === 'ppe' => route('owwa.export.issuance.par-fast-pdf', $record),
+            ! $asPdf && $slug === 'ppe' => route('owwa.export.issuance.par-fast-xlsx', $record),
+            default => route('owwa.export.issuance', $record).($asPdf ? '?format=pdf' : ''),
+        };
 
         $livewire = $action->getLivewire();
         OwwaExportBusyDispatcher::start(

@@ -7,6 +7,7 @@ use App\Models\Item;
 use App\Models\ItemCategory;
 use App\Models\ItemStockBucket;
 use App\Models\StockPositionRestockFlag;
+use App\Models\Transfer;
 use App\Support\SemiExpendableValueCategory;
 use App\Support\UnitCostKey;
 use Illuminate\Support\Collection;
@@ -22,12 +23,16 @@ class InventoryStockService
      *   opening: array<string, int>,
      *   acq: array<string, int>,
      *   inTransfers: array<string, int>,
+     *   returnsIn: array<string, int>,
      *   issuances: array<string, int>,
      *   outTransfers: array<string, int>,
      *   disposals: array<string, int>
      * }|null
      */
     protected static ?array $movementTotalsMaps = null;
+
+    /** @var array<int, bool>|null */
+    protected static ?array $propertyTrackedItemIds = null;
 
     /**
      * Get current stock quantity for an item at an office (sum across all unit-cost buckets).
@@ -163,9 +168,52 @@ class InventoryStockService
 
     protected function tracksUnits(int $itemId): bool
     {
-        $slug = Item::query()->with('category')->find($itemId)?->category?->getTemplateSlug();
+        return $this->itemTracksPropertyUnits($itemId);
+    }
 
-        return in_array($slug, ['ppe', 'semi_expendable'], true);
+    /**
+     * PPE and semi-expendable keep regional stock when relocated; only issue/return/disposal change quantity.
+     */
+    protected function itemTracksPropertyUnits(int $itemId): bool
+    {
+        if (isset(self::$propertyTrackedItemIds[$itemId])) {
+            return self::$propertyTrackedItemIds[$itemId];
+        }
+
+        $slug = Item::query()->with('category')->find($itemId)?->category?->getTemplateSlug();
+        self::$propertyTrackedItemIds ??= [];
+        self::$propertyTrackedItemIds[$itemId] = in_array($slug, ['ppe', 'semi_expendable'], true);
+
+        return self::$propertyTrackedItemIds[$itemId];
+    }
+
+    /**
+     * @param  array<int, int>  $itemIds
+     */
+    protected function warmPropertyTrackedItemIds(array $itemIds): void
+    {
+        $missing = array_values(array_filter(
+            $itemIds,
+            fn (int $id): bool => ! isset(self::$propertyTrackedItemIds[$id]),
+        ));
+
+        if ($missing === []) {
+            return;
+        }
+
+        self::$propertyTrackedItemIds ??= [];
+
+        Item::query()
+            ->with('category:id,name')
+            ->whereIn('id', $missing)
+            ->get(['id', 'item_category_id'])
+            ->each(function (Item $item): void {
+                self::$propertyTrackedItemIds[(int) $item->id] = in_array(
+                    $item->category?->getTemplateSlug(),
+                    ['ppe', 'semi_expendable'],
+                    true,
+                );
+            });
     }
 
     /**
@@ -193,6 +241,7 @@ class InventoryStockService
     public function forgetMovementTotalsCache(): void
     {
         self::$movementTotalsMaps = null;
+        self::$propertyTrackedItemIds = null;
         $this->bumpStockSummaryCacheVersion();
     }
 
@@ -572,8 +621,42 @@ class InventoryStockService
                 ->get(),
             'office_id',
         );
-        $addKeys($scopeTable('transfers', 'from_office_id'), 'office_id');
-        $addKeys($scopeTable('transfers', 'to_office_id'), 'office_id');
+
+        // Location transfers do not create stock positions for PPE / semi-expendable.
+        // Return-to-stock still opens a position at the receiving (regional) office.
+        $transferRows = DB::table('transfers')
+            ->whereNull('deleted_at')
+            ->when($itemIds !== null, fn ($q) => $q->whereIn('item_id', $itemIds))
+            ->select('item_id', 'from_office_id', 'to_office_id', 'unit_cost', 'transfer_type')
+            ->get();
+
+        $transferItemIds = $transferRows->pluck('item_id')->map(fn (mixed $id): int => (int) $id)->unique()->all();
+        $this->warmPropertyTrackedItemIds($transferItemIds);
+
+        foreach ($transferRows as $row) {
+            $itemId = (int) $row->item_id;
+            $cost = $row->unit_cost !== null ? (float) $row->unit_cost : null;
+
+            if ($this->itemTracksPropertyUnits($itemId)) {
+                if ($row->transfer_type === Transfer::TYPE_RETURN) {
+                    $toOfficeId = (int) $row->to_office_id;
+                    if ($officeId === null || $officeId === $toOfficeId) {
+                        $keys[UnitCostKey::positionKey($itemId, $toOfficeId, $cost)] = true;
+                    }
+                }
+
+                continue;
+            }
+
+            $fromOfficeId = (int) $row->from_office_id;
+            $toOfficeId = (int) $row->to_office_id;
+            if ($officeId === null || $officeId === $fromOfficeId) {
+                $keys[UnitCostKey::positionKey($itemId, $fromOfficeId, $cost)] = true;
+            }
+            if ($officeId === null || $officeId === $toOfficeId) {
+                $keys[UnitCostKey::positionKey($itemId, $toOfficeId, $cost)] = true;
+            }
+        }
 
         return $keys;
     }
@@ -759,6 +842,7 @@ class InventoryStockService
             ->pluck('name', 'id');
 
         $listItemIds = $items->keys()->map(fn (mixed $id): int => (int) $id)->all();
+        $this->warmPropertyTrackedItemIds($listItemIds);
         $bucketsByItemCost = $this->stockBucketsByItemCost($listItemIds);
         $flagsByPosition = $this->restockFlagsByPosition($listItemIds);
 
@@ -1227,6 +1311,7 @@ class InventoryStockService
      *   opening: array<string, int>,
      *   acq: array<string, int>,
      *   inTransfers: array<string, int>,
+     *   returnsIn: array<string, int>,
      *   issuances: array<string, int>,
      *   outTransfers: array<string, int>,
      *   disposals: array<string, int>
@@ -1238,6 +1323,7 @@ class InventoryStockService
             'opening' => $this->buildOpeningBalanceMap(),
             'acq' => $this->buildMovementMap('acquisitions', 'office_id', 'unit_cost'),
             'inTransfers' => $this->buildMovementMap('transfers', 'to_office_id', 'unit_cost'),
+            'returnsIn' => $this->buildReturnTransferMovementMap(),
             'issuances' => $this->buildIssuanceMovementMap(),
             'outTransfers' => $this->buildMovementMap('transfers', 'from_office_id', 'unit_cost', excludeReturns: true),
             'disposals' => $this->buildConfirmedDisposalMovementMap(),
@@ -1252,6 +1338,7 @@ class InventoryStockService
      *   opening: array<string, int>,
      *   acq: array<string, int>,
      *   inTransfers: array<string, int>,
+     *   returnsIn: array<string, int>,
      *   issuances: array<string, int>,
      *   outTransfers: array<string, int>,
      *   disposals: array<string, int>
@@ -1263,6 +1350,7 @@ class InventoryStockService
             'opening' => $this->buildOpeningBalanceMap($itemIds, $officeId),
             'acq' => $this->buildMovementMap('acquisitions', 'office_id', 'unit_cost', itemIds: $itemIds, officeId: $officeId),
             'inTransfers' => $this->buildMovementMap('transfers', 'to_office_id', 'unit_cost', itemIds: $itemIds, officeId: $officeId),
+            'returnsIn' => $this->buildReturnTransferMovementMap($itemIds, $officeId),
             'issuances' => $this->buildIssuanceMovementMap($itemIds, $officeId),
             'outTransfers' => $this->buildMovementMap('transfers', 'from_office_id', 'unit_cost', excludeReturns: true, itemIds: $itemIds, officeId: $officeId),
             'disposals' => $this->buildConfirmedDisposalMovementMap($itemIds, $officeId),
@@ -1431,19 +1519,77 @@ class InventoryStockService
     }
 
     /**
-     * @param  array{opening: array<string, int>, acq: array<string, int>, inTransfers: array<string, int>, issuances: array<string, int>, outTransfers: array<string, int>, disposals: array<string, int>}  $maps
+     * @param  array<int, int>|null  $itemIds
+     * @return array<string, int>
+     */
+    protected function buildReturnTransferMovementMap(?array $itemIds = null, ?int $officeId = null): array
+    {
+        return DB::table('transfers')
+            ->whereNull('deleted_at')
+            ->where('transfer_type', Transfer::TYPE_RETURN)
+            ->when($itemIds !== null, fn ($q) => $q->whereIn('item_id', $itemIds))
+            ->when($officeId !== null, fn ($q) => $q->where('to_office_id', $officeId))
+            ->select(
+                'item_id',
+                'to_office_id as office_id',
+                DB::raw('COALESCE(unit_cost, 0) as unit_cost'),
+                DB::raw('SUM(quantity) as total'),
+            )
+            ->groupBy('item_id', 'to_office_id', DB::raw('COALESCE(unit_cost, 0)'))
+            ->get()
+            ->mapWithKeys(function ($row): array {
+                $key = UnitCostKey::positionKey(
+                    (int) $row->item_id,
+                    (int) $row->office_id,
+                    (float) $row->unit_cost,
+                );
+
+                return [$key => (int) $row->total];
+            })
+            ->all();
+    }
+
+    /**
+     * @param  array{
+     *   opening: array<string, int>,
+     *   acq: array<string, int>,
+     *   inTransfers: array<string, int>,
+     *   returnsIn?: array<string, int>,
+     *   issuances: array<string, int>,
+     *   outTransfers: array<string, int>,
+     *   disposals: array<string, int>
+     * }  $maps
      */
     protected function calculateStockFromMaps(string $key, array $maps): int
     {
-        $stock = ($maps['opening'][$key] ?? 0)
-            + ($maps['acq'][$key] ?? 0) + ($maps['inTransfers'][$key] ?? 0)
-            - ($maps['issuances'][$key] ?? 0) - ($maps['outTransfers'][$key] ?? 0) - ($maps['disposals'][$key] ?? 0);
+        $parsed = UnitCostKey::parsePositionKey($key);
+        $propertyTracked = $parsed !== null && $this->itemTracksPropertyUnits($parsed['item_id']);
+
+        $stock = ($maps['opening'][$key] ?? 0) + ($maps['acq'][$key] ?? 0);
+
+        if ($propertyTracked) {
+            // Relocate / reassignment change location only. Return-to-stock restores regional quantity.
+            $stock += ($maps['returnsIn'][$key] ?? 0);
+        } else {
+            $stock += ($maps['inTransfers'][$key] ?? 0);
+            $stock -= ($maps['outTransfers'][$key] ?? 0);
+        }
+
+        $stock -= ($maps['issuances'][$key] ?? 0) + ($maps['disposals'][$key] ?? 0);
 
         return max(0, $stock);
     }
 
     /**
-     * @param  array{opening: array<string, int>, acq: array<string, int>, inTransfers: array<string, int>, issuances: array<string, int>, outTransfers: array<string, int>, disposals: array<string, int>}  $maps
+     * @param  array{
+     *   opening: array<string, int>,
+     *   acq: array<string, int>,
+     *   inTransfers: array<string, int>,
+     *   returnsIn?: array<string, int>,
+     *   issuances: array<string, int>,
+     *   outTransfers: array<string, int>,
+     *   disposals: array<string, int>
+     * }  $maps
      * @return array<int, string>
      */
     protected function positionKeysFromMaps(array $maps): array

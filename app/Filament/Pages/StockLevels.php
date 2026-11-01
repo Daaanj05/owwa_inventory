@@ -20,6 +20,7 @@ use App\Services\StockLevelExportService;
 use App\Support\CategoryWizardBreadcrumb;
 use App\Support\OwwaExportDiagnostics;
 use App\Support\StockCardLedgerDateRange;
+use App\Support\SupplyOfficeResolver;
 use App\Support\UnitCostKey;
 use BackedEnum;
 use Filament\Actions\Action;
@@ -1444,7 +1445,7 @@ class StockLevels extends Page
             return 0;
         }
 
-        $officeId = Filament::auth()->user()?->office_id;
+        $officeId = app(SupplyOfficeResolver::class)->resolve();
 
         return app(SemiExpendableEulAnalyticsService::class)
             ->dueRows($officeId !== null ? [(int) $officeId] : [])
@@ -1457,10 +1458,17 @@ class StockLevels extends Page
         $rows = $this->getStockLevelsFull();
         $total = $rows->count();
         $lowCount = $rows->where('is_low', true)->count();
+        $stockQty = (int) $rows->sum('stock');
+
+        if ($this->usesTaggedUnitsColumn()) {
+            $taggedCounts = $this->taggedUnitCountsForRows($rows);
+            $tagsQty = (int) array_sum($taggedCounts);
+            $stockQty += $tagsQty;
+        }
 
         return [
             'total' => $total,
-            'totalStockQty' => (int) $rows->sum('stock'),
+            'totalStockQty' => $stockQty,
             'lowCount' => $lowCount,
             'okCount' => $total - $lowCount,
         ];
@@ -1474,11 +1482,10 @@ class StockLevels extends Page
         }
 
         $categoryId = $this->categoryRecord?->id;
-        $user = Filament::auth()->user();
-        $officeId = $user?->office_id;
+        $officeId = app(SupplyOfficeResolver::class)->resolve();
         $rows = app(InventoryStockService::class)->getStockLevelsList(
             $categoryId !== null ? (int) $categoryId : null,
-            $officeId !== null ? (int) $officeId : null,
+            $officeId,
         );
 
         if (filled($this->search)) {
@@ -1496,8 +1503,10 @@ class StockLevels extends Page
     }
 
     /**
+     * Issued + under repair only (region-wide). Warehouse in-stock units stay in the Stock column.
+     *
      * @param  \Illuminate\Support\Collection<int, object>  $rows
-     * @return array<string, int>
+     * @return array<string, int> item_id => count
      */
     protected function taggedUnitCountsForRows(\Illuminate\Support\Collection $rows): array
     {
@@ -1506,20 +1515,20 @@ class StockLevels extends Page
         }
 
         $itemIds = $rows->pluck('item_id')->unique()->values();
-        $officeIds = $rows->pluck('office_id')->unique()->values();
 
         $counts = InventoryUnit::query()
-            ->selectRaw('item_id, office_id, count(*) as tagged_units')
+            ->selectRaw('item_id, count(*) as tagged_units')
             ->whereIn('item_id', $itemIds)
-            ->whereIn('office_id', $officeIds)
-            ->whereIn('status', InventoryUnit::accountableStatuses())
-            ->groupBy('item_id', 'office_id')
+            ->whereIn('status', [
+                InventoryUnit::STATUS_ISSUED,
+                InventoryUnit::STATUS_UNDER_REPAIR,
+            ])
+            ->groupBy('item_id')
             ->get();
 
         $result = [];
         foreach ($counts as $count) {
-            $key = (int) $count->item_id.'_'.(int) $count->office_id;
-            $result[$key] = (int) $count->tagged_units;
+            $result[(int) $count->item_id] = (int) $count->tagged_units;
         }
 
         return $result;
@@ -1581,9 +1590,9 @@ class StockLevels extends Page
             $row->latest_unit_cost = ($latestUnitCosts[$pairKey] ?? null) ?? $avg;
 
             if ($taggedCounts !== []) {
-                $row->accountable_tags = (int) ($taggedCounts[$pairKey] ?? 0);
+                $row->accountable_tags = (int) ($taggedCounts[(int) $row->item_id] ?? 0);
                 $row->tagged_units = $row->accountable_tags;
-                $row->tagged_drift = $row->accountable_tags < (int) $row->stock;
+                $row->tagged_drift = false;
             }
 
             return $row;

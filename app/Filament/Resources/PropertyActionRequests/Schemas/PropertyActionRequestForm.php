@@ -52,7 +52,7 @@ class PropertyActionRequestForm
                     ->columns(2)
                     ->schema([
                         TextInput::make('reference_code')
-                            ->label('Reference No.')
+                            ->label(OwwaReferenceLabels::propertyActionRequest())
                             ->disabled()
                             ->visible(fn (string $operation): bool => $operation !== 'create'),
                         Select::make('office_id')

@@ -41,16 +41,16 @@
     @owwa-header-tooltip-show="showTip($event.detail)"
     @owwa-header-tooltip-hide="hideTip()"
 >
-    <dl class="owwa-stock-ledger-header">
-        <div class="owwa-stock-ledger-header-item">
-            <dt>Entity</dt>
-            <dd>{{ $header['entity_name'] }}</dd>
-        </div>
-        <div class="owwa-stock-ledger-header-item">
-            <dt>Item</dt>
-            <dd>{{ $header['item_name'] }}</dd>
-        </div>
+    <dl class="owwa-stock-ledger-header {{ $isConsumable ? '' : 'owwa-stock-ledger-header--property' }}">
         @if ($isConsumable)
+            <div class="owwa-stock-ledger-header-item">
+                <dt>Entity</dt>
+                <dd>{{ $header['entity_name'] }}</dd>
+            </div>
+            <div class="owwa-stock-ledger-header-item">
+                <dt>Item</dt>
+                <dd>{{ $header['item_name'] }}</dd>
+            </div>
             <div class="owwa-stock-ledger-header-item">
                 <dt>Stock No.</dt>
                 <dd>{{ $header['stock_no'] ?? '—' }}</dd>
@@ -65,9 +65,35 @@
             </div>
         @else
             <div class="owwa-stock-ledger-header-item">
+                <dt>Entity</dt>
+                <dd>{{ $header['entity_name'] }}</dd>
+            </div>
+            <div class="owwa-stock-ledger-header-item">
+                <dt>Item</dt>
+                <dd>{{ $header['item_name'] }}</dd>
+            </div>
+            <div class="owwa-stock-ledger-header-item">
                 <dt>{{ $header['asset_identifier_label'] ?? 'Property No.' }}</dt>
                 <dd>{{ $header['property_number'] ?? '—' }}</dd>
             </div>
+            <div class="owwa-stock-ledger-header-item">
+                <dt>Avg cost</dt>
+                <dd>{{ $header['avg_unit_cost'] ?? '—' }}</dd>
+            </div>
+            <div class="owwa-stock-ledger-header-item">
+                <dt>Latest cost</dt>
+                <dd>{{ $header['latest_unit_cost'] ?? '—' }}</dd>
+            </div>
+            <div class="owwa-stock-ledger-header-item">
+                <dt>Value</dt>
+                <dd>{{ $header['stock_value'] ?? '—' }}</dd>
+            </div>
+            @if (filled($header['property_class'] ?? null))
+                <div class="owwa-stock-ledger-header-item">
+                    <dt>Property class</dt>
+                    <dd>{{ $header['property_class'] }}</dd>
+                </div>
+            @endif
         @endif
         @if (filled($header['description'] ?? null))
             <div class="owwa-stock-ledger-header-item owwa-stock-ledger-header-item--wide">

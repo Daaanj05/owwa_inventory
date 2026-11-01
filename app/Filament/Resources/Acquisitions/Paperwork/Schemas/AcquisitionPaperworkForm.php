@@ -396,9 +396,8 @@ class AcquisitionPaperworkForm
                 ->disabled(fn (?AcquisitionPaperwork $record): bool => ! self::isPrEditable($record))
                 ->columnSpanFull(),
             TextInput::make('requested_by_name')
-                ->label('Requested By')
+                ->label("Requester's name")
                 ->maxLength(255)
-                ->datalist(fn (): array => ProcurementSignatoryName::suggestionsForRole(ProcurementSignatoryName::ROLE_REQUESTED))
                 ->helperText(function (Get $get): ?string {
                     $requesters = self::linkedRequesterNames($get('requisitions'));
 
@@ -410,7 +409,7 @@ class AcquisitionPaperworkForm
                 })
                 ->disabled(fn (?AcquisitionPaperwork $record): bool => ! self::isPrEditable($record)),
             SignatorySelect::make('approved_by_name', ProcurementSignatoryName::ROLE_APPROVED)
-                ->label('Approve By')
+                ->label("Approver's name")
                 ->disabled(fn (?AcquisitionPaperwork $record): bool => ! self::isPrEditable($record)),
         ];
     }

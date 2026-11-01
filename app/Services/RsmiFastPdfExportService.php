@@ -2,7 +2,6 @@
 
 namespace App\Services;
 
-use App\Models\Acquisition;
 use App\Models\Issuance;
 use App\Support\OwwaCellMapping;
 use App\Support\OwwaExportFilename;
@@ -158,9 +157,6 @@ class RsmiFastPdfExportService
         );
 
         $lines = $issuances->map(function (Issuance $issuance): array {
-            $unitCost = $this->resolveUnitCost($issuance);
-            $quantity = (int) $issuance->quantity;
-            $lineAmount = $this->resolveLineAmount($issuance, $unitCost);
             $lineOffice = $issuance->office;
             $responsibilityCenter = $issuance->department?->code
                 ?? $lineOffice?->code
@@ -173,21 +169,12 @@ class RsmiFastPdfExportService
                 'stock_no' => (string) ($issuance->item?->item_code ?? ''),
                 'item' => (string) ($issuance->item?->name ?? ''),
                 'unit' => (string) ($issuance->item?->unit ?? ''),
-                'quantity' => (string) $quantity,
-                'unit_cost' => $unitCost !== null ? number_format($unitCost, 2) : '',
-                'amount' => $lineAmount !== null ? number_format($lineAmount, 2) : '',
+                'quantity' => (string) (int) $issuance->quantity,
+                // Accounting Division columns — layout only; leave blank for Accounting to fill.
+                'unit_cost' => '',
+                'amount' => '',
             ];
         })->values()->all();
-
-        $recapLines = array_map(static function (array $line): array {
-            return [
-                'stock_no' => $line['stock_no'],
-                'quantity' => $line['quantity'],
-                'unit_cost' => $line['unit_cost'],
-                'total_cost' => $line['amount'],
-                'uacs' => '',
-            ];
-        }, $lines);
 
         $custodianName = (string) (
             $first->batch?->custodian_printed_name
@@ -195,13 +182,11 @@ class RsmiFastPdfExportService
             ?? $first->issuedBy?->name
             ?? ''
         );
-        $accountingName = (string) (
-            $first->batch?->accounting_staff_printed_name
-            ?? $first->accounting_staff_printed_name
-            ?? ''
-        );
+
+        $recapLines = $this->buildRecapLines($issuances);
 
         // One growing form (official Excel inserts rows past the 21-row template block).
+        // Left Recapitulation: Stock No. + Quantity. Right (Unit/Total Cost, UACS) blank for Accounting.
         return [[
             'entity_name' => $entityName,
             'fund_cluster' => '',
@@ -210,12 +195,39 @@ class RsmiFastPdfExportService
             'lines' => $lines,
             'recap_lines' => $recapLines,
             'custodian_name' => $custodianName,
-            'accounting_staff_name' => $accountingName,
-            'posted_date' => $reportDate,
+            'accounting_staff_name' => '',
+            'posted_date' => '',
             'include_footer' => true,
             'min_detail_rows' => max($this->minDetailRows(), count($lines)),
             'min_recap_rows' => max($this->minRecapRows(), count($recapLines)),
         ]];
+    }
+
+    /**
+     * Summary of issues by stock number (Appendix 64 Recapitulation, Supply side).
+     *
+     * @param  Collection<int, Issuance>  $issuances
+     * @return list<array{stock_no: string, quantity: string, unit_cost: string, total_cost: string, uacs: string}>
+     */
+    protected function buildRecapLines(Collection $issuances): array
+    {
+        return $issuances
+            ->groupBy(function (Issuance $issuance): string {
+                $stockNo = trim((string) ($issuance->item?->item_code ?? ''));
+
+                return $stockNo !== '' ? $stockNo : (string) ($issuance->item?->name ?? '');
+            })
+            ->map(function (Collection $group, string $stockNo): array {
+                return [
+                    'stock_no' => $stockNo,
+                    'quantity' => (string) $group->sum(fn (Issuance $issuance): int => (int) $issuance->quantity),
+                    'unit_cost' => '',
+                    'total_cost' => '',
+                    'uacs' => '',
+                ];
+            })
+            ->values()
+            ->all();
     }
 
     /** Minimum blank detail block (official template size). Form grows when lines exceed this. */
@@ -229,13 +241,10 @@ class RsmiFastPdfExportService
         return (int) (OwwaCellMapping::form('RSMI')['detail']['max_rows'] ?? 200);
     }
 
+    /** Default Recapitulation block; form grows when stock groups exceed this. */
     public function minRecapRows(): int
     {
-        $detail = (array) (OwwaCellMapping::form('RSMI')['detail'] ?? []);
-        $start = (int) ($detail['recap_start_row'] ?? 36);
-        $end = (int) ($detail['recap_end_row'] ?? 51);
-
-        return max(1, ($end - $start) + 1);
+        return 14;
     }
 
     /**
@@ -312,36 +321,5 @@ class RsmiFastPdfExportService
             ?? $issuance->requisition?->getAttribute('ris_number')
             ?? ''
         );
-    }
-
-    protected function resolveUnitCost(Issuance $issuance): ?float
-    {
-        if ($issuance->unit_cost !== null) {
-            return (float) $issuance->unit_cost;
-        }
-
-        if (! $issuance->item_id) {
-            return null;
-        }
-
-        $unitCost = Acquisition::query()
-            ->where('item_id', $issuance->item_id)
-            ->orderByDesc('acquisition_date')
-            ->value('unit_cost');
-
-        return $unitCost !== null ? (float) $unitCost : null;
-    }
-
-    protected function resolveLineAmount(Issuance $issuance, ?float $unitCost): ?float
-    {
-        if ($issuance->amount !== null) {
-            return (float) $issuance->amount;
-        }
-
-        if ($unitCost === null || $issuance->quantity === null) {
-            return null;
-        }
-
-        return $unitCost * (float) $issuance->quantity;
     }
 }

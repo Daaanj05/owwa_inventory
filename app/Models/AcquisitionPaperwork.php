@@ -104,11 +104,10 @@ class AcquisitionPaperwork extends Model
         });
 
         static::saving(function (AcquisitionPaperwork $paperwork): void {
-            $paperwork->applyPrintedNameDesignation(
-                'requested_by_name',
-                'requested_by_designation',
-                ProcurementSignatoryName::ROLE_REQUESTED,
-            );
+            if ($paperwork->isDirty('requested_by_name') && ! $paperwork->isDirty('requested_by_designation')) {
+                $paperwork->requested_by_designation = null;
+            }
+
             $paperwork->applyPrintedNameDesignation(
                 'approved_by_name',
                 'approved_by_designation',
@@ -117,11 +116,6 @@ class AcquisitionPaperwork extends Model
         });
 
         static::saved(function (AcquisitionPaperwork $paperwork): void {
-            ProcurementSignatoryName::remember(
-                ProcurementSignatoryName::ROLE_REQUESTED,
-                $paperwork->requested_by_name,
-                $paperwork->requested_by_designation,
-            );
             ProcurementSignatoryName::remember(
                 ProcurementSignatoryName::ROLE_APPROVED,
                 $paperwork->approved_by_name,

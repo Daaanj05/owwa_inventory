@@ -2,6 +2,8 @@
 
 namespace App\Services;
 
+use App\Models\InventoryUnit;
+use App\Models\Item;
 use App\Models\Transfer;
 use App\Models\User;
 use App\Support\SupplyOfficeResolver;
@@ -94,17 +96,37 @@ class TransferStockValidator
             ]);
         }
 
-        if (! $this->stockService->hasInventoryActivity($itemId, $fromOfficeId)) {
-            throw ValidationException::withMessages([
-                'item_id' => 'This item has no inventory history at the source office.',
-            ]);
-        }
+        $item = Item::query()->with('category')->find($itemId);
+        $propertyTracked = in_array(
+            $item?->category?->getTemplateSlug(),
+            ['ppe', 'semi_expendable'],
+            true,
+        );
 
-        $buckets = $this->stockService->getUnitCostBucketsWithStock($itemId, $fromOfficeId);
-        if (count($buckets) > 1 && $unitCost === null) {
-            throw ValidationException::withMessages([
-                'unit_cost' => 'Select the unit cost bucket to transfer from.',
-            ]);
+        if ($propertyTracked) {
+            $available = $this->inStockUnitCountAtOffice($itemId, $fromOfficeId, $unitCost);
+            if ($available < 1 && ! $this->stockService->hasInventoryActivity($itemId, $fromOfficeId)) {
+                throw ValidationException::withMessages([
+                    'item_id' => 'This item has no in-stock units at the source office.',
+                ]);
+            }
+        } else {
+            if (! $this->stockService->hasInventoryActivity($itemId, $fromOfficeId)) {
+                throw ValidationException::withMessages([
+                    'item_id' => 'This item has no inventory history at the source office.',
+                ]);
+            }
+
+            $buckets = $this->stockService->getUnitCostBucketsWithStock($itemId, $fromOfficeId);
+            if (count($buckets) > 1 && $unitCost === null) {
+                throw ValidationException::withMessages([
+                    'unit_cost' => 'Select the unit cost bucket to transfer from.',
+                ]);
+            }
+
+            $available = $unitCost !== null
+                ? $this->stockService->getStockForUnitCost($itemId, $fromOfficeId, $unitCost)
+                : $this->stockService->getStock($itemId, $fromOfficeId);
         }
 
         if ($quantity < 1) {
@@ -112,10 +134,6 @@ class TransferStockValidator
                 'quantity' => 'Quantity must be at least 1.',
             ]);
         }
-
-        $available = $unitCost !== null
-            ? $this->stockService->getStockForUnitCost($itemId, $fromOfficeId, $unitCost)
-            : $this->stockService->getStock($itemId, $fromOfficeId);
 
         if ($existing !== null
             && (int) $existing->item_id === $itemId
@@ -130,9 +148,30 @@ class TransferStockValidator
 
         if ($quantity > $available) {
             throw ValidationException::withMessages([
-                'quantity' => "Insufficient stock at the source office. Maximum available: {$available}.",
+                'quantity' => $propertyTracked
+                    ? "Insufficient in-stock units at the source office. Maximum available: {$available}."
+                    : "Insufficient stock at the source office. Maximum available: {$available}.",
             ]);
         }
+    }
+
+    protected function inStockUnitCountAtOffice(int $itemId, int $officeId, ?float $unitCost): int
+    {
+        $query = InventoryUnit::query()
+            ->where('item_id', $itemId)
+            ->where('office_id', $officeId)
+            ->where('status', InventoryUnit::STATUS_IN_STOCK);
+
+        if ($unitCost !== null) {
+            $normalized = UnitCostKey::normalize($unitCost);
+            if ($normalized === UnitCostKey::NULL_SENTINEL) {
+                $query->where(fn ($inner) => $inner->whereNull('unit_cost')->orWhere('unit_cost', 0));
+            } else {
+                $query->where('unit_cost', $normalized);
+            }
+        }
+
+        return $query->count();
     }
 
     /**

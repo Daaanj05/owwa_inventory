@@ -331,7 +331,7 @@ class IncidentReportForm
                         DatePicker::make('gov_id_date_issued')
                             ->label('ID date issued'),
                         TextInput::make('immediate_supervisor_printed_name')
-                            ->label('Immediate supervisor (Noted by)'),
+                            ->label("Immediate supervisor's name"),
                     ])
                     ->columns(2)
                     ->collapsible(),

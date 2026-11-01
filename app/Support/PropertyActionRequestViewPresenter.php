@@ -24,7 +24,7 @@ class PropertyActionRequestViewPresenter
             workflowTitle: 'Workflow',
         );
 
-        $hero['referenceLabel'] = 'Reference';
+        $hero['referenceLabel'] = OwwaReferenceLabels::propertyActionRequest();
 
         return $hero;
     }

@@ -11,6 +11,7 @@ use App\Models\ItemCategory;
 use App\Models\StockOpeningBalanceBatch;
 use App\Services\InventoryQrLabelService;
 use App\Services\StockOpeningBalanceBatchService;
+use App\Support\OwwaReferenceLabels;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Repeater;
@@ -35,7 +36,7 @@ class OpeningBalanceBatchesTable
             ->extraAttributes(['class' => 'owwa-acquisition-docs-table'])
             ->columns([
                 TextColumn::make('reference_code')
-                    ->label('Reference No.')
+                    ->label(OwwaReferenceLabels::openingBalanceTracking())
                     ->searchable()
                     ->sortable(),
                 TextColumn::make('status')
@@ -95,7 +96,7 @@ class OpeningBalanceBatchesTable
         return [
             Section::make('Batch')
                 ->schema([
-                    TextEntry::make('reference_code')->label('Reference No.'),
+                    TextEntry::make('reference_code')->label(OwwaReferenceLabels::openingBalanceTracking()),
                     TextEntry::make('status')
                         ->label('Status')
                         ->state(fn (StockOpeningBalanceBatch $record): string => $record->isConfirmed() ? 'Confirmed' : 'Draft')
@@ -105,7 +106,7 @@ class OpeningBalanceBatchesTable
                         ->label('Date')
                         ->date('M d, Y')
                         ->visible(fn (StockOpeningBalanceBatch $record): bool => $record->isConfirmed()),
-                    TextEntry::make('reference')->label('Reference')->placeholder('—'),
+                    TextEntry::make('reference')->label(OwwaReferenceLabels::openingBalanceSourceDocument())->placeholder('—'),
                     TextEntry::make('office.name')->label('Office'),
                     TextEntry::make('recordedBy.name')->label('Recorded by')->placeholder('—'),
                 ])
@@ -199,10 +200,10 @@ class OpeningBalanceBatchesTable
                 ])
                 ->form(fn (StockOpeningBalanceBatch $record): array => [
                     Placeholder::make('reference_code_display')
-                        ->label('Reference No.')
+                        ->label(OwwaReferenceLabels::openingBalanceTracking())
                         ->content(fn (): string => (string) $record->reference_code),
                     TextInput::make('reference')
-                        ->label('Reference')
+                        ->label(OwwaReferenceLabels::openingBalanceSourceDocument())
                         ->maxLength(255)
                         ->placeholder('e.g. physical count sheet #'),
                     self::linesRepeater(
@@ -285,7 +286,7 @@ class OpeningBalanceBatchesTable
     {
         return [
             TextInput::make('reference')
-                ->label('Reference')
+                ->label(OwwaReferenceLabels::openingBalanceSourceDocument())
                 ->maxLength(255)
                 ->placeholder('e.g. physical count sheet #'),
             self::linesRepeater($categoryId),

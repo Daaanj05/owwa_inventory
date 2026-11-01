@@ -51,6 +51,21 @@ class SignatorySelectInstructionTest extends TestCase
     }
 
     #[Test]
+    public function signatory_role_labels_name_the_person(): void
+    {
+        $labels = SignatorySelect::roleOptions();
+
+        $this->assertArrayNotHasKey(\App\Models\ProcurementSignatoryName::ROLE_REQUESTED, $labels);
+        $this->assertSame('Approver', $labels[\App\Models\ProcurementSignatoryName::ROLE_APPROVED]);
+        $this->assertSame('Transfer approver', $labels[\App\Models\ProcurementSignatoryName::ROLE_TRANSFER_APPROVED]);
+        $this->assertSame('Transfer releasing officer', $labels[\App\Models\ProcurementSignatoryName::ROLE_TRANSFER_RELEASED]);
+        $this->assertSame('Transfer receiving officer', $labels[\App\Models\ProcurementSignatoryName::ROLE_TRANSFER_RECEIVED]);
+        $this->assertSame('Certifying officer', $labels[\App\Models\ProcurementSignatoryName::ROLE_PHYSICAL_COUNT_CERTIFIED]);
+        $this->assertSame('Approving officer', $labels[\App\Models\ProcurementSignatoryName::ROLE_PHYSICAL_COUNT_APPROVED]);
+        $this->assertSame('COA representative', $labels[\App\Models\ProcurementSignatoryName::ROLE_PHYSICAL_COUNT_VERIFIED]);
+    }
+
+    #[Test]
     public function pr_name_roles_use_printed_name_helper_copy(): void
     {
         $this->assertSame(

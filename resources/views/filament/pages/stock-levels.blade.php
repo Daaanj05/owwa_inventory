@@ -71,14 +71,14 @@
             <div class="owwa-kpi-card owwa-kpi-card-total">
                 <span class="owwa-kpi-tooltip">
                     @if ($usesTaggedUnits)
-                        Total quantity on hand across all listed items (sum of Stock column). Accountable tags include warehouse and issued-in-use property tags used for physical count.
+                        Region total: Stock (not yet issued) plus Accountable tags (issued and under repair). Field offices are location only.
                     @else
                         Total quantity on hand across all listed items (sum of Stock column).
                     @endif
                 </span>
                 <div class="owwa-kpi-card-inner">
                     <span class="owwa-kpi-card-value">{{ number_format($totalStockQty) }}</span>
-                    <span class="owwa-kpi-card-label">Total stock</span>
+                    <span class="owwa-kpi-card-label">{{ $usesTaggedUnits ? 'Region total' : 'Total stock' }}</span>
                 </div>
             </div>
         </div>
@@ -173,12 +173,14 @@
                                     $columns = [
                                         'item_name' => 'Item',
                                     ];
-                                    $columns['avg_unit_cost'] = 'Avg cost';
-                                    $columns['stock_value'] = 'Value';
-                                    $columns['latest_unit_cost'] = 'Latest cost';
-                                    if ($isSemiExpendable) {
-                                        $columns['property_class'] = 'Property class';
-                                        $columns['value_type'] = 'Value category';
+                                    if ($usesTaggedUnits) {
+                                        if ($isSemiExpendable) {
+                                            $columns['value_type'] = 'Value category';
+                                        }
+                                    } else {
+                                        $columns['avg_unit_cost'] = 'Avg cost';
+                                        $columns['stock_value'] = 'Value';
+                                        $columns['latest_unit_cost'] = 'Latest cost';
                                     }
                                     $columns['stock'] = 'Stock';
                                     if ($usesTaggedUnits) {
@@ -207,7 +209,7 @@
                         <tbody>
                             @forelse($rows as $row)
                                 @php($pairKey = $this->pairKeyForRow($row))
-                                <tr class="{{ ($row->is_inactive_for_restock ?? false) ? 'opacity-75' : '' }} {{ ($row->is_low || ($row->tagged_drift ?? false)) ? 'owwa-row-low' : '' }}">
+                                <tr class="{{ ($row->is_inactive_for_restock ?? false) ? 'opacity-75' : '' }} {{ $row->is_low ? 'owwa-row-low' : '' }}">
                                     <td class="owwa-stock-select">
                                         <input
                                             type="checkbox"
@@ -227,24 +229,20 @@
                                             {{ $row->item_name }}
                                         </button>
                                     </td>
-                                    <td class="owwa-num owwa-cell-muted">₱{{ number_format((float) ($row->avg_unit_cost ?? $row->unit_cost ?? 0), 2) }}</td>
-                                    <td class="owwa-num owwa-cell-muted">₱{{ number_format((float) ($row->stock_value ?? 0), 2) }}</td>
-                                    <td class="owwa-num owwa-cell-muted">₱{{ number_format((float) ($row->latest_unit_cost ?? $row->avg_unit_cost ?? 0), 2) }}</td>
-                                    @if($isSemiExpendable)
-                                        <td class="owwa-cell-muted">
-                                            @if(filled($row->property_class))
-                                                {{ $propertyClassOptions[$row->property_class] ?? $row->property_class }}
-                                            @else
-                                                <span class="text-warning-600 dark:text-warning-400">Not set</span>
-                                            @endif
-                                        </td>
-                                        <td class="owwa-cell-muted">
-                                            {{ SemiExpendableValueCategory::labelForValueType($row->value_type ?? 'low') }}
-                                        </td>
+                                    @if($usesTaggedUnits)
+                                        @if($isSemiExpendable)
+                                            <td class="owwa-cell-muted">
+                                                {{ SemiExpendableValueCategory::labelForValueType($row->value_type ?? 'low') }}
+                                            </td>
+                                        @endif
+                                    @else
+                                        <td class="owwa-num owwa-cell-muted">₱{{ number_format((float) ($row->avg_unit_cost ?? $row->unit_cost ?? 0), 2) }}</td>
+                                        <td class="owwa-num owwa-cell-muted">₱{{ number_format((float) ($row->stock_value ?? 0), 2) }}</td>
+                                        <td class="owwa-num owwa-cell-muted">₱{{ number_format((float) ($row->latest_unit_cost ?? $row->avg_unit_cost ?? 0), 2) }}</td>
                                     @endif
                                     <td class="owwa-num {{ $row->is_low ? 'owwa-cell-danger' : 'owwa-cell-primary' }}">{{ number_format($row->stock) }}</td>
                                     @if($usesTaggedUnits)
-                                        <td class="owwa-num {{ ($row->tagged_drift ?? false) ? 'owwa-cell-danger' : 'owwa-cell-primary' }}" title="Property tags accountable to this office (warehouse + issued in use). Stock column is warehouse quantity only.">
+                                        <td class="owwa-num owwa-cell-primary" title="Issued and under repair only. Stock column is not-yet-issued quantity at the regional office.">
                                             {{ number_format($row->accountable_tags ?? $row->tagged_units ?? 0) }}
                                         </td>
                                     @endif
@@ -260,8 +258,6 @@
                                             </span>
                                         @elseif($row->is_low)
                                             <span class="owwa-status-badge owwa-status-low">Low</span>
-                                        @elseif($row->tagged_drift ?? false)
-                                            <span class="owwa-status-badge owwa-status-low">Tag drift</span>
                                         @else
                                             <span class="owwa-status-badge owwa-status-ok">Sufficient</span>
                                         @endif

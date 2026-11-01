@@ -10,6 +10,7 @@ use App\Models\Distribution;
 use App\Models\Issuance;
 use App\Models\Item;
 use App\Models\ItemAttributeOption;
+use App\Models\ItemCategory;
 use App\Models\Office;
 use App\Models\Requisition;
 use App\Models\RequisitionItem;
@@ -58,7 +59,7 @@ class UserActivityLogDisplayTest extends TestCase
         $this->assertStringNotContainsString('#'.$requisition->id, $summary);
 
         $details = collect(UserActivityLogDisplay::details($activity));
-        $this->assertSame((string) $requisition->transaction_number, $details->firstWhere('label', 'Transaction no.')['value'] ?? null);
+        $this->assertSame((string) $requisition->transaction_number, $details->firstWhere('label', 'Transaction No.')['value'] ?? null);
         $this->assertSame($office->name, $details->firstWhere('label', 'Office')['value'] ?? null);
         $this->assertSame($department->name, $details->firstWhere('label', 'Sub-Office/Department')['value'] ?? null);
         $this->assertStringContainsString('Pending → Accepted', (string) ($details->firstWhere('label', 'What changed')['value'] ?? ''));
@@ -302,8 +303,11 @@ class UserActivityLogDisplayTest extends TestCase
         $this->assertStringContainsString('TX-2026-0007', $distributionSummary);
         $this->assertSame('Issued to staff', collect(UserActivityLogDisplay::details($this->activityOn($distribution, 'created')))->firstWhere('label', 'Remarks')['value'] ?? null);
 
+        $semiCategory = new ItemCategory(['name' => 'Semi-Expendable']);
+        $semiItem = new Item(['name' => 'Bond Paper', 'item_code' => 'ITM-BOND']);
+        $semiItem->setRelation('category', $semiCategory);
         $issuance = new Issuance(['reference_code' => 'ICS-2026-0004', 'quantity' => 1]);
-        $issuance->setRelation('item', $item);
+        $issuance->setRelation('item', $semiItem);
         $issuance->setRelation('batch', null);
         $issuance->setRelation('office', $office);
         $issuance->setRelation('department', null);
@@ -352,7 +356,7 @@ class UserActivityLogDisplayTest extends TestCase
         $this->assertStringContainsString('30 days', UserActivityLogDisplay::summary($this->activityOn($term, 'created')));
 
         $issuanceDetails = collect(UserActivityLogDisplay::details($this->activityOn($issuance, 'created')));
-        $this->assertSame('ICS-2026-0004', $issuanceDetails->firstWhere('label', 'Control no.')['value'] ?? null);
+        $this->assertSame('ICS-2026-0004', $issuanceDetails->firstWhere('label', 'ICS No.')['value'] ?? null);
         $this->assertSame('Bond Paper (ITM-BOND)', $issuanceDetails->firstWhere('label', 'Item')['value'] ?? null);
 
         $export = UserActivityLog::query()->make([

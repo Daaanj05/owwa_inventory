@@ -166,19 +166,19 @@ class PhysicalCountSessionForm
                             filled($get('office_id')) ? (int) $get('office_id') : null,
                             ProcurementSignatoryName::ROLE_PHYSICAL_COUNT_CERTIFIED,
                         ))
-                            ->label('Certified Correct by')
+                            ->label("Certifying officer's name")
                             ->required(),
                         SignatorySelect::makeFromSuggestions('approved_by_printed_name', ProcurementSignatoryName::ROLE_PHYSICAL_COUNT_APPROVED, fn (Get $get): array => self::officerNameSuggestions(
                             filled($get('office_id')) ? (int) $get('office_id') : null,
                             ProcurementSignatoryName::ROLE_PHYSICAL_COUNT_APPROVED,
                         ))
-                            ->label('Approved by')
+                            ->label("Approving officer's name")
                             ->required(),
                         SignatorySelect::makeFromSuggestions('verified_by_printed_name', ProcurementSignatoryName::ROLE_PHYSICAL_COUNT_VERIFIED, fn (Get $get): array => self::officerNameSuggestions(
                             filled($get('office_id')) ? (int) $get('office_id') : null,
                             ProcurementSignatoryName::ROLE_PHYSICAL_COUNT_VERIFIED,
                         ))
-                            ->label('Verified by')
+                            ->label("COA representative's name")
                             ->required(),
                     ]),
                 Section::make('QR counting workflow')
@@ -293,8 +293,17 @@ class PhysicalCountSessionForm
                             $set('../../inventory_type_label', ConsumableInventoryType::label($item->inventory_type));
                         }
                         if ($officeId) {
-                            $stock = app(InventoryStockService::class)->getStock((int) $item->id, (int) $officeId);
-                            $set('balance_per_card', max(0, $stock));
+                            $countType = $get('../../count_type');
+                            if (in_array($countType, [
+                                PhysicalCountSession::TYPE_RPCPPE,
+                                PhysicalCountSession::TYPE_RPCSP,
+                            ], true)) {
+                                // Balance comes from Load expected assets (region-wide tags), not warehouse stock.
+                                $set('balance_per_card', 0);
+                            } else {
+                                $stock = app(InventoryStockService::class)->getStock((int) $item->id, (int) $officeId);
+                                $set('balance_per_card', max(0, $stock));
+                            }
                             $set('on_hand_count', 0);
                         }
                     }),
