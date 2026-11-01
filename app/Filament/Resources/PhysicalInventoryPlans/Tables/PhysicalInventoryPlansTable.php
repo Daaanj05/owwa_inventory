@@ -15,6 +15,7 @@ use Filament\Actions\RestoreBulkAction;
 use Filament\Support\Enums\FontWeight;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
+use Illuminate\Support\HtmlString;
 
 class PhysicalInventoryPlansTable
 {
@@ -40,13 +41,12 @@ class PhysicalInventoryPlansTable
                     ->sortable(),
                 TextColumn::make('progress')
                     ->label('Progress')
-                    ->state(fn (PhysicalInventoryPlan $record): string => (function () use ($record): string {
-                        $counts = $record->progressCounts();
-
-                        return "{$counts['completed']} / {$counts['total']}";
-                    })())
-                    ->badge()
-                    ->color(fn (PhysicalInventoryPlan $record): string => $record->isCompleted() ? 'success' : 'gray'),
+                    ->state(fn (PhysicalInventoryPlan $record): HtmlString => new HtmlString(
+                        view('filament.resources.physical-inventory-plans.partials.schedule-progress', [
+                            'record' => $record,
+                        ])->render()
+                    ))
+                    ->html(),
                 TextColumn::make('status')
                     ->badge()
                     ->formatStateUsing(fn (?string $state): string => match ($state) {

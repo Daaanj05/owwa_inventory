@@ -47,7 +47,6 @@ class PhysicalInventoryPlanDemoSeeder extends Seeder
                 'item_category_id' => null,
                 'committee_chair_name' => 'Roberto Cruz',
                 'property_officer_name' => 'Marita C. Ablis',
-                'accounting_officer_name' => 'Anna Reyes',
                 'approved_at' => Carbon::parse('2026-06-01'),
                 'recorded_by' => $custodian->id,
             ],

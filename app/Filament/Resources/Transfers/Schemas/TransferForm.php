@@ -16,6 +16,7 @@ use App\Support\CustodianOfficeScope;
 use App\Support\InventoryCategoryOptions;
 use App\Support\OwwaReferenceLabels;
 use App\Support\RequisitionNotificationRecipients;
+use App\Support\ScanAssetHandoff;
 use App\Support\SignatorySelect;
 use App\Support\SupplyOfficeResolver;
 use Filament\Facades\Filament;
@@ -29,6 +30,7 @@ use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
+use Illuminate\Support\HtmlString;
 
 class TransferForm
 {
@@ -43,7 +45,19 @@ class TransferForm
                     ->hiddenLabel()
                     ->content('Transfers change where property is located. Stock stays with the regional office. To issue items to a department or employee, use Issuance.')
                     ->columnSpanFull()
-                    ->extraAttributes(['class' => 'owwa-transfer-workflow-hint']),
+                    ->extraAttributes(['class' => 'owwa-transfer-workflow-hint'])
+                    ->visible(fn (Get $get): bool => blank($get('inventory_unit_id'))),
+
+                Hidden::make('inventory_unit_id')
+                    ->dehydrated()
+                    ->live(),
+
+                Placeholder::make('scanned_unit_summary')
+                    ->hiddenLabel()
+                    ->content(fn (Get $get): HtmlString => ScanAssetHandoff::lockedUnitSummaryHtml($get('inventory_unit_id'))
+                        ?? new HtmlString(''))
+                    ->visible(fn (Get $get): bool => filled($get('inventory_unit_id')))
+                    ->columnSpanFull(),
 
                 Section::make('Step 1 — Offices')
                     ->description('Choose the current location and the new location.')
@@ -60,9 +74,17 @@ class TransferForm
                             ->searchable()
                             ->preload()
                             ->default(fn (): ?int => CustodianOfficeScope::inventoryOfficeId())
-                            ->helperText('Select where stock is leaving. You manage all offices; stock is checked at the office you choose.')
+                            ->helperText(fn (Get $get): string => filled($get('inventory_unit_id'))
+                                ? 'Locked from the scanned property tag.'
+                                : 'Select where stock is leaving. You manage all offices; stock is checked at the office you choose.')
+                            ->disabled(fn (Get $get): bool => filled($get('inventory_unit_id')))
+                            ->dehydrated()
                             ->live()
                             ->afterStateUpdated(function ($state, Set $set, Get $get): void {
+                                if (filled($get('inventory_unit_id'))) {
+                                    return;
+                                }
+
                                 $set('item_id', null);
                                 $set('return_issuance_id', null);
                                 $set('property_number', null);
@@ -145,10 +167,15 @@ class TransferForm
                             ->options(fn (): array => InventoryCategoryOptions::allActiveCategoryOptions())
                             ->placeholder('All categories')
                             ->default(fn (): ?int => self::activeCategoryFilter())
-                            ->disabled(fn (): bool => self::isCategoryScoped())
+                            ->disabled(fn (Get $get): bool => self::isCategoryScoped() || filled($get('inventory_unit_id')))
+                            ->visible(fn (Get $get): bool => blank($get('inventory_unit_id')) || self::isCategoryScoped())
                             ->live()
                             ->dehydrated(false)
-                            ->afterStateUpdated(function (Set $set): void {
+                            ->afterStateUpdated(function (Set $set, Get $get): void {
+                                if (filled($get('inventory_unit_id'))) {
+                                    return;
+                                }
+
                                 $set('item_id', null);
                                 $set('return_issuance_id', null);
                                 $set('property_number', null);
@@ -199,7 +226,6 @@ class TransferForm
                                 $set('unit_cost', $issuance->unit_cost);
                                 $set('inventory_unit_id', $unit?->id);
                             }),
-                        Hidden::make('inventory_unit_id'),
                         Select::make('item_id')
                             ->label('Item')
                             ->options(function (Get $get): array {
@@ -212,6 +238,13 @@ class TransferForm
                                     $name = Item::query()->whereKey($itemId)->value('name');
 
                                     return [(int) $itemId => $name ?: 'Issued item'];
+                                }
+
+                                $itemId = $get('item_id');
+                                if (filled($get('inventory_unit_id')) && filled($itemId)) {
+                                    $name = Item::query()->whereKey($itemId)->value('name');
+
+                                    return [(int) $itemId => $name ?: 'Scanned item'];
                                 }
 
                                 $fromOfficeId = $get('from_office_id');
@@ -231,11 +264,17 @@ class TransferForm
                             ->required()
                             ->searchable()
                             ->live()
-                            ->disabled(fn (Get $get): bool => blank($get('from_office_id')) || blank($get('to_office_id')))
+                            ->disabled(fn (Get $get): bool => filled($get('inventory_unit_id'))
+                                || blank($get('from_office_id'))
+                                || blank($get('to_office_id')))
                             ->placeholder(fn (Get $get): string => blank($get('from_office_id')) || blank($get('to_office_id'))
                                 ? 'Select offices first'
                                 : 'Select an item')
                             ->helperText(function (Get $get): ?string {
+                                if (filled($get('inventory_unit_id'))) {
+                                    return 'Locked from the scanned property tag.';
+                                }
+
                                 $itemId = $get('item_id');
                                 $fromOfficeId = $get('from_office_id');
                                 if (blank($itemId) || blank($fromOfficeId)) {
@@ -249,7 +288,7 @@ class TransferForm
                                     : null;
                             })
                             ->afterStateUpdated(function ($state, Set $set, Get $get): void {
-                                if ($get('transfer_type') === Transfer::TYPE_RETURN) {
+                                if ($get('transfer_type') === Transfer::TYPE_RETURN || filled($get('inventory_unit_id'))) {
                                     return;
                                 }
 

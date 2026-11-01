@@ -23,6 +23,11 @@
         .qr-wrap img { width: 80px; height: 80px; }
         .property-number { font-weight: bold; font-size: 10px; margin-top: 4px; word-break: break-all; }
         .item-name { font-size: 8.5px; margin-top: 3px; color: #333; }
+        .signatories { width: 100%; margin-top: 6px; border-collapse: collapse; }
+        .signatories td { width: 50%; vertical-align: top; text-align: center; padding: 0 2px; }
+        .signatory-role { font-size: 6.5px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.02em; color: #222; }
+        .signatory-name { font-size: 7.5px; margin-top: 2px; font-weight: bold; word-break: break-word; }
+        .signatory-designation { font-size: 6.5px; margin-top: 1px; color: #444; word-break: break-word; }
     </style>
 </head>
 <body>
@@ -31,6 +36,14 @@
         @foreach (array_chunk($labels instanceof \Illuminate\Support\Collection ? $labels->all() : $labels, 2) as $row)
             <tr>
                 @foreach ($row as $label)
+                    @php
+                        $coaName = trim((string) ($label['coa_representative_name'] ?? ''));
+                        $coaDesignation = trim((string) ($label['coa_representative_designation'] ?? ''));
+                        $supplyName = trim((string) ($label['supply_property_officer_name'] ?? ''));
+                        $supplyDesignation = trim((string) ($label['supply_property_officer_designation'] ?? ''));
+                        $hasCoa = $coaName !== '';
+                        $hasSupply = $supplyName !== '';
+                    @endphp
                     <td class="label-cell">
                         <div class="label">
                             <div class="letterhead">
@@ -43,6 +56,30 @@
                             </div>
                             <div class="property-number">{{ $label['property_number'] }}</div>
                             <div class="item-name">{{ $label['item_name'] }}</div>
+                            @if ($hasCoa || $hasSupply)
+                                <table class="signatories">
+                                    <tr>
+                                        @if ($hasCoa)
+                                            <td @if (! $hasSupply) colspan="2" @endif>
+                                                <div class="signatory-role">COA Representative</div>
+                                                <div class="signatory-name">{{ $coaName }}</div>
+                                                @if ($coaDesignation !== '')
+                                                    <div class="signatory-designation">{{ $coaDesignation }}</div>
+                                                @endif
+                                            </td>
+                                        @endif
+                                        @if ($hasSupply)
+                                            <td @if (! $hasCoa) colspan="2" @endif>
+                                                <div class="signatory-role">Supply/Property Officer</div>
+                                                <div class="signatory-name">{{ $supplyName }}</div>
+                                                @if ($supplyDesignation !== '')
+                                                    <div class="signatory-designation">{{ $supplyDesignation }}</div>
+                                                @endif
+                                            </td>
+                                        @endif
+                                    </tr>
+                                </table>
+                            @endif
                         </div>
                     </td>
                 @endforeach

@@ -59,6 +59,10 @@ class ProcurementSignatoryName extends Model
 
     public const ROLE_DISPOSAL_ACCOUNTABLE_STATION = 'disposal_accountable_station';
 
+    public const ROLE_QR_COA_REPRESENTATIVE = 'qr_coa_representative';
+
+    public const ROLE_QR_SUPPLY_PROPERTY_OFFICER = 'qr_supply_property_officer';
+
     protected $fillable = [
         'name',
         'designation',
@@ -115,7 +119,29 @@ class ProcurementSignatoryName extends Model
             self::ROLE_PHYSICAL_COUNT_ACCOUNTABLE,
             self::ROLE_DISPOSAL_ACCOUNTABLE_OFFICER,
             self::ROLE_DISPOSAL_AUTHORIZED_OFFICIAL,
+            self::ROLE_QR_COA_REPRESENTATIVE,
+            self::ROLE_QR_SUPPLY_PROPERTY_OFFICER,
         ], true);
+    }
+
+    /**
+     * Property-tag roles allow only one active printed name each.
+     */
+    public static function roleAllowsOneActive(string $role): bool
+    {
+        return in_array($role, [
+            self::ROLE_QR_COA_REPRESENTATIVE,
+            self::ROLE_QR_SUPPLY_PROPERTY_OFFICER,
+        ], true);
+    }
+
+    public static function activeForRole(string $role): ?self
+    {
+        return static::query()
+            ->active()
+            ->where('role', $role)
+            ->orderBy('id')
+            ->first();
     }
 
     /**

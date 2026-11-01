@@ -88,7 +88,13 @@ class ScanAssetPageTest extends TestCase
             ->test(ScanAsset::class)
             ->call('resolveScan', $legacyPayload)
             ->assertSet('resolvedUnitId', $unit->id)
-            ->assertNoRedirect();
+            ->assertNoRedirect()
+            ->assertSee('Disposal')
+            ->assertSee('Open a disposal record for this property tag.')
+            ->assertSee('Transfer')
+            ->assertSee('Move this unit to another office.')
+            ->assertSeeHtml('owwa-scan-asset-action-card--danger')
+            ->assertSeeHtml('owwa-scan-asset-action-card--primary');
     }
 
     public function test_resolve_scan_keeps_result_on_page_for_url_payload(): void

@@ -92,6 +92,8 @@ class SignatorySelect
             ProcurementSignatoryName::ROLE_DISPOSAL_AUTHORIZED_OFFICIAL => 'Name of the authorized official approving inspection and disposition.',
             ProcurementSignatoryName::ROLE_DISPOSAL_WITNESS => 'Name of the person who witnessed the disposal.',
             ProcurementSignatoryName::ROLE_DISPOSAL_INSPECTION_OFFICER => 'Name of the inspection officer on the disposal report.',
+            ProcurementSignatoryName::ROLE_QR_COA_REPRESENTATIVE => 'Printed name of the COA Representative on property QR labels.',
+            ProcurementSignatoryName::ROLE_QR_SUPPLY_PROPERTY_OFFICER => 'Printed name of the Supply/Property Officer on property QR labels.',
             default => null,
         };
     }
@@ -145,6 +147,8 @@ class SignatorySelect
             ProcurementSignatoryName::ROLE_DISPOSAL_AUTHORIZED_OFFICIAL => 'Disposal — Authorized official',
             ProcurementSignatoryName::ROLE_DISPOSAL_INSPECTION_OFFICER => 'Disposal — Inspection officer name',
             ProcurementSignatoryName::ROLE_DISPOSAL_WITNESS => 'Disposal — Witness',
+            ProcurementSignatoryName::ROLE_QR_COA_REPRESENTATIVE => 'COA Representative',
+            ProcurementSignatoryName::ROLE_QR_SUPPLY_PROPERTY_OFFICER => 'Supply/Property Officer',
         ];
     }
 
@@ -177,6 +181,10 @@ class SignatorySelect
                 ProcurementSignatoryName::ROLE_DISPOSAL_AUTHORIZED_OFFICIAL,
                 ProcurementSignatoryName::ROLE_DISPOSAL_INSPECTION_OFFICER,
                 ProcurementSignatoryName::ROLE_DISPOSAL_WITNESS,
+            ],
+            'property_tag' => [
+                ProcurementSignatoryName::ROLE_QR_COA_REPRESENTATIVE,
+                ProcurementSignatoryName::ROLE_QR_SUPPLY_PROPERTY_OFFICER,
             ],
         ];
     }
@@ -263,6 +271,7 @@ class SignatorySelect
             'transfer' => 'Transfer',
             'physical_count' => 'Physical count',
             'disposal' => 'Disposal',
+            'property_tag' => 'Property tag',
         ];
     }
 }

@@ -31,7 +31,60 @@ class SignatoryManageTabsTest extends TestCase
             ->assertSee('PR / IAR')
             ->assertSee('Transfer')
             ->assertSee('Physical count')
-            ->assertSee('Disposal');
+            ->assertSee('Disposal')
+            ->assertSee('Property tag');
+    }
+
+    public function test_property_tag_tab_rejects_second_active_coa_representative(): void
+    {
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+
+        $custodian = User::factory()->create(['role' => User::ROLE_SUPPLY_CUSTODIAN]);
+        $this->actingAs($custodian);
+
+        ProcurementSignatoryName::query()->create([
+            'role' => ProcurementSignatoryName::ROLE_QR_COA_REPRESENTATIVE,
+            'name' => 'First COA',
+            'designation' => 'COA Auditor',
+        ]);
+
+        Livewire::test(ManageProcurementSignatoryNames::class)
+            ->set('activeTab', 'property_tag')
+            ->callAction('create', [
+                'form' => 'property_tag',
+                'role' => ProcurementSignatoryName::ROLE_QR_COA_REPRESENTATIVE,
+                'name' => 'Second COA',
+                'designation' => 'COA Auditor',
+            ])
+            ->assertHasFormErrors(['role']);
+
+        $this->assertDatabaseMissing(ProcurementSignatoryName::class, [
+            'name' => 'Second COA',
+        ]);
+    }
+
+    public function test_property_tag_tab_accepts_supply_property_officer(): void
+    {
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+
+        $custodian = User::factory()->create(['role' => User::ROLE_SUPPLY_CUSTODIAN]);
+        $this->actingAs($custodian);
+
+        Livewire::test(ManageProcurementSignatoryNames::class)
+            ->set('activeTab', 'property_tag')
+            ->callAction('create', [
+                'form' => 'property_tag',
+                'role' => ProcurementSignatoryName::ROLE_QR_SUPPLY_PROPERTY_OFFICER,
+                'name' => 'Supply Officer Name',
+                'designation' => 'Supply/Property Officer',
+            ])
+            ->assertHasNoFormErrors();
+
+        $this->assertDatabaseHas(ProcurementSignatoryName::class, [
+            'role' => ProcurementSignatoryName::ROLE_QR_SUPPLY_PROPERTY_OFFICER,
+            'name' => 'Supply Officer Name',
+            'designation' => 'Supply/Property Officer',
+        ]);
     }
 
     public function test_transfer_tab_only_shows_transfer_signatories(): void

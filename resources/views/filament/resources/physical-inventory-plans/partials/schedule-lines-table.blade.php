@@ -6,8 +6,15 @@
 
     /** @var PhysicalInventoryPlan $record */
     $record->loadMissing(['lines.office', 'lines.itemCategory', 'lines.physicalCountSession']);
-    $lines = $record->lines->sortBy('planned_date')->values();
     $statusService = app(InventoryPlanLineStatusService::class);
+    $lines = $record->lines
+        ->sortBy(function (PhysicalInventoryPlanLine $line) use ($statusService): array {
+            $status = $statusService->statusForLine($line);
+            $overdueRank = $status === PhysicalInventoryPlanLine::STATUS_OVERDUE ? 0 : 1;
+
+            return [$overdueRank, $line->planned_date?->timestamp ?? PHP_INT_MAX, $line->id];
+        })
+        ->values();
 @endphp
 
 <div class="owwa-inventory-plan-schedule">
@@ -45,7 +52,7 @@
                                 default => 'owwa-inventory-plan-status--pending',
                             };
                         @endphp
-                        <tr wire:key="plan-line-{{ $line->id }}">
+                        <tr wire:key="plan-line-{{ $line->id }}" @class(['owwa-inventory-plan-schedule-row--overdue' => $status === PhysicalInventoryPlanLine::STATUS_OVERDUE])>
                             <td class="whitespace-nowrap">{{ $line->planned_date?->format('M j, Y') ?? '—' }}</td>
                             <td>{{ $line->office?->name ?? '—' }}</td>
                             <td>{{ $line->itemCategory?->name ?? '—' }}</td>
@@ -56,31 +63,27 @@
                             </td>
                             <td class="owwa-inventory-plan-schedule-actions whitespace-nowrap">
                                 @if ($line->physical_count_session_id === null)
-                                    <x-filament::link
-                                        tag="button"
+                                    <button
                                         type="button"
-                                        color="primary"
-                                        size="xs"
                                         wire:click="startPlanLineCount({{ $line->id }})"
+                                        class="owwa-inventory-plan-line-btn owwa-inventory-plan-line-btn--primary"
                                     >
                                         Start count
-                                    </x-filament::link>
+                                    </button>
                                 @elseif (! $line->physicalCountSession?->isComplete())
-                                    <x-filament::link
-                                        :href="PhysicalCountSessionResource::getUrl('view', ['record' => $line->physical_count_session_id])"
-                                        color="primary"
-                                        size="xs"
+                                    <a
+                                        href="{{ PhysicalCountSessionResource::getUrl('view', ['record' => $line->physical_count_session_id]) }}"
+                                        class="owwa-inventory-plan-line-btn owwa-inventory-plan-line-btn--primary"
                                     >
                                         Continue
-                                    </x-filament::link>
+                                    </a>
                                 @else
-                                    <x-filament::link
-                                        :href="PhysicalCountSessionResource::getUrl('view', ['record' => $line->physical_count_session_id])"
-                                        color="gray"
-                                        size="xs"
+                                    <a
+                                        href="{{ PhysicalCountSessionResource::getUrl('view', ['record' => $line->physical_count_session_id]) }}"
+                                        class="owwa-inventory-plan-line-btn owwa-inventory-plan-line-btn--gray"
                                     >
                                         View count
-                                    </x-filament::link>
+                                    </a>
                                 @endif
                             </td>
                         </tr>

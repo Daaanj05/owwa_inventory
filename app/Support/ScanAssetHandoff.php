@@ -11,6 +11,7 @@ use App\Models\User;
 use App\Services\DisposalInventoryUnitService;
 use Filament\Facades\Filament;
 use Filament\Notifications\Notification;
+use Illuminate\Support\HtmlString;
 
 class ScanAssetHandoff
 {
@@ -95,10 +96,43 @@ class ScanAssetHandoff
             'item_id' => $unit->item_id,
             'from_office_id' => $unit->office_id,
             'property_number' => $unit->property_number,
+            'inventory_unit_id' => $unit->id,
             'quantity' => 1,
             'item_category_filter' => $categoryId,
             'transfer_date' => now()->toDateString(),
         ];
+    }
+
+    public static function lockedUnitSummaryHtml(mixed $unitId): ?HtmlString
+    {
+        if (! filled($unitId)) {
+            return null;
+        }
+
+        $unit = InventoryUnit::query()
+            ->with(['item', 'office'])
+            ->find((int) $unitId);
+
+        if ($unit === null) {
+            return null;
+        }
+
+        $propertyNumber = e((string) $unit->property_number);
+        $itemName = e((string) ($unit->article ?? $unit->item?->name ?? '—'));
+        $officeName = e((string) ($unit->office?->name ?? '—'));
+        $status = e(str_replace('_', ' ', (string) $unit->status));
+
+        return new HtmlString(
+            '<div class="owwa-scan-locked-summary">'
+            .'<div class="owwa-scan-locked-summary-title">Scanned property tag</div>'
+            .'<dl class="owwa-scan-locked-summary-grid">'
+            .'<div><dt>Property number</dt><dd>'.$propertyNumber.'</dd></div>'
+            .'<div><dt>Item</dt><dd>'.$itemName.'</dd></div>'
+            .'<div><dt>Office</dt><dd>'.$officeName.'</dd></div>'
+            .'<div><dt>Status</dt><dd>'.$status.'</dd></div>'
+            .'</dl>'
+            .'</div>'
+        );
     }
 
     public static function disposalCreateUrl(InventoryUnit $unit, int $categoryId): string
@@ -126,6 +160,7 @@ class ScanAssetHandoff
             'item_id' => $unit->item_id,
             'from_office' => $unit->office_id,
             'property_number' => $unit->property_number,
+            'inventory_unit_id' => $unit->id,
         ]);
     }
 

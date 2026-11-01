@@ -4119,3 +4119,164 @@ body.owwa-busy-active .fi-topbar a {
         font-size: 0.9rem;
     }
 }
+
+/* ═══════════════════════════════════════════════════════════
+   ABOUT MODAL
+═══════════════════════════════════════════════════════════ */
+.owwa-about {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    text-align: center;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+.owwa-about--modal {
+    max-width: none;
+    margin: 0;
+}
+
+.fi-modal-window.owwa-about-modal,
+.fi-modal-window.owwa-about-modal .fi-modal-header,
+.fi-modal-window.owwa-about-modal .fi-modal-heading,
+.fi-modal-window.owwa-about-modal .fi-modal-content {
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+.fi-modal-window.owwa-about-modal .fi-modal-content {
+    padding: 1rem 1.35rem 0.35rem !important;
+}
+
+.fi-modal-window.owwa-about-modal .fi-modal-header {
+    padding: 1rem 1.35rem 0.65rem !important;
+}
+
+.fi-modal-window.owwa-about-modal .fi-modal-footer {
+    padding: 0.65rem 1.35rem 0.9rem !important;
+}
+
+.owwa-about-hero {
+    padding: 0 0 0.75rem;
+    margin: 0;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.owwa-about-logos {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    margin-bottom: 0.65rem;
+    pointer-events: none;
+}
+
+.owwa-about-logo {
+    display: block;
+    height: 3.15rem;
+    width: 3.15rem;
+    flex-shrink: 0;
+    background: center / contain no-repeat;
+    -webkit-user-drag: none;
+    user-select: none;
+    pointer-events: none;
+}
+
+.owwa-about-logo--owwa {
+    background-image: url('/images/owwa-4a_logo_transparent.png');
+}
+
+.owwa-about-logo--bagong {
+    width: 4.25rem;
+    background-image: url('/images/Bagong_Pilipinas_logo.png');
+}
+
+.owwa-about-badge {
+    display: inline-block;
+    margin: 0 0 0.4rem;
+    padding: 0.2rem 0.55rem;
+    border-radius: 9999px;
+    background: #eff6ff;
+    border: 1px solid #bfdbfe;
+    color: #1d4ed8;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+}
+
+.owwa-about-title {
+    margin: 0 0 0.25rem;
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: #0f172a;
+    line-height: 1.3;
+}
+
+.owwa-about-office {
+    margin: 0;
+    font-size: 0.85rem;
+    color: #475569;
+    line-height: 1.4;
+}
+
+.owwa-about-summary {
+    margin: 0;
+    font-size: 0.875rem;
+    color: #334155;
+    line-height: 1.45;
+}
+
+.owwa-about-meta-line {
+    margin: 0;
+    font-size: 0.8rem;
+    color: #64748b;
+    line-height: 1.4;
+}
+
+.owwa-about-meta-sep {
+    margin: 0 0.2rem;
+}
+
+.owwa-about-developers-block {
+    padding-top: 0.65rem;
+    border-top: 1px solid #e2e8f0;
+}
+
+.owwa-about-section-title {
+    margin: 0 0 0.45rem;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: #64748b;
+}
+
+.owwa-about-developers {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.4rem 0.75rem;
+}
+
+.owwa-about-developers li {
+    margin: 0;
+    padding: 0.55rem 0.65rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.55rem;
+    background: #f8fafc;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: #0f172a;
+    line-height: 1.35;
+    text-align: center;
+}
+
+@media (max-width: 480px) {
+    .owwa-about-developers {
+        grid-template-columns: 1fr;
+    }
+}

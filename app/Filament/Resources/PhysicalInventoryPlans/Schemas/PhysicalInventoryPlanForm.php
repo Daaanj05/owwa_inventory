@@ -25,7 +25,7 @@ class PhysicalInventoryPlanForm
             ->columns(1)
             ->components([
                 Section::make('Schedule details')
-                    ->description('Header info for this Inventory Schedule. Schedule lines below list each office and count date.')
+                    ->description('Title and cut-off first. Add office count dates in Schedule below.')
                     ->columnSpanFull()
                     ->columns(3)
                     ->compact()
@@ -38,40 +38,22 @@ class PhysicalInventoryPlanForm
                             ->columnSpanFull()
                             ->helperText('Short name shown in the list and reminders.')
                             ->hintIcon(Heroicon::QuestionMarkCircle, 'Identifies this schedule in notifications and exports.'),
-                        TextInput::make('period_label')
-                            ->label('Period label (optional)')
-                            ->placeholder('FY 2026')
-                            ->maxLength(100)
-                            ->helperText('Optional label for reports; not linked to the Fiscal Years table.')
-                            ->hintIcon(Heroicon::QuestionMarkCircle, 'Display-only text such as fiscal year or quarter. Leave blank if not needed.'),
                         DatePicker::make('cut_off_date')
                             ->label('Cut-off date')
                             ->required()
                             ->minDate($today)
                             ->helperText('Last date a count may be scheduled; inventory is as-of this date.')
                             ->hintIcon(Heroicon::QuestionMarkCircle, 'Must be today or later. Every planned date must fall on or before cut-off.'),
+                        TextInput::make('period_label')
+                            ->label('Period label (optional)')
+                            ->placeholder('FY 2026')
+                            ->maxLength(100)
+                            ->helperText('Optional label for reports.')
+                            ->hintIcon(Heroicon::QuestionMarkCircle, 'Display-only text such as fiscal year or quarter. Leave blank if not needed.'),
                         DatePicker::make('coa_submitted_at')
                             ->label('COA submission date (optional)')
                             ->helperText('Must be at least 10 days before the first scheduled count.')
                             ->hintIcon(Heroicon::QuestionMarkCircle, 'Date COA paperwork was or will be submitted to support the year-end report.'),
-                        TextInput::make('committee_chair_name')
-                            ->label('Committee chair (optional)')
-                            ->placeholder('Full name')
-                            ->maxLength(255)
-                            ->helperText('Printed on committee signatory blocks when exported.')
-                            ->hintIcon(Heroicon::QuestionMarkCircle, 'Chair of the physical inventory committee.'),
-                        TextInput::make('property_officer_name')
-                            ->label('Property officer (optional)')
-                            ->placeholder('Full name')
-                            ->maxLength(255)
-                            ->helperText('Printed on committee signatory blocks when exported.')
-                            ->hintIcon(Heroicon::QuestionMarkCircle, 'Property officer signatory for the count.'),
-                        TextInput::make('accounting_officer_name')
-                            ->label('Accounting officer (optional)')
-                            ->placeholder('Full name')
-                            ->maxLength(255)
-                            ->helperText('Printed on committee signatory blocks when exported.')
-                            ->hintIcon(Heroicon::QuestionMarkCircle, 'Accounting officer signatory for the count.'),
                         ...self::itemCategoryFields($sessionCategoryId),
                     ]),
                 Section::make('Schedule')
@@ -93,6 +75,7 @@ class PhysicalInventoryPlanForm
                                     ->searchable()
                                     ->preload()
                                     ->placeholder('Select office')
+                                    ->selectablePlaceholder(false)
                                     ->helperText('Active office that will perform the count.')
                                     ->hintIcon(Heroicon::QuestionMarkCircle, 'Office included in this schedule.'),
                                 Select::make('item_category_id')
@@ -104,6 +87,8 @@ class PhysicalInventoryPlanForm
                                         ->all())
                                     ->default($sessionCategoryId)
                                     ->required()
+                                    ->placeholder('Select an option')
+                                    ->selectablePlaceholder(false)
                                     ->helperText('Consumables, Semi-Expendable, PPE, etc.')
                                     ->hintIcon(Heroicon::QuestionMarkCircle, 'Determines the count form (RPCI, RPCPPE, or RPCSP) when you start the count.'),
                                 DatePicker::make('planned_date')
@@ -117,6 +102,23 @@ class PhysicalInventoryPlanForm
                             ->defaultItems(1)
                             ->addActionLabel('Add schedule line')
                             ->columnSpanFull(),
+                    ]),
+                Section::make('Inventory Committee (optional)')
+                    ->description('Names printed on Inventory Committee signatory blocks when exported.')
+                    ->columnSpanFull()
+                    ->columns(2)
+                    ->compact()
+                    ->schema([
+                        TextInput::make('committee_chair_name')
+                            ->label('Chairperson')
+                            ->placeholder('Full name')
+                            ->maxLength(255)
+                            ->hintIcon(Heroicon::QuestionMarkCircle, 'Inventory Committee Chairperson for the physical count.'),
+                        TextInput::make('property_officer_name')
+                            ->label('Supply/Property Officer')
+                            ->placeholder('Full name')
+                            ->maxLength(255)
+                            ->hintIcon(Heroicon::QuestionMarkCircle, 'Supply/Property Officer signatory for the count.'),
                     ]),
             ]);
     }
@@ -141,6 +143,8 @@ class PhysicalInventoryPlanForm
                     ->orderBy('name')
                     ->pluck('name', 'id')
                     ->all())
+                ->placeholder('Select an option')
+                ->selectablePlaceholder(false)
                 ->columnSpanFull()
                 ->helperText('Pre-fills category on new schedule lines.')
                 ->hintIcon(Heroicon::QuestionMarkCircle, 'When set, new lines inherit this category. You can still change category per line.'),

@@ -43,6 +43,9 @@ class ListTransfers extends ListRecords
     #[Url]
     public ?string $property_number = null;
 
+    #[Url]
+    public ?int $inventory_unit_id = null;
+
     /**
      * @var array<string, mixed>|null
      */
@@ -101,17 +104,20 @@ class ListTransfers extends ListRecords
         $itemId = (int) ($this->item_id ?? 0);
         $fromOfficeId = (int) ($this->from_office ?? 0);
         $propertyNumber = filled($this->property_number) ? (string) $this->property_number : null;
+        $inventoryUnitId = (int) ($this->inventory_unit_id ?? 0);
 
         $this->create = null;
         $this->item_id = null;
         $this->from_office = null;
         $this->property_number = null;
+        $this->inventory_unit_id = null;
 
         $this->pendingCreateFormData = array_filter([
             'item_id' => $itemId > 0 ? $itemId : null,
             'from_office_id' => $fromOfficeId > 0 ? $fromOfficeId : CustodianOfficeScope::inventoryOfficeId(),
             'item_category_filter' => $this->activeItemCategoryId() ?: null,
             'property_number' => $propertyNumber,
+            'inventory_unit_id' => $inventoryUnitId > 0 ? $inventoryUnitId : null,
             'quantity' => filled($propertyNumber) ? 1 : null,
             'transfer_date' => now()->toDateString(),
         ]);

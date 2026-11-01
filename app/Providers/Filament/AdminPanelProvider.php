@@ -31,6 +31,7 @@ use App\Http\Middleware\VerifyCsrfToken;
 use App\Livewire\OwwaNotificationDropdown;
 use App\Models\ItemCategory;
 use App\Models\User;
+use App\Support\AboutModalAction;
 use App\Support\FilamentEchoShouldStart;
 use App\Support\FilamentSessionAudit;
 use App\Support\InventoryCategoryTasks;
@@ -93,6 +94,7 @@ class AdminPanelProvider extends PanelProvider
                     ->label('Settings')
                     ->icon(Heroicon::OutlinedCog6Tooth)
                     ->url(fn (): string => AccountSettings::getUrl()),
+                'about' => AboutModalAction::make(),
             ])
             ->colors([
                 // Filament\Support\Colors\Color::Blue (inlined to avoid IDE false positives).

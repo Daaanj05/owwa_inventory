@@ -13,6 +13,7 @@ use App\Services\InventoryStockService;
 use App\Support\CustodianOfficeScope;
 use App\Support\InventoryCategoryOptions;
 use App\Support\OwwaReferenceLabels;
+use App\Support\ScanAssetHandoff;
 use App\Support\SignatorySelect;
 use App\Support\SupplyOfficeResolver;
 use Closure;
@@ -57,7 +58,8 @@ class DisposalForm
                     ->default(false),
 
                 Hidden::make('inventory_unit_id')
-                    ->dehydrated(),
+                    ->dehydrated()
+                    ->live(),
 
                 Hidden::make('par_issuance_id')
                     ->default(null)
@@ -65,6 +67,13 @@ class DisposalForm
                     ->dehydrateStateUsing(fn (mixed $state): ?int => self::activeCategorySlug() === 'consumables'
                         ? null
                         : (filled($state) ? (int) $state : null)),
+
+                Placeholder::make('scanned_unit_summary')
+                    ->hiddenLabel()
+                    ->content(fn (Get $get): HtmlString => ScanAssetHandoff::lockedUnitSummaryHtml($get('inventory_unit_id'))
+                        ?? new HtmlString(''))
+                    ->visible(fn (Get $get): bool => filled($get('inventory_unit_id')))
+                    ->columnSpanFull(),
 
                 Section::make('Record disposal')
                     ->columnSpanFull()
@@ -82,7 +91,7 @@ class DisposalForm
                             ->options(fn (): array => InventoryCategoryOptions::allActiveCategoryOptions())
                             ->placeholder('All categories')
                             ->default(fn (): ?int => self::activeCategoryFilter())
-                            ->visible(fn (): bool => ! self::isCategoryScoped())
+                            ->visible(fn (Get $get): bool => ! self::isCategoryScoped() && blank($get('inventory_unit_id')))
                             ->live()
                             ->dehydrated(false)
                             ->afterStateUpdated(function (Set $set) use ($unitService): void {
@@ -120,6 +129,8 @@ class DisposalForm
                             ->required()
                             ->searchable()
                             ->preload()
+                            ->disabled(fn (Get $get): bool => filled($get('inventory_unit_id')))
+                            ->dehydrated()
                             ->live()
                             ->afterStateUpdated($syncItemOffice),
 
@@ -497,6 +508,7 @@ class DisposalForm
                 ->searchable()
                 ->preload()
                 ->default(fn (): ?int => CustodianOfficeScope::inventoryOfficeId())
+                ->disabled(fn (Get $get): bool => filled($get('inventory_unit_id')))
                 ->dehydrated()
                 ->live()
                 ->afterStateUpdated($afterStateUpdated),

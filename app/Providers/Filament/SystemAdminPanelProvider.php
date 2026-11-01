@@ -18,6 +18,7 @@ use App\Http\Middleware\PreventLoginPageCaching;
 use App\Http\Middleware\TouchUserSessionActivity;
 use App\Http\Middleware\VerifyCsrfToken;
 use App\Livewire\OwwaNotificationDropdown;
+use App\Support\AboutModalAction;
 use App\Support\FilamentEchoShouldStart;
 use App\Support\FilamentSessionAudit;
 use App\Support\OwwaFilamentTheme;
@@ -74,6 +75,7 @@ class SystemAdminPanelProvider extends PanelProvider
                     ->label('Settings')
                     ->icon(Heroicon::OutlinedCog6Tooth)
                     ->url(fn (): string => AccountSettings::getUrl()),
+                'about' => AboutModalAction::make(),
             ])
             ->colors([
                 'primary' => Color::Indigo,

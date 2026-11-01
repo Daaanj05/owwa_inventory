@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Acquisition;
 use App\Models\AcquisitionPaperwork;
 use App\Models\InventoryUnit;
+use App\Models\ProcurementSignatoryName;
 use App\Models\StockOpeningBalance;
 use App\Models\StockOpeningBalanceBatch;
 use App\Support\InventoryUnitQrPayload;
@@ -16,6 +17,16 @@ use Illuminate\Support\Collection;
 
 class InventoryQrLabelService
 {
+    /**
+     * @var array{
+     *     coa_name: ?string,
+     *     coa_designation: ?string,
+     *     supply_name: ?string,
+     *     supply_designation: ?string
+     * }|null
+     */
+    protected ?array $propertyTagSignatories = null;
+
     public function encodePayload(InventoryUnit|string $unitOrPropertyNumber): string
     {
         if ($unitOrPropertyNumber instanceof InventoryUnit) {
@@ -248,6 +259,8 @@ class InventoryQrLabelService
     ): array {
         $unitSection = trim($officeName.($departmentName ? ' - '.$departmentName : ''));
 
+        $signatories = $this->propertyTagSignatories();
+
         return [
             'sp_tag_no' => '',
             'unit_section' => $unitSection,
@@ -268,6 +281,35 @@ class InventoryQrLabelService
                 'G/F Parian Commerce Center II, National Highway, Brgy. Parian, Calamba, Laguna',
             ),
             'qr_data_uri' => $this->qrCodeDataUri($qrPayload),
+            'coa_representative_name' => $signatories['coa_name'],
+            'coa_representative_designation' => $signatories['coa_designation'],
+            'supply_property_officer_name' => $signatories['supply_name'],
+            'supply_property_officer_designation' => $signatories['supply_designation'],
+        ];
+    }
+
+    /**
+     * @return array{
+     *     coa_name: ?string,
+     *     coa_designation: ?string,
+     *     supply_name: ?string,
+     *     supply_designation: ?string
+     * }
+     */
+    protected function propertyTagSignatories(): array
+    {
+        if ($this->propertyTagSignatories !== null) {
+            return $this->propertyTagSignatories;
+        }
+
+        $coa = ProcurementSignatoryName::activeForRole(ProcurementSignatoryName::ROLE_QR_COA_REPRESENTATIVE);
+        $supply = ProcurementSignatoryName::activeForRole(ProcurementSignatoryName::ROLE_QR_SUPPLY_PROPERTY_OFFICER);
+
+        return $this->propertyTagSignatories = [
+            'coa_name' => filled($coa?->name) ? (string) $coa->name : null,
+            'coa_designation' => filled($coa?->designation) ? (string) $coa->designation : null,
+            'supply_name' => filled($supply?->name) ? (string) $supply->name : null,
+            'supply_designation' => filled($supply?->designation) ? (string) $supply->designation : null,
         ];
     }
 

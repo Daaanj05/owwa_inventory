@@ -61,17 +61,13 @@ class PhysicalInventoryPlanInfolist
 
     public static function modalCommitteeSection(): Section
     {
-        return Section::make('Committee')
+        return Section::make('Inventory Committee')
             ->columnSpanFull()
-            ->columns(3)
+            ->columns(2)
             ->compact()
-            ->collapsed(fn (PhysicalInventoryPlan $record): bool => blank($record->committee_chair_name)
-                && blank($record->property_officer_name)
-                && blank($record->accounting_officer_name))
             ->schema([
-                TextEntry::make('committee_chair_name')->label('Chair')->placeholder('—'),
-                TextEntry::make('property_officer_name')->label('Property officer')->placeholder('—'),
-                TextEntry::make('accounting_officer_name')->label('Accounting officer')->placeholder('—'),
+                TextEntry::make('committee_chair_name')->label('Chairperson')->placeholder('—'),
+                TextEntry::make('property_officer_name')->label('Supply/Property Officer')->placeholder('—'),
             ]);
     }
 
@@ -116,13 +112,12 @@ class PhysicalInventoryPlanInfolist
 
     public static function committeeSection(): Section
     {
-        return Section::make('Committee')
+        return Section::make('Inventory Committee')
             ->columnSpanFull()
-            ->columns(3)
+            ->columns(2)
             ->schema([
-                TextEntry::make('committee_chair_name')->label('Chair')->placeholder('—'),
-                TextEntry::make('property_officer_name')->label('Property officer')->placeholder('—'),
-                TextEntry::make('accounting_officer_name')->label('Accounting officer')->placeholder('—'),
+                TextEntry::make('committee_chair_name')->label('Chairperson')->placeholder('—'),
+                TextEntry::make('property_officer_name')->label('Supply/Property Officer')->placeholder('—'),
             ]);
     }
 }

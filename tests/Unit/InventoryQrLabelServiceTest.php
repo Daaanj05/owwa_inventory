@@ -6,12 +6,16 @@ use App\Models\InventoryUnit;
 use App\Models\Item;
 use App\Models\ItemCategory;
 use App\Models\Office;
+use App\Models\ProcurementSignatoryName;
 use App\Services\InventoryQrLabelService;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use ReflectionMethod;
 use Tests\TestCase;
 
 class InventoryQrLabelServiceTest extends TestCase
 {
+    use RefreshDatabase;
+
     public function test_label_row_from_unit_includes_letterhead_fields_and_semi_captions(): void
     {
         $office = new Office(['name' => 'OWWA Regional Office IV-A']);
@@ -53,6 +57,43 @@ class InventoryQrLabelServiceTest extends TestCase
         $this->assertSame('Ergonomic mesh chair', $row['description']);
         $this->assertSame('4500.50', $row['acquisition_cost']);
         $this->assertNotSame('', $row['qr_data_uri']);
+        $this->assertNull($row['coa_representative_name']);
+        $this->assertNull($row['supply_property_officer_name']);
+    }
+
+    public function test_label_row_includes_active_property_tag_signatories(): void
+    {
+        ProcurementSignatoryName::query()->create([
+            'role' => ProcurementSignatoryName::ROLE_QR_COA_REPRESENTATIVE,
+            'name' => 'Ana COA',
+            'designation' => 'COA Representative',
+        ]);
+        ProcurementSignatoryName::query()->create([
+            'role' => ProcurementSignatoryName::ROLE_QR_SUPPLY_PROPERTY_OFFICER,
+            'name' => 'Ben Supply',
+            'designation' => 'Supply/Property Officer',
+        ]);
+
+        $category = new ItemCategory(['name' => 'PPE']);
+        $item = new Item(['name' => 'Laptop']);
+        $item->setRelation('category', $category);
+
+        $unit = new InventoryUnit([
+            'property_number' => 'PPE-2026-0001',
+            'unit_cost' => 55000,
+            'article' => 'Laptop',
+        ]);
+        $unit->setRelation('item', $item);
+        $unit->setRelation('acquisition', null);
+        $unit->setRelation('issuance', null);
+
+        $method = new ReflectionMethod(InventoryQrLabelService::class, 'labelRowFromUnit');
+        $row = $method->invoke(app(InventoryQrLabelService::class), $unit, 'Regional Office', null);
+
+        $this->assertSame('Ana COA', $row['coa_representative_name']);
+        $this->assertSame('COA Representative', $row['coa_representative_designation']);
+        $this->assertSame('Ben Supply', $row['supply_property_officer_name']);
+        $this->assertSame('Supply/Property Officer', $row['supply_property_officer_designation']);
     }
 
     public function test_ppe_captions_use_property_labels(): void

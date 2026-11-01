@@ -125,7 +125,35 @@ class AcquisitionPaperworkQrLabelsTest extends TestCase
         $this->assertStringNotContainsString('Unit/Section', $html);
         $this->assertStringNotContainsString('End-user', $html);
         $this->assertStringNotContainsString('Acquisition Cost', $html);
+        $this->assertStringNotContainsString('COA Representative', $html);
+        $this->assertStringNotContainsString('Supply/Property Officer', $html);
         $this->assertSame(5, substr_count($html, 'class="label"'));
+    }
+
+    public function test_qr_labels_view_prints_property_tag_signatories_when_present(): void
+    {
+        $labels = collect([[
+            'qr_data_uri' => 'data:image/png;base64,iVBORw0KGgo=',
+            'property_number' => 'PPE-2026-0001',
+            'item_name' => 'Wall Clock',
+            'agency_line_1' => 'Republic of the Philippines',
+            'agency_line_2' => 'OVERSEAS WORKERS WELFARE ADMINISTRATION',
+            'agency_address' => 'G/F Parian Commerce Center II, National Highway, Brgy. Parian, Calamba, Laguna',
+            'coa_representative_name' => 'Ana COA',
+            'coa_representative_designation' => 'COA Representative',
+            'supply_property_officer_name' => 'Ben Supply',
+            'supply_property_officer_designation' => 'Supply/Property Officer',
+        ]]);
+
+        $html = view('reports.qr-labels', [
+            'title' => 'Unit QR labels — AP-TEST',
+            'labels' => $labels,
+        ])->render();
+
+        $this->assertStringContainsString('COA Representative', $html);
+        $this->assertStringContainsString('Ana COA', $html);
+        $this->assertStringContainsString('Supply/Property Officer', $html);
+        $this->assertStringContainsString('Ben Supply', $html);
     }
 
     protected function createReceivedPpePaperwork(int $quantity): AcquisitionPaperwork

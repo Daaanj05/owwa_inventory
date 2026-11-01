@@ -7,6 +7,7 @@ use App\Filament\Concerns\HasSetupArchiveView;
 use App\Filament\Resources\ProcurementSignatoryNames\ProcurementSignatoryNameResource;
 use App\Models\ProcurementSignatoryName;
 use App\Support\SignatorySelect;
+use Closure;
 use Filament\Actions\CreateAction;
 use Filament\Actions\EditAction;
 use Filament\Forms\Components\Placeholder;
@@ -26,6 +27,7 @@ use Filament\Tables\View\TablesRenderHook;
 use Filament\View\PanelsRenderHook;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\HtmlString;
+use Illuminate\Validation\ValidationException;
 use Livewire\Livewire;
 
 class ManageProcurementSignatoryNames extends ManageRecords
@@ -198,14 +200,42 @@ class ManageProcurementSignatoryNames extends ManageRecords
                     ->mutateFormDataUsing(fn (array $data): array => $this->clearUnusedDesignation($data))
                     ->visible(fn (ProcurementSignatoryName $record): bool => ! $record->isArchived()),
                 ProcurementSignatoryNameResource::archiveAction(),
-                ProcurementSignatoryNameResource::restoreAction(),
+                ProcurementSignatoryNameResource::restoreAction()
+                    ->before(function (ProcurementSignatoryName $record): void {
+                        $this->assertSingleActivePropertyTagRole($record->role, $record->id);
+                    }),
             ])
             ->emptyStateHeading(fn (): string => $this->showingArchived
                 ? 'No archived signatories'
                 : 'No signatories yet')
             ->emptyStateDescription(fn (): string => $this->showingArchived
                 ? 'Archived names for this category will appear here.'
-                : 'Add printed names and designations used on procurement and inventory forms.');
+                : ($this->activeTab === 'property_tag'
+                    ? 'Add the COA Representative and Supply/Property Officer printed on property QR labels.'
+                    : 'Add printed names and designations used on procurement and inventory forms.'));
+    }
+
+    protected function assertSingleActivePropertyTagRole(string $role, ?int $exceptId = null): void
+    {
+        if (! ProcurementSignatoryName::roleAllowsOneActive($role)) {
+            return;
+        }
+
+        $exists = ProcurementSignatoryName::query()
+            ->active()
+            ->where('role', $role)
+            ->when($exceptId !== null, fn (Builder $query): Builder => $query->whereKeyNot($exceptId))
+            ->exists();
+
+        if (! $exists) {
+            return;
+        }
+
+        $label = SignatorySelect::roleOptions()[$role] ?? $role;
+
+        throw ValidationException::withMessages([
+            'role' => "Only one active {$label} is allowed. Archive the current name first.",
+        ]);
     }
 
     /**
@@ -252,7 +282,31 @@ class ManageProcurementSignatoryNames extends ManageRecords
                     return SignatorySelect::roleOptionsForTabIncluding($tab, $record?->role);
                 })
                 ->required()
-                ->live(),
+                ->live()
+                ->rules([
+                    fn (?ProcurementSignatoryName $record): Closure => function (string $attribute, mixed $value, Closure $fail) use ($record): void {
+                        $role = (string) $value;
+                        if (! ProcurementSignatoryName::roleAllowsOneActive($role)) {
+                            return;
+                        }
+
+                        $exists = ProcurementSignatoryName::query()
+                            ->active()
+                            ->where('role', $role)
+                            ->when(
+                                $record !== null,
+                                fn (Builder $query): Builder => $query->whereKeyNot($record->id),
+                            )
+                            ->exists();
+
+                        if (! $exists) {
+                            return;
+                        }
+
+                        $label = SignatorySelect::roleOptions()[$role] ?? $role;
+                        $fail("Only one active {$label} is allowed. Archive the current name first.");
+                    },
+                ]),
             Placeholder::make('role_instruction')
                 ->hiddenLabel()
                 ->content(function (Get $get): \Illuminate\Support\HtmlString {
