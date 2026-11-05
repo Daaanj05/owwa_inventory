@@ -1,3 +1,5 @@
+@props(['logoMessage' => null])
+
 <x-mail::layout>
     {{-- Header --}}
     <x-slot:header>

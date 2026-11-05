@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Notifications\EmailVerificationCodeNotification;
 use App\Support\OwwaMailLogo;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Mail\Markdown;
 use Illuminate\Mail\Message;
 use Illuminate\Support\Facades\URL;
 use Symfony\Component\Mime\Email;
@@ -40,6 +41,29 @@ class OwwaMailThemeTest extends TestCase
         $this->assertStringContainsString('Verification code', $html);
         $this->assertStringContainsString('This code expires in 24 hours.', $html);
         $this->assertStringContainsString('#003f8a', $html);
+    }
+
+    public function test_sign_in_mail_embeds_logos_for_gmail(): void
+    {
+        $message = new Message(new Email);
+        $markdown = app(Markdown::class);
+        $data = [
+            'message' => $message,
+            'level' => 'primary',
+            'greeting' => 'Hello!',
+            'introLines' => ['Your sign-in code is 414441'],
+            'outroLines' => ['This code will expire in 4 minutes.'],
+            'salutation' => 'Regards',
+        ];
+
+        $html = (string) $markdown->render('notifications::email', $data);
+        $text = (string) $markdown->renderText('notifications::email', $data);
+
+        $this->assertStringContainsString('cid:owwa@owwa.mail', $html);
+        $this->assertStringContainsString('cid:bagong_pilipinas@owwa.mail', $html);
+        $this->assertStringNotContainsString('data:image/', $html);
+        $this->assertStringContainsString('Your sign-in code is 414441', $text);
+        $this->assertCount(2, $message->getSymfonyMessage()->getAttachments());
     }
 
     public function test_sent_mail_embeds_logos_instead_of_remote_urls(): void
