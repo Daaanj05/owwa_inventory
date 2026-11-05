@@ -31,6 +31,7 @@ use App\Http\Middleware\VerifyCsrfToken;
 use App\Livewire\OwwaNotificationDropdown;
 use App\Models\ItemCategory;
 use App\Models\User;
+use App\Notifications\LoginEmailAuthenticationNotification;
 use App\Support\AboutModalAction;
 use App\Support\FilamentEchoShouldStart;
 use App\Support\FilamentSessionAudit;
@@ -77,7 +78,8 @@ class AdminPanelProvider extends PanelProvider
                 AppAuthentication::make()
                     ->brandName('OWWA Region IV-A')
                     ->recoverable(),
-                EmailAuthentication::make(),
+                EmailAuthentication::make()
+                    ->codeNotification(LoginEmailAuthenticationNotification::class),
             ], setUpRequiredAction: SetUpRequiredMultiFactorAuthentication::class, isRequired: true)
             ->livewireComponents([
                 VerifyEmailWithCode::class,

@@ -112,4 +112,18 @@ return [
 
     'password_timeout' => env('AUTH_PASSWORD_TIMEOUT', 10800),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Email Verification
+    |--------------------------------------------------------------------------
+    |
+    | The number of minutes a new-account verification code stays valid.
+    | 1440 minutes is 24 hours.
+    |
+    */
+
+    'verification' => [
+        'expire' => 1440,
+    ],
+
 ];

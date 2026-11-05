@@ -13,9 +13,22 @@ class EmailVerificationCodeNotification extends Notification implements ShouldQu
 
     public function __construct(
         public string $code,
-        public int $expiresInMinutes = 60,
+        public int $expiresInMinutes = 1440,
     ) {
         $this->onQueue('mail');
+    }
+
+    public function expiresLabel(): string
+    {
+        if ($this->expiresInMinutes >= 60 && $this->expiresInMinutes % 60 === 0) {
+            $hours = intdiv($this->expiresInMinutes, 60);
+
+            return $hours === 1 ? '1 hour' : $hours.' hours';
+        }
+
+        return $this->expiresInMinutes === 1
+            ? '1 minute'
+            : $this->expiresInMinutes.' minutes';
     }
 
     /**
@@ -33,7 +46,7 @@ class EmailVerificationCodeNotification extends Notification implements ShouldQu
             ->markdown('mail.email-verification-code', [
                 'user' => $notifiable,
                 'code' => $this->code,
-                'expiresInMinutes' => $this->expiresInMinutes,
+                'expiresLabel' => $this->expiresLabel(),
             ]);
     }
 }

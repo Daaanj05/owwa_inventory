@@ -31,8 +31,14 @@ class EmailVerificationCodeTest extends TestCase
 
         app(EmailVerificationCodeService::class)->sendCode($user);
 
-        Notification::assertSentTo($user, EmailVerificationCodeNotification::class, function (EmailVerificationCodeNotification $notification): bool {
-            return strlen($notification->code) === 6;
+        Notification::assertSentTo($user, EmailVerificationCodeNotification::class, function (EmailVerificationCodeNotification $notification) use ($user): bool {
+            $expiresAt = $user->fresh()->email_verification_code_expires_at;
+
+            return strlen($notification->code) === 6
+                && $notification->expiresInMinutes === 1440
+                && $notification->queue === 'mail'
+                && $expiresAt !== null
+                && $expiresAt->between(now()->addHours(24)->subMinute(), now()->addHours(24)->addMinute());
         });
 
         $this->assertNotNull($user->fresh()->email_verification_code_hash);

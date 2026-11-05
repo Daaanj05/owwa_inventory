@@ -38,6 +38,7 @@ class OwwaMailThemeTest extends TestCase
         $this->assertStringContainsString('123456', $html);
         $this->assertStringNotContainsString('Temporary password', $html);
         $this->assertStringContainsString('Verification code', $html);
+        $this->assertStringContainsString('This code expires in 24 hours.', $html);
         $this->assertStringContainsString('#003f8a', $html);
     }
 
