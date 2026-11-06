@@ -45,6 +45,7 @@ class UsersTable
                     ->color(fn (User $record): string => $record->hasVerifiedEmail() ? 'success' : 'warning')
                     ->sortable(),
                 TextColumn::make('role')
+                    ->searchable()
                     ->badge()
                     ->formatStateUsing(function (string $state): string {
                         return match ($state) {
@@ -67,6 +68,17 @@ class UsersTable
                 TextColumn::make('office.name')
                     ->label('Office')
                     ->state(fn (User $record): ?string => $record->assignmentOfficesSummary())
+                    ->searchable(query: function (Builder $query, string $search): Builder {
+                        return $query->where(function (Builder $query) use ($search): void {
+                            $query->whereHas(
+                                'office',
+                                fn (Builder $officeQuery): Builder => $officeQuery->where('name', 'like', "%{$search}%"),
+                            )->orWhereHas(
+                                'assignments.office',
+                                fn (Builder $officeQuery): Builder => $officeQuery->where('name', 'like', "%{$search}%"),
+                            );
+                        });
+                    })
                     ->sortable()
                     ->placeholder('—')
                     ->limit(40)

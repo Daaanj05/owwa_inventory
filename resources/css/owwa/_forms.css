@@ -259,6 +259,85 @@ button[type="submit"].fi-btn:hover {
     color: #fff !important;
 }
 
+/* Each digit is drawn in its own box. The real field stays invisible, so typing
+   the last number cannot scroll the row. */
+.fi-one-time-code-input-ctn {
+    --otp-size: 2.75rem;
+    --otp-gap: 0.5rem;
+    position: relative !important;
+    display: flex !important;
+    gap: var(--otp-gap) !important;
+    height: var(--otp-size) !important;
+    width: max-content !important;
+    max-width: 100% !important;
+    overflow: visible !important;
+}
+
+.fi-one-time-code-input-ctn > .fi-one-time-code-input-digit-field {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    flex: 0 0 var(--otp-size) !important;
+    width: var(--otp-size) !important;
+    height: var(--otp-size) !important;
+    border: 1px solid #d0d5dd !important;
+    border-radius: 0.625rem !important;
+    background: #fff !important;
+    box-shadow: none !important;
+    color: #111827 !important;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace !important;
+    font-size: 1.25rem !important;
+    font-weight: 600 !important;
+    line-height: 1 !important;
+}
+
+.fi-one-time-code-input-ctn > .fi-one-time-code-input-digit-field.fi-filled {
+    border-color: #94a3b8 !important;
+}
+
+.fi-one-time-code-input-ctn > .fi-one-time-code-input-digit-field.fi-active {
+    border-color: #2563eb !important;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.16) !important;
+}
+
+.fi-one-time-code-input-ctn > .fi-one-time-code-input-digit-field.fi-active::after {
+    content: '';
+    width: 1.5px;
+    height: 1.25rem;
+    margin-left: 1px;
+    background: #2563eb;
+    animation: owwa-otp-caret 1s steps(1, end) infinite;
+}
+
+@keyframes owwa-otp-caret {
+    0%, 49% { opacity: 1; }
+    50%, 100% { opacity: 0; }
+}
+
+input[type='text'].fi-one-time-code-input {
+    position: absolute !important;
+    inset: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    letter-spacing: normal !important;
+    font-size: 1.25rem !important;
+    color: transparent !important;
+    -webkit-text-fill-color: transparent !important;
+    caret-color: transparent !important;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    outline: none !important;
+    --tw-ring-shadow: 0 0 #0000 !important;
+}
+
+input[type='text'].fi-one-time-code-input::selection {
+    background: transparent;
+    color: transparent;
+}
+
 /* ═══════════════════════════════════════════════════════════
    INVENTORY LIST PAGES — toolbar + content card layout
 ═══════════════════════════════════════════════════════════ */

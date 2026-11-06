@@ -746,6 +746,32 @@ class ProcurementAnalyticsPageTest extends TestCase
         $this->assertStringStartsWith('%PDF', $replacementBody);
     }
 
+    public function test_how_this_works_is_a_spotlight_tour(): void
+    {
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+
+        $office = Office::factory()->create();
+        $custodian = User::factory()->create([
+            'role' => User::ROLE_SUPPLY_CUSTODIAN,
+            'office_id' => $office->id,
+        ]);
+
+        $html = Livewire::actingAs($custodian)->test(ProcurementAnalytics::class)->html();
+
+        $this->assertStringContainsString('procurementSpotlightTour', $html);
+        $this->assertStringContainsString('data-tour="period"', $html);
+        $this->assertStringContainsString('data-tour="kpis"', $html);
+        $this->assertStringContainsString('data-tour="reorders"', $html);
+        $this->assertStringContainsString('data-tour="filters"', $html);
+        $this->assertStringContainsString('data-tour="useful-life"', $html);
+        $this->assertStringContainsString('data-tour="export"', $html);
+        $this->assertStringContainsString('data-tour="generate"', $html);
+        $this->assertStringContainsString('pa-tour-slide', $html);
+        $this->assertStringNotContainsString('<details class="owwa-pa-how-it-works"', $html);
+        $this->assertStringContainsString('window.procurementSpotlightTour', view('filament.partials.procurement-spotlight-tour')->render());
+        $this->assertStringContainsString('This builds a recommendation from the consumable reorder list', view('filament.partials.procurement-spotlight-tour')->render());
+    }
+
     protected function seedMonthlyIssuances(int $itemId, int $officeId, int $monthlyQty, int $months): void
     {
         for ($i = $months - 1; $i >= 0; $i--) {

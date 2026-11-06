@@ -24,7 +24,7 @@
                             default => 'owwa-cell-primary',
                         };
                     @endphp
-                    <tr @class(['owwa-row-low' => $variance < 0])>
+                    <tr @class(['owwa-row-low' => $variance < 0, 'owwa-row-ok' => $variance >= 0])>
                         <td class="owwa-cell-primary">
                             {{ $row['item_name'] }}
                             @if (count($row['property_numbers']) > 0)

@@ -48,6 +48,73 @@ class UserManagementTest extends TestCase
             ->assertTableColumnStateSet('email_verified_at', 'Pending', $pendingEmployee);
     }
 
+    public function test_users_table_search_matches_email_role_and_office(): void
+    {
+        Filament::setCurrentPanel(Filament::getPanel('system-admin'));
+
+        $regional = Office::factory()->create(['name' => 'Regional Welfare Office IV-A']);
+        $cavite = Office::factory()->create(['name' => 'Cavite Field Office']);
+        $laguna = Office::factory()->create(['name' => 'Laguna Field Office']);
+        $regionalDepartment = Department::query()->create([
+            'office_id' => $regional->id,
+            'name' => 'Welfare',
+            'code' => 'WEL',
+        ]);
+        $caviteDepartment = Department::query()->create([
+            'office_id' => $cavite->id,
+            'name' => 'Field',
+            'code' => 'FLD',
+        ]);
+        $lagunaDepartment = Department::query()->create([
+            'office_id' => $laguna->id,
+            'name' => 'Other',
+            'code' => 'OTH',
+        ]);
+        $admin = User::factory()->create([
+            'role' => User::ROLE_SYSTEM_ADMIN,
+            'email_verified_at' => now(),
+        ]);
+        $employee = User::factory()->create([
+            'role' => User::ROLE_EMPLOYEE,
+            'office_id' => $regional->id,
+            'department_id' => $regionalDepartment->id,
+            'first_name' => 'Anna',
+            'last_name' => 'Reyes',
+            'email' => 'anna.reyes@owwa.gov.ph',
+            'email_verified_at' => now(),
+        ]);
+        $consolidator = User::factory()->create([
+            'role' => User::ROLE_UNIT_CONSOLIDATOR,
+            'office_id' => $laguna->id,
+            'department_id' => $lagunaDepartment->id,
+            'first_name' => 'Ben',
+            'last_name' => 'Cruz',
+            'email' => 'ben.cruz@owwa.gov.ph',
+            'email_verified_at' => now(),
+        ]);
+        $consolidator->syncOfficeAssignments([
+            ['office_id' => $cavite->id, 'department_id' => $caviteDepartment->id],
+        ]);
+
+        $this->actingAs($admin);
+
+        Livewire::test(ListUsers::class)
+            ->searchTable('anna.reyes@owwa.gov.ph')
+            ->assertCanSeeTableRecords([$employee])
+            ->assertCanNotSeeTableRecords([$consolidator])
+            ->assertDontSee('Active filters')
+            ->searchTable('unit consolidator')
+            ->assertCanSeeTableRecords([$consolidator])
+            ->assertCanNotSeeTableRecords([$employee])
+            ->assertDontSee('Active filters')
+            ->searchTable('regional')
+            ->assertCanSeeTableRecords([$employee])
+            ->assertCanNotSeeTableRecords([$consolidator])
+            ->searchTable('cavite')
+            ->assertCanSeeTableRecords([$consolidator])
+            ->assertCanNotSeeTableRecords([$employee]);
+    }
+
     public function test_view_user_modal_shows_status_details_without_repeating_identity(): void
     {
         Filament::setCurrentPanel(Filament::getPanel('system-admin'));

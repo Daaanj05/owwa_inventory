@@ -144,6 +144,9 @@ class AdminPanelProvider extends PanelProvider
             ->renderHook(PanelsRenderHook::STYLES_AFTER, function (): string {
                 return OwwaFilamentTheme::stylesheetLinkTag();
             })
+            ->renderHook(PanelsRenderHook::SCRIPTS_BEFORE, function (): string {
+                return view('filament.partials.procurement-spotlight-tour')->render();
+            })
             ->renderHook(PanelsRenderHook::SIDEBAR_NAV_END, function (): string {
                 if (! Schema::hasTable('item_categories')) {
                     return '';

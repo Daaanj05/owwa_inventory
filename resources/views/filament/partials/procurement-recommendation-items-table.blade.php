@@ -59,7 +59,7 @@
                             </thead>
                             <tbody>
                                 @foreach($reorderRows as $row)
-                                    <tr>
+                                    <tr class="{{ $row->priority === 'High' ? 'owwa-row-low' : 'owwa-row-ok' }}">
                                         <td>
                                             @if($row->priority === 'High')
                                                 <span class="owwa-status-badge owwa-status-low">High</span>

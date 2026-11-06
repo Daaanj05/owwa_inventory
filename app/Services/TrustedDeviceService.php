@@ -13,7 +13,7 @@ class TrustedDeviceService
 
     public function days(): int
     {
-        return max(1, (int) config('inventory.trusted_device_days', 15));
+        return max(1, (int) config('inventory.trusted_device_days', 30));
     }
 
     public function isCurrentDeviceTrusted(User $user): bool

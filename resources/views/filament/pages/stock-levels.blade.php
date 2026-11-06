@@ -209,7 +209,7 @@
                         <tbody>
                             @forelse($rows as $row)
                                 @php($pairKey = $this->pairKeyForRow($row))
-                                <tr class="{{ ($row->is_inactive_for_restock ?? false) ? 'opacity-75' : '' }} {{ $row->is_low ? 'owwa-row-low' : '' }}">
+                                <tr @class(['owwa-row-low' => ($row->can_set_starting_stock ?? false) || ($row->is_inactive_for_restock ?? false) || $row->is_low])>
                                     <td class="owwa-stock-select">
                                         <input
                                             type="checkbox"

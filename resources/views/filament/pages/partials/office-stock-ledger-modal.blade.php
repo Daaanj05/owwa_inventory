@@ -90,7 +90,7 @@
                     </thead>
                     <tbody>
                         @foreach ($propertyUnits as $unit)
-                            <tr>
+                            <tr class="{{ in_array($unit['eul_status'] ?? null, [SemiExpendableUsefulLife::STATUS_EXPIRED, SemiExpendableUsefulLife::STATUS_NEARING], true) ? 'owwa-row-low' : 'owwa-row-ok' }}">
                                 <td class="owwa-cell-primary">{{ $unit['property_number'] }}</td>
                                 <td class="owwa-cell-muted">{{ $unit['reference_code'] }}</td>
                                 <td class="owwa-cell-muted">{{ $unit['issued_to'] }}</td>

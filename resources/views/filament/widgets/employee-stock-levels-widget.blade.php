@@ -47,7 +47,7 @@
                     </thead>
                     <tbody>
                         @forelse($rows as $row)
-                            <tr class="{{ $row->is_low ? 'owwa-row-low' : '' }}">
+                            <tr @class(['owwa-row-low' => $row->is_low])>
                                 <td class="owwa-cell-primary">{{ $row->item_name }}</td>
                                 <td class="owwa-cell-muted">{{ $row->category_name }}</td>
                                 <td class="owwa-num {{ $row->is_low ? 'owwa-cell-danger' : 'owwa-cell-primary' }}">{{ number_format($row->stock) }}</td>

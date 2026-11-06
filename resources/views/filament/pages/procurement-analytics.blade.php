@@ -1,4 +1,4 @@
-@php
+﻿@php
     use App\Filament\Resources\AiProcurementRunResource;
     use Illuminate\Support\Str;
 
@@ -16,22 +16,19 @@
 @endphp
 
 <x-filament-panels::page>
+    <div wire:key="pa-tour" x-data="procurementSpotlightTour(@js($this->availableAnalyticsSlides()))">
     <div class="owwa-pa-filter-chips" aria-label="Active filters">
-        <span class="owwa-pa-chip">{{ $this->getFilterSummary() }}</span>
-        <p class="owwa-pa-period-note">Suggestions use the last 12 months through today.</p>
-        <details class="owwa-pa-how-it-works">
-            <summary>How this works</summary>
-            <p>
-                Suggested reorders compare consumable issuances with current stock and the reorder point.
-                Replacement due lists semi-expendable units that are nearing or past useful life.
-                Use the left and right buttons to switch lists. A useful-life date alone does not create a purchase.
-                <strong>High</strong> means under ~1 month of cover or at or below reorder. <strong>Medium</strong> means ~1–3 months.
-            </p>
-        </details>
+        <div class="owwa-pa-period" data-tour="period">
+            <span class="owwa-pa-chip">{{ $this->getFilterSummary() }}</span>
+            <p class="owwa-pa-period-note">Suggestions use the last 12 months through today.</p>
+        </div>
+        <button type="button" class="owwa-pa-how-it-works" x-ref="startButton" x-on:click="start()" aria-haspopup="dialog">
+            How this works
+        </button>
     </div>
 
     {{-- KPIs --}}
-    <div class="owwa-pa-widgets owwa-pa-widgets--stack" wire:key="pa-coverage-{{ $rangeKey }}">
+    <div class="owwa-pa-widgets owwa-pa-widgets--stack" data-tour="kpis" wire:key="pa-coverage-{{ $rangeKey }}">
         @livewire(\App\Filament\Widgets\CoverageOverviewWidget::class, [
             'from' => $selectedRange['from'],
             'to' => $selectedRange['to'],
@@ -45,6 +42,7 @@
     @endphp
     <div
         wire:key="pa-slides-{{ $rangeKey }}"
+        x-on:pa-tour-slide.window="showSlide($event.detail)"
         x-data="{
             slide: @entangle('analyticsSlide'),
             order: @js($analyticsSlides),
@@ -61,6 +59,12 @@
                 if (panel) {
                     this.height = panel.offsetHeight;
                 }
+            },
+            showSlide(name) {
+                if (! this.order.includes(name) || this.slide === name) {
+                    return;
+                }
+                this.slide = name;
             },
             init() {
                 this.$watch('slide', () => this.measure());
@@ -79,7 +83,7 @@
                 x-bind:class="{ 'is-replacement': slide === 'replacement' }"
             >
                 @if($this->shouldShowReorderSlide())
-                    <section class="owwa-pa-slide-panel" data-slide="reorders">
+                    <section class="owwa-pa-slide-panel" data-slide="reorders" data-tour="reorders">
                         <div class="owwa-pa-slide-copy">
                             <h2 class="fi-section-header-heading">Suggested reorders — consumables</h2>
                             <p class="fi-section-header-description mt-1">Consumable stock compared with issuance pace and the reorder point.</p>
@@ -96,7 +100,7 @@
                     </section>
                 @endif
                 @if($this->shouldShowEulPanel())
-                    <section class="owwa-pa-slide-panel" data-slide="replacement">
+                    <section class="owwa-pa-slide-panel" data-slide="replacement" data-tour="useful-life">
                         <div class="owwa-pa-slide-copy">
                             <h2 class="fi-section-header-heading">Replacement due — semi-expendable</h2>
                             <p class="fi-section-header-description mt-1">Issued semi-expendable units nearing or past useful life. A date alone does not create a purchase.</p>
@@ -118,7 +122,7 @@
                     <button type="button" class="owwa-pa-slide-btn" aria-label="Next list" x-on:click="shift(1)">→</button>
                 </div>
             @endif
-            <button type="button" wire:click="exportAtRiskPdf" class="owwa-pa-export-btn">Export PDF</button>
+            <button type="button" wire:click="exportAtRiskPdf" class="owwa-pa-export-btn" data-tour="export">Export PDF</button>
         </div>
     </div>
 
@@ -205,6 +209,7 @@
                 wire:loading.attr="disabled"
                 wire:target="generateAiRecommendation"
                 class="owwa-pa-generate-btn owwa-pa-generate-btn--footer"
+                data-tour="generate"
                 @disabled($loading)
             >
                 <span wire:loading.remove wire:target="generateAiRecommendation">Generate recommendation</span>
@@ -214,4 +219,33 @@
         </div>
     </div>
     <x-filament-actions::modals />
+    <template x-teleport="body" wire:ignore>
+        <div x-cloak x-show="open" class="owwa-pa-tour">
+            <div class="owwa-pa-tour-hole" x-show="hole.ready" x-bind:style="holeStyle"></div>
+            <div class="owwa-pa-tour-shield" x-bind:class="{ 'is-dim': ! hole.ready }" x-on:click.prevent.stop></div>
+            <div
+                x-show="hole.ready"
+                x-ref="card"
+                class="owwa-pa-tour-card"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="owwa-pa-tour-title"
+                aria-describedby="owwa-pa-tour-body"
+                tabindex="-1"
+                x-bind:style="cardStyle"
+                x-on:keydown.tab="trapFocus($event)"
+            >
+                <p class="owwa-pa-tour-progress" x-text="progressLabel"></p>
+                <h2 id="owwa-pa-tour-title" class="owwa-pa-tour-title" x-text="currentStep()?.title"></h2>
+                <p id="owwa-pa-tour-body" class="owwa-pa-tour-body" x-text="currentStep()?.body"></p>
+                <div class="owwa-pa-tour-actions">
+                    <button type="button" class="owwa-pa-tour-back" x-on:click="back()" x-bind:disabled="index === 0">Back</button>
+                    <button type="button" class="owwa-pa-tour-skip" x-on:click="close()">Skip</button>
+                    <button type="button" class="owwa-pa-tour-next" x-on:click="next()" x-text="isLast ? 'Done' : 'Next'"></button>
+                </div>
+            </div>
+        </div>
+    </template>
+    </div>
 </x-filament-panels::page>
+

@@ -27,7 +27,7 @@
                 </div>
             @else
                 <div class="owwa-table-wrap mt-3 owwa-pa-table-shell">
-                    <table class="owwa-data-table owwa-data-table--zebra">
+                    <table class="owwa-data-table">
                         <thead>
                         <tr>
                             <th style="width: 92px;">Priority</th>
@@ -39,7 +39,7 @@
                         </thead>
                         <tbody>
                         @foreach($rows as $row)
-                            <tr class="owwa-data-table__row {{ $row->priority === 'High' ? 'owwa-row-low' : '' }}">
+                            <tr class="owwa-data-table__row {{ $row->priority === 'High' ? 'owwa-row-low' : 'owwa-row-ok' }}">
                                 <td>
                                     @if($row->priority === 'High')
                                         <span class="owwa-status-badge owwa-status-low">High</span>

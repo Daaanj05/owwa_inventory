@@ -36,7 +36,7 @@
             </div>
         </div>
         @endif
-        <div class="owwa-pa-view-tabs" role="tablist" aria-label="Suggested reorders">
+        <div class="owwa-pa-view-tabs" data-tour="filters" role="tablist" aria-label="Suggested reorders">
             <button
                 type="button"
                 role="tab"
@@ -85,7 +85,7 @@
             </div>
         @else
             <div class="owwa-table-wrap owwa-table-wrap--scroll owwa-pa-table-shell owwa-pa-table-scroll">
-                <table class="owwa-data-table owwa-data-table--zebra">
+                <table class="owwa-data-table">
                     <thead>
                     <tr>
                         <th style="width: 80px;">
@@ -115,7 +115,7 @@
                     </thead>
                     <tbody>
                     @foreach($rows as $row)
-                        <tr class="owwa-data-table__row {{ $row->priority === 'High' ? 'owwa-row-low' : '' }}">
+                        <tr class="owwa-data-table__row {{ $row->priority === 'High' ? 'owwa-row-low' : 'owwa-row-ok' }}">
                             <td>
                                 @if($row->priority === 'High')
                                     <span class="owwa-status-badge owwa-status-low">High</span>

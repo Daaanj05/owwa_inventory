@@ -1086,6 +1086,85 @@ button[type="submit"].fi-btn:hover {
     color: #fff !important;
 }
 
+/* Each digit is drawn in its own box. The real field stays invisible, so typing
+   the last number cannot scroll the row. */
+.fi-one-time-code-input-ctn {
+    --otp-size: 2.75rem;
+    --otp-gap: 0.5rem;
+    position: relative !important;
+    display: flex !important;
+    gap: var(--otp-gap) !important;
+    height: var(--otp-size) !important;
+    width: max-content !important;
+    max-width: 100% !important;
+    overflow: visible !important;
+}
+
+.fi-one-time-code-input-ctn > .fi-one-time-code-input-digit-field {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    flex: 0 0 var(--otp-size) !important;
+    width: var(--otp-size) !important;
+    height: var(--otp-size) !important;
+    border: 1px solid #d0d5dd !important;
+    border-radius: 0.625rem !important;
+    background: #fff !important;
+    box-shadow: none !important;
+    color: #111827 !important;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace !important;
+    font-size: 1.25rem !important;
+    font-weight: 600 !important;
+    line-height: 1 !important;
+}
+
+.fi-one-time-code-input-ctn > .fi-one-time-code-input-digit-field.fi-filled {
+    border-color: #94a3b8 !important;
+}
+
+.fi-one-time-code-input-ctn > .fi-one-time-code-input-digit-field.fi-active {
+    border-color: #2563eb !important;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.16) !important;
+}
+
+.fi-one-time-code-input-ctn > .fi-one-time-code-input-digit-field.fi-active::after {
+    content: '';
+    width: 1.5px;
+    height: 1.25rem;
+    margin-left: 1px;
+    background: #2563eb;
+    animation: owwa-otp-caret 1s steps(1, end) infinite;
+}
+
+@keyframes owwa-otp-caret {
+    0%, 49% { opacity: 1; }
+    50%, 100% { opacity: 0; }
+}
+
+input[type='text'].fi-one-time-code-input {
+    position: absolute !important;
+    inset: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    letter-spacing: normal !important;
+    font-size: 1.25rem !important;
+    color: transparent !important;
+    -webkit-text-fill-color: transparent !important;
+    caret-color: transparent !important;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    outline: none !important;
+    --tw-ring-shadow: 0 0 #0000 !important;
+}
+
+input[type='text'].fi-one-time-code-input::selection {
+    background: transparent;
+    color: transparent;
+}
+
 /* ═══════════════════════════════════════════════════════════
    INVENTORY LIST PAGES — toolbar + content card layout
 ═══════════════════════════════════════════════════════════ */
@@ -2685,19 +2764,20 @@ button[type="submit"].fi-btn:hover {
     width: 100%;
     min-height: 2.875rem;
     padding: 0.5rem 1rem;
-    background: linear-gradient(135deg, #003f8a 0%, #0059c2 60%, #8b1538 100%);
-    background-color: #003f8a;
+    background: #2563eb;
+    background-color: #2563eb;
     border: none;
     border-radius: 0.625rem;
     color: #ffffff;
     font-weight: 600;
     font-size: 0.9375rem;
     cursor: pointer;
-    transition: opacity 0.15s ease;
+    transition: background-color 0.15s ease;
 }
 
 .owwa-login-submit-btn:hover {
-    opacity: 0.9;
+    background: #1d4ed8;
+    background-color: #1d4ed8;
 }
 
 /* Password reveal (eye) icon: only visible when password field is focused — target by input wrapper */
@@ -2757,33 +2837,38 @@ button[type="submit"].fi-btn:hover {
     outline: none !important;
 }
 
-/* Sign in button */
-.owwa-login-form-inner .fi-btn {
-    width: 100% !important;
-    background: linear-gradient(135deg, #003f8a 0%, #0059c2 60%, #8b1538 100%) !important;
-    background-color: #003f8a !important;
+/* Primary actions on the login page. Cancel stays the default light button. */
+.owwa-login-form-inner .fi-btn.fi-color-primary:not(.fi-outlined) {
+    background: #2563eb !important;
+    background-color: #2563eb !important;
     border: none !important;
     color: #ffffff !important;
     font-weight: 600 !important;
     font-size: 0.9375rem !important;
     border-radius: 0.625rem !important;
-    min-height: 2.875rem !important;
-    transition: opacity 0.15s ease !important;
+    transition: background-color 0.15s ease !important;
     box-shadow: none !important;
 }
 
-.owwa-login-form-inner .fi-btn:hover {
-    opacity: 0.9 !important;
+.owwa-login-form-inner .owwa-mfa-challenge-form .fi-btn.fi-color-primary:not(.fi-outlined) {
+    width: 100% !important;
+    min-height: 2.875rem !important;
+}
+
+.owwa-login-form-inner .fi-btn.fi-color-primary:not(.fi-outlined):hover {
+    background: #1d4ed8 !important;
+    background-color: #1d4ed8 !important;
+    opacity: 1 !important;
 }
 
 /* Force the label span visible — Alpine's x-show sets display:none inline;
    this overrides it so "Sign in" is always visible on the login button */
-.owwa-login-form-inner .fi-btn span {
+.owwa-login-form-inner .fi-btn.fi-color-primary:not(.fi-outlined) span {
     display: inline !important;
     color: #ffffff !important;
 }
 
-.owwa-login-form-inner .fi-btn svg {
+.owwa-login-form-inner .fi-btn.fi-color-primary:not(.fi-outlined) svg {
     color: #ffffff !important;
 }
 
@@ -4630,22 +4715,26 @@ select.owwa-search-bar {
 
 .owwa-data-table tbody tr {
     border-bottom: 1px solid #e5e7eb;
+    background-color: #fff;
     transition: background-color 0.12s ease;
 }
 
-.owwa-data-table tbody tr:nth-child(even) {
-    background-color: #fafafa;
+.owwa-data-table tbody tr.owwa-row-ok,
+.owwa-pa-summary-table tbody tr.owwa-row-ok {
+    background-color: #f0fdf4;
+}
+
+.owwa-data-table tbody tr.owwa-row-low,
+.owwa-pa-summary-table tbody tr.owwa-row-low {
+    background-color: #fef2f2;
 }
 
 .owwa-data-table tbody tr:hover {
     background-color: #f1f5f9;
 }
 
-.owwa-data-table tbody tr.owwa-row-low {
-    background-color: #fef2f2;
-}
-
-.owwa-data-table tbody tr.owwa-row-low:hover {
+.owwa-data-table tbody tr.owwa-row-low:hover,
+.owwa-pa-summary-table tbody tr.owwa-row-low:hover {
     background-color: #fde8e8;
 }
 
@@ -4670,10 +4759,6 @@ select.owwa-search-bar {
 
 .owwa-stock-ledger-modal .owwa-data-table tbody td.owwa-ledger-data-cell.owwa-num {
     text-align: center;
-}
-
-.owwa-data-table--zebra tbody tr:nth-child(even):not(.owwa-row-low) {
-    background-color: #fafafa;
 }
 
 .owwa-pa-table-shell {
@@ -5146,24 +5231,132 @@ select.owwa-search-bar {
     border: 1px solid #bfdbfe;
 }
 
-.owwa-pa-how-it-works summary {
+.owwa-pa-period {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 0.75rem;
+    max-width: 100%;
+}
+
+.owwa-pa-how-it-works {
+    border: 0;
+    background: transparent;
+    padding: 0;
     font-size: 0.75rem;
     font-weight: 600;
     color: #2563eb;
     cursor: pointer;
-    list-style: none;
 }
 
-.owwa-pa-how-it-works summary::-webkit-details-marker {
-    display: none;
+.owwa-pa-how-it-works:hover,
+.owwa-pa-how-it-works:focus-visible {
+    text-decoration: underline;
 }
 
-.owwa-pa-how-it-works p {
-    margin: 0.5rem 0 0;
-    max-width: 52rem;
+.owwa-pa-tour-hole {
+    position: fixed;
+    z-index: 140;
+    border-radius: 0.75rem;
+    pointer-events: none;
+    box-shadow: 0 0 0 9999px rgba(15, 23, 42, 0.62);
+    outline: 2px solid #fff;
+}
+
+.owwa-pa-tour-shield {
+    position: fixed;
+    inset: 0;
+    z-index: 141;
+    background: transparent;
+}
+
+.owwa-pa-tour-shield.is-dim {
+    background: rgba(15, 23, 42, 0.62);
+}
+
+.owwa-pa-tour-card {
+    position: fixed;
+    z-index: 142;
+    width: min(22rem, calc(100vw - 1.5rem));
+    padding: 1rem 1rem 0.85rem;
+    border-radius: 0.85rem;
+    background: #fff;
+    color: #0f172a;
+    border: 1px solid #e2e8f0;
+    box-shadow: 0 18px 40px rgba(15, 23, 42, 0.22);
+}
+
+.owwa-pa-tour-progress {
+    margin: 0;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #2563eb;
+}
+
+.owwa-pa-tour-title {
+    margin: 0.35rem 0 0;
+    font-size: 1rem;
+    font-weight: 700;
+    line-height: 1.3;
+}
+
+.owwa-pa-tour-body {
+    margin: 0.45rem 0 0;
     font-size: 0.8125rem;
     line-height: 1.55;
-    color: #64748b;
+    color: #475569;
+}
+
+.owwa-pa-tour-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    margin-top: 0.9rem;
+}
+
+.owwa-pa-tour-back,
+.owwa-pa-tour-skip,
+.owwa-pa-tour-next {
+    border-radius: 0.5rem;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    padding: 0.4rem 0.75rem;
+    cursor: pointer;
+}
+
+.owwa-pa-tour-back,
+.owwa-pa-tour-skip {
+    border: 1px solid #cbd5e1;
+    background: #fff;
+    color: #1e3a5f;
+}
+
+.owwa-pa-tour-back:disabled {
+    opacity: 0.45;
+    cursor: default;
+}
+
+.owwa-pa-tour-next {
+    border: 1px solid #1e6fbe;
+    background: #1e6fbe;
+    color: #fff;
+}
+
+.dark .owwa-pa-tour-card {
+    background: #0f172a;
+    color: #e2e8f0;
+    border-color: rgba(255, 255, 255, 0.12);
+}
+
+.dark .owwa-pa-tour-body {
+    color: #cbd5e1;
+}
+
+.dark .owwa-pa-tour-back,
+.dark .owwa-pa-tour-skip {
+    background: #0f172a;
+    color: #e2e8f0;
+    border-color: rgba(255, 255, 255, 0.16);
 }
 
 .owwa-pa-table-header {

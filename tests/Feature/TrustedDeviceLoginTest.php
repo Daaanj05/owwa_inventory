@@ -79,6 +79,7 @@ class TrustedDeviceLoginTest extends TestCase
             ->call('authenticate');
 
         $this->assertNotNull($component->get('userUndertakingMultiFactorAuthentication'));
+        $component->assertSee('Remember this device for 30 days');
 
         session()->put('filament_email_authentication_code', Hash::make('555555'));
         session()->put('filament_email_authentication_code_expires_at', now()->addMinutes(4));
@@ -97,6 +98,9 @@ class TrustedDeviceLoginTest extends TestCase
 
         $this->assertAuthenticatedAs($user);
         $this->assertDatabaseCount('trusted_devices', 1);
+        $device = TrustedDevice::query()->first();
+        $this->assertNotNull($device);
+        $this->assertTrue($device->expires_at->between(now()->addDays(29), now()->addDays(31)));
         $this->assertTrue(
             collect(\Illuminate\Support\Facades\Cookie::getQueuedCookies())
                 ->contains(fn ($cookie): bool => $cookie->getName() === TrustedDeviceService::COOKIE)

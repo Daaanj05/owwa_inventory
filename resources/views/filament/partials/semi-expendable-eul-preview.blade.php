@@ -38,7 +38,7 @@
                         <tbody>
                             @foreach($rows as $row)
                                 <tr
-                                    class="owwa-pa-click-row"
+                                    class="owwa-pa-click-row {{ in_array($row->status, ['expired', 'nearing'], true) ? 'owwa-row-low' : 'owwa-row-ok' }}"
                                     wire:click="openReplacementIssuance({{ (int) $row->issuance_id }})"
                                     wire:keydown.enter="openReplacementIssuance({{ (int) $row->issuance_id }})"
                                     tabindex="0"

@@ -69,6 +69,7 @@ class AppServiceProvider extends ServiceProvider
             ->paginationPageOptions([10])
             ->defaultPaginationPageOption(10)
             ->columnManager(false)
+            ->hiddenFilterIndicators()
             ->filtersTriggerAction(fn (Action $action) => $action->visible(false))
             ->columnManagerTriggerAction(fn (Action $action) => $action->visible(false)));
 

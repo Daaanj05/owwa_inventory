@@ -98,7 +98,7 @@
                         </thead>
                         <tbody>
                             @forelse($rows as $row)
-                                <tr class="{{ ($row->is_inactive_for_restock ?? false) ? 'opacity-75' : '' }} {{ $row->is_low ? 'owwa-row-low' : '' }}">
+                                <tr @class(['owwa-row-low' => ($row->is_inactive_for_restock ?? false) || $row->is_low])>
                                     <td class="owwa-cell-primary">{{ $row->item_name }}</td>
                                     <td class="owwa-cell-muted">{{ $row->category_name }}</td>
                                     <td class="owwa-cell-muted">

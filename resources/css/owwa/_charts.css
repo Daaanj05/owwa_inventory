@@ -740,19 +740,20 @@
     width: 100%;
     min-height: 2.875rem;
     padding: 0.5rem 1rem;
-    background: linear-gradient(135deg, #003f8a 0%, #0059c2 60%, #8b1538 100%);
-    background-color: #003f8a;
+    background: #2563eb;
+    background-color: #2563eb;
     border: none;
     border-radius: 0.625rem;
     color: #ffffff;
     font-weight: 600;
     font-size: 0.9375rem;
     cursor: pointer;
-    transition: opacity 0.15s ease;
+    transition: background-color 0.15s ease;
 }
 
 .owwa-login-submit-btn:hover {
-    opacity: 0.9;
+    background: #1d4ed8;
+    background-color: #1d4ed8;
 }
 
 /* Password reveal (eye) icon: only visible when password field is focused — target by input wrapper */
@@ -812,33 +813,38 @@
     outline: none !important;
 }
 
-/* Sign in button */
-.owwa-login-form-inner .fi-btn {
-    width: 100% !important;
-    background: linear-gradient(135deg, #003f8a 0%, #0059c2 60%, #8b1538 100%) !important;
-    background-color: #003f8a !important;
+/* Primary actions on the login page. Cancel stays the default light button. */
+.owwa-login-form-inner .fi-btn.fi-color-primary:not(.fi-outlined) {
+    background: #2563eb !important;
+    background-color: #2563eb !important;
     border: none !important;
     color: #ffffff !important;
     font-weight: 600 !important;
     font-size: 0.9375rem !important;
     border-radius: 0.625rem !important;
-    min-height: 2.875rem !important;
-    transition: opacity 0.15s ease !important;
+    transition: background-color 0.15s ease !important;
     box-shadow: none !important;
 }
 
-.owwa-login-form-inner .fi-btn:hover {
-    opacity: 0.9 !important;
+.owwa-login-form-inner .owwa-mfa-challenge-form .fi-btn.fi-color-primary:not(.fi-outlined) {
+    width: 100% !important;
+    min-height: 2.875rem !important;
+}
+
+.owwa-login-form-inner .fi-btn.fi-color-primary:not(.fi-outlined):hover {
+    background: #1d4ed8 !important;
+    background-color: #1d4ed8 !important;
+    opacity: 1 !important;
 }
 
 /* Force the label span visible — Alpine's x-show sets display:none inline;
    this overrides it so "Sign in" is always visible on the login button */
-.owwa-login-form-inner .fi-btn span {
+.owwa-login-form-inner .fi-btn.fi-color-primary:not(.fi-outlined) span {
     display: inline !important;
     color: #ffffff !important;
 }
 
-.owwa-login-form-inner .fi-btn svg {
+.owwa-login-form-inner .fi-btn.fi-color-primary:not(.fi-outlined) svg {
     color: #ffffff !important;
 }
 

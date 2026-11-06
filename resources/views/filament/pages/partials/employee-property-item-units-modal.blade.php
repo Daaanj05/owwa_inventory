@@ -40,7 +40,7 @@
             </thead>
             <tbody>
                 @forelse ($rows as $row)
-                    <tr>
+                    <tr class="{{ $categorySlug === 'semi_expendable' && in_array($row['eul_status'] ?? null, [SemiExpendableUsefulLife::STATUS_EXPIRED, SemiExpendableUsefulLife::STATUS_NEARING], true) ? 'owwa-row-low' : 'owwa-row-ok' }}">
                         <td class="owwa-cell-primary">{{ $row['property_number'] }}</td>
                         <td class="owwa-cell-muted">{{ $row['issued_date'] }}</td>
                         <td class="owwa-cell-muted">
