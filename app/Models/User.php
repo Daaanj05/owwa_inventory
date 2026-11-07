@@ -111,6 +111,22 @@ class User extends Authenticatable implements FilamentUser, HasAppAuthentication
         return self::genderOptions()[$this->gender] ?? '—';
     }
 
+    /**
+     * First and last name for list rows. The full name (with middle) stays on name for modals and saved identity.
+     */
+    public function listName(): string
+    {
+        $first = trim((string) ($this->first_name ?? ''));
+        $last = trim((string) ($this->last_name ?? ''));
+        $joined = trim(implode(' ', array_values(array_filter([$first, $last], fn (string $part): bool => $part !== ''))));
+
+        if ($joined !== '') {
+            return $joined;
+        }
+
+        return filled($this->name) ? (string) $this->name : '—';
+    }
+
     protected static function booted(): void
     {
         static::saving(function (self $user): void {

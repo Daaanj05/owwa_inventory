@@ -161,6 +161,37 @@ class UserManagementTest extends TestCase
         $this->assertNotContains('office.name', $detailKeys);
     }
 
+    public function test_users_table_shows_first_and_last_name_while_modal_keeps_middle_name(): void
+    {
+        Filament::setCurrentPanel(Filament::getPanel('system-admin'));
+
+        $admin = User::factory()->create([
+            'role' => User::ROLE_SYSTEM_ADMIN,
+            'email_verified_at' => now(),
+        ]);
+        $employee = User::factory()->create([
+            'role' => User::ROLE_EMPLOYEE,
+            'first_name' => 'Anna',
+            'middle_name' => 'Santos',
+            'last_name' => 'Reyes',
+            'email_verified_at' => now(),
+        ]);
+
+        $this->actingAs($admin);
+
+        $this->assertSame('Anna Santos Reyes', $employee->fresh()->name);
+        $this->assertSame('Anna Reyes', $employee->listName());
+
+        Livewire::test(ListUsers::class)
+            ->assertCanSeeTableRecords([$employee])
+            ->assertTableColumnStateSet('name', 'Anna Reyes', $employee)
+            ->assertSee('Anna Reyes')
+            ->assertDontSee('Anna Santos Reyes');
+
+        $hero = \App\Support\OwwaTransactionViewPresenter::forUser($employee->fresh());
+        $this->assertSame('Anna Santos Reyes', $hero['reference'] ?? null);
+    }
+
     public function test_edit_user_from_actions_menu_shows_form_fields(): void
     {
         Filament::setCurrentPanel(Filament::getPanel('system-admin'));

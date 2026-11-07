@@ -31,6 +31,8 @@ class UsersTable
         return $table
             ->columns([
                 TextColumn::make('name')
+                    ->label('Name')
+                    ->state(fn (User $record): string => $record->listName())
                     ->searchable()
                     ->sortable()
                     ->weight(\Filament\Support\Enums\FontWeight::Medium),
