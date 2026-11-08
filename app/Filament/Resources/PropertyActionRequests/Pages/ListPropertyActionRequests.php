@@ -374,7 +374,6 @@ class ListPropertyActionRequests extends ListRecords
                                 'ucDepartmentId' => $livewire->ucDepartmentId,
                                 'officeOptions' => $livewire->getUcOfficeOptions(),
                                 'departmentOptions' => $livewire->getUcDepartmentOptions(),
-                                'scopeComplete' => $livewire->ucListScopeIsComplete(),
                             ])
                         );
                     },
@@ -502,17 +501,12 @@ class ListPropertyActionRequests extends ListRecords
             })->count();
         }
 
-        if (! $this->ucListScopeIsComplete()) {
-            return 0;
-        }
-
-        return (int) $query
-            ->where('status', PropertyActionRequest::STATUS_PENDING_UC)
-            ->whereNull('compiled_into_property_action_request_id')
-            ->whereHas('requestedBy', fn (Builder $q): Builder => $q->where('role', User::ROLE_EMPLOYEE))
-            ->where('office_id', $this->ucOfficeId)
-            ->where('department_id', $this->ucDepartmentId)
-            ->count();
+        return (int) $this->applyUcReceivedScope(
+            $query
+                ->where('status', PropertyActionRequest::STATUS_PENDING_UC)
+                ->whereNull('compiled_into_property_action_request_id')
+                ->whereHas('requestedBy', fn (Builder $q): Builder => $q->where('role', User::ROLE_EMPLOYEE)),
+        )->count();
     }
 
     protected function getTableQuery(): Builder
@@ -546,13 +540,7 @@ class ListPropertyActionRequests extends ListRecords
                 ->whereNull('compiled_into_property_action_request_id')
                 ->whereHas('requestedBy', fn (Builder $q): Builder => $q->where('role', User::ROLE_EMPLOYEE));
 
-            if (! $this->ucListScopeIsComplete()) {
-                return $query->whereRaw('1 = 0');
-            }
-
-            return $query
-                ->where('office_id', $this->ucOfficeId)
-                ->where('department_id', $this->ucDepartmentId);
+            return $this->applyUcReceivedScope($query);
         }
 
         return $query;
@@ -560,40 +548,56 @@ class ListPropertyActionRequests extends ListRecords
 
     protected function initializeUcListScope(): void
     {
-        /** @var User|null $user */
-        $user = Filament::auth()->user();
-
-        if (! $user instanceof User || ! $user->isUnitConsolidator()) {
-            return;
-        }
-
-        if ($user->hasSingleOfficeAssignment()) {
-            $this->ucOfficeId ??= $user->assignedOfficeIds()[0] ?? null;
-        }
-
-        if ($this->ucOfficeId !== null
-            && $this->ucOfficeId > 0
-            && $user->hasSingleDepartmentAssignmentForOffice($this->ucOfficeId)) {
-            $departmentIds = $user->assignedDepartmentIdsForOffice($this->ucOfficeId);
-            $this->ucDepartmentId ??= $departmentIds[0] ?? null;
-        }
+        // Null office and department mean All assigned offices and departments.
+        // A notification deep-link may already have set a specific pair.
     }
 
-    public function updatedUcOfficeId(): void
+    /**
+     * @param  Builder<PropertyActionRequest>  $query
+     * @return Builder<PropertyActionRequest>
+     */
+    protected function applyUcReceivedScope(Builder $query): Builder
     {
         /** @var User|null $user */
         $user = Filament::auth()->user();
 
-        if ($user instanceof User
-            && $this->ucOfficeId !== null
-            && $this->ucOfficeId > 0
-            && $user->hasSingleDepartmentAssignmentForOffice($this->ucOfficeId)) {
-            $departmentIds = $user->assignedDepartmentIdsForOffice($this->ucOfficeId);
-            $this->ucDepartmentId = $departmentIds[0] ?? null;
-        } else {
-            $this->ucDepartmentId = null;
+        if (! $user instanceof User || ! $this->ucListScopeIsComplete()) {
+            return $query->whereRaw('1 = 0');
         }
 
+        $officeId = ($this->ucOfficeId !== null && $this->ucOfficeId > 0) ? $this->ucOfficeId : null;
+        $departmentId = ($this->ucDepartmentId !== null && $this->ucDepartmentId > 0) ? $this->ucDepartmentId : null;
+
+        if ($officeId !== null && $departmentId !== null) {
+            return $query
+                ->where('office_id', $officeId)
+                ->where('department_id', $departmentId);
+        }
+
+        if ($officeId !== null) {
+            $departmentIds = $user->assignedDepartmentIdsForOffice($officeId);
+
+            if ($departmentIds === []) {
+                return $query->whereRaw('1 = 0');
+            }
+
+            return $query
+                ->where('office_id', $officeId)
+                ->whereIn('department_id', $departmentIds);
+        }
+
+        $query = $user->applyUnitConsolidatorRequisitionScope($query);
+
+        if ($departmentId !== null) {
+            $query->where('department_id', $departmentId);
+        }
+
+        return $query;
+    }
+
+    public function updatedUcOfficeId(): void
+    {
+        $this->ucDepartmentId = null;
         $this->resetTable();
     }
 
@@ -609,10 +613,10 @@ class ListPropertyActionRequests extends ListRecords
 
     public function ucListScopeIsComplete(): bool
     {
-        return $this->ucOfficeId !== null
-            && $this->ucOfficeId > 0
-            && $this->ucDepartmentId !== null
-            && $this->ucDepartmentId > 0;
+        /** @var User|null $user */
+        $user = Filament::auth()->user();
+
+        return $user instanceof User && $user->assignedOfficeIds() !== [];
     }
 
     /**
@@ -649,11 +653,13 @@ class ListPropertyActionRequests extends ListRecords
         /** @var User|null $user */
         $user = Filament::auth()->user();
 
-        if (! $user instanceof User || $this->ucOfficeId === null || $this->ucOfficeId <= 0) {
+        if (! $user instanceof User) {
             return [];
         }
 
-        $departmentIds = $user->assignedDepartmentIdsForOffice($this->ucOfficeId);
+        $departmentIds = ($this->ucOfficeId !== null && $this->ucOfficeId > 0)
+            ? $user->assignedDepartmentIdsForOffice($this->ucOfficeId)
+            : $user->assignedDepartmentIds();
 
         if ($departmentIds === []) {
             return [];
@@ -661,7 +667,10 @@ class ListPropertyActionRequests extends ListRecords
 
         return Department::query()
             ->active()
-            ->where('office_id', $this->ucOfficeId)
+            ->when(
+                $this->ucOfficeId !== null && $this->ucOfficeId > 0,
+                fn ($query) => $query->where('office_id', $this->ucOfficeId),
+            )
             ->whereIn('id', $departmentIds)
             ->orderBy('name')
             ->pluck('name', 'id')

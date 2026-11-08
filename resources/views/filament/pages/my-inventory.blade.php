@@ -108,7 +108,9 @@
                                         $slug = $row->template_slug ?? null;
                                         $eulStatus = $row->worst_eul_status ?? null;
                                     @endphp
-                                    <tr class="{{ in_array($eulStatus, [SemiExpendableUsefulLife::STATUS_EXPIRED, SemiExpendableUsefulLife::STATUS_NEARING], true) ? 'owwa-row-low' : 'owwa-row-ok' }}">
+                                    <tr @class([
+                                        'owwa-row-low' => in_array($eulStatus, [SemiExpendableUsefulLife::STATUS_EXPIRED, SemiExpendableUsefulLife::STATUS_NEARING], true),
+                                    ])>
                                         <td class="owwa-cell-primary">
                                             <button
                                                 type="button"

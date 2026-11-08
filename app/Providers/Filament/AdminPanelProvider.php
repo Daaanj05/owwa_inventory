@@ -224,7 +224,8 @@ class AdminPanelProvider extends PanelProvider
                         'allowMinimize' => true,
                     ])->render()
                     .Blade::render('@livewire(\App\Livewire\AiProcurementBusyChip::class)')
-                    .view('filament.partials.saved-catalog-suggestions')->render();
+                    .view('filament.partials.saved-catalog-suggestions')->render()
+                    .view('filament.partials.owwa-topbar-dedupe')->render();
             })
             ->navigationGroups([
                 NavigationGroup::make('My items'),

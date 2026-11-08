@@ -98,6 +98,12 @@
     user-select: none;
 }
 
+/* SPA / x-persist can leave a second bell or user menu in the topbar end. */
+.fi-topbar-end > .owwa-notif-root ~ .owwa-notif-root,
+.fi-topbar-end > .fi-user-menu ~ .fi-user-menu {
+    display: none !important;
+}
+
 /* ═══════════════════════════════════════════════════════════
    SIDEBAR
 ═══════════════════════════════════════════════════════════ */
@@ -4783,9 +4789,18 @@ select.owwa-search-bar {
     box-shadow: 0 1px 0 rgba(255, 255, 255, 0.1);
 }
 
-.owwa-pa-table-scroll {
+.owwa-table-wrap.owwa-pa-table-scroll {
     max-height: 28rem;
-    overflow: auto;
+    overflow-x: auto;
+    overflow-y: auto;
+    overflow-anchor: none;
+}
+
+.owwa-pa-load-more {
+    padding: 0.75rem 1rem;
+    text-align: center;
+    font-size: 0.75rem;
+    color: #64748b;
 }
 
 .owwa-pa-period-note {

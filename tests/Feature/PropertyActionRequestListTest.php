@@ -84,7 +84,10 @@ class PropertyActionRequestListTest extends TestCase
                 'item_category_id' => $category->id,
                 'action_type' => PropertyActionRequest::ACTION_RETURN,
                 'lines' => [
-                    ['inventory_unit_id' => InventoryUnit::query()->where('issuance_id', $issuance->id)->value('id')],
+                    [
+                        'item_id' => (int) $issuance->item_id,
+                        'inventory_unit_id' => InventoryUnit::query()->where('issuance_id', $issuance->id)->value('id'),
+                    ],
                 ],
             ])
             ->callMountedAction()
@@ -107,7 +110,10 @@ class PropertyActionRequestListTest extends TestCase
                 'item_category_id' => $category->id,
                 'action_type' => PropertyActionRequest::ACTION_RETURN,
                 'lines' => [
-                    ['inventory_unit_id' => InventoryUnit::query()->where('issuance_id', $issuance->id)->value('id')],
+                    [
+                        'item_id' => (int) $issuance->item_id,
+                        'inventory_unit_id' => InventoryUnit::query()->where('issuance_id', $issuance->id)->value('id'),
+                    ],
                 ],
             ])
             ->callMountedAction(['workflow' => PropertyActionRequestEmployeeActions::WORKFLOW_SUBMIT])
@@ -128,7 +134,10 @@ class PropertyActionRequestListTest extends TestCase
                 'action_type' => PropertyActionRequest::ACTION_RETURN,
                 'reason_code' => 'needs_repair',
                 'lines' => [
-                    ['inventory_unit_id' => InventoryUnit::query()->where('issuance_id', $issuance->id)->value('id')],
+                    [
+                        'item_id' => (int) $issuance->item_id,
+                        'inventory_unit_id' => InventoryUnit::query()->where('issuance_id', $issuance->id)->value('id'),
+                    ],
                 ],
             ])
             ->callMountedAction(['workflow' => PropertyActionRequestEmployeeActions::WORKFLOW_SUBMIT])
@@ -231,6 +240,66 @@ class PropertyActionRequestListTest extends TestCase
             ])
             ->assertCanSeeTableRecords([$requestA])
             ->assertCanNotSeeTableRecords([$requestB]);
+    }
+
+    public function test_uc_received_list_defaults_to_all_assigned_offices_and_departments(): void
+    {
+        $officeA = Office::factory()->create(['name' => 'Office Alpha']);
+        $officeB = Office::factory()->create(['name' => 'Office Beta']);
+        $deptA = Department::query()->create(['office_id' => $officeA->id, 'name' => 'Dept A', 'code' => 'DA']);
+        $deptB = Department::query()->create(['office_id' => $officeB->id, 'name' => 'Dept B', 'code' => 'DB']);
+
+        $employeeA = User::factory()->create([
+            'role' => User::ROLE_EMPLOYEE,
+            'office_id' => $officeA->id,
+            'department_id' => $deptA->id,
+        ]);
+        $employeeB = User::factory()->create([
+            'role' => User::ROLE_EMPLOYEE,
+            'office_id' => $officeB->id,
+            'department_id' => $deptB->id,
+        ]);
+
+        $uc = User::factory()->create([
+            'role' => User::ROLE_UNIT_CONSOLIDATOR,
+            'office_id' => $officeA->id,
+            'department_id' => $deptA->id,
+        ]);
+        $uc->syncOfficeAssignments([
+            ['office_id' => $officeA->id, 'department_id' => $deptA->id],
+            ['office_id' => $officeB->id, 'department_id' => $deptB->id],
+        ]);
+
+        $requestA = PropertyActionRequest::query()->create([
+            'reference_code' => 'PAREQ-ALL-A',
+            'action_type' => PropertyActionRequest::ACTION_RETURN,
+            'reason_code' => 'serviceable_not_needed',
+            'requested_by' => $employeeA->id,
+            'accountable_user_id' => $uc->id,
+            'office_id' => $officeA->id,
+            'department_id' => $deptA->id,
+            'status' => PropertyActionRequest::STATUS_PENDING_UC,
+        ]);
+        $requestB = PropertyActionRequest::query()->create([
+            'reference_code' => 'PAREQ-ALL-B',
+            'action_type' => PropertyActionRequest::ACTION_RETURN,
+            'reason_code' => 'serviceable_not_needed',
+            'requested_by' => $employeeB->id,
+            'accountable_user_id' => $uc->id,
+            'office_id' => $officeB->id,
+            'department_id' => $deptB->id,
+            'status' => PropertyActionRequest::STATUS_PENDING_UC,
+        ]);
+
+        Livewire::actingAs($uc)
+            ->test(ListPropertyActionRequests::class, [
+                'ucTab' => 'received',
+            ])
+            ->assertSet('ucOfficeId', null)
+            ->assertSet('ucDepartmentId', null)
+            ->assertSeeHtml('All offices')
+            ->assertSeeHtml('All departments')
+            ->assertCanSeeTableRecords([$requestA, $requestB]);
     }
 
     public function test_uc_property_return_uses_archive_icons_like_requisitions(): void
@@ -444,6 +513,23 @@ class PropertyActionRequestListTest extends TestCase
         $this->assertStringContainsString('->selectablePlaceholder(false)', $source);
     }
 
+    public function test_uc_approve_and_reject_are_only_inside_view_modal(): void
+    {
+        $tableSource = file_get_contents(app_path('Filament/Resources/PropertyActionRequests/Tables/PropertyActionRequestsTable.php'));
+        $actionsSource = file_get_contents(app_path('Filament/Resources/PropertyActionRequests/Actions/PropertyActionRequestTableActions.php'));
+
+        $this->assertIsString($tableSource);
+        $this->assertIsString($actionsSource);
+        $this->assertStringNotContainsString('ucApproveAction()', $tableSource);
+        $this->assertStringNotContainsString('ucRejectAction()', $tableSource);
+        $this->assertStringContainsString('ucApproveFromViewAction()', $tableSource);
+        $this->assertStringContainsString('ucRejectFromViewAction()', $tableSource);
+        $this->assertStringNotContainsString('function ucApproveAction', $actionsSource);
+        $this->assertStringNotContainsString('function ucRejectAction', $actionsSource);
+        $this->assertStringContainsString('function ucApproveFromViewAction', $actionsSource);
+        $this->assertStringContainsString('function ucRejectFromViewAction', $actionsSource);
+    }
+
     public function test_uc_approve_keeps_received_then_compile_sends_to_sc(): void
     {
         [$employee, $uc, $custodian, $issuance] = $this->seedPropertyContext();
@@ -472,7 +558,7 @@ class PropertyActionRequestListTest extends TestCase
                 'ucOfficeId' => $issuance->office_id,
                 'ucDepartmentId' => $issuance->department_id,
             ])
-            ->callAction(TestAction::make('ucApprove')->table($pending))
+            ->callAction([TestAction::make('view')->table($pending), TestAction::make('approveFromView')])
             ->assertNotified()
             ->assertSet('ucTab', 'received');
 

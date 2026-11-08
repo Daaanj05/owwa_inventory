@@ -533,6 +533,92 @@ class RequisitionCompileWorkflowTest extends TestCase
         $this->assertSame(6, RequisitionSourceEndorsement::query()->value('endorsed_quantity'));
     }
 
+    public function test_compiled_requisition_notifies_the_supply_custodian(): void
+    {
+        Notification::fake();
+
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+
+        $regionalOffice = Office::factory()->create(['is_regional_supply' => true]);
+        $office = Office::factory()->create();
+        $department = Department::query()->create([
+            'office_id' => $office->id,
+            'name' => 'Operations Division',
+            'code' => 'OPS',
+        ]);
+        $item = Item::factory()->create();
+
+        $employee = User::factory()->create([
+            'role' => User::ROLE_EMPLOYEE,
+            'office_id' => $office->id,
+            'department_id' => $department->id,
+        ]);
+        $uc = User::factory()->create([
+            'role' => User::ROLE_UNIT_CONSOLIDATOR,
+            'office_id' => $office->id,
+            'department_id' => $department->id,
+        ]);
+        $uc->syncOfficeAssignments([
+            ['office_id' => $office->id, 'department_id' => $department->id],
+        ]);
+        $custodian = User::factory()->create([
+            'role' => User::ROLE_SUPPLY_CUSTODIAN,
+            'office_id' => $regionalOffice->id,
+        ]);
+
+        $employeeRequisition = Requisition::query()->create([
+            'office_id' => $office->id,
+            'department_id' => $department->id,
+            'requested_by' => $employee->id,
+            'status' => Requisition::STATUS_ACCEPTED,
+            'transaction_number' => 'REQ-2026-0201',
+            'purpose' => 'Supplies',
+        ]);
+        $line = RequisitionItem::query()->create([
+            'requisition_id' => $employeeRequisition->id,
+            'item_id' => $item->id,
+            'quantity' => 4,
+        ]);
+
+        $this->actingAs($uc);
+
+        Livewire::test(ListRequisitions::class)
+            ->callAction(
+                TestAction::make('create')->schemaComponent(true, 'content'),
+                data: [
+                    'office_id' => $office->id,
+                    'department_id' => $department->id,
+                    'purpose' => 'Consolidated supplies',
+                    'source_requisition_ids' => [$employeeRequisition->id],
+                    'endorsement_lines' => [
+                        [
+                            'source_requisition_id' => $employeeRequisition->id,
+                            'requisition_item_id' => $line->id,
+                            'item_id' => $item->id,
+                            'requested_quantity' => 4,
+                            'endorsed_quantity' => 4,
+                            'employee_remarks' => '',
+                            'item_name' => $item->name,
+                        ],
+                    ],
+                    'items' => [
+                        [
+                            'item_category_id' => $item->item_category_id,
+                            'item_id' => $item->id,
+                            'quantity' => 4,
+                        ],
+                    ],
+                ],
+            )
+            ->assertNotified();
+
+        Notification::assertSentTo(
+            $custodian,
+            RequisitionWorkflowDatabaseNotification::class,
+            fn (RequisitionWorkflowDatabaseNotification $notification): bool => $notification->title === 'Consolidated requisition submitted',
+        );
+    }
+
     public function test_notification_sent_when_endorsed_quantity_is_reduced(): void
     {
         Notification::fake();

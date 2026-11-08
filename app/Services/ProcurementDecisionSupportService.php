@@ -173,15 +173,27 @@ class ProcurementDecisionSupportService
         );
 
         return $rows
-            ->sortBy([
-                fn ($r) => match ($r->priority) {
-                    'High' => 0,
-                    'Medium' => 1,
-                    default => 2,
-                },
-                fn ($r) => (int) ($r->category_sort_rank ?? 99),
-                fn ($r) => strtolower((string) ($r->item_name ?? '')),
-            ])
+            ->sort(function (object $a, object $b): int {
+                return [
+                    (int) ($a->category_sort_rank ?? 99),
+                    strtolower((string) ($a->category_name ?? '')),
+                    match ($a->priority) {
+                        'High' => 0,
+                        'Medium' => 1,
+                        default => 2,
+                    },
+                    strtolower((string) ($a->item_name ?? '')),
+                ] <=> [
+                    (int) ($b->category_sort_rank ?? 99),
+                    strtolower((string) ($b->category_name ?? '')),
+                    match ($b->priority) {
+                        'High' => 0,
+                        'Medium' => 1,
+                        default => 2,
+                    },
+                    strtolower((string) ($b->item_name ?? '')),
+                ];
+            })
             ->values()
             ->take($limit);
     }

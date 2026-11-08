@@ -95,6 +95,8 @@
                             'sortDirection' => $sortDirection,
                             'allAtRiskCount' => $allAtRiskCount,
                             'stockoutCount' => $stockoutCount,
+                            'hasMoreAtRisk' => $this->hasMoreAtRiskRows(),
+                            'atRiskVisibleLimit' => $atRiskVisibleLimit,
                             'embedded' => true,
                         ])
                     </section>

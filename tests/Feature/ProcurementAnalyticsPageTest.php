@@ -152,6 +152,72 @@ class ProcurementAnalyticsPageTest extends TestCase
             });
     }
 
+    public function test_at_risk_rows_open_as_a_window_and_sort_by_category_priority_then_name(): void
+    {
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+
+        $office = Office::factory()->create();
+        $adhesives = ItemCategory::factory()->create(['name' => 'Adhesives']);
+        $brushes = ItemCategory::factory()->create(['name' => 'Brushes']);
+
+        $apple = Item::factory()->create([
+            'name' => 'Apple Tape',
+            'item_category_id' => $adhesives->id,
+            'reorder_level' => 2,
+        ]);
+        $mango = Item::factory()->create([
+            'name' => 'Mango Tape',
+            'item_category_id' => $adhesives->id,
+            'reorder_level' => 2,
+        ]);
+        $zebra = Item::factory()->create([
+            'name' => 'Zebra Brush',
+            'item_category_id' => $brushes->id,
+            'reorder_level' => 2,
+        ]);
+        $alpha = Item::factory()->create([
+            'name' => 'Alpha Brush',
+            'item_category_id' => $brushes->id,
+            'reorder_level' => 2,
+        ]);
+
+        foreach ([$apple, $zebra] as $item) {
+            $this->seedMonthlyIssuances($item->id, $office->id, 10, 6);
+            $this->createAcquisition($item->id, $office->id, 5 + 60);
+        }
+
+        foreach ([$mango, $alpha] as $item) {
+            $this->seedMonthlyIssuances($item->id, $office->id, 10, 6);
+            $this->createAcquisition($item->id, $office->id, 25 + 60);
+        }
+
+        $custodian = User::factory()->create([
+            'role' => User::ROLE_SUPPLY_CUSTODIAN,
+            'office_id' => $office->id,
+        ]);
+
+        $component = Livewire::actingAs($custodian)
+            ->test(ProcurementAnalytics::class)
+            ->set('atRiskVisibleLimit', 1);
+
+        $this->assertSame(4, $component->instance()->getAtRiskPreviewCount());
+        $this->assertCount(1, $component->instance()->getAtRiskPreviewRows());
+        $this->assertSame('Apple Tape', $component->instance()->getAtRiskPreviewRows()->first()->item_name);
+        $component->assertSee('All at-risk (4)');
+        $component->assertSee('Apple Tape');
+        $component->assertSee('Scroll to see more');
+        $component->assertDontSee('Mango Tape');
+        $component->assertDontSee('wire:intersect="loadMoreAtRiskRows"');
+
+        $component->call('loadMoreAtRiskRows');
+
+        $this->assertSame(
+            ['Apple Tape', 'Mango Tape', 'Zebra Brush', 'Alpha Brush'],
+            $component->instance()->getAtRiskPreviewRows()->pluck('item_name')->all(),
+        );
+        $component->assertSee('All at-risk (4)');
+    }
+
     public function test_period_context_uses_fixed_twelve_month_label(): void
     {
         Filament::setCurrentPanel(Filament::getPanel('admin'));

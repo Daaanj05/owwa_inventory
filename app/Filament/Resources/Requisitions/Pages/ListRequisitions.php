@@ -438,6 +438,8 @@ class ListRequisitions extends ListRecords
 
                     if ($user?->isEmployee()) {
                         $data['status'] = Requisition::STATUS_DRAFT;
+                    } elseif ($user?->isUnitConsolidator()) {
+                        $data['status'] = Requisition::STATUS_PENDING;
                     }
 
                     $endorsementLinesByKey = is_array($data['endorsement_lines'] ?? null)

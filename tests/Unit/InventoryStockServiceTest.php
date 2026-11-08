@@ -66,6 +66,11 @@ class InventoryStockServiceTest extends TestCase
         $this->assertSame(15, $this->service->getStock($item->id, $office->id));
         $this->assertSame(10, $this->service->getStockForUnitCost($item->id, $office->id, 100.00));
         $this->assertSame(5, $this->service->getStockForUnitCost($item->id, $office->id, 150.00));
+
+        $summarized = $this->service->summarizeStockLevelsByItemOffice($list, includeLatestUnitCost: false);
+        $this->assertCount(1, $summarized);
+        $this->assertSame(15, (int) $summarized->first()->stock);
+        $this->assertSame($item->id, (int) $summarized->first()->item_id);
     }
 
     public function test_item_appears_in_stock_levels_after_acquisition(): void

@@ -62,6 +62,7 @@ class PropertyActionRequestFormTest extends TestCase
         $this->assertIsArray($lines);
         $this->assertCount(1, array_values($lines));
         $first = array_values($lines)[0];
+        $this->assertTrue(blank($first['item_id'] ?? null));
         $this->assertTrue(blank($first['inventory_unit_id'] ?? null));
     }
 
@@ -76,7 +77,10 @@ class PropertyActionRequestFormTest extends TestCase
                 'action_type' => PropertyActionRequest::ACTION_RETURN,
                 'reason_code' => 'needs_repair',
                 'lines' => [
-                    ['inventory_unit_id' => $this->unitIdFor($issuance)],
+                    [
+                        'item_id' => (int) $issuance->item_id,
+                        'inventory_unit_id' => $this->unitIdFor($issuance),
+                    ],
                 ],
             ])
             ->callMountedAction()
@@ -95,8 +99,14 @@ class PropertyActionRequestFormTest extends TestCase
                 'action_type' => PropertyActionRequest::ACTION_RETURN,
                 'reason_code' => 'needs_repair',
                 'lines' => [
-                    ['inventory_unit_id' => $this->unitIdFor($issuanceOne)],
-                    ['inventory_unit_id' => $this->unitIdFor($issuanceTwo)],
+                    [
+                        'item_id' => (int) $issuanceOne->item_id,
+                        'inventory_unit_id' => $this->unitIdFor($issuanceOne),
+                    ],
+                    [
+                        'item_id' => (int) $issuanceTwo->item_id,
+                        'inventory_unit_id' => $this->unitIdFor($issuanceTwo),
+                    ],
                 ],
             ])
             ->callMountedAction()
@@ -124,7 +134,10 @@ class PropertyActionRequestFormTest extends TestCase
                 'action_type' => PropertyActionRequest::ACTION_RETURN,
                 'reason_code' => 'needs_repair',
                 'lines' => [
-                    ['inventory_unit_id' => $this->unitIdFor($issuance)],
+                    [
+                        'item_id' => (int) $issuance->item_id,
+                        'inventory_unit_id' => $this->unitIdFor($issuance),
+                    ],
                 ],
             ])
             ->callMountedAction()
@@ -147,8 +160,14 @@ class PropertyActionRequestFormTest extends TestCase
                 'action_type' => PropertyActionRequest::ACTION_RETURN,
                 'reason_code' => 'needs_repair',
                 'lines' => [
-                    ['inventory_unit_id' => $this->unitIdFor($issuance)],
-                    ['inventory_unit_id' => $this->unitIdFor($issuance)],
+                    [
+                        'item_id' => (int) $issuance->item_id,
+                        'inventory_unit_id' => $this->unitIdFor($issuance),
+                    ],
+                    [
+                        'item_id' => (int) $issuance->item_id,
+                        'inventory_unit_id' => $this->unitIdFor($issuance),
+                    ],
                 ],
             ])
             ->callMountedAction()
@@ -159,8 +178,10 @@ class PropertyActionRequestFormTest extends TestCase
     {
         [$employee, $issuance, $category] = $this->seedEmployeeIssuance();
         $unitId = $this->unitIdFor($issuance);
+        $itemId = (int) $issuance->item_id;
 
-        $this->assertArrayHasKey($unitId, PropertyActionRequestForm::returnableUnitOptions($employee, $category->id));
+        $this->assertArrayHasKey($itemId, PropertyActionRequestForm::returnableItemOptions($employee, $category->id));
+        $this->assertArrayHasKey($unitId, PropertyActionRequestForm::returnableUnitOptions($employee, $category->id, $itemId));
 
         $open = PropertyActionRequest::query()->create([
             'action_type' => PropertyActionRequest::ACTION_RETURN,
@@ -177,7 +198,34 @@ class PropertyActionRequestFormTest extends TestCase
             'sort_order' => 0,
         ]);
 
-        $this->assertArrayNotHasKey($unitId, PropertyActionRequestForm::returnableUnitOptions($employee, $category->id));
+        $this->assertArrayNotHasKey($unitId, PropertyActionRequestForm::returnableUnitOptions($employee, $category->id, $itemId));
+    }
+
+    public function test_returnable_item_options_use_item_names_only(): void
+    {
+        [$employee, $issuance, $category] = $this->seedEmployeeIssuance();
+        $issuance->loadMissing('item');
+        $itemId = (int) $issuance->item_id;
+        $itemName = (string) $issuance->item?->name;
+        $units = InventoryUnit::query()
+            ->where('item_id', $itemId)
+            ->where('status', InventoryUnit::STATUS_ISSUED)
+            ->orderBy('id')
+            ->get();
+
+        $itemOptions = PropertyActionRequestForm::returnableItemOptions($employee, $category->id);
+        $unitOptions = PropertyActionRequestForm::returnableUnitOptions($employee, $category->id, $itemId);
+
+        $this->assertSame([$itemId => $itemName], $itemOptions);
+        $this->assertSame(
+            $units
+                ->mapWithKeys(fn (InventoryUnit $unit): array => [
+                    $unit->id => $unit->property_number ?: ('Unit #'.$unit->id),
+                ])
+                ->all(),
+            $unitOptions,
+        );
+        $this->assertSame([], PropertyActionRequestForm::returnableUnitOptions($employee, $category->id));
     }
 
     private function unitIdFor(Issuance $issuance): int

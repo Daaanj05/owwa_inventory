@@ -85,7 +85,7 @@ class PropertyActionRequestForm
                             ->afterStateUpdated(function (Set $set, Get $get) use ($user): void {
                                 $set('source_property_action_request_ids', []);
                                 $set('lines', [
-                                    ['inventory_unit_id' => null],
+                                    ['item_id' => null, 'inventory_unit_id' => null],
                                 ]);
 
                                 if (! $user instanceof User) {
@@ -153,7 +153,7 @@ class PropertyActionRequestForm
                             ->afterStateUpdated(function (Set $set): void {
                                 $set('source_property_action_request_ids', []);
                                 $set('lines', [
-                                    ['inventory_unit_id' => null],
+                                    ['item_id' => null, 'inventory_unit_id' => null],
                                 ]);
                             }),
                         Select::make('item_category_id')
@@ -164,7 +164,7 @@ class PropertyActionRequestForm
                             ->dehydrated(false)
                             ->visible(fn (string $operation): bool => $operation === 'create' && $isEmployee)
                             ->afterStateUpdated(fn (callable $set): mixed => $set('lines', [
-                                ['inventory_unit_id' => null],
+                                ['item_id' => null, 'inventory_unit_id' => null],
                             ])),
                         ...($isEmployee ? [
                             Hidden::make('action_type')
@@ -220,17 +220,17 @@ class PropertyActionRequestForm
                             ->minItems(1)
                             ->defaultItems(1)
                             ->default([
-                                ['inventory_unit_id' => null],
+                                ['item_id' => null, 'inventory_unit_id' => null],
                             ])
                             ->addActionLabel('Add Item')
                             ->reorderable(false)
                             ->deleteAction(self::repeaterDeleteVisibleExceptFirst())
                             ->visible(fn (string $operation): bool => $operation === 'create' && $isEmployee)
                             ->schema([
-                                Select::make('inventory_unit_id')
+                                Select::make('item_id')
                                     ->label('Item')
                                     ->hiddenLabel()
-                                    ->options(fn (Get $get): array => self::returnableUnitOptions(
+                                    ->options(fn (Get $get): array => self::returnableItemOptions(
                                         $user,
                                         self::intOrNull($get('../../item_category_id')),
                                     ))
@@ -239,19 +239,43 @@ class PropertyActionRequestForm
                                             return 'Select a category first';
                                         }
 
-                                        return 'Select a property';
+                                        return 'Select an item';
                                     })
                                     ->disabled(fn (Get $get): bool => blank($get('../../item_category_id')))
                                     ->required()
                                     ->searchable()
                                     ->selectablePlaceholder(false)
-                                    ->live(),
-                                Placeholder::make('asset_identifier_display')
-                                    ->hiddenLabel()
                                     ->dehydrated(false)
-                                    ->content(fn (Get $get): string => self::resolveUnit(
-                                        self::intOrNull($get('inventory_unit_id')),
-                                    )?->property_number ?? '—'),
+                                    ->live()
+                                    ->afterStateUpdated(fn (Set $set): mixed => $set('inventory_unit_id', null)),
+                                Select::make('inventory_unit_id')
+                                    ->label(fn (Get $get): string => self::assetIdentifierColumnLabel(
+                                        self::intOrNull($get('../../item_category_id')),
+                                    ))
+                                    ->hiddenLabel()
+                                    ->options(fn (Get $get): array => self::returnableUnitOptions(
+                                        $user,
+                                        self::intOrNull($get('../../item_category_id')),
+                                        self::intOrNull($get('item_id')),
+                                    ))
+                                    ->placeholder(function (Get $get): string {
+                                        if (blank($get('../../item_category_id'))) {
+                                            return 'Select a category first';
+                                        }
+
+                                        if (blank($get('item_id'))) {
+                                            return 'Select an item first';
+                                        }
+
+                                        return 'Select '.mb_strtolower(self::assetIdentifierColumnLabel(
+                                            self::intOrNull($get('../../item_category_id')),
+                                        ));
+                                    })
+                                    ->disabled(fn (Get $get): bool => blank($get('../../item_category_id')) || blank($get('item_id')))
+                                    ->required()
+                                    ->searchable()
+                                    ->selectablePlaceholder(false)
+                                    ->live(),
                                 Placeholder::make('issued_date_display')
                                     ->label('Issued')
                                     ->hiddenLabel()
@@ -469,11 +493,11 @@ class PropertyActionRequestForm
     }
 
     /**
-     * One option per issued unit still returnable by the employee (label: item — inventory item / property no. — ICS/PAR no.).
+     * Distinct catalog items still returnable by the employee in the chosen category.
      *
      * @return array<int, string>
      */
-    public static function returnableUnitOptions(?User $user, ?int $categoryId = null): array
+    public static function returnableItemOptions(?User $user, ?int $categoryId = null): array
     {
         if (! $user instanceof User || ! $user->isEmployee()) {
             return [];
@@ -483,8 +507,40 @@ class PropertyActionRequestForm
             return [];
         }
 
+        return app(PropertyReturnService::class)
+            ->returnableUnitsQuery((int) $user->id, $categoryId)
+            ->with('item')
+            ->orderBy('id')
+            ->limit(500)
+            ->get()
+            ->filter(fn (InventoryUnit $unit): bool => $unit->item !== null)
+            ->unique(fn (InventoryUnit $unit): int => (int) $unit->item_id)
+            ->sortBy(fn (InventoryUnit $unit): string => mb_strtolower($unit->item?->name ?? ''))
+            ->mapWithKeys(fn (InventoryUnit $unit): array => [
+                (int) $unit->item_id => $unit->item?->name ?? 'Unknown item',
+            ])
+            ->all();
+    }
+
+    /**
+     * One option per issued unit still returnable by the employee for the chosen item.
+     * Labels are inventory item / property numbers only.
+     *
+     * @return array<int, string>
+     */
+    public static function returnableUnitOptions(?User $user, ?int $categoryId = null, ?int $itemId = null): array
+    {
+        if (! $user instanceof User || ! $user->isEmployee()) {
+            return [];
+        }
+
+        if ($categoryId === null || $categoryId <= 0 || $itemId === null || $itemId <= 0) {
+            return [];
+        }
+
         $units = app(PropertyReturnService::class)
             ->returnableUnitsQuery((int) $user->id, $categoryId)
+            ->where('item_id', $itemId)
             ->with(['item', 'issuance.batch'])
             ->orderBy('issuance_id')
             ->orderBy('id')
@@ -497,11 +553,7 @@ class PropertyActionRequestForm
 
         return $units
             ->mapWithKeys(fn (InventoryUnit $unit): array => [
-                $unit->id => collect([
-                    $unit->item?->name ?? 'Unknown item',
-                    $unit->property_number,
-                    $unit->issuance?->controlNumber(),
-                ])->filter()->implode(' — '),
+                $unit->id => $unit->property_number ?: ('Unit #'.$unit->id),
             ])
             ->all();
     }
@@ -509,7 +561,7 @@ class PropertyActionRequestForm
     /**
      * Prefill lines with every returnable unit of one issuance (e.g. "Return" from My Inventory).
      *
-     * @return list<array{inventory_unit_id: int}>
+     * @return list<array{item_id: int, inventory_unit_id: int}>
      */
     public static function linesForIssuance(User $user, Issuance $issuance): array
     {
@@ -517,9 +569,10 @@ class PropertyActionRequestForm
             ->returnableUnitsQuery((int) $user->id)
             ->where('issuance_id', $issuance->id)
             ->orderBy('id')
-            ->pluck('id')
-            ->map(fn (mixed $unitId): array => [
-                'inventory_unit_id' => (int) $unitId,
+            ->get(['id', 'item_id'])
+            ->map(fn (InventoryUnit $unit): array => [
+                'item_id' => (int) $unit->item_id,
+                'inventory_unit_id' => (int) $unit->id,
             ])
             ->all();
     }
@@ -547,6 +600,8 @@ class PropertyActionRequestForm
      */
     public static function withUnitIssuance(array $line): array
     {
+        unset($line['item_id']);
+
         $line['issuance_id'] = self::resolveUnit(self::intOrNull($line['inventory_unit_id'] ?? null))?->issuance_id;
         $line['quantity'] = 1;
 

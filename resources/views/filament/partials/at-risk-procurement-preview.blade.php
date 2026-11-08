@@ -84,7 +84,20 @@
                 </p>
             </div>
         @else
-            <div class="owwa-table-wrap owwa-table-wrap--scroll owwa-pa-table-shell owwa-pa-table-scroll">
+            <div
+                class="owwa-table-wrap owwa-table-wrap--scroll owwa-pa-table-shell owwa-pa-table-scroll"
+                x-data="{ pending: false }"
+                x-on:scroll.debounce.200ms="
+                    if (pending || $el.scrollTop < 24) {
+                        return;
+                    }
+                    if (($el.scrollTop + $el.clientHeight) < ($el.scrollHeight - 80)) {
+                        return;
+                    }
+                    pending = true;
+                    $wire.loadMoreAtRiskRows().finally(() => { pending = false; });
+                "
+            >
                 <table class="owwa-data-table">
                     <thead>
                     <tr>
@@ -115,7 +128,7 @@
                     </thead>
                     <tbody>
                     @foreach($rows as $row)
-                        <tr class="owwa-data-table__row {{ $row->priority === 'High' ? 'owwa-row-low' : 'owwa-row-ok' }}">
+                        <tr wire:key="at-risk-{{ $row->item_id }}-{{ $row->office_id }}" class="owwa-data-table__row {{ $row->priority === 'High' ? 'owwa-row-low' : 'owwa-row-ok' }}">
                             <td>
                                 @if($row->priority === 'High')
                                     <span class="owwa-status-badge owwa-status-low">High</span>
@@ -171,6 +184,9 @@
                     @endforeach
                     </tbody>
                 </table>
+                @if($hasMoreAtRisk ?? false)
+                    <div class="owwa-pa-load-more">Scroll to see more</div>
+                @endif
             </div>
         @endif
     </div>

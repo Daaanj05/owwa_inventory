@@ -204,7 +204,11 @@ class RegionalSupplyCatalog extends Page
 
         $categoryId = filled($this->category) ? (int) $this->category : null;
 
-        $rows = app(InventoryStockService::class)->getStockLevelsList($categoryId, $supplyOfficeId);
+        $stockService = app(InventoryStockService::class);
+        $rows = $stockService->summarizeStockLevelsByItemOffice(
+            $stockService->getStockLevelsList($categoryId, $supplyOfficeId),
+            includeLatestUnitCost: false,
+        );
 
         if (filled($this->search)) {
             $needle = mb_strtolower($this->search);

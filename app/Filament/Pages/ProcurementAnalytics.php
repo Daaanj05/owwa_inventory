@@ -37,6 +37,8 @@ class ProcurementAnalytics extends Page
 {
     private const int AT_RISK_LIMIT = 25;
 
+    private const int AT_RISK_PAGE_SIZE = 25;
+
     private const float STOCKOUT_WITHIN_MONTHS = 2.0;
 
     protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-chart-bar-square';
@@ -74,9 +76,14 @@ class ProcurementAnalytics extends Page
     /** @var array{headline: string, priority_actions: array<int, array{item: string, stock: int, suggested: int|null, stock_url: string|null}>, reorder_suggestions: array<int, array{item: string, suggested: int, stock_url: string|null}>}|null */
     public ?array $actionSummary = null;
 
-    public string $sortColumn = 'priority';
+    public string $sortColumn = 'category';
 
     public string $sortDirection = 'asc';
+
+    public int $atRiskVisibleLimit = self::AT_RISK_PAGE_SIZE;
+
+    /** @var array<int, Collection<int, object>> */
+    protected array $atRiskRowsCache = [];
 
     public ?int $replacementIssuanceId = null;
 
@@ -227,11 +234,13 @@ class ProcurementAnalytics extends Page
 
         $this->syncAnalyticsSlides();
         $this->clearGeneratedSummary();
+        $this->resetAtRiskWindow();
     }
 
     public function updatedAtRiskView(): void
     {
         $this->clearGeneratedSummary();
+        $this->resetAtRiskWindow();
     }
 
     protected function clearGeneratedSummary(): void
@@ -377,6 +386,40 @@ class ProcurementAnalytics extends Page
             $this->sortColumn = $column;
             $this->sortDirection = 'asc';
         }
+
+        $this->resetAtRiskWindow();
+    }
+
+    public function loadMoreAtRiskRows(): void
+    {
+        $total = $this->currentAtRiskTotal();
+
+        if ($this->atRiskVisibleLimit >= $total) {
+            return;
+        }
+
+        $this->atRiskVisibleLimit = min(
+            $this->atRiskVisibleLimit + self::AT_RISK_PAGE_SIZE,
+            $total,
+        );
+    }
+
+    public function hasMoreAtRiskRows(): bool
+    {
+        return $this->atRiskVisibleLimit < $this->currentAtRiskTotal();
+    }
+
+    protected function resetAtRiskWindow(): void
+    {
+        $this->atRiskVisibleLimit = self::AT_RISK_PAGE_SIZE;
+        $this->atRiskRowsCache = [];
+    }
+
+    protected function currentAtRiskTotal(): int
+    {
+        return $this->atRiskView === 'stockouts'
+            ? $this->getStockoutPreviewCount()
+            : $this->getAtRiskPreviewCount();
     }
 
     public function getFilterSummary(): string
@@ -696,10 +739,14 @@ class ProcurementAnalytics extends Page
         $user = Filament::auth()->user();
         $officeIds = $user?->office_id ? [(int) $user->office_id] : [];
 
+        if (isset($this->atRiskRowsCache[$limit])) {
+            return $this->atRiskRowsCache[$limit];
+        }
+
         ['from' => $from, 'to' => $to] = $this->resolveDateRange();
         $scope = $this->resolveProcurementCategoryScope();
 
-        return app(ProcurementDecisionSupportService::class)->getAtRiskRows(
+        return $this->atRiskRowsCache[$limit] = app(ProcurementDecisionSupportService::class)->getAtRiskRows(
             from: $from,
             to: $to,
             categoryId: $scope['categoryId'],
@@ -717,7 +764,9 @@ class ProcurementAnalytics extends Page
      */
     public function getAtRiskPreviewRows(): Collection
     {
-        return $this->displayAtRiskRows($this->queryAtRiskRows());
+        return $this->displayAtRiskRows($this->queryAtRiskRows())
+            ->take($this->atRiskVisibleLimit)
+            ->values();
     }
 
     public function getAtRiskPreviewCount(): int
@@ -829,43 +878,41 @@ class ProcurementAnalytics extends Page
         };
 
         $categoryRank = static fn (object $row): int => (int) ($row->category_sort_rank ?? 99);
+        $categoryName = static fn (object $row): string => strtolower((string) ($row->category_name ?? ''));
         $itemKey = static fn (object $row): string => strtolower((string) ($row->item_name ?? ''));
 
-        $severityTieBreak = static function (object $a, object $b) use ($priorityRank, $categoryRank, $itemKey): int {
-            return [$priorityRank($a), $categoryRank($a), $itemKey($a)]
-                <=> [$priorityRank($b), $categoryRank($b), $itemKey($b)];
+        $byCategory = static function (object $a, object $b) use ($categoryRank, $categoryName, $priorityRank, $itemKey): int {
+            return [$categoryRank($a), $categoryName($a), $priorityRank($a), $itemKey($a)]
+                <=> [$categoryRank($b), $categoryName($b), $priorityRank($b), $itemKey($b)];
         };
 
         return match ($this->sortColumn) {
-            'cover' => $rows->sort(function (object $a, object $b) use ($severityTieBreak): int {
+            'cover' => $rows->sort(function (object $a, object $b) use ($byCategory): int {
                 $coverA = $a->months_cover ?? ($this->sortDirection === 'desc' ? -1 : 999);
                 $coverB = $b->months_cover ?? ($this->sortDirection === 'desc' ? -1 : 999);
                 $coverCmp = $this->sortDirection === 'desc'
                     ? ($coverB <=> $coverA)
                     : ($coverA <=> $coverB);
 
-                return $coverCmp !== 0 ? $coverCmp : $severityTieBreak($a, $b);
+                return $coverCmp !== 0 ? $coverCmp : $byCategory($a, $b);
             }),
-            'stockout' => $rows->sort(function (object $a, object $b) use ($severityTieBreak): int {
+            'stockout' => $rows->sort(function (object $a, object $b) use ($byCategory): int {
                 $stockoutA = $a->projected_stockout_date ?? ($this->sortDirection === 'desc' ? '0000-01-01' : '9999-12-31');
                 $stockoutB = $b->projected_stockout_date ?? ($this->sortDirection === 'desc' ? '0000-01-01' : '9999-12-31');
                 $stockoutCmp = $this->sortDirection === 'desc'
                     ? ($stockoutB <=> $stockoutA)
                     : ($stockoutA <=> $stockoutB);
 
-                return $stockoutCmp !== 0 ? $stockoutCmp : $severityTieBreak($a, $b);
+                return $stockoutCmp !== 0 ? $stockoutCmp : $byCategory($a, $b);
             }),
-            default => $this->sortDirection === 'desc'
-                ? $rows->sort(function (object $a, object $b) use ($priorityRank, $severityTieBreak): int {
-                    $priorityCmp = $priorityRank($b) <=> $priorityRank($a);
+            'priority' => $rows->sort(function (object $a, object $b) use ($priorityRank, $byCategory): int {
+                $priorityCmp = $this->sortDirection === 'desc'
+                    ? ($priorityRank($b) <=> $priorityRank($a))
+                    : ($priorityRank($a) <=> $priorityRank($b));
 
-                    return $priorityCmp !== 0 ? $priorityCmp : $severityTieBreak($a, $b);
-                })
-                : $rows->sortBy([
-                    $priorityRank,
-                    $categoryRank,
-                    $itemKey,
-                ]),
+                return $priorityCmp !== 0 ? $priorityCmp : $byCategory($a, $b);
+            }),
+            default => $rows->sort($byCategory),
         };
     }
 

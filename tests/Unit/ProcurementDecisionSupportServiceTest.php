@@ -74,6 +74,51 @@ class ProcurementDecisionSupportServiceTest extends TestCase
         $this->assertGreaterThan(0, $match->suggested_reorder_qty);
     }
 
+    public function test_at_risk_rows_sort_by_category_then_priority_then_name(): void
+    {
+        $office = Office::factory()->create();
+        $adhesives = ItemCategory::factory()->create(['name' => 'Adhesives']);
+        $brushes = ItemCategory::factory()->create(['name' => 'Brushes']);
+
+        $apple = Item::factory()->create([
+            'name' => 'Apple Tape',
+            'item_category_id' => $adhesives->id,
+            'reorder_level' => 2,
+        ]);
+        $mango = Item::factory()->create([
+            'name' => 'Mango Tape',
+            'item_category_id' => $adhesives->id,
+            'reorder_level' => 2,
+        ]);
+        $zebra = Item::factory()->create([
+            'name' => 'Zebra Brush',
+            'item_category_id' => $brushes->id,
+            'reorder_level' => 2,
+        ]);
+        $alpha = Item::factory()->create([
+            'name' => 'Alpha Brush',
+            'item_category_id' => $brushes->id,
+            'reorder_level' => 2,
+        ]);
+
+        foreach ([$apple, $zebra] as $item) {
+            $this->seedMonthlyIssuances($item->id, $office->id, 10, 6);
+            $this->createAcquisition($item->id, $office->id, 5 + 60);
+        }
+
+        foreach ([$mango, $alpha] as $item) {
+            $this->seedMonthlyIssuances($item->id, $office->id, 10, 6);
+            $this->createAcquisition($item->id, $office->id, 25 + 60);
+        }
+
+        $names = $this->queryRows($office->id)->pluck('item_name')->all();
+
+        $this->assertSame(
+            ['Apple Tape', 'Mango Tape', 'Zebra Brush', 'Alpha Brush'],
+            $names,
+        );
+    }
+
     public function test_category_filter_limits_at_risk_rows(): void
     {
         $office = Office::factory()->create();

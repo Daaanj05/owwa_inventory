@@ -17,6 +17,8 @@ class RequisitionWorkflowNotificationService
 {
     public function handleCreated(Requisition $requisition): void
     {
+        $this->hydrateStatusFromDatabase($requisition);
+
         if ($requisition->status !== Requisition::STATUS_PENDING) {
             return;
         }
@@ -287,6 +289,23 @@ class RequisitionWorkflowNotificationService
         MailDelivery::attempt(
             fn (): mixed => $user->notify(new RequisitionRejectedMailNotification($requisition, $title))
         );
+    }
+
+    /**
+     * A create that omits status still stores the column default. The in-memory
+     * model stays blank until it is read back, which skipped the custodian bell.
+     */
+    protected function hydrateStatusFromDatabase(Requisition $requisition): void
+    {
+        if (filled($requisition->status) || ! $requisition->exists) {
+            return;
+        }
+
+        $status = $requisition->newQuery()->whereKey($requisition->getKey())->value('status');
+
+        if (is_string($status) && $status !== '') {
+            $requisition->status = $status;
+        }
     }
 
     protected function newEmployeeRequisitionTitle(User $requester): string

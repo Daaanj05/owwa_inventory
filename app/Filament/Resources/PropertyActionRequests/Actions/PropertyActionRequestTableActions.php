@@ -4,9 +4,7 @@ namespace App\Filament\Resources\PropertyActionRequests\Actions;
 
 use App\Filament\Resources\Disposals\DisposalResource;
 use App\Filament\Resources\PropertyActionRequests\Pages\ListPropertyActionRequests;
-use App\Filament\Resources\PropertyActionRequests\PropertyActionRequestResource;
 use App\Filament\Resources\Transfers\TransferResource;
-use App\Filament\Support\OwwaFormModalDefaults;
 use App\Models\InventoryUnit;
 use App\Models\PropertyActionRequest;
 use App\Models\User;
@@ -29,84 +27,6 @@ class PropertyActionRequestTableActions
     private const REPAIR_REISSUE = 'reissue';
 
     private const REPAIR_DISPOSE = 'dispose';
-
-    /**
-     * @return array<int, Action>
-     */
-    public static function recordActions(): array
-    {
-        return [
-            OwwaFormModalDefaults::editActionForResource(PropertyActionRequestResource::class, OwwaFormModalDefaults::WIDTH_MEDIUM)
-                ->visible(fn (PropertyActionRequest $record): bool => ($user = Filament::auth()->user()) instanceof User
-                    && $user->isUnitConsolidator()
-                    && $record->status === PropertyActionRequest::STATUS_PENDING_SC),
-            self::ucApproveAction(),
-            self::ucRejectAction(),
-            self::ucCompileAndSendAction(),
-            self::scApproveAction(),
-            self::scRejectAction(),
-            self::scReceiveAndRouteAction(),
-            self::openDisposalAction(),
-            self::openTransferAction(),
-        ];
-    }
-
-    public static function ucApproveAction(): Action
-    {
-        return Action::make('ucApprove')
-            ->label('Approve')
-            ->icon('heroicon-o-check')
-            ->color('success')
-            ->requiresConfirmation()
-            ->visible(fn (PropertyActionRequest $record): bool => ($user = Filament::auth()->user()) instanceof User
-                && $user->isUnitConsolidator()
-                && $record->status === PropertyActionRequest::STATUS_PENDING_UC
-                && $record->uc_approved_at === null
-                && $record->compiled_into_property_action_request_id === null)
-            ->action(function (PropertyActionRequest $record, Action $action): void {
-                $user = Filament::auth()->user();
-                if (! $user instanceof User) {
-                    return;
-                }
-
-                app(PropertyActionRequestWorkflowService::class)->approveByUnitConsolidator($record, $user);
-                Notification::make()->title('Property return approved — ready to compile')->success()->send();
-            });
-    }
-
-    public static function ucRejectAction(): Action
-    {
-        return Action::make('ucReject')
-            ->label('Reject')
-            ->icon('heroicon-o-x-mark')
-            ->color('danger')
-            ->requiresConfirmation()
-            ->modalHeading('Reject this property return?')
-            ->modalDescription('The requestor will see your remarks. This cannot be undone from the Active list.')
-            ->modalSubmitActionLabel('Yes, reject')
-            ->schema([
-                Textarea::make('remarks')
-                    ->label('Remarks')
-                    ->rows(2),
-            ])
-            ->visible(fn (PropertyActionRequest $record): bool => ($user = Filament::auth()->user()) instanceof User
-                && $user->isUnitConsolidator()
-                && $record->status === PropertyActionRequest::STATUS_PENDING_UC
-                && $record->compiled_into_property_action_request_id === null)
-            ->action(function (PropertyActionRequest $record, array $data): void {
-                $user = Filament::auth()->user();
-                if (! $user instanceof User) {
-                    return;
-                }
-
-                app(PropertyActionRequestWorkflowService::class)->rejectByUnitConsolidator(
-                    $record,
-                    $user,
-                    $data['remarks'] ?? null,
-                );
-                Notification::make()->title('Request rejected')->success()->send();
-            });
-    }
 
     public static function ucCompileAndSendAction(): Action
     {

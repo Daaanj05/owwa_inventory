@@ -264,7 +264,8 @@ class MyInventoryTest extends TestCase
             ->test(MyInventory::class, ['category' => 'semi_expendable'])
             ->assertSee('Total qty')
             ->assertSee('Last received')
-            ->assertSee('Times received');
+            ->assertSee('Times received')
+            ->assertDontSeeHtml('owwa-row-ok');
     }
 
     public function test_consumable_ledger_uses_ris_number_column(): void

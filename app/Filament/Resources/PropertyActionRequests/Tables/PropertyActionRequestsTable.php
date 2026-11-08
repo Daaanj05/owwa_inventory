@@ -120,9 +120,7 @@ class PropertyActionRequestsTable
                     '5xl',
                     modelLabel: PropertyActionRequestResource::getModelLabel(),
                 ),
-                PropertyActionRequestTableActions::ucApproveAction(),
                 PropertyActionRequestTableActions::ucCompileAndSendAction(),
-                PropertyActionRequestTableActions::ucRejectAction(),
                 PropertyActionRequestEmployeeActions::tableActionGroup(),
                 PropertyActionRequestEmployeeActions::ucTableActionGroup(),
             ])

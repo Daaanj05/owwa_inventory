@@ -65,6 +65,12 @@
     user-select: none;
 }
 
+/* SPA / x-persist can leave a second bell or user menu in the topbar end. */
+.fi-topbar-end > .owwa-notif-root ~ .owwa-notif-root,
+.fi-topbar-end > .fi-user-menu ~ .fi-user-menu {
+    display: none !important;
+}
+
 /* ═══════════════════════════════════════════════════════════
    SIDEBAR
 ═══════════════════════════════════════════════════════════ */
