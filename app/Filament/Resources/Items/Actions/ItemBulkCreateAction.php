@@ -9,6 +9,7 @@ use App\Models\ItemAttributeOption;
 use App\Models\ItemCategory;
 use App\Models\UacsObjectCode;
 use App\Services\BulkCreateItemsService;
+use App\Support\CatalogNameSuggestions;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Placeholder;
@@ -318,13 +319,20 @@ class ItemBulkCreateAction
     protected static function commonLeadingFields(int $categoryId): array
     {
         return [
-            TextInput::make('base_name')
-                ->hiddenLabel()
-                ->maxLength(255)
-                ->datalist(fn (): array => Item::familySuggestionsForCategory($categoryId)),
-            TextInput::make('sub_item')
-                ->hiddenLabel()
-                ->maxLength(255),
+            CatalogNameSuggestions::apply(
+                TextInput::make('base_name')
+                    ->hiddenLabel()
+                    ->maxLength(255),
+                fn (Get $get): array => Item::familySuggestionsForCategory(
+                    filled($get('item_category_id')) ? (int) $get('item_category_id') : $categoryId,
+                ),
+            ),
+            CatalogNameSuggestions::apply(
+                TextInput::make('sub_item')
+                    ->hiddenLabel()
+                    ->maxLength(255),
+                fn (Get $get): array => Item::variantSuggestionsForCategory($categoryId, $get('base_name')),
+            ),
             self::lockedChoice(
                 Select::make('unit')
                     ->hiddenLabel()

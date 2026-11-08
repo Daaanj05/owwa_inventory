@@ -762,6 +762,7 @@ class RequisitionForm
         return Select::make('item_category_id')
             ->label('Category')
             ->options(fn (): array => InventoryCategoryOptions::allActiveCategoryOptions())
+            ->default(fn (): ?int => ($id = InventoryCategoryOptions::defaultConsumablesCategoryId()) > 0 ? $id : null)
             ->live()
             ->required()
             ->selectablePlaceholder(false)
@@ -771,13 +772,37 @@ class RequisitionForm
                 $set('item_id', null);
             })
             ->afterStateHydrated(function (Select $component, $state, ?RequisitionItem $record): void {
-                if (filled($state) || $record === null) {
+                if ($record !== null) {
+                    $record->loadMissing('item');
+
+                    if (filled($record->item?->item_category_id)) {
+                        $component->state($record->item->item_category_id);
+
+                        return;
+                    }
+                }
+
+                if (filled($state)) {
                     return;
                 }
 
-                $record->loadMissing('item');
-                $component->state($record->item?->item_category_id);
+                $defaultId = InventoryCategoryOptions::defaultConsumablesCategoryId();
+
+                if ($defaultId > 0) {
+                    $component->state($defaultId);
+                }
             });
+    }
+
+    private static function resolvedRequestCategoryId(Get $get): int
+    {
+        $categoryId = (int) ($get('item_category_id') ?? 0);
+
+        if ($categoryId > 0) {
+            return $categoryId;
+        }
+
+        return InventoryCategoryOptions::defaultConsumablesCategoryId();
     }
 
     private static function requestItemSelect(): Select
@@ -785,15 +810,15 @@ class RequisitionForm
         return Select::make('item_id')
             ->label('Item')
             ->options(function (Get $get): array {
-                $categoryId = $get('item_category_id');
+                $categoryId = self::resolvedRequestCategoryId($get);
 
-                if (blank($categoryId)) {
+                if ($categoryId < 1) {
                     return [];
                 }
 
                 $items = Item::query()
                     ->active()
-                    ->where('item_category_id', (int) $categoryId)
+                    ->where('item_category_id', $categoryId)
                     ->orderBy('name')
                     ->get(['id', 'name']);
 
@@ -807,10 +832,24 @@ class RequisitionForm
             ->selectablePlaceholder(false)
             ->live()
             ->hiddenLabel()
-            ->disabled(fn (Get $get): bool => blank($get('item_category_id')))
-            ->placeholder(fn (Get $get): string => blank($get('item_category_id'))
+            ->disabled(fn (Get $get): bool => self::resolvedRequestCategoryId($get) < 1)
+            ->placeholder(fn (Get $get): string => self::resolvedRequestCategoryId($get) < 1
                 ? 'Choose a category first'
                 : 'Select an item');
+    }
+
+    /**
+     * @return array{item_category_id: int|null, item_id: null, quantity: null}
+     */
+    public static function blankRequestLine(): array
+    {
+        $categoryId = InventoryCategoryOptions::defaultConsumablesCategoryId();
+
+        return [
+            'item_category_id' => $categoryId > 0 ? $categoryId : null,
+            'item_id' => null,
+            'quantity' => null,
+        ];
     }
 
     private static function requestItemUnitPlaceholder(): Placeholder

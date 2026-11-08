@@ -52,7 +52,35 @@ trait SyncsActiveItemCategory
             return self::resolveActiveItemCategoryId((int) request()->query('category'));
         }
 
+        if (\Livewire\Livewire::isLivewireRequest()) {
+            $fromReferer = self::categoryIdFromReferer();
+
+            if ($fromReferer > 0) {
+                return self::resolveActiveItemCategoryId($fromReferer);
+            }
+        }
+
         return self::resolveActiveItemCategoryId((int) session('active_item_category_id', 0));
+    }
+
+    protected static function categoryIdFromReferer(): int
+    {
+        $referer = request()->headers->get('Referer');
+
+        if (! is_string($referer) || $referer === '') {
+            return 0;
+        }
+
+        $query = parse_url($referer, PHP_URL_QUERY);
+
+        if (! is_string($query) || $query === '') {
+            return 0;
+        }
+
+        parse_str($query, $params);
+        $category = $params['category'] ?? null;
+
+        return filled($category) ? (int) $category : 0;
     }
 
     protected static function categoryIdFromCurrentLivewireComponent(): int

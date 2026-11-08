@@ -91,7 +91,11 @@ class AdminPanelProvider extends PanelProvider
             ->defaultAvatarProvider(LocalGenderAvatarProvider::class)
             ->profile(EditProfile::class, isSimple: false)
             ->userMenuItems([
-                'profile' => fn (Action $action): Action => $action->label('Profile'),
+                'profile' => fn (Action $action): Action => $action->label(function (): string {
+                    $user = Filament::auth()->user();
+
+                    return $user instanceof User ? $user->profileMenuLabel() : 'Profile';
+                }),
                 'settings' => fn (): Action => Action::make('settings')
                     ->label('Settings')
                     ->icon(Heroicon::OutlinedCog6Tooth)
@@ -219,7 +223,8 @@ class AdminPanelProvider extends PanelProvider
                         'leaveMessage' => 'Recommendation generation is still in progress. Are you sure you want to leave this page?',
                         'allowMinimize' => true,
                     ])->render()
-                    .Blade::render('@livewire(\App\Livewire\AiProcurementBusyChip::class)');
+                    .Blade::render('@livewire(\App\Livewire\AiProcurementBusyChip::class)')
+                    .view('filament.partials.saved-catalog-suggestions')->render();
             })
             ->navigationGroups([
                 NavigationGroup::make('My items'),
@@ -343,7 +348,7 @@ class AdminPanelProvider extends PanelProvider
                     ->url(fn (): string => $url)
                     ->visible(fn (): bool => $this->categoryNavigationIsVisible())
                     ->isActiveWhen(function () use ($route, $categoryId): bool {
-                        if (! request()->routeIs($route)) {
+                        if (! \Filament\Support\original_request()->routeIs($route)) {
                             return false;
                         }
 
@@ -359,7 +364,7 @@ class AdminPanelProvider extends PanelProvider
             ->url(fn (): string => IncidentReportResource::getUrl())
             ->visible(fn (): bool => Filament::auth()->check()
                 && (Filament::auth()->user()?->isSupplyCustodian() ?? false))
-            ->isActiveWhen(fn (): bool => request()->routeIs('filament.admin.resources.incident-reports.*'));
+            ->isActiveWhen(fn (): bool => \Filament\Support\original_request()->routeIs('filament.admin.resources.incident-reports.*'));
 
         $ucRegistryNav = NavigationItem::make('Office Property Registry')
             ->icon(Heroicon::OutlinedClipboardDocumentList)
@@ -367,7 +372,7 @@ class AdminPanelProvider extends PanelProvider
             ->url(fn (): string => OfficePropertyRegister::getUrl())
             ->visible(fn (): bool => Filament::auth()->check()
                 && (Filament::auth()->user()?->isUnitConsolidator() ?? false))
-            ->isActiveWhen(fn (): bool => request()->routeIs('filament.admin.pages.office-property-register'));
+            ->isActiveWhen(fn (): bool => \Filament\Support\original_request()->routeIs('filament.admin.pages.office-property-register'));
 
         $ucEmployeeCustodyNav = NavigationItem::make('Employee Custody')
             ->icon(Heroicon::OutlinedUsers)
@@ -375,7 +380,7 @@ class AdminPanelProvider extends PanelProvider
             ->url(fn (): string => EmployeeCustody::getUrl())
             ->visible(fn (): bool => Filament::auth()->check()
                 && (Filament::auth()->user()?->isUnitConsolidator() ?? false))
-            ->isActiveWhen(fn (): bool => request()->routeIs('filament.admin.pages.employee-custody'));
+            ->isActiveWhen(fn (): bool => \Filament\Support\original_request()->routeIs('filament.admin.pages.employee-custody'));
 
         return [
             ...$items,

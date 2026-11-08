@@ -357,11 +357,7 @@ class ListRequisitions extends ListRecords
                     if (! $user?->isUnitConsolidator()) {
                         $schema?->fill($catalogPrefill !== [] ? $catalogPrefill : [
                             'items' => [
-                                [
-                                    'item_category_id' => null,
-                                    'item_id' => null,
-                                    'quantity' => null,
-                                ],
+                                RequisitionForm::blankRequestLine(),
                             ],
                         ]);
 
@@ -383,11 +379,7 @@ class ListRequisitions extends ListRecords
                             'source_requisition_ids' => [],
                             'endorsement_lines' => [],
                             'items' => $catalogPrefill['items'] ?? [
-                                [
-                                    'item_category_id' => null,
-                                    'item_id' => null,
-                                    'quantity' => null,
-                                ],
+                                RequisitionForm::blankRequestLine(),
                             ],
                         ]);
 

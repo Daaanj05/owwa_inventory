@@ -127,6 +127,26 @@ class User extends Authenticatable implements FilamentUser, HasAppAuthentication
         return filled($this->name) ? (string) $this->name : '—';
     }
 
+    /**
+     * Given name shown on the account menu beside Settings, About, and Sign out.
+     */
+    public function profileMenuLabel(): string
+    {
+        $first = trim((string) ($this->first_name ?? ''));
+
+        if ($first !== '') {
+            return $first;
+        }
+
+        $full = trim((string) ($this->name ?? ''));
+
+        if ($full === '') {
+            return 'Profile';
+        }
+
+        return (string) str($full)->before(' ');
+    }
+
     protected static function booted(): void
     {
         static::saving(function (self $user): void {

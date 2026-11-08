@@ -59,8 +59,8 @@ class OwwaMailThemeTest extends TestCase
         $html = (string) $markdown->render('notifications::email', $data);
         $text = (string) $markdown->renderText('notifications::email', $data);
 
-        $this->assertStringContainsString('cid:owwa@owwa.mail', $html);
-        $this->assertStringContainsString('cid:bagong_pilipinas@owwa.mail', $html);
+        $this->assertStringContainsString('cid:', $html);
+        $this->assertMatchesRegularExpression('/cid:[^"\']+@[^"\']+/', $html);
         $this->assertStringNotContainsString('data:image/', $html);
         $this->assertStringContainsString('Your sign-in code is 414441', $text);
         $this->assertCount(2, $message->getSymfonyMessage()->getAttachments());
@@ -72,8 +72,8 @@ class OwwaMailThemeTest extends TestCase
         $src = OwwaMailLogo::src($message, 'owwa');
         $part = $message->getSymfonyMessage()->getAttachments()[0];
 
-        $this->assertSame('cid:owwa@owwa.mail', $src);
+        $this->assertStringStartsWith('cid:', $src);
         $this->assertSame('inline', $part->getDisposition());
-        $this->assertNull($part->getFilename());
+        $this->assertSame('owwa-form-logo.png', $part->getFilename());
     }
 }

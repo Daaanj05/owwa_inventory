@@ -4,13 +4,13 @@ namespace App\Support;
 
 use Illuminate\Mail\Message;
 use Illuminate\Support\Facades\URL;
-use Symfony\Component\Mime\Part\DataPart;
 
 class OwwaMailLogo
 {
     /**
-     * Inline logo for email. Real sends use a CID attachment so clients do not
-     * fetch the image from the public site. Previews fall back to a data URI.
+     * Inline logo for email. Real sends use Laravel's embed() (CID + filename)
+     * so Gmail shows the image in the header instead of as a download. Previews
+     * fall back to a data URI (Gmail blocks data URIs on real sends).
      */
     public static function src(?object $message, string $key): string
     {
@@ -24,12 +24,7 @@ class OwwaMailLogo
         $mime = mime_content_type($path) ?: 'image/png';
 
         if ($message instanceof Message) {
-            $cid = $key.'@owwa.mail';
-            $part = (new DataPart((string) file_get_contents($path), null, $mime))->asInline();
-            $part->setContentId($cid);
-            $message->getSymfonyMessage()->addPart($part);
-
-            return 'cid:'.$cid;
+            return $message->embed($path);
         }
 
         return 'data:'.$mime.';base64,'.base64_encode((string) file_get_contents($path));

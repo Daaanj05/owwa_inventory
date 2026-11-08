@@ -22,6 +22,7 @@ use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Notifications\Notification;
 use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\Utilities\Get;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
@@ -232,7 +233,7 @@ class OpeningBalanceBatchesTable
                             ->send();
                     }
                 }),
-            OwwaFormModalDefaults::WIDTH_COMPACT,
+            OwwaFormModalDefaults::WIDTH_STANDARD,
         );
     }
 
@@ -242,21 +243,22 @@ class OpeningBalanceBatchesTable
     public static function linesRepeater(int $categoryId, array $includeItemIds = []): Repeater
     {
         $requiresUnitCost = self::categoryRequiresUnitCost($categoryId);
-        $unitCostColumn = TableColumn::make('Unit cost')->width('8rem');
+        $unitCostColumn = TableColumn::make('Unit cost')->width('9.5rem');
         if ($requiresUnitCost) {
             $unitCostColumn = $unitCostColumn->markAsRequired();
         }
 
         return Repeater::make('lines')
             ->label('Items')
-            ->extraAttributes(['class' => 'owwa-line-table'])
+            ->extraAttributes(['class' => 'owwa-line-table owwa-opening-balance-lines'])
             ->minItems(1)
             ->defaultItems(1)
             ->addActionLabel('Add item')
             ->reorderable(false)
             ->table([
                 TableColumn::make('Catalog item')->markAsRequired(),
-                TableColumn::make('Quantity')->markAsRequired()->width('7rem'),
+                TableColumn::make('Unit')->width('5.5rem'),
+                TableColumn::make('Quantity')->markAsRequired()->width('6.5rem'),
                 $unitCostColumn,
             ])
             ->schema([
@@ -264,20 +266,39 @@ class OpeningBalanceBatchesTable
                     ->hiddenLabel()
                     ->required()
                     ->searchable()
+                    ->live()
                     ->options(fn (): array => self::eligibleItemOptions($categoryId, $includeItemIds))
                     ->disableOptionsWhenSelectedInSiblingRepeaterItems(),
+                Placeholder::make('unit_display')
+                    ->hiddenLabel()
+                    ->extraAttributes(['class' => 'owwa-opening-balance-unit'])
+                    ->content(function (Get $get): string {
+                        $itemId = $get('item_id');
+
+                        if (blank($itemId)) {
+                            return '—';
+                        }
+
+                        $unit = Item::query()->whereKey($itemId)->value('unit');
+
+                        return filled($unit) ? (string) $unit : '—';
+                    }),
                 TextInput::make('quantity')
                     ->hiddenLabel()
                     ->numeric()
                     ->required()
                     ->minValue(1)
-                    ->integer(),
+                    ->integer()
+                    ->placeholder('0')
+                    ->extraInputAttributes(['class' => 'owwa-opening-balance-qty']),
                 TextInput::make('unit_cost')
                     ->hiddenLabel()
                     ->numeric()
-                    ->prefix('₱')
+                    ->prefix('₱', isInline: true)
+                    ->placeholder('0.00')
                     ->minValue(0)
-                    ->required($requiresUnitCost),
+                    ->required($requiresUnitCost)
+                    ->extraInputAttributes(['class' => 'owwa-opening-balance-unit-cost']),
             ])
             ->columnSpanFull();
     }

@@ -63,6 +63,37 @@ class Item extends Model
     }
 
     /**
+     * Distinct saved variants in the category. A typed value is included only after an item with that variant is saved.
+     * When a family is given, only variants already stored on that family are returned.
+     *
+     * @return list<string>
+     */
+    public static function variantSuggestionsForCategory(int $categoryId, ?string $baseName = null): array
+    {
+        if ($categoryId <= 0) {
+            return [];
+        }
+
+        $family = trim((string) $baseName);
+
+        return self::query()
+            ->active()
+            ->where('item_category_id', $categoryId)
+            ->whereNotNull('sub_item')
+            ->where('sub_item', '!=', '')
+            ->when($family !== '', function (Builder $query) use ($family): void {
+                $query->whereRaw('LOWER(COALESCE(base_name, name)) = ?', [mb_strtolower($family)]);
+            })
+            ->pluck('sub_item')
+            ->map(fn (mixed $value): string => trim((string) $value))
+            ->filter(fn (string $value): bool => $value !== '')
+            ->unique(fn (string $value): string => mb_strtolower($value))
+            ->sortBy(fn (string $value): string => mb_strtolower($value))
+            ->values()
+            ->all();
+    }
+
+    /**
      * Trim and, when a same-category family matches case-insensitively, reuse that exact spelling.
      */
     public static function normalizeFamilyName(string $baseName, int $categoryId): string

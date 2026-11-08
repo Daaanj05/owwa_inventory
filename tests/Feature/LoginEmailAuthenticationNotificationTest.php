@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\User;
 use App\Notifications\LoginEmailAuthenticationNotification;
 use Filament\Auth\MultiFactor\Email\EmailAuthentication;
 use Filament\Facades\Filament;
@@ -21,6 +22,18 @@ class LoginEmailAuthenticationNotificationTest extends TestCase
         $notification = new LoginEmailAuthenticationNotification('123456', 4);
 
         $this->assertSame('mail', $notification->queue);
+
+        $user = new User([
+            'name' => 'Satornina Mendiola Rizal',
+            'email' => 'gamingacc4884@gmail.com',
+        ]);
+        $html = (string) $notification->toMail($user)->render();
+
+        $this->assertStringContainsString('Your sign-in code', $html);
+        $this->assertStringContainsString('font-size: 36px', $html);
+        $this->assertStringContainsString('123456', $html);
+        $this->assertStringContainsString('This code expires in 4 minutes.', $html);
+        $this->assertStringNotContainsString('Your sign-in code is: 123456', $html);
     }
 
     /**

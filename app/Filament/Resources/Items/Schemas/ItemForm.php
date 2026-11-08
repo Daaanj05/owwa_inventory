@@ -6,6 +6,7 @@ use App\Filament\Concerns\SyncsActiveItemCategory;
 use App\Models\Item;
 use App\Models\ItemAttributeOption;
 use App\Models\ItemCategory;
+use App\Support\CatalogNameSuggestions;
 use App\Support\ItemMeasurementUnitInput;
 use App\Support\SemiExpendableUsefulLife;
 use App\Support\SemiExpendableValueCategory;
@@ -51,24 +52,18 @@ class ItemForm
                             ->visible(fn (string $operation): bool => $operation === 'create' && ! self::isCategoryScoped())
                             ->columnSpanFull(),
 
-                        TextInput::make('base_name')
-                            ->label('Item family')
-                            ->required()
-                            ->maxLength(255)
-                            ->datalist(function (Get $get): array {
-                                $categoryId = filled($get('item_category_id'))
-                                    ? (int) $get('item_category_id')
-                                    : (int) (self::activeCategoryId() ?? 0);
-
-                                return Item::familySuggestionsForCategory($categoryId);
-                            })
-                            ->live(onBlur: true)
-                            ->helperText('Pick an existing name or type a new one (e.g. Bond Paper).')
+                        CatalogNameSuggestions::apply(
+                            TextInput::make('base_name')
+                                ->label('Item family')
+                                ->required()
+                                ->maxLength(255)
+                                ->live(onBlur: true)
+                                ->helperText('Pick an existing name or type a new one (e.g. Bond Paper).'),
+                            fn (Get $get): array => Item::familySuggestionsForCategory(self::categoryIdFromForm($get)),
+                        )
                             ->rule(function (Get $get, ?Item $record = null) {
                                 return function (string $attribute, mixed $value, \Closure $fail) use ($get, $record): void {
-                                    $categoryId = filled($get('item_category_id'))
-                                        ? (int) $get('item_category_id')
-                                        : (int) (self::activeCategoryId() ?? 0);
+                                    $categoryId = self::categoryIdFromForm($get);
                                     $baseName = Item::normalizeFamilyName((string) $value, $categoryId);
                                     $subItem = filled($get('sub_item')) ? trim((string) $get('sub_item')) : null;
                                     $name = Item::mergeDisplayName($baseName, $subItem);
@@ -92,11 +87,17 @@ class ItemForm
                                     }
                                 };
                             }),
-                        TextInput::make('sub_item')
-                            ->label('Variant')
-                            ->maxLength(255)
-                            ->live(onBlur: true)
-                            ->helperText('Optional size or kind (e.g. A4, Long, Letter).'),
+                        CatalogNameSuggestions::apply(
+                            TextInput::make('sub_item')
+                                ->label('Variant')
+                                ->maxLength(255)
+                                ->live(onBlur: true)
+                                ->helperText('Optional size or kind (e.g. A4, Long, Letter).'),
+                            fn (Get $get): array => Item::variantSuggestionsForCategory(
+                                self::categoryIdFromForm($get),
+                                $get('base_name'),
+                            ),
+                        ),
                         Placeholder::make('name_preview')
                             ->label('Catalog name')
                             ->content(fn (Get $get): string => Item::mergeDisplayName(
@@ -407,6 +408,13 @@ class ItemForm
                                 : null),
                     ]),
             ]);
+    }
+
+    protected static function categoryIdFromForm(Get $get): int
+    {
+        return filled($get('item_category_id'))
+            ? (int) $get('item_category_id')
+            : (int) (self::activeCategoryId() ?? 0);
     }
 
     protected static function isConsumablesCategory(mixed $categoryId): bool

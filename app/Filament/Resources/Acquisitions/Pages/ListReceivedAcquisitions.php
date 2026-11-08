@@ -224,7 +224,7 @@ class ListReceivedAcquisitions extends ListRecordsWithoutFilterUrl
                             ->send();
                     }
                 }),
-            OwwaFormModalDefaults::WIDTH_COMPACT,
+            OwwaFormModalDefaults::WIDTH_STANDARD,
         );
     }
 

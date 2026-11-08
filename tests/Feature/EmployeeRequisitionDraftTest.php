@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Filament\Resources\Requisitions\Actions\EmployeeRequisitionActions;
 use App\Filament\Resources\Requisitions\Pages\ListRequisitions;
 use App\Models\Item;
+use App\Models\ItemCategory;
 use App\Models\Office;
 use App\Models\Requisition;
 use App\Models\RequisitionItem;
@@ -42,6 +43,33 @@ class EmployeeRequisitionDraftTest extends TestCase
                 ], $itemOverrides),
             ],
         ]);
+    }
+
+    public function test_new_requisition_lists_consumable_items_without_reselecting_the_category(): void
+    {
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+
+        $office = Office::factory()->create();
+        $employee = User::factory()->create([
+            'role' => User::ROLE_EMPLOYEE,
+            'office_id' => $office->id,
+        ]);
+        $category = ItemCategory::factory()->create(['name' => 'Consumables']);
+        $item = Item::factory()->create([
+            'item_category_id' => $category->id,
+            'name' => 'Bond Paper',
+        ]);
+
+        $this->actingAs($employee);
+
+        $test = Livewire::test(ListRequisitions::class)
+            ->mountAction(TestAction::make('create')->schemaComponent(true, 'content'));
+
+        $items = array_values($test->get('mountedActions')[0]['data']['items'] ?? []);
+
+        $this->assertNotEmpty($items);
+        $this->assertSame((string) $category->id, (string) ($items[0]['item_category_id'] ?? ''));
+        $this->assertSame($category->id, $item->item_category_id);
     }
 
     public function test_employee_create_submit_moves_requisition_to_pending_and_notifies_uc(): void

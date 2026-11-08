@@ -782,18 +782,10 @@
     }
 }
 
-/* Themed autocomplete (replaces browser-native dark datalist) */
-.owwa-styled-datalist {
-    position: relative;
-    width: 100%;
-}
-
+/* Saved catalog names only. Position is set in script so the panel can sit above a modal. */
 .owwa-styled-datalist-panel {
-    position: absolute;
-    z-index: 50;
-    top: calc(100% + 0.25rem);
-    left: 0;
-    right: 0;
+    position: fixed;
+    z-index: 10000;
     max-height: 14rem;
     overflow-y: auto;
     padding: 0.25rem;

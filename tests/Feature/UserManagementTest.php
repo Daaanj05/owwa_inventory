@@ -17,6 +17,18 @@ class UserManagementTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_profile_menu_label_uses_the_first_name(): void
+    {
+        $user = User::factory()->make([
+            'first_name' => 'Satornina',
+            'middle_name' => 'Mendiola',
+            'last_name' => 'Rizal',
+            'name' => 'Satornina Mendiola Rizal',
+        ]);
+
+        $this->assertSame('Satornina', $user->profileMenuLabel());
+    }
+
     public function test_users_table_shows_verification_status(): void
     {
         Filament::setCurrentPanel(Filament::getPanel('system-admin'));

@@ -18,6 +18,7 @@ use App\Http\Middleware\PreventLoginPageCaching;
 use App\Http\Middleware\TouchUserSessionActivity;
 use App\Http\Middleware\VerifyCsrfToken;
 use App\Livewire\OwwaNotificationDropdown;
+use App\Models\User;
 use App\Notifications\LoginEmailAuthenticationNotification;
 use App\Support\AboutModalAction;
 use App\Support\FilamentEchoShouldStart;
@@ -72,7 +73,11 @@ class SystemAdminPanelProvider extends PanelProvider
             ->defaultAvatarProvider(LocalGenderAvatarProvider::class)
             ->profile(EditProfile::class, isSimple: false)
             ->userMenuItems([
-                'profile' => fn (Action $action): Action => $action->label('Profile'),
+                'profile' => fn (Action $action): Action => $action->label(function (): string {
+                    $user = Filament::auth()->user();
+
+                    return $user instanceof User ? $user->profileMenuLabel() : 'Profile';
+                }),
                 'settings' => fn (): Action => Action::make('settings')
                     ->label('Settings')
                     ->icon(Heroicon::OutlinedCog6Tooth)

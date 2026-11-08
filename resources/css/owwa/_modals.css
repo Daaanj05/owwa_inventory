@@ -2351,20 +2351,55 @@
     border-top: 1px solid #f3f4f6 !important;
 }
 
-.fi-modal-window.owwa-record-modal .fi-fo-table-repeater .fi-input-wrp {
+.fi-modal-window.owwa-record-modal .fi-fo-table-repeater:not(.owwa-opening-balance-lines) .fi-input-wrp {
     min-height: 0;
     box-shadow: none !important;
     background: transparent !important;
 }
 
-.fi-modal-window.owwa-record-modal .fi-fo-table-repeater .fi-input-wrp-input,
-.fi-modal-window.owwa-record-modal .fi-fo-table-repeater input {
+.fi-modal-window.owwa-record-modal .fi-fo-table-repeater:not(.owwa-opening-balance-lines) .fi-input-wrp-input,
+.fi-modal-window.owwa-record-modal .fi-fo-table-repeater:not(.owwa-opening-balance-lines) input {
     padding: 0.25rem 0.5rem;
     font-size: 0.8125rem;
     min-height: 1.75rem;
     border: none !important;
     box-shadow: none !important;
     background: transparent !important;
+}
+
+.fi-modal-window.owwa-record-modal .owwa-opening-balance-lines.fi-fo-table-repeater > table {
+    table-layout: auto;
+}
+
+.fi-modal-window.owwa-record-modal .owwa-opening-balance-lines .fi-input-wrp {
+    min-height: 2.25rem;
+    background: #fff !important;
+    border: 1px solid #cbd5e1 !important;
+    border-radius: 0.375rem;
+    box-shadow: none !important;
+}
+
+.fi-modal-window.owwa-record-modal .owwa-opening-balance-lines .fi-input-wrp-input,
+.fi-modal-window.owwa-record-modal .owwa-opening-balance-lines input {
+    padding: 0.35rem 0.45rem;
+    font-size: 0.8125rem;
+    min-height: 2.25rem;
+    border: 0 !important;
+    box-shadow: none !important;
+    background: transparent !important;
+}
+
+.fi-modal-window.owwa-record-modal .owwa-opening-balance-lines .fi-input-wrp-prefix,
+.fi-modal-window.owwa-record-modal .owwa-opening-balance-lines [data-slot='prefix'] {
+    font-size: 0.75rem !important;
+    line-height: 1;
+    padding-inline: 0.35rem 0.05rem !important;
+}
+
+.fi-modal-window.owwa-record-modal .owwa-opening-balance-lines .owwa-opening-balance-unit {
+    font-size: 0.8125rem;
+    color: #374151;
+    white-space: nowrap;
 }
 
 .fi-modal-window.owwa-record-modal .fi-fo-table-repeater .fi-input-wrp:focus-within {

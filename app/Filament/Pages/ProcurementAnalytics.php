@@ -813,7 +813,7 @@ class ProcurementAnalytics extends Page
             });
         }
 
-        return $this->sortAtRiskRows($rows)->values()->take(self::AT_RISK_LIMIT);
+        return $this->sortAtRiskRows($rows)->values();
     }
 
     /**

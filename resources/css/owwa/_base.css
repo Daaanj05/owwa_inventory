@@ -142,19 +142,22 @@
     font-weight: 400 !important;
 }
 
-.fi-sidebar .fi-sidebar-item-button.fi-active .fi-sidebar-item-label,
-.fi-sidebar [aria-current="page"] .fi-sidebar-item-label {
-    font-weight: 600 !important;
-}
-
 .fi-sidebar a:hover {
     background-color: #f1f5f9 !important;
     color: #003366 !important;
 }
 
-.fi-sidebar .fi-sidebar-item-button.fi-active,
-.fi-sidebar [aria-current="page"] {
+.fi-sidebar .fi-sidebar-item.fi-active > .fi-sidebar-item-btn,
+.fi-sidebar .fi-sidebar-item.fi-active > .fi-sidebar-item-btn:hover {
     background-color: #eff6ff !important;
+    color: #1d4ed8 !important;
+    font-weight: 600 !important;
+}
+
+.fi-sidebar .fi-sidebar-item.fi-active > .fi-sidebar-item-btn .fi-sidebar-item-label,
+.fi-sidebar .fi-sidebar-item.fi-active > .fi-sidebar-item-btn:hover .fi-sidebar-item-label,
+.fi-sidebar .fi-sidebar-item.fi-active > .fi-sidebar-item-btn .fi-sidebar-item-icon,
+.fi-sidebar .fi-sidebar-item.fi-active > .fi-sidebar-item-btn:hover .fi-sidebar-item-icon {
     color: #1d4ed8 !important;
     font-weight: 600 !important;
 }

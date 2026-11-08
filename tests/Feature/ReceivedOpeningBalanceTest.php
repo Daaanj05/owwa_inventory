@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Filament\Resources\Acquisitions\Pages\ListReceivedAcquisitions;
+use App\Filament\Resources\Acquisitions\Tables\OpeningBalanceBatchesTable;
 use App\Models\InventoryUnit;
 use App\Models\Item;
 use App\Models\ItemCategory;
@@ -152,6 +153,20 @@ class ReceivedOpeningBalanceTest extends TestCase
 
         $this->expectException(ValidationException::class);
         app(StockOpeningBalanceBatchService::class)->confirm($batch->fresh());
+    }
+
+    public function test_record_opening_balance_modal_includes_the_measurement_unit(): void
+    {
+        $category = ItemCategory::factory()->create(['name' => 'Consumables']);
+        $children = OpeningBalanceBatchesTable::linesRepeater($category->id)->getDefaultChildComponents();
+        $names = array_map(
+            fn ($component): string => $component->getName(),
+            is_array($children) ? $children : [],
+        );
+
+        $this->assertContains('unit_display', $names);
+        $this->assertContains('quantity', $names);
+        $this->assertContains('unit_cost', $names);
     }
 
     public function test_record_opening_balance_modal_saves_draft_from_received_page(): void
