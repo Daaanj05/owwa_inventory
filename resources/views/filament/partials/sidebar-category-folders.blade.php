@@ -36,43 +36,57 @@
             localStorage.setItem(sectionFlag, '1');
         }
 
-        var active = document.querySelector('.fi-sidebar-group.fi-active');
+        var resetSidebar = false;
 
-        if (active) {
-            var activeLabel = active.dataset.groupLabel;
-            collapsed = collapsed.filter(function (label) {
-                return label !== activeLabel;
+        try {
+            resetSidebar = sessionStorage.getItem('owwaSidebarReset') === '1';
+        } catch (error) {
+            resetSidebar = false;
+        }
+
+        if (! resetSidebar) {
+            var active = document.querySelector('.fi-sidebar-group.fi-active');
+
+            if (active) {
+                var activeLabel = active.dataset.groupLabel;
+                collapsed = collapsed.filter(function (label) {
+                    return label !== activeLabel;
+                });
+                var items = active.querySelector('.fi-sidebar-group-items');
+
+                if (items) {
+                    items.style.display = '';
+                }
+
+                active.classList.remove('fi-collapsed');
+            }
+        }
+
+        if (! resetSidebar) {
+            localStorage.setItem('collapsedGroups', JSON.stringify(collapsed));
+
+            if (window.Alpine && Alpine.store('sidebar')) {
+                Alpine.store('sidebar').collapsedGroups = collapsed.slice();
+            }
+        }
+
+        if (! resetSidebar) {
+            collapsed.forEach(function (label) {
+                var group = document.querySelector('.fi-sidebar-group[data-group-label="' + label.replace(/"/g, '\\"') + '"]');
+
+                if (! group || group.classList.contains('fi-active')) {
+                    return;
+                }
+
+                var groupItems = group.querySelector('.fi-sidebar-group-items');
+
+                if (groupItems) {
+                    groupItems.style.display = 'none';
+                }
+
+                group.classList.add('fi-collapsed');
             });
-            var items = active.querySelector('.fi-sidebar-group-items');
-
-            if (items) {
-                items.style.display = '';
-            }
-
-            active.classList.remove('fi-collapsed');
         }
-
-        localStorage.setItem('collapsedGroups', JSON.stringify(collapsed));
-
-        if (window.Alpine && Alpine.store('sidebar')) {
-            Alpine.store('sidebar').collapsedGroups = collapsed.slice();
-        }
-
-        collapsed.forEach(function (label) {
-            var group = document.querySelector('.fi-sidebar-group[data-group-label="' + label.replace(/"/g, '\\"') + '"]');
-
-            if (! group || group.classList.contains('fi-active')) {
-                return;
-            }
-
-            var groupItems = group.querySelector('.fi-sidebar-group-items');
-
-            if (groupItems) {
-                groupItems.style.display = 'none';
-            }
-
-            group.classList.add('fi-collapsed');
-        });
 
         var requisitions = document.querySelector('.fi-sidebar-group[data-group-label="Requisitions"]');
         var requisitionBadge = requisitions

@@ -615,6 +615,12 @@ class ProcurementAnalyticsPageTest extends TestCase
         $this->assertCount(1, $eulRows);
         $this->assertSame('Office Chair', $eulRows->first()->item_name);
         $this->assertSame('nearing', $eulRows->first()->status);
+        Livewire::actingAs($custodian)
+            ->withQueryParams(['analyticsSlide' => 'replacement'])
+            ->test(ProcurementAnalytics::class)
+            ->assertSet('analyticsSlide', 'replacement')
+            ->assertSee('Replacement due — semi-expendable');
+
         $component->call('setAnalyticsSlide', 'replacement');
         $component->assertSee('Replacement due — semi-expendable');
         $component->assertSee('Office Chair');

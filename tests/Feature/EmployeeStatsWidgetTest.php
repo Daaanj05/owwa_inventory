@@ -155,6 +155,18 @@ class EmployeeStatsWidgetTest extends TestCase
 
         $this->actingAs($custodian)
             ->get(route('owwa.export.requisition', $requisition))
+            ->assertForbidden();
+
+        $requisition->update([
+            'ris_approval_status' => Requisition::RIS_APPROVAL_FOR_APPROVAL,
+            'pending_issue_payload' => [
+                'issuance_date' => now()->toDateString(),
+                'lines' => [],
+            ],
+        ]);
+
+        $this->actingAs($custodian)
+            ->get(route('owwa.export.requisition', $requisition))
             ->assertOk();
     }
 }

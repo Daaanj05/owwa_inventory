@@ -8,7 +8,18 @@ Your requisition was rejected.
 <x-mail::panel>
 **Reference:** {{ $requisition->reference_code ?? '—' }}
 
-**Office:** {{ $requisition->office?->name ?? '—' }}
+**Office:** {{ ($context->officeName ?? null) ?: ($requisition->office?->name ?? '—') }}
+
+**Department:** {{ ($context->departmentName ?? null) ?: ($requisition->department?->name ?: '—') }}
+
+@if (($context->employees ?? []) !== [])
+**Employees:**
+@foreach ($context->employees as $employee)
+- {{ $employee['name'] }} ({{ $employee['reference'] }})
+@endforeach
+@elseif (filled($context->employeeName ?? null))
+**Employee:** {{ $context->employeeName }}
+@endif
 
 @if (filled($requisition->remarks))
 **Reason:** {{ $requisition->remarks }}

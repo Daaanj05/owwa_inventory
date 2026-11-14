@@ -6,7 +6,6 @@ use App\Filament\Resources\Acquisitions\AcquisitionResource;
 use App\Models\Requisition;
 use App\Models\RequisitionItem;
 use App\Services\RequisitionFulfillmentService;
-use App\Services\RequisitionRestockStatusService;
 use App\Services\RequisitionStockSnapshotService;
 use App\Support\EmployeeRequisitionOriginalSubmission;
 use App\Support\EmployeeRequisitionStatus;
@@ -33,6 +32,7 @@ class RequisitionInfolistSchema
             Section::make('Requisition details')
                 ->columns(2)
                 ->schema(self::detailFields(forModal: true)),
+            self::printedSignatoriesSection(),
             self::relatedPurchaseRequestsSection(),
             self::employeeAllocationsSection(),
             self::requestedItemsSection(),
@@ -45,6 +45,7 @@ class RequisitionInfolistSchema
             Section::make('Requisition details')
                 ->columns(2)
                 ->schema(self::detailFields(forModal: false)),
+            self::printedSignatoriesSection(),
             self::relatedPurchaseRequestsSection(),
             self::employeeAllocationsSection(),
             self::requestedItemsSection(),
@@ -80,6 +81,49 @@ class RequisitionInfolistSchema
             ]);
     }
 
+    protected static function printedSignatoriesSection(): Section
+    {
+        return Section::make('Printed RIS signatories')
+            ->description('Names printed on Appendix 63. Separate from Processed by.')
+            ->columns(2)
+            ->visible(fn (Requisition $record): bool => filled($record->ris_approved_by_name)
+                || filled($record->ris_requested_by_name)
+                || filled($record->ris_issued_by_name)
+                || filled($record->ris_received_by_name))
+            ->schema([
+                self::printedSignatoryEntry('Requested by', 'ris_requested_by'),
+                self::printedSignatoryEntry('Approved by', 'ris_approved_by'),
+                self::printedSignatoryEntry('Issued by', 'ris_issued_by'),
+                self::printedSignatoryEntry('Received by', 'ris_received_by'),
+            ]);
+    }
+
+    protected static function printedSignatoryEntry(string $label, string $prefix): TextEntry
+    {
+        return TextEntry::make($prefix.'_block')
+            ->label($label)
+            ->state(function (Requisition $record) use ($prefix): ?string {
+                $name = $record->{$prefix.'_name'} ?? null;
+                if (blank($name)) {
+                    return null;
+                }
+
+                $designation = $record->{$prefix.'_designation'} ?? null;
+                $date = $record->{$prefix.'_date'} ?? null;
+                $dateText = $date?->format('M d, Y');
+
+                return collect([$name, $designation, $dateText])
+                    ->filter(fn (?string $part): bool => filled($part))
+                    ->implode(' · ');
+            })
+            ->placeholder('—')
+            ->visible(function (Requisition $record) use ($prefix): bool {
+                $name = $record->{$prefix.'_name'} ?? null;
+
+                return filled($name);
+            });
+    }
+
     /**
      * @return array<int, TextEntry>
      */
@@ -95,10 +139,6 @@ class RequisitionInfolistSchema
                 ->state(fn (Requisition $record): ?string => $record->displayRisNumber())
                 ->placeholder('—')
                 ->visible(fn (Requisition $record): bool => $record->isEmployeeRequest()),
-            TextEntry::make('reference_code')
-                ->label(OwwaReferenceLabels::requisition())
-                ->placeholder('—')
-                ->visible(fn (Requisition $record): bool => ! $record->isEmployeeRequest()),
             TextEntry::make('employee_status')
                 ->label('Status')
                 ->badge()
@@ -123,7 +163,8 @@ class RequisitionInfolistSchema
                 ->label('Related issuances')
                 ->state(fn (Requisition $record): ?string => RequisitionLineDisplay::relatedIssuancesText($record))
                 ->placeholder('—')
-                ->columnSpanFull(),
+                ->columnSpanFull()
+                ->visible(fn (Requisition $record): bool => RequisitionLineDisplay::hasIssuances($record)),
             TextEntry::make('mixed_categories_notice')
                 ->label('')
                 ->state(fn (Requisition $record): ?string => $record->hasMixedCategories()
@@ -155,8 +196,17 @@ class RequisitionInfolistSchema
                 ->label('Department')
                 ->placeholder('—')
                 ->visible(fn (): bool => ! $forModal),
+            TextEntry::make('purpose')
+                ->label(fn (Requisition $record): string => $record->isEmployeeRequest() && $record->compiled_into_requisition_id === null
+                    ? 'Purpose'
+                    : 'Purpose (RIS)')
+                ->state(fn (Requisition $record): ?string => $record->isEmployeeRequest() && $record->compiled_into_requisition_id === null
+                    ? $record->displayEmployeePurpose()
+                    : $record->displayRisPurpose())
+                ->placeholder('—')
+                ->columnSpanFull(),
             TextEntry::make('approvedBy.name')
-                ->label('Actioned by')
+                ->label('Processed by')
                 ->placeholder('—')
                 ->state(function (Requisition $record): ?string {
                     if ($record->approved_at === null || $record->created_at === null) {
@@ -170,7 +220,7 @@ class RequisitionInfolistSchema
                     return $record->approvedBy?->name;
                 }),
             TextEntry::make('approved_at')
-                ->label('Actioned on')
+                ->label('Date processed')
                 ->placeholder('—')
                 ->state(function (Requisition $record): ?string {
                     if ($record->approved_at === null) {
@@ -183,15 +233,6 @@ class RequisitionInfolistSchema
 
                     return $record->approved_at->format('M d, Y h:i A');
                 }),
-            TextEntry::make('purpose')
-                ->label(fn (Requisition $record): string => $record->isEmployeeRequest() && $record->compiled_into_requisition_id === null
-                    ? 'Purpose'
-                    : 'Purpose (RIS)')
-                ->state(fn (Requisition $record): ?string => $record->isEmployeeRequest() && $record->compiled_into_requisition_id === null
-                    ? $record->displayEmployeePurpose()
-                    : $record->displayRisPurpose())
-                ->placeholder('—')
-                ->columnSpanFull(),
             TextEntry::make('original_purpose')
                 ->label('Original purpose (at submit)')
                 ->state(fn (Requisition $record): ?string => EmployeeRequisitionOriginalSubmission::originalPurpose($record))
@@ -292,7 +333,7 @@ class RequisitionInfolistSchema
                         TableColumn::make('Requested'),
                         TableColumn::make('Endorsed'),
                         TableColumn::make('Source purpose'),
-                        TableColumn::make('UC remarks'),
+                        TableColumn::make('Endorsement note'),
                     ])
                     ->schema([
                         TextEntry::make('requestedBy.name')->label('Employee')->placeholder('—'),
@@ -309,7 +350,7 @@ class RequisitionInfolistSchema
                             ->label('Source purpose')
                             ->placeholder('—'),
                         TextEntry::make('employee_remarks')
-                            ->label('UC remarks')
+                            ->label('Endorsement note')
                             ->placeholder('—'),
                     ]),
             ]);
@@ -324,18 +365,16 @@ class RequisitionInfolistSchema
                 ? [
                     TableColumn::make('Category'),
                     TableColumn::make('Item'),
-                    TableColumn::make('Restock'),
-                    TableColumn::make(OwwaReferenceLabels::assetIdentifierTableHeader()),
+                    TableColumn::make(self::identifierHeaderForRequisition($record)),
                     TableColumn::make('Requested'),
                     TableColumn::make('Endorsed by UC'),
                     TableColumn::make('Status'),
-                    TableColumn::make('UC remarks'),
+                    TableColumn::make('Endorsement note'),
                 ]
                 : [
                     TableColumn::make('Category'),
                     TableColumn::make('Item'),
-                    TableColumn::make('Restock'),
-                    TableColumn::make(OwwaReferenceLabels::assetIdentifierTableHeader()),
+                    TableColumn::make(self::identifierHeaderForRequisition($record)),
                     TableColumn::make('Qty'),
                     TableColumn::make('Status'),
                 ])
@@ -355,7 +394,6 @@ class RequisitionInfolistSchema
                 ->badge()
                 ->placeholder('—'),
             TextEntry::make('item.name')->label('Item')->placeholder('—'),
-            self::restockStatusEntry(),
             TextEntry::make('line_identifier')
                 ->label(fn (RequisitionItem $record): string => RequisitionLineDisplay::identifierLabel($record))
                 ->state(fn (RequisitionItem $record): string => RequisitionLineDisplay::identifierValue($record) ?? '—'),
@@ -379,7 +417,7 @@ class RequisitionInfolistSchema
 
         if ($endorsed) {
             $fields[] = TextEntry::make('employee_endorsement_remarks')
-                ->label('UC remarks')
+                ->label('Endorsement note')
                 ->state(function (RequisitionItem $record) use ($requisition): ?string {
                     return $requisition->employeeLineEndorsement((int) $record->id)?->employee_remarks;
                 })
@@ -395,23 +433,31 @@ class RequisitionInfolistSchema
             ->hiddenLabel()
             ->visible(fn (Requisition $record): bool => ! $record->isEmployeeRequest())
             ->extraAttributes(['class' => 'owwa-requisition-items-table'])
-            ->table([
+            ->table(fn (Requisition $record): array => [
                 TableColumn::make('Category'),
                 TableColumn::make('Item'),
-                TableColumn::make(OwwaReferenceLabels::assetIdentifierTableHeader()),
+                TableColumn::make(self::identifierHeaderForRequisition($record)),
                 TableColumn::make('Available stock'),
                 TableColumn::make('Requested'),
                 TableColumn::make('Issued'),
                 TableColumn::make('Remaining'),
                 TableColumn::make('Status'),
-                TableColumn::make('Restock'),
-                TableColumn::make('Remarks'),
+                TableColumn::make('Issue remarks'),
             ])
             ->schema(self::sharedItemFields(
                 quantityLabel: 'Requested',
                 includeIssued: true,
                 includeRemaining: true,
             ));
+    }
+
+    protected static function identifierHeaderForRequisition(Requisition $record): string
+    {
+        $record->loadMissing('items.item.category');
+
+        return OwwaReferenceLabels::assetIdentifierTableHeaderForSlugs(
+            $record->items->map(fn (RequisitionItem $line): ?string => $line->item?->category?->getTemplateSlug())
+        );
     }
 
     /**
@@ -452,28 +498,12 @@ class RequisitionInfolistSchema
             ->badge()
             ->state(fn (RequisitionItem $record): string => $record->fulfillmentStateLabel())
             ->color(fn (RequisitionItem $record): string => RequisitionLineFulfillmentState::color($record->fulfillmentState()));
-        $fields[] = self::restockStatusEntry();
         $fields[] = TextEntry::make('line_remarks')
-            ->label('Remarks')
+            ->label('Issue remarks')
             ->state(fn (RequisitionItem $record): ?string => $record->issue_remarks)
             ->placeholder('—');
 
         return $fields;
-    }
-
-    protected static function restockStatusEntry(): TextEntry
-    {
-        return TextEntry::make('restock_status')
-            ->label('Restock')
-            ->state(function (RequisitionItem $record): ?string {
-                $statusService = app(RequisitionRestockStatusService::class);
-                $status = $statusService->resolve((int) $record->item_id);
-
-                return $statusService->displayLabel($status);
-            })
-            ->badge()
-            ->color(fn (?string $state): string => filled($state) && str_starts_with((string) $state, 'Inactive') ? 'warning' : 'success')
-            ->placeholder('Active');
     }
 
     public static function acceptIssueModalDescription(Requisition $record): string|Htmlable

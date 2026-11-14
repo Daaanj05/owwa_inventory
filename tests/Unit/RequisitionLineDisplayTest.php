@@ -19,9 +19,18 @@ class RequisitionLineDisplayTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_asset_identifier_table_header_is_asset_no(): void
+    public function test_asset_identifier_table_header_defaults_to_stock_property(): void
     {
-        $this->assertSame('Asset No.', OwwaReferenceLabels::assetIdentifierTableHeader());
+        $this->assertSame('Stock / property no.', OwwaReferenceLabels::assetIdentifierTableHeader());
+        $this->assertSame('Stock No.', OwwaReferenceLabels::assetIdentifierTableHeader('consumables'));
+        $this->assertSame(
+            'Stock No.',
+            OwwaReferenceLabels::assetIdentifierTableHeaderForSlugs(['consumables', 'consumables']),
+        );
+        $this->assertSame(
+            'Stock / property no.',
+            OwwaReferenceLabels::assetIdentifierTableHeaderForSlugs(['consumables', 'ppe']),
+        );
     }
 
     public function test_identifier_resolves_through_compiled_parent_issuance(): void
@@ -72,7 +81,8 @@ class RequisitionLineDisplayTest extends TestCase
             'reference_code' => '2026-01-0501',
             'item_id' => $item->id,
             'office_id' => $office->id,
-            'requisition_id' => $consolidated->id,
+            'requisition_id' => $employeeRequisition->id,
+            'consolidated_requisition_id' => $consolidated->id,
             'quantity' => 1,
             'issuance_date' => now()->toDateString(),
             'issued_by' => $uc->id,
@@ -81,6 +91,8 @@ class RequisitionLineDisplayTest extends TestCase
         $line->refresh();
 
         $this->assertSame('STK-LINE-01', RequisitionLineDisplay::identifierValue($line));
+        $this->assertTrue(RequisitionLineDisplay::hasIssuances($consolidated->fresh()));
+        $this->assertNotEmpty(RequisitionLineDisplay::relatedIssuanceSummaries($consolidated->fresh()));
     }
 
     public function test_identifier_uses_semi_expendable_inventory_item_number(): void

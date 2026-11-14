@@ -57,7 +57,9 @@ class SignatorySelectInstructionTest extends TestCase
 
         $this->assertArrayNotHasKey(\App\Models\ProcurementSignatoryName::ROLE_REQUESTED, $labels);
         $this->assertSame('Approver', $labels[\App\Models\ProcurementSignatoryName::ROLE_APPROVED]);
+        $this->assertSame('RIS approver', $labels[\App\Models\ProcurementSignatoryName::ROLE_RIS_APPROVED]);
         $this->assertSame('Transfer approver', $labels[\App\Models\ProcurementSignatoryName::ROLE_TRANSFER_APPROVED]);
+        $this->assertSame('requisition', \App\Support\SignatorySelect::tabForRole(\App\Models\ProcurementSignatoryName::ROLE_RIS_APPROVED));
         $this->assertSame('Transfer releasing officer', $labels[\App\Models\ProcurementSignatoryName::ROLE_TRANSFER_RELEASED]);
         $this->assertSame('Transfer receiving officer', $labels[\App\Models\ProcurementSignatoryName::ROLE_TRANSFER_RECEIVED]);
         $this->assertSame('Certifying officer', $labels[\App\Models\ProcurementSignatoryName::ROLE_PHYSICAL_COUNT_CERTIFIED]);

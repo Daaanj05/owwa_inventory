@@ -19,6 +19,8 @@ class ProcurementSignatoryName extends Model
 
     public const ROLE_CUSTODIAN = 'custodian';
 
+    public const ROLE_RIS_APPROVED = 'ris_approved';
+
     public const ROLE_TRANSFER_APPROVED = 'transfer_approved';
 
     public const ROLE_TRANSFER_APPROVED_DESIGNATION = 'transfer_approved_designation';
@@ -113,6 +115,7 @@ class ProcurementSignatoryName extends Model
     {
         return in_array($role, [
             self::ROLE_APPROVED,
+            self::ROLE_RIS_APPROVED,
             self::ROLE_TRANSFER_APPROVED,
             self::ROLE_TRANSFER_RELEASED,
             self::ROLE_TRANSFER_RECEIVED,

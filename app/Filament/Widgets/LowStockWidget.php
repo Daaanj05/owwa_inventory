@@ -5,8 +5,11 @@ namespace App\Filament\Widgets;
 use App\Filament\Concerns\SyncsActiveItemCategory;
 use App\Filament\Pages\ProcurementAnalytics;
 use App\Filament\Pages\StockLevels;
+use App\Filament\Resources\Acquisitions\AcquisitionResource;
 use App\Filament\Resources\Acquisitions\PurchaseOrders\PurchaseOrderResource;
+use App\Filament\Resources\PropertyActionRequests\PropertyActionRequestResource;
 use App\Filament\Resources\Requisitions\RequisitionResource;
+use App\Models\AcquisitionPaperwork;
 use App\Models\Issuance;
 use App\Models\ItemCategory;
 use App\Models\PropertyActionRequest;
@@ -50,6 +53,10 @@ class LowStockWidget extends StatsOverviewWidget implements HasActions
 
     public int $kpiUsefulLifePage = 1;
 
+    public string $kpiPendingTab = 'requisition';
+
+    public string $kpiOrdersTab = 'pr';
+
     protected const int KPI_PER_PAGE = 10;
 
     public static function canView(): bool
@@ -91,6 +98,29 @@ class LowStockWidget extends StatsOverviewWidget implements HasActions
             'useful_life' => $this->kpiUsefulLifePage = $page,
             default => null,
         };
+    }
+
+    public function setKpiTab(string $group, string $tab): void
+    {
+        if ($group === 'pending') {
+            if (! in_array($tab, ['requisition', 'return'], true)) {
+                return;
+            }
+
+            $this->kpiPendingTab = $tab;
+            $this->kpiPendingPage = 1;
+
+            return;
+        }
+
+        if ($group === 'orders') {
+            if (! in_array($tab, ['pr', 'po', 'inspect'], true)) {
+                return;
+            }
+
+            $this->kpiOrdersTab = $tab;
+            $this->kpiIncomingPage = 1;
+        }
     }
 
     protected function getStats(): array
@@ -141,16 +171,16 @@ class LowStockWidget extends StatsOverviewWidget implements HasActions
      */
     protected function buildSupplyCustodianStats(int $lowStockCount, string $scopeLabel): array
     {
-        /** @var array{pending: int, orders_to_inspect: int} $kpiCounts */
+        /** @var array{pending: int, orders_and_approvals: int} $kpiCounts */
         $kpiCounts = DashboardKpiCache::remember('supply_custodian', function (): array {
             return [
                 'pending' => $this->computePendingActionsCount(),
-                'orders_to_inspect' => $this->ordersToInspectQuery()->count(),
+                'orders_and_approvals' => $this->computeOrdersAndApprovalsCount(),
             ];
         });
 
         $pendingCount = $kpiCounts['pending'];
-        $ordersToInspectCount = $kpiCounts['orders_to_inspect'];
+        $ordersAndApprovalsCount = $kpiCounts['orders_and_approvals'];
         $usefulLifeDueCount = $this->usefulLifeDueCount();
 
         return [
@@ -184,20 +214,36 @@ class LowStockWidget extends StatsOverviewWidget implements HasActions
                 ->color($pendingCount > 0 ? 'warning' : 'success')
                 ->extraAttributes([
                     'class' => 'cursor-pointer owwa-stat-clickable owwa-kpi-square',
-                    'wire:click' => "mountAction('viewPendingRequisitions')",
+                    'wire:click' => 'openPendingRequisitionsModal',
                     'title' => 'Click to view details',
                 ], merge: true),
 
-            Stat::make('Orders to inspect & receive', number_format($ordersToInspectCount))
-                ->description('Approved POs still waiting to be received')
+            Stat::make('Orders and approvals', number_format($ordersAndApprovalsCount))
+                ->description($ordersAndApprovalsCount > 0
+                    ? 'POs to receive, and PR or PO awaiting approval'
+                    : 'Nothing awaiting action')
                 ->descriptionIcon('heroicon-o-truck')
-                ->color('info')
+                ->color($ordersAndApprovalsCount > 0 ? 'info' : 'success')
                 ->extraAttributes([
                     'class' => 'cursor-pointer owwa-stat-clickable owwa-kpi-square',
-                    'wire:click' => "mountAction('viewOrdersToInspect')",
-                    'title' => 'Items already ordered from the supplier, not yet received into stock. Click to view details',
+                    'wire:click' => 'openOrdersAndApprovalsModal',
+                    'title' => 'Pending PR or PO approval, and approved orders not yet received. Click to view details',
                 ], merge: true),
         ];
+    }
+
+    public function openPendingRequisitionsModal(): void
+    {
+        $this->kpiPendingTab = 'requisition';
+        $this->kpiPendingPage = 1;
+        $this->mountAction('viewPendingRequisitions');
+    }
+
+    public function openOrdersAndApprovalsModal(): void
+    {
+        $this->kpiOrdersTab = 'pr';
+        $this->kpiIncomingPage = 1;
+        $this->mountAction('viewOrdersToInspect');
     }
 
     public function viewLowStockAction(): Action
@@ -217,7 +263,9 @@ class LowStockWidget extends StatsOverviewWidget implements HasActions
             'viewUsefulLifeDue',
             'Useful Life Due',
             fn (): array => $this->usefulLifeDueDetail(),
-            ProcurementAnalytics::getUrl(),
+            ProcurementAnalytics::getUrl([
+                'analyticsSlide' => 'replacement',
+            ]),
             'Open Procurement Recommendation',
         );
     }
@@ -228,8 +276,12 @@ class LowStockWidget extends StatsOverviewWidget implements HasActions
             'viewPendingRequisitions',
             'Pending requests & returns',
             fn (): array => $this->pendingActionsDetail(),
-            RequisitionResource::getUrl('index'),
-            'Open Requisitions',
+            fn (): string => $this->kpiPendingTab === 'return'
+                ? PropertyActionRequestResource::getUrl('index')
+                : RequisitionResource::getUrl('index'),
+            fn (): string => $this->kpiPendingTab === 'return'
+                ? 'Open Property Returns'
+                : 'Open Requisitions',
         );
     }
 
@@ -237,22 +289,28 @@ class LowStockWidget extends StatsOverviewWidget implements HasActions
     {
         return $this->detailModalAction(
             'viewOrdersToInspect',
-            'Orders to inspect & receive',
-            fn (): array => $this->ordersToInspectDetail(),
-            $this->purchaseOrdersIndexUrl(),
-            'Open Purchase Orders',
+            'Orders and approvals',
+            fn (): array => $this->ordersAndApprovalsDetail(),
+            fn (): string => $this->kpiOrdersTab === 'pr'
+                ? $this->purchaseRequestsIndexUrl()
+                : $this->purchaseOrdersIndexUrl(),
+            fn (): string => $this->kpiOrdersTab === 'pr'
+                ? 'Open Purchase Requests'
+                : 'Open Purchase Orders',
         );
     }
 
     /**
      * @param  callable(): array<string, mixed>  $detailResolver
+     * @param  string|callable(): string  $pageUrl
+     * @param  string|callable(): string  $pageLabel
      */
     protected function detailModalAction(
         string $name,
         string $heading,
         callable $detailResolver,
-        string $pageUrl,
-        string $pageLabel,
+        string|callable $pageUrl,
+        string|callable $pageLabel,
     ): Action {
         return Action::make($name)
             ->modalWidth(Width::FiveExtraLarge)
@@ -417,16 +475,29 @@ class LowStockWidget extends StatsOverviewWidget implements HasActions
      */
     protected function pendingActionsDetail(): array
     {
-        $rows = $this->pendingActionRows();
+        $cached = $this->cachedPendingModalRows();
+        $requisitionRows = collect($cached['requisition']);
+        $returnRows = collect($cached['return']);
+        $combinedTotal = $requisitionRows->count() + $returnRows->count();
+
+        $activeTab = in_array($this->kpiPendingTab, ['requisition', 'return'], true)
+            ? $this->kpiPendingTab
+            : 'requisition';
+
+        $rows = $activeTab === 'return' ? $returnRows : $requisitionRows;
         $total = $rows->count();
         $lastPage = max(1, (int) ceil($total / self::KPI_PER_PAGE));
         $page = min(max(1, $this->kpiPendingPage), $lastPage);
         $slice = $rows->forPage($page, self::KPI_PER_PAGE)->values();
 
         return [
-            'summary' => number_format($total).' pending request'.($total === 1 ? '' : 's').' & return'.($total === 1 ? '' : 's').' awaiting your action.',
-            'empty_title' => 'No pending requests or returns',
-            'empty_desc' => 'There are no transactions awaiting Supply Custodian action.',
+            'summary' => number_format($combinedTotal).' pending request'.($combinedTotal === 1 ? '' : 's').' & return'.($combinedTotal === 1 ? '' : 's').' awaiting your action.',
+            'empty_title' => $activeTab === 'return'
+                ? 'No pending property returns'
+                : 'No pending requisitions',
+            'empty_desc' => $activeTab === 'return'
+                ? 'There are no property returns awaiting Supply Custodian action.'
+                : 'There are no requisitions awaiting Supply Custodian action.',
             'columns' => [
                 'reference' => 'Reference',
                 'transaction_type' => 'Transaction',
@@ -436,6 +507,20 @@ class LowStockWidget extends StatsOverviewWidget implements HasActions
             ],
             'numeric_keys' => [],
             'rows' => $slice->all(),
+            'tabs' => [
+                [
+                    'key' => 'requisition',
+                    'label' => 'Pending Requisition',
+                    'count' => $requisitionRows->count(),
+                ],
+                [
+                    'key' => 'return',
+                    'label' => 'Pending Property Return',
+                    'count' => $returnRows->count(),
+                ],
+            ],
+            'tab_group' => 'pending',
+            'active_tab' => $activeTab,
             'pagination' => [
                 'key' => 'pending',
                 'current' => $page,
@@ -446,11 +531,19 @@ class LowStockWidget extends StatsOverviewWidget implements HasActions
     }
 
     /**
-     * KPI badge count without loading full row payloads (modal still uses {@see pendingActionRows()}).
+     * @return array{requisition: array<int, array<string, mixed>>, return: array<int, array<string, mixed>>}
      */
-    protected function pendingActionsCount(): int
+    protected function cachedPendingModalRows(): array
     {
-        return $this->computePendingActionsCount();
+        /** @var array{requisition: array<int, array<string, mixed>>, return: array<int, array<string, mixed>>} $rows */
+        $rows = DashboardKpiCache::remember('supply_custodian.pending_modal_rows', function (): array {
+            return [
+                'requisition' => $this->buildPendingRequisitionRows()->all(),
+                'return' => $this->buildPendingPropertyReturnRows()->all(),
+            ];
+        });
+
+        return $rows;
     }
 
     protected function computePendingActionsCount(): int
@@ -460,10 +553,17 @@ class LowStockWidget extends StatsOverviewWidget implements HasActions
             + $this->pendingPropertyReturnsQuery()->count();
     }
 
+    protected function computeOrdersAndApprovalsCount(): int
+    {
+        return $this->pendingPrApprovalQuery()->count()
+            + $this->pendingPoApprovalQuery()->count()
+            + $this->ordersToInspectQuery()->count();
+    }
+
     /**
      * @return Collection<int, array{reference: string, transaction_type: string, office: ?string, requested_by: ?string, created: ?string, record_url: string}>
      */
-    protected function pendingActionRows(): Collection
+    protected function buildPendingRequisitionRows(): Collection
     {
         $rows = collect();
 
@@ -473,16 +573,7 @@ class LowStockWidget extends StatsOverviewWidget implements HasActions
             ->get();
 
         foreach ($pendingRequisitions as $requisition) {
-            $rows->push([
-                'reference' => $requisition->displayRisNumber() ?? $requisition->reference_code ?? '#'.$requisition->id,
-                'transaction_type' => 'Requisition',
-                'office' => $requisition->office?->name,
-                'requested_by' => $requisition->requestedBy?->name,
-                'created' => optional($requisition->created_at)?->format('M j, Y'),
-                'record_url' => RequisitionResource::getUrl('index', [
-                    'tableSearch' => $requisition->reference_code,
-                ]),
-            ]);
+            $rows->push($this->mapPendingRequisitionRow($requisition, 'Requisition'));
         }
 
         $remainderRequisitions = $this->remainderRequisitionsQuery()
@@ -491,38 +582,52 @@ class LowStockWidget extends StatsOverviewWidget implements HasActions
             ->get();
 
         foreach ($remainderRequisitions as $requisition) {
-            $rows->push([
-                'reference' => $requisition->displayRisNumber() ?? $requisition->reference_code ?? '#'.$requisition->id,
-                'transaction_type' => 'Issue remainder',
-                'office' => $requisition->office?->name,
-                'requested_by' => $requisition->requestedBy?->name,
-                'created' => optional($requisition->created_at)?->format('M j, Y'),
-                'record_url' => RequisitionResource::getUrl('index', [
-                    'tableSearch' => $requisition->reference_code,
-                ]),
-            ]);
+            $rows->push($this->mapPendingRequisitionRow($requisition, 'Issue remainder'));
         }
 
-        $propertyReturns = $this->pendingPropertyReturnsQuery()
+        return $rows
+            ->sortByDesc(fn (array $row): string => (string) ($row['created_at'] ?? ''))
+            ->map(function (array $row): array {
+                unset($row['created_at']);
+
+                return $row;
+            })
+            ->values();
+    }
+
+    /**
+     * @return array{reference: string, transaction_type: string, office: ?string, requested_by: ?string, created: ?string, created_at: string, record_url: string}
+     */
+    protected function mapPendingRequisitionRow(Requisition $requisition, string $transactionType): array
+    {
+        return [
+            'reference' => $requisition->displayRisNumber() ?? $requisition->reference_code ?? '#'.$requisition->id,
+            'transaction_type' => $transactionType,
+            'office' => $requisition->office?->name,
+            'requested_by' => $requisition->requestedBy?->name,
+            'created' => optional($requisition->created_at)?->format('M j, Y'),
+            'created_at' => optional($requisition->created_at)?->toIso8601String() ?? '',
+            'record_url' => RequisitionResource::viewModalUrl($requisition),
+        ];
+    }
+
+    /**
+     * @return Collection<int, array{reference: string, transaction_type: string, office: ?string, requested_by: ?string, created: ?string, record_url: string}>
+     */
+    protected function buildPendingPropertyReturnRows(): Collection
+    {
+        return $this->pendingPropertyReturnsQuery()
             ->with(['requestedBy', 'office'])
             ->latest('created_at')
-            ->get();
-
-        foreach ($propertyReturns as $request) {
-            $rows->push([
+            ->get()
+            ->map(fn (PropertyActionRequest $request): array => [
                 'reference' => $request->reference_code ?? '#'.$request->id,
                 'transaction_type' => 'Property return',
                 'office' => $request->office?->name,
                 'requested_by' => $request->requestedBy?->name,
                 'created' => optional($request->created_at)?->format('M j, Y'),
-                'record_url' => \App\Filament\Resources\PropertyActionRequests\PropertyActionRequestResource::getUrl('index', [
-                    'tableSearch' => $request->reference_code,
-                ]),
-            ]);
-        }
-
-        return $rows
-            ->sortByDesc(fn (array $row): string => (string) ($row['created'] ?? ''))
+                'record_url' => PropertyActionRequestResource::viewModalUrl($request),
+            ])
             ->values();
     }
 
@@ -565,6 +670,26 @@ class LowStockWidget extends StatsOverviewWidget implements HasActions
     }
 
     /**
+     * @return Builder<AcquisitionPaperwork>
+     */
+    protected function pendingPrApprovalQuery(): Builder
+    {
+        return AcquisitionPaperwork::query()
+            ->whereNull('archived_at')
+            ->where('pr_status', AcquisitionPaperwork::STATUS_PENDING_APPROVAL);
+    }
+
+    /**
+     * @return Builder<PurchaseOrder>
+     */
+    protected function pendingPoApprovalQuery(): Builder
+    {
+        return PurchaseOrder::query()
+            ->whereNull('archived_at')
+            ->where('status', PurchaseOrder::STATUS_PENDING_APPROVAL);
+    }
+
+    /**
      * Approved POs not yet received into stock (IAR may be missing or in progress).
      *
      * @return Builder<PurchaseOrder>
@@ -588,34 +713,199 @@ class LowStockWidget extends StatsOverviewWidget implements HasActions
     /**
      * @return array<string, mixed>
      */
-    protected function ordersToInspectDetail(): array
+    protected function ordersAndApprovalsDetail(): array
     {
-        $orders = $this->ordersToInspectQuery()
+        $cached = $this->cachedOrdersModalRows();
+        $prRows = $cached['pr'];
+        $poRows = $cached['po'];
+        $inspectRows = $cached['inspect'];
+        $prCount = count($prRows);
+        $poCount = count($poRows);
+        $inspectCount = count($inspectRows);
+        $combinedTotal = $prCount + $poCount + $inspectCount;
+
+        $activeTab = in_array($this->kpiOrdersTab, ['pr', 'po', 'inspect'], true)
+            ? $this->kpiOrdersTab
+            : 'pr';
+
+        $detail = match ($activeTab) {
+            'po' => $this->paginateOrdersTabDetail(
+                $poRows,
+                'No purchase orders pending approval',
+                'There are no purchase orders awaiting approval.',
+                [
+                    'po_number' => 'PO number',
+                    'supplier' => 'Supplier',
+                    'status' => 'Status',
+                    'office' => 'Office',
+                    'date' => 'Submitted',
+                ],
+            ),
+            'inspect' => $this->paginateOrdersTabDetail(
+                $inspectRows,
+                'Approved POs still waiting to be received',
+                'There are no approved purchase orders waiting to be inspected or received into stock.',
+                [
+                    'po_number' => 'PO number',
+                    'supplier' => 'Supplier',
+                    'status' => 'Status',
+                    'office' => 'Office',
+                    'date' => 'PO date',
+                ],
+            ),
+            default => $this->paginateOrdersTabDetail(
+                $prRows,
+                'No purchase requests pending approval',
+                'There are no purchase requests awaiting approval.',
+                [
+                    'pr_number' => 'PR number',
+                    'purpose' => 'Purpose',
+                    'office' => 'Office',
+                    'status' => 'Status',
+                    'date' => 'Submitted',
+                ],
+            ),
+        };
+
+        return array_merge($detail, [
+            'summary' => number_format($combinedTotal).' order'.($combinedTotal === 1 ? '' : 's')
+                .' and approval'.($combinedTotal === 1 ? '' : 's')
+                .' awaiting your action.',
+            'tabs' => [
+                [
+                    'key' => 'pr',
+                    'label' => 'Pending PR approval',
+                    'count' => $prCount,
+                ],
+                [
+                    'key' => 'po',
+                    'label' => 'PO approval',
+                    'count' => $poCount,
+                ],
+                [
+                    'key' => 'inspect',
+                    'label' => 'Orders to inspect & receive',
+                    'count' => $inspectCount,
+                ],
+            ],
+            'tab_group' => 'orders',
+            'active_tab' => $activeTab,
+        ]);
+    }
+
+    /**
+     * @return array{pr: array<int, array<string, mixed>>, po: array<int, array<string, mixed>>, inspect: array<int, array<string, mixed>>}
+     */
+    protected function cachedOrdersModalRows(): array
+    {
+        /** @var array{pr: array<int, array<string, mixed>>, po: array<int, array<string, mixed>>, inspect: array<int, array<string, mixed>>} $rows */
+        $rows = DashboardKpiCache::remember('supply_custodian.orders_modal_rows', function (): array {
+            return [
+                'pr' => $this->buildPendingPrApprovalRows(),
+                'po' => $this->buildPendingPoApprovalRows(),
+                'inspect' => $this->buildOrdersToInspectRows(),
+            ];
+        });
+
+        return $rows;
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $rows
+     * @param  array<string, string>  $columns
+     * @return array<string, mixed>
+     */
+    protected function paginateOrdersTabDetail(
+        array $rows,
+        string $emptyTitle,
+        string $emptyDesc,
+        array $columns,
+    ): array {
+        $collection = collect($rows);
+        $total = $collection->count();
+        $lastPage = max(1, (int) ceil($total / self::KPI_PER_PAGE));
+        $page = min(max(1, $this->kpiIncomingPage), $lastPage);
+
+        return [
+            'empty_title' => $emptyTitle,
+            'empty_desc' => $emptyDesc,
+            'columns' => $columns,
+            'numeric_keys' => [],
+            'rows' => $collection->forPage($page, self::KPI_PER_PAGE)->values()->all(),
+            'pagination' => [
+                'key' => 'incoming',
+                'current' => $page,
+                'last' => $lastPage,
+                'total' => $total,
+            ],
+        ];
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    protected function buildPendingPrApprovalRows(): array
+    {
+        return $this->pendingPrApprovalQuery()
+            ->with(['office', 'itemCategory'])
+            ->latest('pr_submitted_at')
+            ->latest('created_at')
+            ->get()
+            ->map(function (AcquisitionPaperwork $paperwork): array {
+                $categoryId = (int) ($paperwork->item_category_id ?? 0);
+
+                return [
+                    'pr_number' => $paperwork->pr_number ?? $paperwork->reference_code ?? '#'.$paperwork->id,
+                    'purpose' => $paperwork->purpose,
+                    'office' => $paperwork->office?->name,
+                    'status' => $paperwork->workflowStatusLabel(),
+                    'date' => optional($paperwork->pr_submitted_at ?? $paperwork->created_at)?->format('M j, Y'),
+                    'record_url' => AcquisitionResource::viewModalUrl($paperwork, array_filter([
+                        'category' => $categoryId > 0 ? $categoryId : null,
+                    ])),
+                ];
+            })
+            ->all();
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    protected function buildPendingPoApprovalRows(): array
+    {
+        return $this->pendingPoApprovalQuery()
+            ->with(['purchaseRequest.office', 'supplier'])
+            ->latest('submitted_at')
+            ->latest('created_at')
+            ->get()
+            ->map(function (PurchaseOrder $order): array {
+                $categoryId = (int) ($order->purchaseRequest?->item_category_id ?? 0);
+
+                return [
+                    'po_number' => $order->number ?? '#'.$order->id,
+                    'supplier' => $order->supplier_name ?: ($order->supplier?->name ?? '—'),
+                    'status' => $order->statusLabel(),
+                    'office' => $order->purchaseRequest?->office?->name,
+                    'date' => optional($order->submitted_at ?? $order->po_date)?->format('M j, Y'),
+                    'record_url' => PurchaseOrderResource::viewModalUrl($order, array_filter([
+                        'category' => $categoryId > 0 ? $categoryId : null,
+                    ])),
+                ];
+            })
+            ->all();
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    protected function buildOrdersToInspectRows(): array
+    {
+        return $this->ordersToInspectQuery()
             ->with(['purchaseRequest.office', 'inspectionAcceptanceReport', 'supplier'])
             ->latest('approved_at')
             ->latest('po_date')
-            ->get();
-
-        $total = $orders->count();
-        $lastPage = max(1, (int) ceil($total / self::KPI_PER_PAGE));
-        $page = min(max(1, $this->kpiIncomingPage), $lastPage);
-        $slice = $orders->forPage($page, self::KPI_PER_PAGE)->values();
-
-        return [
-            'summary' => number_format($total).' approved purchase order'
-                .($total === 1 ? '' : 's')
-                .' still waiting to be received.',
-            'empty_title' => 'Approved POs still waiting to be received',
-            'empty_desc' => 'There are no approved purchase orders waiting to be inspected or received into stock.',
-            'columns' => [
-                'po_number' => 'PO number',
-                'supplier' => 'Supplier',
-                'status' => 'Status',
-                'office' => 'Office',
-                'date' => 'PO date',
-            ],
-            'numeric_keys' => [],
-            'rows' => $slice->map(function (PurchaseOrder $order): array {
+            ->get()
+            ->map(function (PurchaseOrder $order): array {
                 $categoryId = (int) ($order->purchaseRequest?->item_category_id ?? 0);
 
                 return [
@@ -624,19 +914,12 @@ class LowStockWidget extends StatsOverviewWidget implements HasActions
                     'status' => $order->statusLabel(),
                     'office' => $order->purchaseRequest?->office?->name,
                     'date' => optional($order->po_date ?? $order->approved_at)?->format('M j, Y'),
-                    'record_url' => PurchaseOrderResource::getUrl('index', array_filter([
+                    'record_url' => PurchaseOrderResource::viewModalUrl($order, array_filter([
                         'category' => $categoryId > 0 ? $categoryId : null,
-                        'tableSearch' => $order->number,
                     ])),
                 ];
-            })->all(),
-            'pagination' => [
-                'key' => 'incoming',
-                'current' => $page,
-                'last' => $lastPage,
-                'total' => $total,
-            ],
-        ];
+            })
+            ->all();
     }
 
     protected function purchaseOrdersIndexUrl(): string
@@ -648,6 +931,19 @@ class LowStockWidget extends StatsOverviewWidget implements HasActions
         }
 
         return PurchaseOrderResource::getUrl('index', array_filter([
+            'category' => $categoryId > 0 ? $categoryId : null,
+        ]));
+    }
+
+    protected function purchaseRequestsIndexUrl(): string
+    {
+        $categoryId = SyncsActiveItemCategory::resolveCategoryIdFromContext();
+
+        if ($categoryId <= 0) {
+            $categoryId = (int) ItemCategory::query()->orderBy('name')->value('id');
+        }
+
+        return AcquisitionResource::getUrl('index', array_filter([
             'category' => $categoryId > 0 ? $categoryId : null,
         ]));
     }

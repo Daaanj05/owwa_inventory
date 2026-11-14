@@ -1,5 +1,5 @@
 @php
-    /** @var array{summary: string|null, empty_title: string, empty_desc: string, columns: array<string, string>, numeric_keys: array<int, string>, rows?: array<int, array<string, mixed>>, sections?: array<int, array{heading: string, columns?: array<string, string>, rows: array<int, array<string, mixed>>}>, pagination?: array{key: string, current: int, last: int, total: int}} $detail */
+    /** @var array{summary: string|null, empty_title: string, empty_desc: string, columns: array<string, string>, numeric_keys: array<int, string>, rows?: array<int, array<string, mixed>>, sections?: array<int, array{heading: string, columns?: array<string, string>, rows: array<int, array<string, mixed>>}>, tabs?: array<int, array{key: string, label: string, count: int}>, tab_group?: string, active_tab?: string, pagination?: array{key: string, current: int, last: int, total: int}} $detail */
     $summary = $detail['summary'] ?? null;
     $columns = $detail['columns'];
     $rows = $detail['rows'] ?? [];
@@ -8,6 +8,9 @@
     $emptyTitle = $detail['empty_title'] ?? 'No records';
     $emptyDesc = $detail['empty_desc'] ?? 'Nothing to show.';
     $pagination = $detail['pagination'] ?? null;
+    $tabs = $detail['tabs'] ?? [];
+    $tabGroup = $detail['tab_group'] ?? null;
+    $activeTab = $detail['active_tab'] ?? null;
     $hasSections = $sections !== [];
     $isEmpty = $hasSections
         ? collect($sections)->every(fn (array $section): bool => ($section['rows'] ?? []) === [])
@@ -19,6 +22,29 @@
         <p class="owwa-stock-ledger-header" style="margin:0 0 0.75rem;color:#64748b;font-size:0.8125rem;">
             {{ $summary }}
         </p>
+    @endif
+
+    @if ($tabs !== [] && filled($tabGroup))
+        <div class="owwa-kpi-modal-tabs" role="tablist">
+            @foreach ($tabs as $tab)
+                @php
+                    $isActive = ($tab['key'] ?? null) === $activeTab;
+                    $count = (int) ($tab['count'] ?? 0);
+                @endphp
+                <button
+                    type="button"
+                    role="tab"
+                    class="owwa-kpi-modal-tab {{ $isActive ? 'is-active' : '' }}"
+                    aria-selected="{{ $isActive ? 'true' : 'false' }}"
+                    wire:click="setKpiTab('{{ $tabGroup }}', '{{ $tab['key'] }}')"
+                >
+                    {{ $tab['label'] }}
+                    @if ($count > 0)
+                        ({{ number_format($count) }})
+                    @endif
+                </button>
+            @endforeach
+        </div>
     @endif
 
     @if ($hasSections)

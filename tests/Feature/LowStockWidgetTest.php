@@ -18,6 +18,7 @@ use App\Services\AcquisitionUnitService;
 use App\Support\DashboardKpiCache;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Livewire\Livewire;
 use Tests\TestCase;
@@ -73,13 +74,14 @@ class LowStockWidgetTest extends TestCase
             ->assertDontSee('Stocks in hand')
             ->assertSee('Items running low')
             ->assertSee('Pending requests & returns')
-            ->assertSee('Orders to inspect & receive')
-            ->assertSee('Approved POs still waiting to be received')
+            ->assertSee('Orders and approvals')
+            ->assertSee('Nothing awaiting action')
+            ->assertDontSee('Orders to inspect & receive')
             ->assertDontSee('Pending requisitions')
             ->assertDontSee('Low stock');
     }
 
-    public function test_supply_custodian_orders_to_inspect_modal_shows_approved_po_only(): void
+    public function test_supply_custodian_orders_and_approvals_modal_tabs_and_counts(): void
     {
         $office = Office::factory()->create(['is_regional_supply' => true]);
         $category = ItemCategory::factory()->create(['name' => 'Consumables']);
@@ -87,6 +89,18 @@ class LowStockWidgetTest extends TestCase
             'role' => User::ROLE_SUPPLY_CUSTODIAN,
             'office_id' => $office->id,
             'email_verified_at' => now(),
+        ]);
+
+        AcquisitionPaperwork::query()->create([
+            'office_id' => $office->id,
+            'item_category_id' => $category->id,
+            'requesting_office_id' => $office->id,
+            'recorded_by' => $user->id,
+            'purpose' => 'Pending PR',
+            'pr_date' => now(),
+            'pr_status' => AcquisitionPaperwork::STATUS_PENDING_APPROVAL,
+            'pr_number' => 'PR-KPI-PENDING',
+            'pr_submitted_at' => now(),
         ]);
 
         $approvedPr = AcquisitionPaperwork::query()->create([
@@ -106,6 +120,25 @@ class LowStockWidgetTest extends TestCase
             'po_date' => now(),
             'supplier_name' => 'Acme Supplies',
             'approved_at' => now(),
+        ]);
+
+        $pendingPoPr = AcquisitionPaperwork::query()->create([
+            'office_id' => $office->id,
+            'item_category_id' => $category->id,
+            'requesting_office_id' => $office->id,
+            'recorded_by' => $user->id,
+            'purpose' => 'Pending PO paperwork',
+            'pr_date' => now(),
+            'pr_status' => AcquisitionPaperwork::STATUS_APPROVED,
+            'pr_number' => 'PR-KPI-FOR-PO',
+        ]);
+        PurchaseOrder::query()->create([
+            'acquisition_paperwork_id' => $pendingPoPr->id,
+            'status' => PurchaseOrder::STATUS_PENDING_APPROVAL,
+            'number' => 'PO-KPI-PENDING',
+            'po_date' => now(),
+            'supplier_name' => 'Pending Supplier',
+            'submitted_at' => now(),
         ]);
 
         $draftPr = AcquisitionPaperwork::query()->create([
@@ -130,16 +163,39 @@ class LowStockWidgetTest extends TestCase
 
         $component = Livewire::test(LowStockWidget::class)
             ->assertOk()
-            ->assertSee('Orders to inspect & receive')
-            ->assertSee('Approved POs still waiting to be received')
+            ->assertSee('Orders and approvals')
+            ->assertSee('POs to receive, and PR or PO awaiting approval')
+            ->assertSee('3')
             ->assertActionExists('viewOrdersToInspect')
-            ->mountAction('viewOrdersToInspect')
-            ->assertActionMounted('viewOrdersToInspect');
+            ->call('openOrdersAndApprovalsModal')
+            ->assertActionMounted('viewOrdersToInspect')
+            ->assertSet('kpiOrdersTab', 'pr');
 
-        $html = (string) $component->instance()->getMountedAction()?->getModalContent();
-        $this->assertStringContainsString('PO-KPI-APPROVED', $html);
-        $this->assertStringContainsString('Acme Supplies', $html);
-        $this->assertStringNotContainsString('PO-KPI-DRAFT', $html);
+        $prHtml = html_entity_decode((string) $component->instance()->getMountedAction()?->getModalContent());
+        $this->assertStringContainsString('Pending PR approval', $prHtml);
+        $this->assertStringContainsString('PO approval', $prHtml);
+        $this->assertStringContainsString('Orders to inspect & receive', $prHtml);
+        $this->assertStringContainsString('PR-KPI-PENDING', $prHtml);
+        $this->assertStringContainsString('tableAction=view', $prHtml);
+        $this->assertStringNotContainsString('PO-KPI-APPROVED', $prHtml);
+        $this->assertStringNotContainsString('PO-KPI-DRAFT', $prHtml);
+
+        $component->call('setKpiTab', 'orders', 'po');
+        $poHtml = html_entity_decode((string) $component->instance()->getMountedAction()?->getModalContent());
+        $this->assertStringContainsString('PO-KPI-PENDING', $poHtml);
+        $this->assertStringContainsString('Pending Supplier', $poHtml);
+        $this->assertStringContainsString('tableAction=view', $poHtml);
+        $this->assertStringNotContainsString('PO-KPI-APPROVED', $poHtml);
+        $this->assertStringNotContainsString('PO-KPI-DRAFT', $poHtml);
+        $this->assertStringNotContainsString('PR-KPI-PENDING', $poHtml);
+
+        $component->call('setKpiTab', 'orders', 'inspect');
+        $inspectHtml = html_entity_decode((string) $component->instance()->getMountedAction()?->getModalContent());
+        $this->assertStringContainsString('PO-KPI-APPROVED', $inspectHtml);
+        $this->assertStringContainsString('Acme Supplies', $inspectHtml);
+        $this->assertStringContainsString('tableAction=view', $inspectHtml);
+        $this->assertStringNotContainsString('PO-KPI-DRAFT', $inspectHtml);
+        $this->assertStringNotContainsString('PO-KPI-PENDING', $inspectHtml);
     }
 
     public function test_supply_custodian_orders_to_inspect_includes_iar_until_received(): void
@@ -208,9 +264,11 @@ class LowStockWidgetTest extends TestCase
 
         $component = Livewire::test(LowStockWidget::class)
             ->assertOk()
-            ->assertSee('Approved POs still waiting to be received')
-            ->mountAction('viewOrdersToInspect')
-            ->assertActionMounted('viewOrdersToInspect');
+            ->assertSee('Orders and approvals')
+            ->assertSee('POs to receive, and PR or PO awaiting approval')
+            ->call('openOrdersAndApprovalsModal')
+            ->assertActionMounted('viewOrdersToInspect')
+            ->call('setKpiTab', 'orders', 'inspect');
 
         $html = (string) $component->instance()->getMountedAction()?->getModalContent();
         $this->assertStringContainsString('PO-KPI-WITH-IAR', $html);
@@ -324,6 +382,11 @@ class LowStockWidgetTest extends TestCase
         $this->assertStringContainsString('Expired', $html);
         $this->assertStringNotContainsString('All categories', $html);
         $this->assertStringNotContainsString('Reorder point', $html);
+
+        $openPageUrl = (string) $component->instance()->getMountedAction()
+            ?->getModalFooterActions()['openPage']
+            ?->getUrl();
+        $this->assertStringContainsString('analyticsSlide=replacement', html_entity_decode($openPageUrl));
     }
 
     public function test_supply_custodian_pending_kpi_uses_sql_counts_matching_modal_rows(): void
@@ -341,6 +404,20 @@ class LowStockWidgetTest extends TestCase
             'role' => User::ROLE_UNIT_CONSOLIDATOR,
             'office_id' => $office->id,
             'email_verified_at' => now(),
+        ]);
+
+        $older = Requisition::query()->create([
+            'office_id' => $office->id,
+            'requested_by' => $consolidator->id,
+            'status' => Requisition::STATUS_PENDING,
+            'reference_code' => 'REQ-OLDER-KPI',
+            'transaction_number' => '2026-01-0000',
+        ]);
+        RequisitionItem::query()->create([
+            'requisition_id' => $older->id,
+            'item_id' => $item->id,
+            'quantity' => 2,
+            'quantity_issued' => 0,
         ]);
 
         $pending = Requisition::query()->create([
@@ -371,6 +448,21 @@ class LowStockWidgetTest extends TestCase
             'quantity_issued' => 3,
         ]);
 
+        DB::table('requisitions')->where('id', $older->id)->update([
+            'created_at' => now()->subDays(2),
+            'updated_at' => now()->subDays(2),
+        ]);
+        DB::table('requisitions')->where('id', $pending->id)->update([
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        DB::table('requisitions')->where('id', $remainder->id)->update([
+            'created_at' => now()->subDay(),
+            'updated_at' => now()->subDay(),
+        ]);
+
+        DashboardKpiCache::bump();
+
         $fullyIssued = Requisition::query()->create([
             'office_id' => $office->id,
             'requested_by' => $consolidator->id,
@@ -397,19 +489,53 @@ class LowStockWidgetTest extends TestCase
 
         $this->actingAs($custodian);
 
+        $pendingCacheKey = 'dashboard.kpi_counts.v'.DashboardKpiCache::version().'.supply_custodian.pending_modal_rows';
+        $this->assertFalse(Cache::has($pendingCacheKey));
+
         $component = Livewire::test(LowStockWidget::class)
             ->assertOk()
             ->assertSee('Pending requests & returns')
-            ->assertSee('3')
-            ->mountAction('viewPendingRequisitions')
-            ->assertActionMounted('viewPendingRequisitions');
+            ->assertSee('4')
+            ->call('openPendingRequisitionsModal')
+            ->assertActionMounted('viewPendingRequisitions')
+            ->assertSet('kpiPendingTab', 'requisition');
+
+        $this->assertTrue(Cache::has($pendingCacheKey));
+
+        /** @var array{requisition: array<int, array{reference: string}>} $cachedPendingRows */
+        $cachedPendingRows = Cache::get($pendingCacheKey);
+        $this->assertSame(
+            ['REQ-PENDING-KPI', 'REQ-REMAINDER-KPI', 'REQ-OLDER-KPI'],
+            array_column($cachedPendingRows['requisition'], 'reference'),
+        );
 
         $html = html_entity_decode((string) $component->instance()->getMountedAction()?->getModalContent());
-        $this->assertStringContainsString('3 pending requests & returns', $html);
+        $this->assertStringContainsString('4 pending requests & returns', $html);
+        $this->assertStringContainsString('Pending Requisition', $html);
+        $this->assertStringContainsString('Pending Property Return', $html);
         $this->assertStringContainsString('REQ-PENDING-KPI', $html);
         $this->assertStringContainsString('REQ-REMAINDER-KPI', $html);
-        $this->assertStringContainsString('PAR-PENDING-KPI', $html);
+        $this->assertStringContainsString('REQ-OLDER-KPI', $html);
+        $this->assertStringContainsString('tableAction=view', $html);
+        $this->assertStringNotContainsString('PAR-PENDING-KPI', $html);
         $this->assertStringNotContainsString('REQ-FULL-KPI', $html);
+
+        $component->call('setKpiTab', 'pending', 'return');
+        $returnHtml = html_entity_decode((string) $component->instance()->getMountedAction()?->getModalContent());
+        $this->assertStringContainsString('PAR-PENDING-KPI', $returnHtml);
+        $this->assertStringContainsString('tableAction=view', $returnHtml);
+        $this->assertStringNotContainsString('REQ-PENDING-KPI', $returnHtml);
+        $this->assertStringNotContainsString('REQ-REMAINDER-KPI', $returnHtml);
+
+        $component
+            ->call('unmountAction')
+            ->call('openPendingRequisitionsModal')
+            ->assertSet('kpiPendingTab', 'requisition');
+
+        $reopenedHtml = html_entity_decode((string) $component->instance()->getMountedAction()?->getModalContent());
+        $this->assertStringContainsString('REQ-PENDING-KPI', $reopenedHtml);
+        $this->assertStringNotContainsString('PAR-PENDING-KPI', $reopenedHtml);
+        $this->assertTrue(Cache::has($pendingCacheKey));
     }
 
     public function test_pending_kpi_cache_refreshes_when_requisition_is_created(): void
@@ -458,5 +584,75 @@ class LowStockWidgetTest extends TestCase
             ->assertSee('Pending requests & returns')
             ->assertSee('1')
             ->assertSee('Requests & returns awaiting your action');
+    }
+
+    public function test_orders_modal_rows_are_cached_and_reset_to_pr_tab_on_reopen(): void
+    {
+        $office = Office::factory()->create(['is_regional_supply' => true]);
+        $category = ItemCategory::factory()->create(['name' => 'Consumables']);
+        $user = User::factory()->create([
+            'role' => User::ROLE_SUPPLY_CUSTODIAN,
+            'office_id' => $office->id,
+            'email_verified_at' => now(),
+        ]);
+
+        AcquisitionPaperwork::query()->create([
+            'office_id' => $office->id,
+            'item_category_id' => $category->id,
+            'requesting_office_id' => $office->id,
+            'recorded_by' => $user->id,
+            'purpose' => 'Pending PR',
+            'pr_date' => now(),
+            'pr_status' => AcquisitionPaperwork::STATUS_PENDING_APPROVAL,
+            'pr_number' => 'PR-KPI-CACHE',
+            'pr_submitted_at' => now(),
+        ]);
+
+        $pendingPoPr = AcquisitionPaperwork::query()->create([
+            'office_id' => $office->id,
+            'item_category_id' => $category->id,
+            'requesting_office_id' => $office->id,
+            'recorded_by' => $user->id,
+            'purpose' => 'Pending PO paperwork',
+            'pr_date' => now(),
+            'pr_status' => AcquisitionPaperwork::STATUS_APPROVED,
+            'pr_number' => 'PR-KPI-FOR-PO-CACHE',
+        ]);
+        PurchaseOrder::query()->create([
+            'acquisition_paperwork_id' => $pendingPoPr->id,
+            'status' => PurchaseOrder::STATUS_PENDING_APPROVAL,
+            'number' => 'PO-KPI-CACHE',
+            'po_date' => now(),
+            'supplier_name' => 'Pending Supplier',
+            'submitted_at' => now(),
+        ]);
+
+        $this->actingAs($user);
+
+        $ordersCacheKey = 'dashboard.kpi_counts.v'.DashboardKpiCache::version().'.supply_custodian.orders_modal_rows';
+        $this->assertFalse(Cache::has($ordersCacheKey));
+
+        $component = Livewire::test(LowStockWidget::class)
+            ->call('openOrdersAndApprovalsModal')
+            ->assertActionMounted('viewOrdersToInspect')
+            ->assertSet('kpiOrdersTab', 'pr');
+
+        $this->assertTrue(Cache::has($ordersCacheKey));
+        $this->assertStringContainsString(
+            'PR-KPI-CACHE',
+            html_entity_decode((string) $component->instance()->getMountedAction()?->getModalContent()),
+        );
+
+        $component
+            ->call('setKpiTab', 'orders', 'po')
+            ->assertSet('kpiOrdersTab', 'po')
+            ->call('unmountAction')
+            ->call('openOrdersAndApprovalsModal')
+            ->assertSet('kpiOrdersTab', 'pr');
+
+        $reopenedHtml = html_entity_decode((string) $component->instance()->getMountedAction()?->getModalContent());
+        $this->assertStringContainsString('PR-KPI-CACHE', $reopenedHtml);
+        $this->assertStringNotContainsString('PO-KPI-CACHE', $reopenedHtml);
+        $this->assertTrue(Cache::has($ordersCacheKey));
     }
 }

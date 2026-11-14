@@ -290,6 +290,57 @@
     overflow: visible;
 }
 
+.owwa-stock-ledger-modal .owwa-kpi-modal-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.35rem;
+    margin: 0;
+    padding: 0;
+    border: none;
+    box-shadow: none;
+    background: transparent;
+}
+
+.owwa-stock-ledger-modal .owwa-kpi-modal-tab {
+    display: inline-flex;
+    align-items: center;
+    min-height: 1.5rem;
+    padding: 0.15rem 0.55rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 9999px;
+    background: #ffffff;
+    color: #475569;
+    font-size: 0.75rem;
+    font-weight: 600;
+    line-height: 1.2;
+    cursor: pointer;
+    outline: none;
+    box-shadow: none;
+}
+
+.owwa-stock-ledger-modal .owwa-kpi-modal-tab:hover {
+    border-color: #cbd5e1;
+    color: #334155;
+}
+
+.owwa-stock-ledger-modal .owwa-kpi-modal-tab:focus,
+.owwa-stock-ledger-modal .owwa-kpi-modal-tab:focus-visible {
+    outline: none;
+    box-shadow: none;
+    border-color: #93c5fd;
+}
+
+.owwa-stock-ledger-modal .owwa-kpi-modal-tab.is-active,
+.owwa-stock-ledger-modal .owwa-kpi-modal-tab.is-active:focus,
+.owwa-stock-ledger-modal .owwa-kpi-modal-tab.is-active:focus-visible {
+    border-color: #bfdbfe;
+    background: #eff6ff;
+    color: #2563eb;
+    outline: none;
+    box-shadow: none;
+}
+
 .owwa-stock-ledger-header {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));

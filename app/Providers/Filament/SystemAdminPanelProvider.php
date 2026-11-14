@@ -103,8 +103,22 @@ class SystemAdminPanelProvider extends PanelProvider
             ->broadcasting(fn (): bool => FilamentEchoShouldStart::forCurrentRequest());
 
         return $panel
+            ->renderHook(PanelsRenderHook::HEAD_START, function (): string {
+                if (Filament::auth()->check()) {
+                    return '';
+                }
+
+                return view('filament.partials.sidebar-groups-reset', [
+                    'when' => 'guest',
+                ])->render();
+            })
             ->renderHook(PanelsRenderHook::STYLES_AFTER, function (): string {
                 return OwwaFilamentTheme::stylesheetLinkTag();
+            })
+            ->renderHook(PanelsRenderHook::SIDEBAR_NAV_END, function (): string {
+                return view('filament.partials.sidebar-groups-reset', [
+                    'when' => 'signed-in',
+                ])->render();
             })
             ->renderHook(PanelsRenderHook::BODY_END, function (): string {
                 if (! Filament::auth()->check()) {
@@ -115,8 +129,8 @@ class SystemAdminPanelProvider extends PanelProvider
                     .FilamentSessionAudit::idleLogoutMonitorHtml();
             })
             ->navigationGroups([
-                NavigationGroup::make('Setup'),
-                NavigationGroup::make('Monitoring'),
+                NavigationGroup::make('Setup')->collapsed(),
+                NavigationGroup::make('Monitoring')->collapsed(),
             ])
             ->discoverResources(in: app_path('Filament/Resources'), for: 'App\Filament\Resources')
             ->discoverPages(in: app_path('Filament/Pages'), for: 'App\Filament\Pages')

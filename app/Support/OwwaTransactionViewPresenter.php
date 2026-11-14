@@ -44,23 +44,31 @@ class OwwaTransactionViewPresenter
      */
     public static function forIssuance(Issuance $record): array
     {
-        $record->loadMissing(['item.category', 'office', 'department', 'requisition', 'batch']);
+        $record->loadMissing(['item.category', 'office', 'department', 'requisition', 'consolidatedRequisition', 'batch']);
         $lines = $record->batchLines();
         $recipients = IssuanceRecipientSummary::forIssuance($record);
+
+        $meta = [
+            ['label' => 'Date', 'value' => $record->issuance_date?->format('M j, Y') ?? '—'],
+            ['label' => OwwaReferenceLabels::RIS, 'value' => $record->displayRisNumber() ?? '—'],
+            ['label' => 'Office', 'value' => $record->office?->name ?? '—'],
+            ['label' => 'Department', 'value' => $record->department?->name ?? '—'],
+            ['label' => 'Issued to', 'value' => $recipients['employee'] ?? $record->issuedTo?->name ?? '—'],
+            ['label' => 'Endorsed by (UC)', 'value' => $recipients['unit_consolidator'] ?? '—'],
+        ];
+
+        $transactionNumber = $record->displayTransactionNumber();
+        if (filled($transactionNumber)) {
+            $meta[] = ['label' => OwwaReferenceLabels::TRANSACTION_NO, 'value' => $transactionNumber];
+        }
+
+        $meta[] = ['label' => 'Items', 'value' => $lines->count() === 1 ? ($record->item?->name ?? '—') : $lines->count().' item lines'];
 
         $hero = OwwaRecordHeroData::make(
             reference: $record->controlNumber() ?? '—',
             statusLabel: 'Issued',
             statusClass: 'owwa-pc-status-badge--complete',
-            meta: [
-                ['label' => 'Date', 'value' => $record->issuance_date?->format('M j, Y') ?? '—'],
-                ['label' => OwwaReferenceLabels::RIS, 'value' => $record->requisition?->reference_code ?? '—'],
-                ['label' => 'Office', 'value' => $record->office?->name ?? '—'],
-                ['label' => 'Department', 'value' => $record->department?->name ?? '—'],
-                ['label' => 'Issued to', 'value' => $recipients['employee'] ?? $record->issuedTo?->name ?? '—'],
-                ['label' => 'Endorsed by (UC)', 'value' => $recipients['unit_consolidator'] ?? '—'],
-                ['label' => 'Items', 'value' => $lines->count() === 1 ? ($record->item?->name ?? '—') : $lines->count().' item lines'],
-            ],
+            meta: $meta,
             kpis: [],
         );
         $hero['referenceLabel'] = OwwaReferenceLabels::forIssuance($record);

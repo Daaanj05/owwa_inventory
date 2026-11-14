@@ -320,31 +320,61 @@
 /* Procurement analytics & COA reports: title sits higher; keep bottom spacing for scroll/actions */
 .fi-main:has(.owwa-pa-page),
 .fi-main:has(.owwa-coa-reports-page) {
-    padding-top: 0.05rem !important;
+    padding-top: 0 !important;
     padding-bottom: 0.75rem !important;
 }
 
 /*
- * Filament default: .fi-page-header-main-ctn { flex flex-col gap-y-8 py-8 } — large gap between
- * the page header (title/subheading) and .fi-page-main (where the FY bar lives). Override here
- * to tighten that space; row-gap is what separates subtitle from the context bar.
+ * Filament default: .fi-page-header-main-ctn { padding-block: spacing*8 ≈ 2rem }.
+ * Must override padding-block (not only padding-top). DevTools confirmed 5.6px after
+ * first fix; squeeze to 0 so the title sits flush under the topbar like a tight list page.
  */
-.fi-page.owwa-pa-page .fi-page-header-main-ctn {
-    row-gap: 0.5rem !important;
-    padding-top: 0.75rem !important;
-    padding-bottom: 0.5rem !important;
+.fi-page.owwa-pa-page > .fi-page-header-main-ctn {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 0.15rem !important;
+    row-gap: 0.15rem !important;
+    padding: 0 !important;
+    padding-block: 0 !important;
+    /* Kill leftover half-leading / flex air under sticky topbar (DevTools: pad was already ~5.6px). */
+    margin-top: -0.35rem !important;
 }
 
 .fi-page.owwa-pa-page .fi-header {
-    padding-left: 0.75rem !important;
-    padding-right: 0.75rem !important;
-    padding-top: 0.05rem !important;
-    padding-bottom: 0.05rem !important;
+    gap: 0.2rem !important;
+    padding: 0 0.75rem !important;
+    padding-block: 0 !important;
+    margin: 0 !important;
+    align-items: flex-start !important;
+}
+
+.fi-page.owwa-pa-page .fi-header > div {
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+.fi-page.owwa-pa-page .fi-header-heading {
+    display: flex !important;
+    align-items: center !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    line-height: 1.15 !important;
+}
+
+.fi-page.owwa-pa-page .owwa-pa-page-title {
+    gap: 0.5rem !important;
+}
+
+.fi-page.owwa-pa-page .owwa-pa-page-title-icon {
+    width: 1.5rem !important;
+    height: 1.5rem !important;
 }
 
 .fi-page.owwa-pa-page .fi-header-subheading {
-    margin-top: 0.375rem !important;
-    padding-bottom: 0.05rem;
+    margin-top: 0.15rem !important;
+    margin-bottom: 0 !important;
+    padding: 0 !important;
+    line-height: 1.35 !important;
 }
 
 /*
@@ -357,11 +387,6 @@
     column-gap: 0.5rem !important;
     padding-top: 0.125rem;
     padding-bottom: 1rem;
-}
-
-.fi-page.owwa-pa-page .fi-header-heading {
-    display: flex !important;
-    align-items: center !important;
 }
 
 /* KPI stack + lazy stats: remove extra vertical margin above the first widget */
@@ -6082,18 +6107,45 @@ select.owwa-search-bar {
 .fi-modal-window.owwa-record-modal.owwa-requisition-issue-modal .owwa-requisition-issue-lines-repeater.fi-fo-table-repeater > table > thead > tr > th,
 .fi-modal-window.owwa-record-modal.owwa-requisition-issue-modal .owwa-requisition-issue-lines-repeater.fi-fo-table-repeater > table > tbody > tr > td {
     vertical-align: middle;
-    padding-block: 0.15rem;
-    padding-inline: 0.35rem;
+    padding-block: 0.45rem;
+    padding-inline: 0.6rem;
+    font-size: 0.75rem;
+    line-height: 1.25;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
+.fi-modal-window.owwa-record-modal.owwa-requisition-issue-modal .owwa-requisition-issue-lines-repeater > table > tbody > tr > td .owwa-issue-line-cell {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    overflow: hidden;
+    white-space: normal;
+    font-size: 0.75rem;
+    line-height: 1.25;
+    padding-inline: 0.15rem;
+}
+
+.fi-modal-window.owwa-record-modal.owwa-requisition-issue-modal .owwa-requisition-issue-lines-repeater > table > tbody > tr > td .owwa-issue-line-cell-numeric .owwa-issue-line-cell,
+.fi-modal-window.owwa-record-modal.owwa-requisition-issue-modal .owwa-requisition-issue-lines-repeater > table > tbody > tr > td.owwa-issue-line-cell-numeric .owwa-issue-line-cell {
+    text-align: center;
+    font-variant-numeric: tabular-nums;
 }
 
 .fi-modal-window.owwa-record-modal.owwa-requisition-issue-modal .owwa-requisition-issue-lines-repeater > table > tbody > tr > td .fi-input-wrp {
     max-width: 100%;
 }
 
+.fi-modal-window.owwa-record-modal.owwa-requisition-issue-modal .owwa-requisition-issue-lines-repeater > table > tbody > tr > td .fi-input,
+.fi-modal-window.owwa-record-modal.owwa-requisition-issue-modal .owwa-requisition-issue-lines-repeater > table > tbody > tr > td .fi-input-wrp {
+    font-size: 0.75rem;
+}
+
 .fi-modal-window.owwa-record-modal.owwa-requisition-issue-modal .owwa-requisition-issue-lines-repeater > table > tbody > tr > td .fi-input[type="number"] {
     text-align: center;
     font-variant-numeric: tabular-nums;
 }
+
 
 .fi-modal-window.owwa-record-modal.owwa-requisition-issue-modal .fi-modal-footer.fi-align-center,
 .fi-modal-window.owwa-record-modal.owwa-requisition-issue-modal .fi-modal-footer {
@@ -8574,6 +8626,57 @@ body.owwa-busy-active .fi-topbar a {
     flex-direction: column;
     gap: 1rem;
     overflow: visible;
+}
+
+.owwa-stock-ledger-modal .owwa-kpi-modal-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.35rem;
+    margin: 0;
+    padding: 0;
+    border: none;
+    box-shadow: none;
+    background: transparent;
+}
+
+.owwa-stock-ledger-modal .owwa-kpi-modal-tab {
+    display: inline-flex;
+    align-items: center;
+    min-height: 1.5rem;
+    padding: 0.15rem 0.55rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 9999px;
+    background: #ffffff;
+    color: #475569;
+    font-size: 0.75rem;
+    font-weight: 600;
+    line-height: 1.2;
+    cursor: pointer;
+    outline: none;
+    box-shadow: none;
+}
+
+.owwa-stock-ledger-modal .owwa-kpi-modal-tab:hover {
+    border-color: #cbd5e1;
+    color: #334155;
+}
+
+.owwa-stock-ledger-modal .owwa-kpi-modal-tab:focus,
+.owwa-stock-ledger-modal .owwa-kpi-modal-tab:focus-visible {
+    outline: none;
+    box-shadow: none;
+    border-color: #93c5fd;
+}
+
+.owwa-stock-ledger-modal .owwa-kpi-modal-tab.is-active,
+.owwa-stock-ledger-modal .owwa-kpi-modal-tab.is-active:focus,
+.owwa-stock-ledger-modal .owwa-kpi-modal-tab.is-active:focus-visible {
+    border-color: #bfdbfe;
+    background: #eff6ff;
+    color: #2563eb;
+    outline: none;
+    box-shadow: none;
 }
 
 .owwa-stock-ledger-header {

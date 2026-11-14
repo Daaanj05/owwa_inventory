@@ -2196,18 +2196,45 @@ select.owwa-search-bar {
 .fi-modal-window.owwa-record-modal.owwa-requisition-issue-modal .owwa-requisition-issue-lines-repeater.fi-fo-table-repeater > table > thead > tr > th,
 .fi-modal-window.owwa-record-modal.owwa-requisition-issue-modal .owwa-requisition-issue-lines-repeater.fi-fo-table-repeater > table > tbody > tr > td {
     vertical-align: middle;
-    padding-block: 0.15rem;
-    padding-inline: 0.35rem;
+    padding-block: 0.45rem;
+    padding-inline: 0.6rem;
+    font-size: 0.75rem;
+    line-height: 1.25;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
+.fi-modal-window.owwa-record-modal.owwa-requisition-issue-modal .owwa-requisition-issue-lines-repeater > table > tbody > tr > td .owwa-issue-line-cell {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    overflow: hidden;
+    white-space: normal;
+    font-size: 0.75rem;
+    line-height: 1.25;
+    padding-inline: 0.15rem;
+}
+
+.fi-modal-window.owwa-record-modal.owwa-requisition-issue-modal .owwa-requisition-issue-lines-repeater > table > tbody > tr > td .owwa-issue-line-cell-numeric .owwa-issue-line-cell,
+.fi-modal-window.owwa-record-modal.owwa-requisition-issue-modal .owwa-requisition-issue-lines-repeater > table > tbody > tr > td.owwa-issue-line-cell-numeric .owwa-issue-line-cell {
+    text-align: center;
+    font-variant-numeric: tabular-nums;
 }
 
 .fi-modal-window.owwa-record-modal.owwa-requisition-issue-modal .owwa-requisition-issue-lines-repeater > table > tbody > tr > td .fi-input-wrp {
     max-width: 100%;
 }
 
+.fi-modal-window.owwa-record-modal.owwa-requisition-issue-modal .owwa-requisition-issue-lines-repeater > table > tbody > tr > td .fi-input,
+.fi-modal-window.owwa-record-modal.owwa-requisition-issue-modal .owwa-requisition-issue-lines-repeater > table > tbody > tr > td .fi-input-wrp {
+    font-size: 0.75rem;
+}
+
 .fi-modal-window.owwa-record-modal.owwa-requisition-issue-modal .owwa-requisition-issue-lines-repeater > table > tbody > tr > td .fi-input[type="number"] {
     text-align: center;
     font-variant-numeric: tabular-nums;
 }
+
 
 .fi-modal-window.owwa-record-modal.owwa-requisition-issue-modal .fi-modal-footer.fi-align-center,
 .fi-modal-window.owwa-record-modal.owwa-requisition-issue-modal .fi-modal-footer {

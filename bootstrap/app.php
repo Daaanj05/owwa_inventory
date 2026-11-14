@@ -31,6 +31,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $schedule->command('audit:archive-old-logs')->daily();
         $schedule->command('password-reset-requests:prune')->daily();
         $schedule->command('inventory:send-plan-reminders')->dailyAt('08:00');
+        $schedule->command('inventory:remind-partial-requisitions')->dailyAt('08:00');
         $schedule->command('inventory:eul-reminders')->dailyAt('08:30');
         $schedule->command('inventory:mark-stale-zero-stock-inactive')->daily();
         $schedule->command('owwa:prune-stock-card-exports')->daily();

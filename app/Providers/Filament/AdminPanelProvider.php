@@ -145,6 +145,15 @@ class AdminPanelProvider extends PanelProvider
         });
 
         return $panel
+            ->renderHook(PanelsRenderHook::HEAD_START, function (): string {
+                if (Filament::auth()->check()) {
+                    return '';
+                }
+
+                return view('filament.partials.sidebar-groups-reset', [
+                    'when' => 'guest',
+                ])->render();
+            })
             ->renderHook(PanelsRenderHook::STYLES_AFTER, function (): string {
                 return OwwaFilamentTheme::stylesheetLinkTag();
             })
@@ -152,25 +161,27 @@ class AdminPanelProvider extends PanelProvider
                 return view('filament.partials.procurement-spotlight-tour')->render();
             })
             ->renderHook(PanelsRenderHook::SIDEBAR_NAV_END, function (): string {
-                if (! Schema::hasTable('item_categories')) {
-                    return '';
+                $folders = '';
+
+                if (Schema::hasTable('item_categories')) {
+                    $labels = $this->navigationCategories()
+                        ->map(fn (ItemCategory $category): string => $category->name)
+                        ->values()
+                        ->all();
+
+                    if ($labels !== []) {
+                        $poll = (string) config('inventory.requisition_poll_interval', '5s');
+                        $pollMs = max(1000, (int) preg_replace('/\D/', '', $poll) * (str_ends_with($poll, 'ms') ? 1 : 1000));
+
+                        $folders = view('filament.partials.sidebar-category-folders', [
+                            'labels' => $labels,
+                            'pollMs' => $pollMs,
+                        ])->render();
+                    }
                 }
 
-                $labels = $this->navigationCategories()
-                    ->map(fn (ItemCategory $category): string => $category->name)
-                    ->values()
-                    ->all();
-
-                if ($labels === []) {
-                    return '';
-                }
-
-                $poll = (string) config('inventory.requisition_poll_interval', '5s');
-                $pollMs = max(1000, (int) preg_replace('/\D/', '', $poll) * (str_ends_with($poll, 'ms') ? 1 : 1000));
-
-                return view('filament.partials.sidebar-category-folders', [
-                    'labels' => $labels,
-                    'pollMs' => $pollMs,
+                return $folders.view('filament.partials.sidebar-groups-reset', [
+                    'when' => 'signed-in',
                 ])->render();
             })
             ->renderHook(PanelsRenderHook::SIDEBAR_NAV_START, function (): string {
@@ -312,6 +323,7 @@ class AdminPanelProvider extends PanelProvider
             ->collapsible(false)
             ->extraSidebarAttributes(['class' => 'owwa-nav-plain']);
         $groups[] = NavigationGroup::make('Setup')
+            ->collapsed()
             ->extraSidebarAttributes(['class' => 'owwa-nav-folder']);
 
         return $groups;

@@ -5,6 +5,7 @@ Input labels name the person. View screens, employee screens, and the activity l
 ## Setup — Signatories
 
 - Approver
+- RIS approver
 - Transfer approver
 - Transfer releasing officer
 - Transfer receiving officer
@@ -23,11 +24,14 @@ Input labels name the person. View screens, employee screens, and the activity l
 - Approved by
 - Issued by
 - Received by
-- Actioned by
+- Processed by
+- Date processed
 - Endorsed by UC
 - Endorsed by (UC)
 - Reviewed by UC
 - Reviewed by consolidator
+- Endorsement note
+- Issue remarks
 
 ## Issuance signatories
 

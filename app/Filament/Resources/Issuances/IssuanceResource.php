@@ -80,7 +80,10 @@ class IssuanceResource extends Resource
                 'batch.lines.issuedBy',
                 'batch.lines.issuedTo',
                 'batch.lines.requisition',
+                'batch.lines.consolidatedRequisition',
                 'item.category',
+                'requisition',
+                'consolidatedRequisition',
             ]);
     }
 
@@ -98,12 +101,18 @@ class IssuanceResource extends Resource
                         TextEntry::make('batch.reference_code')
                             ->label(fn (Issuance $record): string => OwwaReferenceLabels::forIssuance($record))
                             ->state(fn (Issuance $record): ?string => $record->controlNumber()),
-                        TextEntry::make('requisition.reference_code')
+                        TextEntry::make('ris_number')
                             ->label(OwwaReferenceLabels::RIS)
+                            ->state(fn (Issuance $record): ?string => $record->displayRisNumber())
                             ->placeholder('—')
-                            ->helperText(fn (Issuance $record): ?string => $record->requisition_id
+                            ->helperText(fn (Issuance $record): ?string => ($record->requisition_id || $record->consolidated_requisition_id)
                                 ? null
                                 : 'Legacy record without a linked requisition.'),
+                        TextEntry::make('transaction_number')
+                            ->label(OwwaReferenceLabels::TRANSACTION_NO)
+                            ->state(fn (Issuance $record): ?string => $record->displayTransactionNumber())
+                            ->placeholder('—')
+                            ->visible(fn (Issuance $record): bool => filled($record->displayTransactionNumber())),
                         TextEntry::make('issuance_date')->label('Date')->date('M d, Y'),
                         TextEntry::make('office.name')->label('Office'),
                         TextEntry::make('department.name')->label('Department')->placeholder('—'),

@@ -112,4 +112,55 @@ class RequisitionViewPresenterTest extends TestCase
         $this->assertStringContainsString('Reviewed by consolidator', $steps[1]['description']);
         $this->assertStringContainsString('Sent to Supply Custodian', $steps[2]['description']);
     }
+
+    public function test_workflow_marks_fulfillment_done_when_consolidated_issuance_exists(): void
+    {
+        $office = Office::factory()->create();
+        $uc = User::factory()->create([
+            'role' => User::ROLE_UNIT_CONSOLIDATOR,
+            'office_id' => $office->id,
+        ]);
+        $employee = User::factory()->create([
+            'role' => User::ROLE_EMPLOYEE,
+            'office_id' => $office->id,
+        ]);
+        $item = \App\Models\Item::factory()->create();
+
+        $consolidated = Requisition::query()->create([
+            'reference_code' => '2026-10-0203',
+            'office_id' => $office->id,
+            'requested_by' => $uc->id,
+            'status' => Requisition::STATUS_ACCEPTED,
+        ]);
+        \App\Models\RequisitionItem::query()->create([
+            'requisition_id' => $consolidated->id,
+            'item_id' => $item->id,
+            'quantity' => 5,
+            'quantity_issued' => 5,
+        ]);
+
+        $employeeRequisition = Requisition::query()->create([
+            'office_id' => $office->id,
+            'requested_by' => $employee->id,
+            'status' => Requisition::STATUS_ACCEPTED,
+            'transaction_number' => '2026-0006',
+            'compiled_into_requisition_id' => $consolidated->id,
+        ]);
+
+        \App\Models\Issuance::query()->create([
+            'reference_code' => '2026-10-0028',
+            'item_id' => $item->id,
+            'office_id' => $office->id,
+            'requisition_id' => $employeeRequisition->id,
+            'consolidated_requisition_id' => $consolidated->id,
+            'quantity' => 5,
+            'issuance_date' => now()->toDateString(),
+            'issued_by' => $uc->id,
+        ]);
+
+        $steps = RequisitionViewPresenter::workflowSteps($consolidated->fresh()->load('items'));
+
+        $this->assertSame('done', $steps[3]['state']);
+        $this->assertSame('Fully issued', $steps[3]['description']);
+    }
 }

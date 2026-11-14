@@ -4,9 +4,9 @@ namespace App\Filament\Resources\Issuances\Schemas;
 
 use App\Filament\Concerns\SyncsActiveItemCategory;
 use App\Models\Acquisition;
+use App\Models\Issuance;
 use App\Models\Item;
 use App\Models\ItemCategory;
-use App\Models\Requisition;
 use App\Models\User;
 use App\Services\InventoryStockService;
 use App\Services\SemiExpendablePropertyNumberBuilder;
@@ -51,23 +51,15 @@ class IssuanceForm
                             ->dehydrated(false)
                             ->visible(fn (string $operation): bool => $operation === 'edit')
                             ->placeholder('—')
-                            ->helperText(fn (Get $get): ?string => filled($get('requisition_id'))
+                            ->helperText(fn (Get $get): ?string => (filled($get('requisition_id')) || filled($get('consolidated_requisition_id')))
                                 ? 'Linked via Requisitions → Record issuance (RSMI). Cannot be changed here.'
                                 : 'No requisition linked — RSMI export will leave RIS No. blank (ad-hoc issue).')
-                            ->afterStateHydrated(function (TextInput $component, $state, Get $get): void {
+                            ->afterStateHydrated(function (TextInput $component, $state, ?Issuance $record): void {
                                 if (filled($state)) {
                                     return;
                                 }
 
-                                $requisitionId = $get('requisition_id');
-                                if (blank($requisitionId)) {
-                                    $component->state('—');
-
-                                    return;
-                                }
-
-                                $code = Requisition::query()->whereKey($requisitionId)->value('reference_code');
-                                $component->state(filled($code) ? $code : '—');
+                                $component->state($record?->displayRisNumber() ?: '—');
                             })
                             ->columnSpanFull(),
                         Select::make('item_category_filter')

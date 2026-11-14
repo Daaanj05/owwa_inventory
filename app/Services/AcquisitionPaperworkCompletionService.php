@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\AcquisitionPaperwork;
+use App\Support\DashboardKpiCache;
 use Illuminate\Validation\ValidationException;
 
 class AcquisitionPaperworkCompletionService
@@ -103,6 +104,8 @@ class AcquisitionPaperworkCompletionService
 
         $paperwork->update($payload);
 
+        DashboardKpiCache::bump();
+
         return $paperwork->fresh() ?? $paperwork;
     }
 
@@ -143,6 +146,8 @@ class AcquisitionPaperworkCompletionService
         }
 
         $paperwork->update($payload);
+
+        DashboardKpiCache::bump();
 
         return $paperwork->fresh() ?? $paperwork;
     }

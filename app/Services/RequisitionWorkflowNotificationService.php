@@ -7,11 +7,12 @@ use App\Models\User;
 use App\Notifications\RequisitionRejectedMailNotification;
 use App\Notifications\RequisitionWorkflowDatabaseNotification;
 use App\Support\EmployeeRequisitionOriginalSubmission;
-use App\Support\MailDelivery;
+use App\Support\EmployeeRequisitionStatus;
 use App\Support\NotificationRecipientResolver;
 use App\Support\RequisitionNotificationRecipients;
+use App\Support\WorkflowEmailContext;
+use App\Support\WorkflowEmailNotifier;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\Notification;
 
 class RequisitionWorkflowNotificationService
 {
@@ -23,7 +24,7 @@ class RequisitionWorkflowNotificationService
             return;
         }
 
-        $requisition->loadMissing(['requestedBy', 'office']);
+        $requisition->loadMissing(['requestedBy', 'office', 'department']);
         $requester = $requisition->requestedBy;
 
         if ($requester === null) {
@@ -37,8 +38,12 @@ class RequisitionWorkflowNotificationService
                     $requisition->department_id ? (int) $requisition->department_id : null,
                 ),
                 $this->newEmployeeRequisitionTitle($requester),
-                $this->bodyFor($requisition),
+                sprintf(
+                    '%s — awaiting your review.',
+                    $requisition->displayTransactionNumber() ?? $requisition->reference_code ?? 'Requisition',
+                ),
                 $requisition,
+                WorkflowEmailContext::fromRequisition($requisition),
             );
 
             return;
@@ -48,7 +53,7 @@ class RequisitionWorkflowNotificationService
             $this->notifyUsers(
                 app(NotificationRecipientResolver::class)->supplyCustodiansForRegionalOffice(),
                 'Consolidated requisition submitted',
-                $this->bodyFor($requisition),
+                $this->bodyForConsolidated($requisition),
                 $requisition,
             );
         }
@@ -60,7 +65,7 @@ class RequisitionWorkflowNotificationService
             return;
         }
 
-        $requisition->loadMissing(['requestedBy', 'office']);
+        $requisition->loadMissing(['requestedBy', 'office', 'department']);
         $requester = $requisition->requestedBy;
 
         if ($requester === null) {
@@ -76,8 +81,12 @@ class RequisitionWorkflowNotificationService
                     $requisition->department_id ? (int) $requisition->department_id : null,
                 ),
                 $this->newEmployeeRequisitionTitle($requester),
-                $this->bodyFor($requisition),
+                sprintf(
+                    '%s — awaiting your review.',
+                    $requisition->displayTransactionNumber() ?? $requisition->reference_code ?? 'Requisition',
+                ),
                 $requisition,
+                WorkflowEmailContext::fromRequisition($requisition),
             );
 
             return;
@@ -108,37 +117,169 @@ class RequisitionWorkflowNotificationService
         }
     }
 
+    /**
+     * @param  array<int, array<string, mixed>>  $preparedLines
+     */
+    public function handleRisSavedForApproval(Requisition $requisition, array $preparedLines = []): void
+    {
+        $requisition->loadMissing([
+            'requestedBy',
+            'office',
+            'department',
+            'sourceEndorsements.sourceRequisition.requestedBy',
+        ]);
+
+        $risNumber = $requisition->reference_code ?? 'RIS';
+        $title = 'RIS for approval';
+        $body = sprintf('%s — waiting for the approver’s signature before stock is issued.', $risNumber);
+
+        $consolidator = $requisition->requestedBy;
+        if ($consolidator instanceof User) {
+            $this->notifyUser(
+                $consolidator,
+                $title,
+                $body,
+                $requisition,
+                $consolidator->isUnitConsolidator()
+                    ? WorkflowEmailContext::fromRequisition($requisition)
+                    : null,
+            );
+        }
+
+        $employeeIds = [];
+        foreach ($preparedLines as $row) {
+            if (! is_array($row) || (int) ($row['quantity_to_issue'] ?? 0) <= 0) {
+                continue;
+            }
+
+            $endorsementId = (int) ($row['source_endorsement_id'] ?? 0);
+            if ($endorsementId <= 0) {
+                continue;
+            }
+
+            $endorsement = $requisition->sourceEndorsements->firstWhere('id', $endorsementId);
+            $employee = $endorsement?->sourceRequisition?->requestedBy;
+
+            if (! $employee instanceof User || ! $employee->isEmployee()) {
+                continue;
+            }
+
+            if (isset($employeeIds[$employee->id])) {
+                continue;
+            }
+
+            $employeeIds[$employee->id] = true;
+            $source = $endorsement->sourceRequisition;
+            $transaction = $source?->displayTransactionNumber() ?? $source?->reference_code ?? 'Requisition';
+
+            $this->notifyUser(
+                $employee,
+                $title,
+                sprintf('%s — %s is waiting for the approver’s signature before stock is issued.', $risNumber, $transaction),
+                $source ?? $requisition,
+            );
+        }
+    }
+
     public function handleCustodianIssued(Requisition $requisition): void
     {
-        $requisition->loadMissing(['requestedBy', 'office']);
-        $requester = $requisition->requestedBy;
+        $requisition->loadMissing([
+            'requestedBy',
+            'office',
+            'department',
+            'sourceRequests.requestedBy',
+            'sourceRequests.office',
+            'sourceRequests.department',
+        ]);
 
-        if ($requester === null) {
+        foreach ($requisition->sourceRequests as $sourceRequest) {
+            if (! $sourceRequest->isEmployeeRequest()) {
+                continue;
+            }
+
+            if ($sourceRequest->closed_at !== null) {
+                continue;
+            }
+
+            $target = EmployeeRequisitionStatus::fulfillmentTargetTotal($sourceRequest);
+            $issued = EmployeeRequisitionStatus::issuedTotal($sourceRequest);
+
+            if ($issued <= 0 || $issued >= $target) {
+                continue;
+            }
+
+            $employee = $sourceRequest->requestedBy;
+            $summary = EmployeeRequisitionStatus::formatSummary($issued, $target);
+            $transaction = $sourceRequest->displayTransactionNumber() ?? $sourceRequest->reference_code ?? 'Requisition';
+            $ris = $requisition->reference_code ?? 'RIS';
+            $title = 'Requisition partially issued';
+            $employeeNotified = false;
+
+            if ($employee instanceof User && $employee->isEmployee()) {
+                $this->notifyUser(
+                    $employee,
+                    $title,
+                    sprintf('%s — %s.', $transaction, $summary),
+                    $sourceRequest,
+                );
+                $employeeNotified = true;
+            }
+
+            $uc = $requisition->requestedBy;
+
+            if ($uc instanceof User && (! $employeeNotified || (int) $uc->id !== (int) ($employee?->id ?? 0))) {
+                $this->notifyUser(
+                    $uc,
+                    $title,
+                    sprintf('%s — %s partially issued. %s.', $ris, $transaction, $summary),
+                    $sourceRequest,
+                    WorkflowEmailContext::fromRequisition($sourceRequest),
+                );
+            }
+        }
+
+        if ($requisition->sourceRequests->isNotEmpty()) {
             return;
         }
 
-        $this->notifyUser(
-            $requester,
-            'Requisition fulfilled by Supply Custodian',
-            $this->bodyFor($requisition),
-            $requisition,
-        );
+        $requester = $requisition->requestedBy;
+
+        if (! $requester instanceof User) {
+            return;
+        }
+
+        if ($requisition->hasRemainingToIssue()) {
+            $this->notifyUser(
+                $requester,
+                'Requisition partially issued',
+                $this->bodyFor($requisition),
+                $requisition,
+                $requester->isUnitConsolidator()
+                    ? WorkflowEmailContext::fromRequisition($requisition)
+                    : null,
+            );
+        }
     }
 
     public function handleCustodianRejected(Requisition $requisition): void
     {
-        $requisition->loadMissing(['requestedBy', 'office']);
+        $requisition->loadMissing(['requestedBy', 'office', 'department', 'sourceRequests.requestedBy', 'sourceRequests.office', 'sourceRequests.department']);
         $requester = $requisition->requestedBy;
 
         if ($requester === null) {
             return;
         }
+
+        $context = $requester->isUnitConsolidator() && $requisition->sourceRequests->isNotEmpty()
+            ? WorkflowEmailContext::fromSourceRecords($requisition->sourceRequests, $requisition->office?->name, $requisition->department?->name)
+            : ($requester->isUnitConsolidator() ? WorkflowEmailContext::fromRequisition($requisition) : null);
 
         $this->notifyUserWithRejectionMail(
             $requester,
             'Requisition rejected',
             $this->bodyFor($requisition, includeRemarks: true),
             $requisition,
+            $context,
         );
     }
 
@@ -215,7 +356,7 @@ class RequisitionWorkflowNotificationService
             return;
         }
 
-        $requisition->loadMissing(['requestedBy', 'office']);
+        $requisition->loadMissing(['requestedBy', 'office', 'department']);
 
         $this->notifyUsers(
             RequisitionNotificationRecipients::unitConsolidatorsForOffice(
@@ -229,12 +370,20 @@ class RequisitionWorkflowNotificationService
                 $requisition->requestedBy?->name ?? 'Employee',
             ),
             $requisition,
+            WorkflowEmailContext::fromRequisition($requisition),
         );
     }
 
     public function handleBackorderAcknowledged(Requisition $requisition): void
     {
-        $requisition->loadMissing(['requestedBy', 'office', 'sourceRequests.requestedBy']);
+        $requisition->loadMissing([
+            'requestedBy',
+            'office',
+            'department',
+            'sourceRequests.requestedBy',
+            'sourceRequests.office',
+            'sourceRequests.department',
+        ]);
 
         $risNumber = $requisition->reference_code ?? 'RIS';
         $title = 'RIS acknowledged — awaiting stock';
@@ -243,7 +392,15 @@ class RequisitionWorkflowNotificationService
         $requester = $requisition->requestedBy;
 
         if ($requester instanceof User) {
-            $this->notifyUser($requester, $title, $body, $requisition);
+            $context = $requisition->sourceRequests->isNotEmpty()
+                ? WorkflowEmailContext::fromSourceRecords(
+                    $requisition->sourceRequests,
+                    $requisition->office?->name,
+                    $requisition->department?->name,
+                )
+                : ($requester->isUnitConsolidator() ? WorkflowEmailContext::fromRequisition($requisition) : null);
+
+            $this->notifyUser($requester, $title, $body, $requisition, $context);
         }
 
         foreach ($requisition->sourceRequests as $sourceRequest) {
@@ -263,31 +420,73 @@ class RequisitionWorkflowNotificationService
     /**
      * @param  Collection<int, User>|array<int, User>  $users
      */
-    protected function notifyUsers(Collection|array $users, string $title, string $body, Requisition $requisition): void
-    {
+    protected function notifyUsers(
+        Collection|array $users,
+        string $title,
+        string $body,
+        Requisition $requisition,
+        ?WorkflowEmailContext $context = null,
+    ): void {
         $users = $users instanceof Collection ? $users : collect($users);
 
-        if ($users->isEmpty()) {
-            return;
+        foreach ($users as $user) {
+            if (! $user instanceof User) {
+                continue;
+            }
+
+            $this->notifyUser($user, $title, $body, $requisition, $context);
+        }
+    }
+
+    protected function notifyUser(
+        User $user,
+        string $title,
+        string $body,
+        Requisition $requisition,
+        ?WorkflowEmailContext $context = null,
+    ): void {
+        $user->notify(new RequisitionWorkflowDatabaseNotification($title, $body, (int) $requisition->id));
+
+        $mailContext = $context;
+        if ($mailContext === null && $user->isUnitConsolidator()) {
+            $mailContext = WorkflowEmailContext::fromRequisition($requisition);
         }
 
-        Notification::send(
-            $users,
-            new RequisitionWorkflowDatabaseNotification($title, $body, (int) $requisition->id),
+        app(WorkflowEmailNotifier::class)->queue(
+            $user,
+            $title,
+            $body,
+            ['requisition_id' => (int) $requisition->id],
+            $user->isUnitConsolidator() ? $mailContext : null,
         );
     }
 
-    protected function notifyUser(User $user, string $title, string $body, Requisition $requisition): void
-    {
+    protected function notifyUserWithRejectionMail(
+        User $user,
+        string $title,
+        string $body,
+        Requisition $requisition,
+        ?WorkflowEmailContext $context = null,
+    ): void {
         $user->notify(new RequisitionWorkflowDatabaseNotification($title, $body, (int) $requisition->id));
-    }
 
-    protected function notifyUserWithRejectionMail(User $user, string $title, string $body, Requisition $requisition): void
-    {
-        $user->notify(new RequisitionWorkflowDatabaseNotification($title, $body, (int) $requisition->id));
+        $mailContext = $user->isUnitConsolidator()
+            ? ($context ?? WorkflowEmailContext::fromRequisition($requisition))
+            : null;
 
-        MailDelivery::attempt(
-            fn (): mixed => $user->notify(new RequisitionRejectedMailNotification($requisition, $title))
+        $mail = new RequisitionRejectedMailNotification(
+            $requisition,
+            $title,
+            context: $mailContext,
+        );
+
+        app(WorkflowEmailNotifier::class)->queue(
+            $user,
+            $title,
+            $body,
+            ['requisition_id' => (int) $requisition->id],
+            $mailContext,
+            $mail,
         );
     }
 
@@ -329,5 +528,21 @@ class RequisitionWorkflowNotificationService
         }
 
         return $body;
+    }
+
+    protected function bodyForConsolidated(Requisition $requisition): string
+    {
+        $officeName = $requisition->office?->name ?? 'Office';
+        $departmentName = $requisition->department?->name;
+
+        $location = filled($departmentName)
+            ? "{$officeName} / {$departmentName}"
+            : $officeName;
+
+        return sprintf(
+            '%s — %s',
+            $requisition->reference_code ?? $requisition->displayTransactionNumber() ?? 'RIS',
+            $location,
+        );
     }
 }

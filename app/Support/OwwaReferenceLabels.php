@@ -67,9 +67,31 @@ class OwwaReferenceLabels
         return self::TRANSACTION_NO;
     }
 
-    public static function assetIdentifierTableHeader(): string
+    public static function assetIdentifierTableHeader(?string $categorySlug = null): string
     {
-        return 'Asset No.';
+        if ($categorySlug === null) {
+            return 'Stock / property no.';
+        }
+
+        return self::assetIdentifierLabel($categorySlug);
+    }
+
+    /**
+     * @param  iterable<int, object|null>  $categorySlugs
+     */
+    public static function assetIdentifierTableHeaderForSlugs(iterable $categorySlugs): string
+    {
+        $slugs = collect($categorySlugs)
+            ->filter(fn ($slug): bool => filled($slug))
+            ->map(fn ($slug): string => (string) $slug)
+            ->unique()
+            ->values();
+
+        if ($slugs->count() === 1) {
+            return self::assetIdentifierLabel($slugs->first());
+        }
+
+        return self::assetIdentifierTableHeader();
     }
 
     public static function acquisition(): string

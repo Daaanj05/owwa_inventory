@@ -31,17 +31,17 @@ final class InventoryCategoryTasks
         $categoryId = $category->id;
         $tasks = [
             self::task(
-                'Stock levels',
-                Heroicon::OutlinedSquares2x2,
-                StockLevels::getUrl(['category' => $categoryId]),
-                StockLevels::getRouteName(),
-                1,
-            ),
-            self::task(
                 'Items',
                 Heroicon::OutlinedCube,
                 self::urlWithActiveItemCategory(ItemResource::getUrl('index'), $categoryId),
                 ItemResource::getRouteBaseName().'.*',
+                1,
+            ),
+            self::task(
+                'Stock levels',
+                Heroicon::OutlinedSquares2x2,
+                StockLevels::getUrl(['category' => $categoryId]),
+                StockLevels::getRouteName(),
                 2,
             ),
             self::task(

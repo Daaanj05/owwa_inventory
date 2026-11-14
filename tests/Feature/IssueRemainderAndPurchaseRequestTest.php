@@ -307,11 +307,11 @@ class IssueRemainderAndPurchaseRequestTest extends TestCase
             ->toHtml();
 
         $this->assertStringContainsString('Available stock', $html);
-        $this->assertStringContainsString(OwwaReferenceLabels::assetIdentifierTableHeader(), $html);
+        $this->assertStringContainsString(OwwaReferenceLabels::STOCK_NO, $html);
         $this->assertStringContainsString('Counted Marker', $html);
         $this->assertStringContainsString('17', $html);
         $this->assertMatchesRegularExpression(
-            '/Available stock.*Requested.*Issued.*Remaining.*Status.*Restock.*Remarks/s',
+            '/Available stock.*Requested.*Issued.*Remaining.*Status.*Issue remarks/s',
             $html,
         );
     }

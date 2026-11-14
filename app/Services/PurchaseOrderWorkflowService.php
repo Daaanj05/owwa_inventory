@@ -152,6 +152,8 @@ class PurchaseOrderWorkflowService
             ],
         ]);
 
+        DashboardKpiCache::bump();
+
         return $purchaseOrder->fresh() ?? $purchaseOrder;
     }
 

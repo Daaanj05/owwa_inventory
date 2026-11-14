@@ -76,6 +76,7 @@ class SignatorySelect
         return match ($role) {
             ProcurementSignatoryName::ROLE_REQUESTED => 'Name of the person requesting the purchase of the item/s.',
             ProcurementSignatoryName::ROLE_APPROVED => 'Name of the person approving the purchase of the item/s.',
+            ProcurementSignatoryName::ROLE_RIS_APPROVED => 'Name of the person approving the Requisition and Issue Slip.',
             ProcurementSignatoryName::ROLE_INSPECTION_OFFICER => 'Signs the Inspection portion: inspected, verified, and found in order as to quantity and specifications.',
             ProcurementSignatoryName::ROLE_CUSTODIAN => 'Acknowledges receipt on Acceptance: name, signature, date, and complete/partial mark.',
             ProcurementSignatoryName::ROLE_TRANSFER_APPROVED => 'Name of the Approver',
@@ -134,6 +135,7 @@ class SignatorySelect
     {
         return [
             ProcurementSignatoryName::ROLE_APPROVED => 'Approver',
+            ProcurementSignatoryName::ROLE_RIS_APPROVED => 'RIS approver',
             ProcurementSignatoryName::ROLE_INSPECTION_OFFICER => 'Inspection officer',
             ProcurementSignatoryName::ROLE_CUSTODIAN => 'Custodian / accountable officer',
             ProcurementSignatoryName::ROLE_TRANSFER_APPROVED => 'Transfer approver',
@@ -164,6 +166,9 @@ class SignatorySelect
                 ProcurementSignatoryName::ROLE_APPROVED,
                 ProcurementSignatoryName::ROLE_INSPECTION_OFFICER,
                 ProcurementSignatoryName::ROLE_CUSTODIAN,
+            ],
+            'requisition' => [
+                ProcurementSignatoryName::ROLE_RIS_APPROVED,
             ],
             'transfer' => [
                 ProcurementSignatoryName::ROLE_TRANSFER_APPROVED,
@@ -268,6 +273,7 @@ class SignatorySelect
     {
         return [
             'pr_iar' => 'PR / IAR',
+            'requisition' => 'Requisition',
             'transfer' => 'Transfer',
             'physical_count' => 'Physical count',
             'disposal' => 'Disposal',

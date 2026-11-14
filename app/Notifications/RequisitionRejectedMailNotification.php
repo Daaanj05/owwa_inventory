@@ -3,6 +3,7 @@
 namespace App\Notifications;
 
 use App\Models\Requisition;
+use App\Support\WorkflowEmailContext;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
@@ -15,6 +16,8 @@ class RequisitionRejectedMailNotification extends Notification implements Should
     public function __construct(
         public Requisition $requisition,
         public string $title,
+        public ?int $workflowEmailNotificationId = null,
+        public ?WorkflowEmailContext $context = null,
     ) {
         $this->onQueue('mail');
     }
@@ -29,13 +32,14 @@ class RequisitionRejectedMailNotification extends Notification implements Should
 
     public function toMail(object $notifiable): MailMessage
     {
-        $this->requisition->loadMissing(['office']);
+        $this->requisition->loadMissing(['office', 'department']);
 
         return (new MailMessage)
             ->subject($this->title)
             ->markdown('mail.requisition-rejected', [
                 'requisition' => $this->requisition,
                 'recipient' => $notifiable,
+                'context' => $this->context,
             ]);
     }
 }

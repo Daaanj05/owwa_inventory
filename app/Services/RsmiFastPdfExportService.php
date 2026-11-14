@@ -313,13 +313,6 @@ class RsmiFastPdfExportService
 
     protected function risNumber(Issuance $issuance): string
     {
-        $issuance->loadMissing(['consolidatedRequisition', 'requisition']);
-
-        return (string) (
-            $issuance->consolidatedRequisition?->reference_code
-            ?? $issuance->requisition?->reference_code
-            ?? $issuance->requisition?->getAttribute('ris_number')
-            ?? ''
-        );
+        return (string) ($issuance->displayRisNumber() ?? '');
     }
 }

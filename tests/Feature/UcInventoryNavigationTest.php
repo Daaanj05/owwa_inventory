@@ -158,6 +158,11 @@ class UcInventoryNavigationTest extends TestCase
         $this->assertIsInt($setupIndex);
         $this->assertLessThan($supplyLinksIndex, $analyticsIndex);
         $this->assertLessThan($setupIndex, $supplyLinksIndex);
+
+        $setup = collect($groupsMethod->invoke($provider))
+            ->first(fn ($group): bool => $group->getLabel() === 'Setup');
+
+        $this->assertTrue($setup->isCollapsed());
     }
 
     public function test_distributions_module_is_removed(): void

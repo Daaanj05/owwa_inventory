@@ -124,6 +124,11 @@ class PropertyActionRequest extends Model
         return $this->hasMany(self::class, 'compiled_into_property_action_request_id');
     }
 
+    public function workflowEmailNotifications(): HasMany
+    {
+        return $this->hasMany(WorkflowEmailNotification::class)->latest();
+    }
+
     public function isUcApprovedForCompile(): bool
     {
         return $this->status === self::STATUS_PENDING_UC

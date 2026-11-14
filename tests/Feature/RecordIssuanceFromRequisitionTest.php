@@ -17,6 +17,7 @@ use App\Models\Requisition;
 use App\Models\RequisitionItem;
 use App\Models\RequisitionSourceEndorsement;
 use App\Models\User;
+use App\Notifications\RequisitionWorkflowDatabaseNotification;
 use App\Services\OwwaTemplateExportService;
 use App\Services\RequisitionFulfillmentService;
 use App\Support\RequisitionLineDisplay;
@@ -24,6 +25,7 @@ use Filament\Actions\Testing\TestAction;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Notification;
 use Livewire\Livewire;
 use Tests\TestCase;
 
@@ -115,7 +117,7 @@ class RecordIssuanceFromRequisitionTest extends TestCase
         $this->assertStringContainsString($issuance->reference_code, (string) $values['G6']);
     }
 
-    public function test_accept_and_issue_action_submits_requisition_line_ids(): void
+    public function test_accept_and_issue_action_saves_for_approval_without_issuing(): void
     {
         Filament::setCurrentPanel(Filament::getPanel('admin'));
 
@@ -163,7 +165,7 @@ class RecordIssuanceFromRequisitionTest extends TestCase
             ->mountTableAction('view', $requisition)
             ->callAction(TestAction::make('acceptAndIssue'), [
                 'issuance_date' => '2026-06-07',
-                'ris_requested_by_name' => 'Unit Custodian',
+                'ris_requested_by_name' => $uc->name,
                 'ris_requested_by_designation' => 'Admin',
                 'ris_requested_by_date' => '2026-06-07',
                 'ris_approved_by_name' => 'Approving Officer',
@@ -172,16 +174,21 @@ class RecordIssuanceFromRequisitionTest extends TestCase
                 'ris_issued_by_name' => 'Supply Custodian',
                 'ris_issued_by_designation' => 'Supply Officer',
                 'ris_issued_by_date' => '2026-06-07',
-                'ris_received_by_name' => 'Unit Custodian',
+                'ris_received_by_name' => $uc->name,
                 'ris_received_by_designation' => 'Admin',
                 'ris_received_by_date' => '2026-06-07',
                 'lines' => RequisitionIssuanceFormSchema::defaultLines($requisition->fresh(), false),
             ])
             ->assertNotified();
 
-        $this->assertSame(1, Issuance::query()->where('requisition_id', $requisition->id)->count());
-        $this->assertSame(Requisition::STATUS_ACCEPTED, $requisition->fresh()->status);
-        $this->assertSame(2, $line->fresh()->quantity_issued);
+        $requisition->refresh();
+
+        $this->assertSame(0, Issuance::query()->where('requisition_id', $requisition->id)->count());
+        $this->assertSame(Requisition::STATUS_PENDING, $requisition->status);
+        $this->assertSame(Requisition::RIS_APPROVAL_FOR_APPROVAL, $requisition->ris_approval_status);
+        $this->assertNotNull($requisition->pending_issue_payload);
+        $this->assertSame(0, (int) ($line->fresh()->quantity_issued ?? 0));
+        $this->assertSame('Approving Officer', $requisition->ris_approved_by_name);
     }
 
     public function test_custodian_reject_action_was_removed(): void
@@ -276,6 +283,8 @@ class RecordIssuanceFromRequisitionTest extends TestCase
             ->assertFormFieldExists('ris_issued_by_designation')
             ->assertFormFieldExists('ris_received_by_name')
             ->assertFormFieldExists('ris_received_by_designation')
+            ->assertFormFieldDoesNotExist('ris_requested_by_date_display')
+            ->assertFormFieldDoesNotExist('ris_approved_by_date_display')
             ->assertFormFieldDoesNotExist('accounting_staff_printed_name')
             ->assertFormFieldExists('lines');
     }
@@ -623,5 +632,366 @@ class RecordIssuanceFromRequisitionTest extends TestCase
             'quantity' => 1,
             'issuance_date' => now()->toDateString(),
         ]);
+    }
+
+    public function test_ris_approval_flow_notifies_and_issues_only_after_mark_approved(): void
+    {
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+        Notification::fake();
+
+        $office = Office::factory()->create();
+        $category = ItemCategory::factory()->create(['name' => 'Consumables']);
+        $item = Item::factory()->create(['item_category_id' => $category->id]);
+
+        DB::table('acquisitions')->insert([
+            'reference_code' => 'ACQ-APPROVAL-1',
+            'item_id' => $item->id,
+            'office_id' => $office->id,
+            'quantity' => 50,
+            'acquisition_date' => now()->toDateString(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $employee = User::factory()->create([
+            'role' => User::ROLE_EMPLOYEE,
+            'office_id' => $office->id,
+            'name' => 'Maria Santos',
+        ]);
+        $uc = User::factory()->create([
+            'role' => User::ROLE_UNIT_CONSOLIDATOR,
+            'office_id' => $office->id,
+            'name' => 'Unit Head',
+        ]);
+        $custodian = User::factory()->create([
+            'role' => User::ROLE_SUPPLY_CUSTODIAN,
+        ]);
+
+        $employeeRequest = Requisition::query()->create([
+            'office_id' => $office->id,
+            'requested_by' => $employee->id,
+            'status' => Requisition::STATUS_ACCEPTED,
+            'transaction_number' => 'EMP-APPR-1',
+        ]);
+        $employeeLine = RequisitionItem::query()->create([
+            'requisition_id' => $employeeRequest->id,
+            'item_id' => $item->id,
+            'quantity' => 2,
+        ]);
+
+        $requisition = Requisition::query()->create([
+            'reference_code' => '2026-09-0202',
+            'office_id' => $office->id,
+            'requested_by' => $uc->id,
+            'status' => Requisition::STATUS_PENDING,
+        ]);
+        RequisitionItem::query()->create([
+            'requisition_id' => $requisition->id,
+            'item_id' => $item->id,
+            'quantity' => 2,
+        ]);
+
+        $endorsement = RequisitionSourceEndorsement::query()->create([
+            'consolidated_requisition_id' => $requisition->id,
+            'source_requisition_id' => $employeeRequest->id,
+            'requisition_item_id' => $employeeLine->id,
+            'requested_by_user_id' => $employee->id,
+            'item_id' => $item->id,
+            'requested_quantity' => 2,
+            'endorsed_quantity' => 2,
+        ]);
+
+        $employeeRequest->update(['compiled_into_requisition_id' => $requisition->id]);
+
+        $this->actingAs($custodian);
+
+        $lines = app(RequisitionFulfillmentService::class)
+            ->defaultEndorsementIssueLines($requisition->fresh(), false);
+
+        Livewire::test(ListRequisitions::class)
+            ->mountTableAction('view', $requisition)
+            ->callAction(TestAction::make('acceptAndIssue'), [
+                'issuance_date' => '2026-06-07',
+                'ris_requested_by_name' => $uc->name,
+                'ris_requested_by_designation' => 'Operations',
+                'ris_requested_by_date' => '2026-06-07',
+                'ris_approved_by_name' => 'Approving Officer',
+                'ris_approved_by_designation' => 'Chief',
+                'ris_approved_by_date' => '2026-06-07',
+                'ris_issued_by_name' => 'Supply Custodian',
+                'ris_issued_by_designation' => 'Supply Officer',
+                'ris_issued_by_date' => '2026-06-07',
+                'ris_received_by_name' => $employee->name,
+                'ris_received_by_designation' => 'Staff',
+                'ris_received_by_date' => '2026-06-07',
+                'lines' => $lines,
+            ])
+            ->assertNotified();
+
+        $requisition->refresh();
+
+        $this->assertSame(0, Issuance::query()->count());
+        $this->assertSame(Requisition::RIS_APPROVAL_FOR_APPROVAL, $requisition->ris_approval_status);
+        $this->assertSame($employee->name, $requisition->ris_received_by_name);
+
+        Notification::assertSentTo(
+            $uc,
+            RequisitionWorkflowDatabaseNotification::class,
+            fn (RequisitionWorkflowDatabaseNotification $notification): bool => $notification->title === 'RIS for approval',
+        );
+        Notification::assertSentTo(
+            $employee,
+            RequisitionWorkflowDatabaseNotification::class,
+            fn (RequisitionWorkflowDatabaseNotification $notification): bool => $notification->title === 'RIS for approval',
+        );
+        Notification::assertNotSentTo(
+            $custodian,
+            RequisitionWorkflowDatabaseNotification::class,
+            fn (RequisitionWorkflowDatabaseNotification $notification): bool => $notification->title === 'RIS for approval',
+        );
+
+        $values = app(OwwaTemplateExportService::class)->cellValuesForRequisition($requisition->fresh());
+        $this->assertSame('2', (string) $values['G12']);
+
+        Livewire::test(ListRequisitions::class)
+            ->mountTableAction('view', $requisition)
+            ->assertActionHidden(TestAction::make('issueApprovedStock'))
+            ->assertActionVisible(TestAction::make('markRisApproved'));
+
+        $this->assertSame(0, Issuance::query()->count());
+        $this->assertTrue($requisition->fresh()->isRisForApproval());
+
+        Livewire::test(ListRequisitions::class)
+            ->mountTableAction('view', $requisition)
+            ->callAction(TestAction::make('markRisApproved'))
+            ->assertNotified();
+
+        $this->assertTrue($requisition->fresh()->isRisApprovedReadyToIssue());
+        $this->assertSame(0, Issuance::query()->count());
+
+        Livewire::test(ListRequisitions::class)
+            ->mountTableAction('view', $requisition)
+            ->assertActionVisible(TestAction::make('issueApprovedStock'))
+            ->callAction(TestAction::make('issueApprovedStock'))
+            ->assertNotified();
+
+        $this->assertSame(1, Issuance::query()->where('source_endorsement_id', $endorsement->id)->count());
+        $this->assertNull($requisition->fresh()->ris_approval_status);
+        $this->assertNull($requisition->fresh()->pending_issue_payload);
+        $this->assertSame(Requisition::STATUS_ACCEPTED, $requisition->fresh()->status);
+    }
+
+    public function test_received_by_uses_consolidator_when_multiple_employees_share_ris(): void
+    {
+        $office = Office::factory()->create();
+        $category = ItemCategory::factory()->create(['name' => 'Consumables']);
+        $item = Item::factory()->create(['item_category_id' => $category->id]);
+
+        $employeeA = User::factory()->create([
+            'role' => User::ROLE_EMPLOYEE,
+            'office_id' => $office->id,
+            'name' => 'Employee A',
+        ]);
+        $employeeB = User::factory()->create([
+            'role' => User::ROLE_EMPLOYEE,
+            'office_id' => $office->id,
+            'name' => 'Employee B',
+        ]);
+        $uc = User::factory()->create([
+            'role' => User::ROLE_UNIT_CONSOLIDATOR,
+            'office_id' => $office->id,
+            'name' => 'Unit Head',
+        ]);
+
+        $reqA = Requisition::query()->create([
+            'office_id' => $office->id,
+            'requested_by' => $employeeA->id,
+            'status' => Requisition::STATUS_ACCEPTED,
+        ]);
+        $lineA = RequisitionItem::query()->create([
+            'requisition_id' => $reqA->id,
+            'item_id' => $item->id,
+            'quantity' => 1,
+        ]);
+        $reqB = Requisition::query()->create([
+            'office_id' => $office->id,
+            'requested_by' => $employeeB->id,
+            'status' => Requisition::STATUS_ACCEPTED,
+        ]);
+        $lineB = RequisitionItem::query()->create([
+            'requisition_id' => $reqB->id,
+            'item_id' => $item->id,
+            'quantity' => 1,
+        ]);
+
+        $consolidated = Requisition::query()->create([
+            'reference_code' => '2026-09-0300',
+            'office_id' => $office->id,
+            'requested_by' => $uc->id,
+            'status' => Requisition::STATUS_PENDING,
+        ]);
+        RequisitionItem::query()->create([
+            'requisition_id' => $consolidated->id,
+            'item_id' => $item->id,
+            'quantity' => 2,
+        ]);
+
+        RequisitionSourceEndorsement::query()->create([
+            'consolidated_requisition_id' => $consolidated->id,
+            'source_requisition_id' => $reqA->id,
+            'requisition_item_id' => $lineA->id,
+            'requested_by_user_id' => $employeeA->id,
+            'item_id' => $item->id,
+            'requested_quantity' => 1,
+            'endorsed_quantity' => 1,
+        ]);
+        RequisitionSourceEndorsement::query()->create([
+            'consolidated_requisition_id' => $consolidated->id,
+            'source_requisition_id' => $reqB->id,
+            'requisition_item_id' => $lineB->id,
+            'requested_by_user_id' => $employeeB->id,
+            'item_id' => $item->id,
+            'requested_quantity' => 1,
+            'endorsed_quantity' => 1,
+        ]);
+
+        $receivedBy = RequisitionIssuanceFormSchema::resolveReceivedByUser($consolidated->fresh());
+
+        $this->assertTrue($receivedBy?->is($uc));
+    }
+
+    public function test_issued_by_defaults_to_signed_in_custodian_account_name(): void
+    {
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+
+        $office = Office::factory()->create([
+            'supply_custodian_name' => 'Office Default Custodian',
+            'supply_custodian_designation' => 'Supply Officer',
+        ]);
+        $uc = User::factory()->create([
+            'role' => User::ROLE_UNIT_CONSOLIDATOR,
+            'office_id' => $office->id,
+        ]);
+        $custodian = User::factory()->create([
+            'role' => User::ROLE_SUPPLY_CUSTODIAN,
+            'name' => 'Dan Jediael Caranay',
+            'office_id' => $office->id,
+        ]);
+
+        $requisition = Requisition::query()->create([
+            'reference_code' => '2026-09-0500',
+            'office_id' => $office->id,
+            'requested_by' => $uc->id,
+            'status' => Requisition::STATUS_PENDING,
+        ]);
+
+        $this->actingAs($custodian);
+
+        [$name, $designation] = RequisitionIssuanceFormSchema::resolveIssuedBy($requisition);
+
+        $this->assertSame('Dan Jediael Caranay', $name);
+        $this->assertSame('Supply Officer', $designation);
+
+        $state = RequisitionIssuanceFormSchema::defaultFormState($requisition);
+        $this->assertSame('Dan Jediael Caranay', $state['ris_issued_by_name']);
+        $this->assertSame('Supply Officer', $state['ris_issued_by_designation']);
+    }
+
+    public function test_close_remaining_balance_hides_issue_remainder(): void
+    {
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+
+        $office = Office::factory()->create();
+        $category = ItemCategory::factory()->create(['name' => 'Consumables']);
+        $item = Item::factory()->create(['item_category_id' => $category->id]);
+
+        DB::table('acquisitions')->insert([
+            'reference_code' => 'ACQ-CLOSE-REM',
+            'item_id' => $item->id,
+            'office_id' => $office->id,
+            'quantity' => 50,
+            'acquisition_date' => now()->toDateString(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $employee = User::factory()->create([
+            'role' => User::ROLE_EMPLOYEE,
+            'office_id' => $office->id,
+        ]);
+        $uc = User::factory()->create([
+            'role' => User::ROLE_UNIT_CONSOLIDATOR,
+            'office_id' => $office->id,
+        ]);
+        $custodian = User::factory()->create([
+            'role' => User::ROLE_SUPPLY_CUSTODIAN,
+        ]);
+
+        $employeeRequest = Requisition::query()->create([
+            'office_id' => $office->id,
+            'requested_by' => $employee->id,
+            'status' => Requisition::STATUS_ACCEPTED,
+            'transaction_number' => 'EMP-CLOSE-1',
+        ]);
+        $employeeLine = RequisitionItem::query()->create([
+            'requisition_id' => $employeeRequest->id,
+            'item_id' => $item->id,
+            'quantity' => 20,
+            'quantity_issued' => 16,
+        ]);
+
+        $consolidated = Requisition::query()->create([
+            'reference_code' => '2026-09-0400',
+            'office_id' => $office->id,
+            'requested_by' => $uc->id,
+            'status' => Requisition::STATUS_ACCEPTED,
+        ]);
+        RequisitionItem::query()->create([
+            'requisition_id' => $consolidated->id,
+            'item_id' => $item->id,
+            'quantity' => 20,
+            'quantity_issued' => 16,
+        ]);
+
+        $endorsement = RequisitionSourceEndorsement::query()->create([
+            'consolidated_requisition_id' => $consolidated->id,
+            'source_requisition_id' => $employeeRequest->id,
+            'requisition_item_id' => $employeeLine->id,
+            'requested_by_user_id' => $employee->id,
+            'item_id' => $item->id,
+            'requested_quantity' => 20,
+            'endorsed_quantity' => 20,
+        ]);
+
+        $employeeRequest->update(['compiled_into_requisition_id' => $consolidated->id]);
+
+        Issuance::withoutEvents(function () use ($office, $item, $employeeRequest, $consolidated, $endorsement, $employee, $custodian): void {
+            Issuance::query()->create([
+                'reference_code' => 'ISS-CLOSE-REM',
+                'office_id' => $office->id,
+                'item_id' => $item->id,
+                'quantity' => 16,
+                'issuance_date' => now()->toDateString(),
+                'requisition_id' => $employeeRequest->id,
+                'consolidated_requisition_id' => $consolidated->id,
+                'source_endorsement_id' => $endorsement->id,
+                'issued_to' => $employee->id,
+                'issued_by' => $custodian->id,
+            ]);
+        });
+
+        $this->actingAs($custodian);
+
+        $this->assertTrue(CustodianRequisitionActions::canIssueRemainder($consolidated->fresh()));
+        $this->assertTrue(CustodianRequisitionActions::canCloseRemainingBalance($consolidated->fresh()));
+
+        Livewire::test(ListRequisitions::class)
+            ->mountTableAction('view', $consolidated)
+            ->callAction(TestAction::make('closeRemainingBalance'))
+            ->assertNotified();
+
+        $this->assertNotNull($employeeRequest->fresh()->closed_at);
+        $this->assertFalse(CustodianRequisitionActions::canIssueRemainder($consolidated->fresh()));
+        $this->assertFalse(CustodianRequisitionActions::canCloseRemainingBalance($consolidated->fresh()));
     }
 }

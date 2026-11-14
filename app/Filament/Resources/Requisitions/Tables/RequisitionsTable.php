@@ -28,6 +28,7 @@ use Filament\Notifications\Notification;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Auth;
 
@@ -72,7 +73,16 @@ class RequisitionsTable
                 TextColumn::make('requestedBy.name')
                     ->label('Requested by')
                     ->placeholder('—')
-                    ->searchable()
+                    ->state(fn (Requisition $record): string => $record->requestedBy?->listName() ?? '—')
+                    ->searchable(query: function (Builder $query, string $search): Builder {
+                        return $query->whereHas('requestedBy', function (Builder $userQuery) use ($search): void {
+                            $userQuery->where(function (Builder $nameQuery) use ($search): void {
+                                $nameQuery->where('first_name', 'like', "%{$search}%")
+                                    ->orWhere('last_name', 'like', "%{$search}%")
+                                    ->orWhere('name', 'like', "%{$search}%");
+                            });
+                        });
+                    })
                     ->visible(function () use ($table, $isEmployeeViewer, $isUnitConsolidatorViewer): bool {
                         if ($isEmployeeViewer) {
                             return false;
@@ -98,7 +108,7 @@ class RequisitionsTable
                     ->placeholder('—')
                     ->visible(! $isEmployeeViewer),
                 TextColumn::make('approved_at')
-                    ->label('Actioned on')
+                    ->label('Date processed')
                     ->date('M d, Y')
                     ->sortable()
                     ->placeholder('—')
@@ -140,6 +150,11 @@ class RequisitionsTable
                         CustodianRequisitionActions::createPurchaseRequestAction(),
                         CustodianRequisitionActions::reviewAndIssueAction(),
                         CustodianRequisitionActions::issueRemainderAction(),
+                        CustodianRequisitionActions::editForApprovalAction(),
+                        CustodianRequisitionActions::markRisApprovedAction(),
+                        CustodianRequisitionActions::issueApprovedStockAction(),
+                        CustodianRequisitionActions::reviseRisApprovalAction(),
+                        CustodianRequisitionActions::closeRemainingBalanceAction(),
                         Action::make('reviewFromView')
                             ->label('Mark as reviewed')
                             ->icon('heroicon-o-check')
@@ -319,13 +334,16 @@ class RequisitionsTable
         }
 
         $status = RequisitionStatus::label($record->status);
+        $approval = match (true) {
+            $record->isRisForApproval() => 'For approval',
+            $record->isRisApprovedReadyToIssue() => 'Approved — ready to issue',
+            default => null,
+        };
         $fulfillment = self::custodianFulfillmentLabel($record);
 
-        if (filled($fulfillment)) {
-            return "{$status} · {$fulfillment}";
-        }
+        $parts = array_values(array_filter([$status, $approval, $fulfillment]));
 
-        return $status;
+        return implode(' · ', $parts);
     }
 
     protected static function workflowStateColor(Requisition $record): string
@@ -338,6 +356,14 @@ class RequisitionsTable
             }
 
             return EmployeeRequisitionStatus::color($record);
+        }
+
+        if ($record->isRisForApproval()) {
+            return 'warning';
+        }
+
+        if ($record->isRisApprovedReadyToIssue()) {
+            return 'info';
         }
 
         $record->loadMissing('items');

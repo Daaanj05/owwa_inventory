@@ -59,6 +59,10 @@ class RequisitionFulfillmentService
 
         return $requisition->sourceEndorsements
             ->filter(function (RequisitionSourceEndorsement $endorsement) use ($remainderOnly, $stockSnapshot): bool {
+                if ($endorsement->sourceRequisition?->closed_at !== null) {
+                    return false;
+                }
+
                 $remaining = $this->endorsementRemainingQuantity($endorsement);
 
                 if ($remainderOnly) {
@@ -324,6 +328,10 @@ class RequisitionFulfillmentService
                     continue;
                 }
 
+                if ($endorsement->sourceRequisition?->closed_at !== null) {
+                    continue;
+                }
+
                 $stock = $this->issuableStock((int) $endorsement->item_id);
 
                 if ($qtyToIssue <= 0) {
@@ -461,6 +469,14 @@ class RequisitionFulfillmentService
         }
 
         return $this->finalizeIssueResult($consolidated, $custodian, $created, $acknowledged, $categoryCounts);
+    }
+
+    /**
+     * @param  array<string, mixed>  $signatories
+     */
+    public function persistRisSignatoriesPublic(Requisition $requisition, array $signatories): void
+    {
+        $this->persistRisSignatories($requisition, $signatories);
     }
 
     /**

@@ -15,15 +15,18 @@ class RequisitionInfolistSchemaTest extends TestCase
         $this->assertStringContainsString("TableColumn::make('Qty')", $source);
         $this->assertStringContainsString("TableColumn::make('Status')", $source);
         $this->assertStringContainsString("TableColumn::make('Available stock')", $source);
-        $this->assertMatchesRegularExpression(
-            "/TableColumn::make\\('Category'\\),\\s*TableColumn::make\\('Item'\\),\\s*TableColumn::make\\(OwwaReferenceLabels::assetIdentifierTableHeader\\(\\)\\),\\s*TableColumn::make\\('Available stock'\\),\\s*TableColumn::make\\('Requested'\\),\\s*TableColumn::make\\('Issued'\\),\\s*TableColumn::make\\('Remaining'\\),\\s*TableColumn::make\\('Status'\\),\\s*TableColumn::make\\('Restock'\\),\\s*TableColumn::make\\('Remarks'\\),/s",
-            $source,
-        );
+        $this->assertStringContainsString("TableColumn::make('Issue remarks')", $source);
+        $this->assertStringContainsString("TableColumn::make('Endorsement note')", $source);
+        $this->assertStringContainsString('identifierHeaderForRequisition', $source);
         $this->assertStringContainsString('employeeRequestedItemsRepeatable', $source);
         $this->assertStringContainsString('consolidatedRequestedItemsRepeatable', $source);
+        $this->assertStringNotContainsString("TableColumn::make('Restock')", $source);
+        $this->assertStringNotContainsString('WorkflowEmailNotificationsInfolist', $source);
         $this->assertStringNotContainsString("TableColumn::make('Stock at request')", $source);
         $this->assertStringNotContainsString("TableColumn::make('Distributed')", $source);
         $this->assertStringNotContainsString("TableColumn::make('Fulfillment')", $source);
+        $this->assertStringContainsString("'Processed by'", $source);
+        $this->assertStringContainsString("'Date processed'", $source);
     }
 
     public function test_requested_items_section_is_exposed_for_modal(): void
@@ -34,5 +37,7 @@ class RequisitionInfolistSchemaTest extends TestCase
         );
 
         $this->assertContains('Requested items', $headings);
+        $this->assertContains('Printed RIS signatories', $headings);
+        $this->assertNotContains('Email notifications', $headings);
     }
 }

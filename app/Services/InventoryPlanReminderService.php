@@ -7,8 +7,8 @@ use App\Models\PhysicalInventoryPlanLine;
 use App\Models\User;
 use App\Notifications\InventoryPlanReminderNotification;
 use App\Support\NotificationRecipientResolver;
+use App\Support\WorkflowEmailNotifier;
 use Illuminate\Support\Carbon;
-use Illuminate\Support\Facades\Notification;
 
 class InventoryPlanReminderService
 {
@@ -74,10 +74,26 @@ class InventoryPlanReminderService
                 continue;
             }
 
-            Notification::send(
-                $recipientResolver->supplyCustodiansForOffice((int) ($line->office_id ?? 0)),
-                new InventoryPlanReminderNotification($line, $reminderType),
-            );
+            $recipients = $recipientResolver->supplyCustodiansForOffice((int) ($line->office_id ?? 0));
+            $notification = new InventoryPlanReminderNotification($line, $reminderType);
+
+            foreach ($recipients as $custodian) {
+                if (! $custodian instanceof User) {
+                    continue;
+                }
+
+                $custodian->notify($notification);
+
+                app(WorkflowEmailNotifier::class)->queue(
+                    $custodian,
+                    $notification->title(),
+                    $notification->body(),
+                    [
+                        'physical_inventory_plan_id' => (int) $line->physical_inventory_plan_id,
+                        'physical_inventory_plan_line_id' => (int) $line->id,
+                    ],
+                );
+            }
 
             $line->update([
                 'last_reminder_type' => $reminderType,

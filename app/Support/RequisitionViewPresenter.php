@@ -34,7 +34,7 @@ class RequisitionViewPresenter
                 : self::workflowSteps($record),
             hint: $isEmployeeRequest
                 ? 'Track your request status and endorsed RIS number below.'
-                : 'Use actions below to issue, export, or action this requisition.',
+                : null,
             workflowTitle: 'Workflow',
         );
 
@@ -73,8 +73,7 @@ class RequisitionViewPresenter
         $totalRemaining = $record->items->sum(
             fn ($item): int => $fulfillment->remainingQuantity($item)
         );
-        $hasIssuance = $record->issuances()->exists()
-            || ($record->compiledIntoRequisition?->issuances()->exists() ?? false);
+        $hasIssuance = RequisitionLineDisplay::hasIssuances($record);
 
         $reviewState = $record->status === Requisition::STATUS_PENDING ? 'active' : 'done';
         $decisionState = match ($record->status) {

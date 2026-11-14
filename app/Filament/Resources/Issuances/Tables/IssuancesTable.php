@@ -47,11 +47,28 @@ class IssuancesTable
                     ->color(fn (Issuance $record): ?string => str_starts_with(strtoupper((string) $record->controlNumber()), 'RIS-')
                         ? 'warning'
                         : null),
-                TextColumn::make('requisition.reference_code')
+                TextColumn::make('ris_no')
                     ->label(OwwaReferenceLabels::RIS)
+                    ->state(fn (Issuance $record): ?string => $record->displayRisNumber())
                     ->placeholder('—')
-                    ->searchable()
-                    ->sortable()
+                    ->searchable(query: function (Builder $query, string $search): Builder {
+                        return $query->where(function (Builder $inner) use ($search): void {
+                            $inner->whereHas(
+                                'consolidatedRequisition',
+                                fn (Builder $requisitionQuery): Builder => $requisitionQuery->where('reference_code', 'like', "%{$search}%"),
+                            )->orWhereHas(
+                                'requisition',
+                                fn (Builder $requisitionQuery): Builder => $requisitionQuery->where('reference_code', 'like', "%{$search}%"),
+                            );
+                        });
+                    })
+                    ->sortable(query: function (Builder $query, string $direction): Builder {
+                        return $query
+                            ->leftJoin('requisitions as ris_consolidated', 'issuances.consolidated_requisition_id', '=', 'ris_consolidated.id')
+                            ->leftJoin('requisitions as ris_direct', 'issuances.requisition_id', '=', 'ris_direct.id')
+                            ->orderByRaw('COALESCE(ris_consolidated.reference_code, ris_direct.reference_code) '.$direction)
+                            ->select('issuances.*');
+                    })
                     ->toggleable(),
                 TextColumn::make('item.item_code')
                     ->label(OwwaReferenceLabels::STOCK_NO)

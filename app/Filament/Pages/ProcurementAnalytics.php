@@ -102,26 +102,47 @@ class ProcurementAnalytics extends Page
             }
         }
 
+        $this->applyOneShotAnalyticsSlideFromQuery();
         $this->syncAnalyticsSlides();
 
         $this->restoreRecommendationState();
-        $this->stripLegacyAiRunQueryFromBrowserUrl();
+        $this->stripOneShotQueryParamsFromBrowserUrl();
     }
 
-    protected function stripLegacyAiRunQueryFromBrowserUrl(): void
+    protected function applyOneShotAnalyticsSlideFromQuery(): void
     {
-        if (! request()->has('ai_run')) {
+        $slide = (string) request()->query('analyticsSlide', '');
+
+        if ($slide === '' || ! in_array($slide, $this->availableAnalyticsSlides(), true)) {
             return;
         }
 
-        // Old toast/DB notification links used ?ai_run=N; strip it so it never sticks in the bar.
+        $this->analyticsSlide = $slide;
+    }
+
+    protected function stripOneShotQueryParamsFromBrowserUrl(): void
+    {
+        $stripAiRun = request()->has('ai_run');
+        $stripAnalyticsSlide = request()->has('analyticsSlide');
+
+        if (! $stripAiRun && ! $stripAnalyticsSlide) {
+            return;
+        }
+
+        // One-shot deep links / legacy toast params: apply in mount, then keep the bar clean.
         $this->js(<<<'JS'
             (() => {
                 const url = new URL(window.location.href);
-                if (! url.searchParams.has('ai_run')) {
+                let changed = false;
+                for (const key of ['ai_run', 'analyticsSlide']) {
+                    if (url.searchParams.has(key)) {
+                        url.searchParams.delete(key);
+                        changed = true;
+                    }
+                }
+                if (! changed) {
                     return;
                 }
-                url.searchParams.delete('ai_run');
                 const next = url.pathname + url.search + url.hash;
                 window.history.replaceState(window.history.state, '', next);
             })();

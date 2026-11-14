@@ -4,6 +4,7 @@ namespace App\Filament\Resources\PropertyActionRequests\Schemas;
 
 use App\Filament\Resources\Disposals\DisposalResource;
 use App\Filament\Resources\Transfers\TransferResource;
+use App\Filament\Support\WorkflowEmailNotificationsInfolist;
 use App\Models\PropertyActionRequest;
 use App\Models\PropertyActionRequestLine;
 use App\Support\OwwaReferenceLabels;
@@ -25,6 +26,7 @@ class PropertyActionRequestInfolistSchema
                 ->schema(self::detailFields()),
             self::requestedItemsSection(),
             self::outcomeLinksSection(),
+            WorkflowEmailNotificationsInfolist::section(),
         ];
     }
 

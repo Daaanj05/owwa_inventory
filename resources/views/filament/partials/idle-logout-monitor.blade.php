@@ -64,6 +64,8 @@
                 clearTimeout(this.warningTimer);
                 clearInterval(this.countdown);
                 try {
+                    localStorage.removeItem('collapsedGroups');
+                    sessionStorage.setItem('owwaSidebarReset', '1');
                     localStorage.setItem(this.logoutKey, String(Date.now()));
                 } catch (e) {}
                 // Navigate to recover (GET logout). Do not POST with the page CSRF —
@@ -78,6 +80,10 @@
                         this.resetIdle(false);
                     }
                     if (event.key === this.logoutKey && event.newValue) {
+                        try {
+                            localStorage.removeItem('collapsedGroups');
+                            sessionStorage.setItem('owwaSidebarReset', '1');
+                        } catch (e) {}
                         window.location.replace(@js($recoverUrl));
                     }
                 });

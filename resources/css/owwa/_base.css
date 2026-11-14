@@ -287,31 +287,61 @@
 /* Procurement analytics & COA reports: title sits higher; keep bottom spacing for scroll/actions */
 .fi-main:has(.owwa-pa-page),
 .fi-main:has(.owwa-coa-reports-page) {
-    padding-top: 0.05rem !important;
+    padding-top: 0 !important;
     padding-bottom: 0.75rem !important;
 }
 
 /*
- * Filament default: .fi-page-header-main-ctn { flex flex-col gap-y-8 py-8 } — large gap between
- * the page header (title/subheading) and .fi-page-main (where the FY bar lives). Override here
- * to tighten that space; row-gap is what separates subtitle from the context bar.
+ * Filament default: .fi-page-header-main-ctn { padding-block: spacing*8 ≈ 2rem }.
+ * Must override padding-block (not only padding-top). DevTools confirmed 5.6px after
+ * first fix; squeeze to 0 so the title sits flush under the topbar like a tight list page.
  */
-.fi-page.owwa-pa-page .fi-page-header-main-ctn {
-    row-gap: 0.5rem !important;
-    padding-top: 0.75rem !important;
-    padding-bottom: 0.5rem !important;
+.fi-page.owwa-pa-page > .fi-page-header-main-ctn {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 0.15rem !important;
+    row-gap: 0.15rem !important;
+    padding: 0 !important;
+    padding-block: 0 !important;
+    /* Kill leftover half-leading / flex air under sticky topbar (DevTools: pad was already ~5.6px). */
+    margin-top: -0.35rem !important;
 }
 
 .fi-page.owwa-pa-page .fi-header {
-    padding-left: 0.75rem !important;
-    padding-right: 0.75rem !important;
-    padding-top: 0.05rem !important;
-    padding-bottom: 0.05rem !important;
+    gap: 0.2rem !important;
+    padding: 0 0.75rem !important;
+    padding-block: 0 !important;
+    margin: 0 !important;
+    align-items: flex-start !important;
+}
+
+.fi-page.owwa-pa-page .fi-header > div {
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+.fi-page.owwa-pa-page .fi-header-heading {
+    display: flex !important;
+    align-items: center !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    line-height: 1.15 !important;
+}
+
+.fi-page.owwa-pa-page .owwa-pa-page-title {
+    gap: 0.5rem !important;
+}
+
+.fi-page.owwa-pa-page .owwa-pa-page-title-icon {
+    width: 1.5rem !important;
+    height: 1.5rem !important;
 }
 
 .fi-page.owwa-pa-page .fi-header-subheading {
-    margin-top: 0.375rem !important;
-    padding-bottom: 0.05rem;
+    margin-top: 0.15rem !important;
+    margin-bottom: 0 !important;
+    padding: 0 !important;
+    line-height: 1.35 !important;
 }
 
 /*
@@ -324,11 +354,6 @@
     column-gap: 0.5rem !important;
     padding-top: 0.125rem;
     padding-bottom: 1rem;
-}
-
-.fi-page.owwa-pa-page .fi-header-heading {
-    display: flex !important;
-    align-items: center !important;
 }
 
 /* KPI stack + lazy stats: remove extra vertical margin above the first widget */

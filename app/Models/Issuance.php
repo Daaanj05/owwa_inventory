@@ -210,6 +210,35 @@ class Issuance extends Model
         return $this->consolidated_requisition_id !== null;
     }
 
+    /**
+     * Custodian RIS number for this issuance. Never the employee transaction number.
+     */
+    public function displayRisNumber(): ?string
+    {
+        $this->loadMissing(['consolidatedRequisition', 'requisition']);
+
+        if (filled($this->consolidatedRequisition?->reference_code)) {
+            return (string) $this->consolidatedRequisition->reference_code;
+        }
+
+        if (filled($this->requisition?->reference_code)) {
+            return (string) $this->requisition->reference_code;
+        }
+
+        return null;
+    }
+
+    public function displayTransactionNumber(): ?string
+    {
+        $this->loadMissing('requisition');
+
+        if (! $this->requisition?->isEmployeeRequest()) {
+            return null;
+        }
+
+        return $this->requisition->displayTransactionNumber();
+    }
+
     public function issuedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'issued_by');

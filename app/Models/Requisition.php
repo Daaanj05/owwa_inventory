@@ -25,6 +25,10 @@ class Requisition extends Model
 
     public const STATUS_REJECTED = 'rejected';
 
+    public const RIS_APPROVAL_FOR_APPROVAL = 'for_approval';
+
+    public const RIS_APPROVAL_APPROVED = 'approved';
+
     protected $fillable = [
         'reference_code', 'transaction_number', 'office_id', 'department_id', 'requested_by',
         'status', 'remarks', 'purpose', 'original_submission', 'content_edited_at',
@@ -33,7 +37,9 @@ class Requisition extends Model
         'ris_approved_by_name', 'ris_approved_by_designation', 'ris_approved_by_date',
         'ris_issued_by_name', 'ris_issued_by_designation', 'ris_issued_by_date',
         'ris_received_by_name', 'ris_received_by_designation', 'ris_received_by_date',
+        'ris_approval_status', 'pending_issue_payload',
         'endorsed_at', 'endorsed_by', 'closed_at', 'fulfillment_summary',
+        'partial_balance_reminded_at',
         'compiled_into_requisition_id', 'archived_at',
     ];
 
@@ -47,8 +53,10 @@ class Requisition extends Model
             'ris_approved_by_date' => 'date',
             'ris_issued_by_date' => 'date',
             'ris_received_by_date' => 'date',
+            'pending_issue_payload' => 'array',
             'endorsed_at' => 'datetime',
             'closed_at' => 'datetime',
+            'partial_balance_reminded_at' => 'datetime',
             'archived_at' => 'datetime',
         ];
     }
@@ -97,6 +105,11 @@ class Requisition extends Model
     public function sourceRequests(): HasMany
     {
         return $this->hasMany(self::class, 'compiled_into_requisition_id');
+    }
+
+    public function workflowEmailNotifications(): HasMany
+    {
+        return $this->hasMany(WorkflowEmailNotification::class)->latest();
     }
 
     public function sourceEndorsements(): HasMany
@@ -218,6 +231,31 @@ class Requisition extends Model
             || ($this->isAccepted() && $this->hasRemainingToIssue());
     }
 
+    public function isRisForApproval(): bool
+    {
+        return $this->ris_approval_status === self::RIS_APPROVAL_FOR_APPROVAL;
+    }
+
+    public function isRisApprovedReadyToIssue(): bool
+    {
+        return $this->ris_approval_status === self::RIS_APPROVAL_APPROVED;
+    }
+
+    public function hasPendingRisApproval(): bool
+    {
+        return filled($this->ris_approval_status);
+    }
+
+    /**
+     * @return array{issuance_date?: string, lines?: array<int, array<string, mixed>>, signatories?: array<string, mixed>}|null
+     */
+    public function pendingIssuePayload(): ?array
+    {
+        $payload = $this->pending_issue_payload;
+
+        return is_array($payload) ? $payload : null;
+    }
+
     public function hasMixedCategories(): bool
     {
         $this->loadMissing('items.item.category');
@@ -285,7 +323,12 @@ class Requisition extends Model
 
     public function canExportRis(): bool
     {
-        return ! $this->isEmployeeRequest() && filled($this->reference_code);
+        if ($this->isEmployeeRequest() || blank($this->reference_code)) {
+            return false;
+        }
+
+        // Pending review has no prepared RIS yet. Export after Save for approval, or once accepted.
+        return $this->hasPendingRisApproval() || $this->isAccepted();
     }
 
     public function hasBackorderedLines(): bool

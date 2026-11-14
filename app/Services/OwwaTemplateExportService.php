@@ -3318,6 +3318,7 @@ class OwwaTemplateExportService
             'requestedBy',
             'approvedBy',
             'items.item',
+            'sourceEndorsements',
         ]);
 
         $office = $requisition->office;
@@ -3345,6 +3346,7 @@ class OwwaTemplateExportService
         $maxRows = (int) ($detail['max_rows'] ?? 19);
         $columns = (array) ($detail['columns'] ?? []);
         $rowIndex = 0;
+        $preparedIssueByItem = $this->preparedIssueQuantitiesByRequisitionItem($requisition);
 
         foreach ($requisition->items as $itemLine) {
             if ($rowIndex >= $maxRows) {
@@ -3370,7 +3372,10 @@ class OwwaTemplateExportService
                 }
             }
 
-            if ($itemLine->quantity_issued !== null) {
+            $preparedQty = $preparedIssueByItem[(int) $itemLine->id] ?? null;
+            if ($preparedQty !== null) {
+                $values[OwwaCellMapping::columnCell($columns['issue_quantity'] ?? 'G', $row)] = (string) $preparedQty;
+            } elseif ($itemLine->quantity_issued !== null) {
                 $values[OwwaCellMapping::columnCell($columns['issue_quantity'] ?? 'G', $row)] = (string) $itemLine->quantity_issued;
             }
 
@@ -3405,6 +3410,67 @@ class OwwaTemplateExportService
             'F39' => $issuedByDate,
             'H39' => $receivedByDate,
         ]));
+    }
+
+    /**
+     * Prepared issue quantities keyed by consolidated requisition item id while a RIS
+     * is saved for approval / approved but not yet issued.
+     *
+     * @return array<int, int>
+     */
+    protected function preparedIssueQuantitiesByRequisitionItem(Requisition $requisition): array
+    {
+        if (! $requisition->hasPendingRisApproval()) {
+            return [];
+        }
+
+        $payload = $requisition->pendingIssuePayload();
+        $lines = is_array($payload['lines'] ?? null) ? $payload['lines'] : [];
+        if ($lines === []) {
+            return [];
+        }
+
+        $byItem = [];
+
+        foreach ($lines as $row) {
+            if (! is_array($row)) {
+                continue;
+            }
+
+            $qty = (int) ($row['quantity_to_issue'] ?? 0);
+            if ($qty <= 0) {
+                continue;
+            }
+
+            $itemLineId = (int) ($row['requisition_item_id'] ?? 0);
+            if ($itemLineId > 0) {
+                $byItem[$itemLineId] = ($byItem[$itemLineId] ?? 0) + $qty;
+
+                continue;
+            }
+
+            $endorsementId = (int) ($row['source_endorsement_id'] ?? 0);
+            if ($endorsementId <= 0) {
+                continue;
+            }
+
+            $endorsement = $requisition->relationLoaded('sourceEndorsements')
+                ? $requisition->sourceEndorsements->firstWhere('id', $endorsementId)
+                : $requisition->sourceEndorsements()->whereKey($endorsementId)->first();
+
+            if ($endorsement === null) {
+                continue;
+            }
+
+            $consolidatedLine = $requisition->items->firstWhere('item_id', (int) $endorsement->item_id);
+            if ($consolidatedLine === null) {
+                continue;
+            }
+
+            $byItem[(int) $consolidatedLine->id] = ($byItem[(int) $consolidatedLine->id] ?? 0) + $qty;
+        }
+
+        return $byItem;
     }
 
     /**

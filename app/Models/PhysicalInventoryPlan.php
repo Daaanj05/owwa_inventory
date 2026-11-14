@@ -84,6 +84,11 @@ class PhysicalInventoryPlan extends Model
         return $this->hasMany(PhysicalInventoryPlanLine::class);
     }
 
+    public function workflowEmailNotifications(): HasMany
+    {
+        return $this->hasMany(WorkflowEmailNotification::class)->latest();
+    }
+
     public function isDraft(): bool
     {
         return $this->status === self::STATUS_DRAFT;

@@ -19,7 +19,7 @@ class RequisitionLineDisplay
 
     public static function identifierValue(RequisitionItem $line): ?string
     {
-        $line->loadMissing(['item.category', 'requisition.compiledIntoRequisition.issuances']);
+        $line->loadMissing(['item.category', 'requisition']);
 
         $slug = $line->item?->category?->getTemplateSlug();
         $fromIssuance = self::latestIssuanceForLine($line)?->property_number;
@@ -47,18 +47,62 @@ class RequisitionLineDisplay
 
     public static function latestIssuanceForLine(RequisitionItem $line): ?Issuance
     {
-        $requisition = self::fulfillmentRequisition($line);
+        $line->loadMissing('requisition');
 
+        $requisition = $line->requisition;
         if (! $requisition) {
             return null;
         }
 
-        $requisition->loadMissing('issuances');
-
-        return $requisition->issuances
+        return self::issuancesForRequisition($requisition)
             ->where('item_id', $line->item_id)
             ->sortByDesc('id')
             ->first();
+    }
+
+    /**
+     * @return Collection<int, Issuance>
+     */
+    public static function issuancesForRequisition(Requisition $requisition): Collection
+    {
+        if ($requisition->isEmployeeRequest()) {
+            return Issuance::query()
+                ->with(['item.category'])
+                ->where('requisition_id', $requisition->id)
+                ->orderBy('id')
+                ->get();
+        }
+
+        return Issuance::query()
+            ->with(['item.category'])
+            ->where(function ($query) use ($requisition): void {
+                $query->where('consolidated_requisition_id', $requisition->id)
+                    ->orWhere(function ($direct) use ($requisition): void {
+                        $direct->where('requisition_id', $requisition->id)
+                            ->whereNull('consolidated_requisition_id');
+                    });
+            })
+            ->orderBy('id')
+            ->get();
+    }
+
+    public static function hasIssuances(Requisition $requisition): bool
+    {
+        if ($requisition->isEmployeeRequest()) {
+            return Issuance::query()
+                ->where('requisition_id', $requisition->id)
+                ->exists();
+        }
+
+        return Issuance::query()
+            ->where(function ($query) use ($requisition): void {
+                $query->where('consolidated_requisition_id', $requisition->id)
+                    ->orWhere(function ($direct) use ($requisition): void {
+                        $direct->where('requisition_id', $requisition->id)
+                            ->whereNull('consolidated_requisition_id');
+                    });
+            })
+            ->exists();
     }
 
     /**
@@ -66,22 +110,14 @@ class RequisitionLineDisplay
      */
     public static function relatedIssuanceSummaries(Requisition $requisition): Collection
     {
-        $fulfillmentRequisition = self::fulfillmentRequisitionForRequisition($requisition);
-
-        if (! $fulfillmentRequisition) {
-            return collect();
-        }
-
-        $fulfillmentRequisition->loadMissing(['issuances.item.category']);
-
-        return $fulfillmentRequisition->issuances
-            ->sortBy('id')
+        return self::issuancesForRequisition($requisition)
             ->groupBy(fn (Issuance $issuance): string => $issuance->item?->category?->name ?? 'Other')
             ->flatMap(function (Collection $group, string $categoryName): Collection {
                 return $group->map(function (Issuance $issuance) use ($categoryName): string {
                     $controlLabel = OwwaReferenceLabels::forIssuance($issuance);
+                    $controlNumber = $issuance->controlNumber() ?? $issuance->reference_code;
 
-                    return "{$categoryName} — {$controlLabel} {$issuance->reference_code}";
+                    return "{$categoryName} — {$controlLabel} {$controlNumber}";
                 });
             })
             ->values();
@@ -112,23 +148,5 @@ class RequisitionLineDisplay
         $summary = $parts !== [] ? ' Records are under: '.implode(', ', $parts).'.' : '';
 
         return "Issued {$created} item(s).{$summary} Find them under Inventory → category → Issuances.";
-    }
-
-    protected static function fulfillmentRequisition(RequisitionItem $line): ?Requisition
-    {
-        $line->loadMissing('requisition.compiledIntoRequisition');
-
-        return self::fulfillmentRequisitionForRequisition($line->requisition);
-    }
-
-    protected static function fulfillmentRequisitionForRequisition(?Requisition $requisition): ?Requisition
-    {
-        if (! $requisition) {
-            return null;
-        }
-
-        $requisition->loadMissing('compiledIntoRequisition');
-
-        return $requisition->compiledIntoRequisition ?? $requisition;
     }
 }

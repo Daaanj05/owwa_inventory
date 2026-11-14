@@ -12,6 +12,8 @@ use App\Models\Transfer;
 use App\Models\User;
 use App\Notifications\RequisitionWorkflowDatabaseNotification;
 use App\Support\SupplyOfficeResolver;
+use App\Support\WorkflowEmailContext;
+use App\Support\WorkflowEmailNotifier;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
@@ -534,16 +536,35 @@ class PropertyActionRequestWorkflowService
 
     protected function notifyRequester(PropertyActionRequest $request, string $title, string $body): void
     {
-        $request->loadMissing('requestedBy');
+        $request->loadMissing([
+            'requestedBy',
+            'office',
+            'department',
+            'compiledSourcePropertyActionRequests.requestedBy',
+            'compiledSourcePropertyActionRequests.office',
+            'compiledSourcePropertyActionRequests.department',
+        ]);
         $requester = $request->requestedBy;
 
-        if ($requester instanceof User) {
-            $requester->notify(new RequisitionWorkflowDatabaseNotification(
-                $title,
-                $body,
-                propertyActionRequestId: (int) $request->id,
-            ));
+        if (! $requester instanceof User) {
+            return;
         }
+
+        $context = null;
+
+        if ($requester->isUnitConsolidator()) {
+            $sources = $request->compiledSourcePropertyActionRequests;
+
+            $context = $sources->isNotEmpty()
+                ? WorkflowEmailContext::fromSourceRecords(
+                    $sources,
+                    $request->office?->name,
+                    $request->department?->name,
+                )
+                : WorkflowEmailContext::fromPropertyActionRequest($request);
+        }
+
+        $this->notifyUser($requester, $title, $body, $request, $context);
     }
 
     protected function notifyAccountableUser(PropertyActionRequest $request, string $title, string $body): void
@@ -552,17 +573,13 @@ class PropertyActionRequestWorkflowService
         $accountable = $request->accountableUser;
 
         if ($accountable instanceof User && (int) $accountable->id !== (int) $request->requested_by) {
-            $accountable->notify(new RequisitionWorkflowDatabaseNotification(
-                $title,
-                $body,
-                propertyActionRequestId: (int) $request->id,
-            ));
+            $this->notifyUser($accountable, $title, $body, $request);
         }
     }
 
     public function notifyEmployeeSubmitted(PropertyActionRequest $request): void
     {
-        $request->loadMissing('requestedBy');
+        $request->loadMissing(['requestedBy', 'office', 'department']);
 
         $this->notifyOfficeUnitConsolidators(
             $request,
@@ -582,12 +599,10 @@ class PropertyActionRequestWorkflowService
             $request->department_id ? (int) $request->department_id : null,
         );
 
+        $context = WorkflowEmailContext::fromPropertyActionRequest($request);
+
         foreach ($recipients as $user) {
-            $user->notify(new RequisitionWorkflowDatabaseNotification(
-                $title,
-                $body,
-                propertyActionRequestId: (int) $request->id,
-            ));
+            $this->notifyUser($user, $title, $body, $request, $context);
         }
     }
 
@@ -597,7 +612,7 @@ class PropertyActionRequestWorkflowService
             throw new InvalidArgumentException('Only draft requests can be sent to SC.');
         }
 
-        $request->loadMissing('lines');
+        $request->loadMissing(['lines', 'office', 'department']);
 
         if ($request->lines->isEmpty()) {
             throw new InvalidArgumentException('Property return requests require at least one property line.');
@@ -610,23 +625,52 @@ class PropertyActionRequestWorkflowService
             'uc_remarks' => $remarks,
         ]);
 
+        $office = $request->office?->name ?? 'Office';
+        $department = $request->department?->name;
+        $location = filled($department) ? "{$office} / {$department}" : $office;
+
         $this->notifyRegionalCustodians(
             $request,
             'Property return awaiting SC approval',
-            sprintf('%s — awaiting Supply Custodian review.', $request->reference_code),
+            sprintf('%s — awaiting Supply Custodian review. %s.', $request->reference_code, $location),
+            WorkflowEmailContext::fromPropertyActionRequest($request),
         );
     }
 
-    protected function notifyRegionalCustodians(PropertyActionRequest $request, string $title, string $body): void
-    {
+    protected function notifyRegionalCustodians(
+        PropertyActionRequest $request,
+        string $title,
+        string $body,
+        ?WorkflowEmailContext $context = null,
+    ): void {
         $custodians = app(\App\Support\NotificationRecipientResolver::class)->supplyCustodiansForRegionalOffice();
 
         foreach ($custodians as $custodian) {
-            $custodian->notify(new RequisitionWorkflowDatabaseNotification(
-                $title,
-                $body,
-                propertyActionRequestId: (int) $request->id,
-            ));
+            $this->notifyUser($custodian, $title, $body, $request, $context);
         }
+    }
+
+    protected function notifyUser(
+        User $user,
+        string $title,
+        string $body,
+        PropertyActionRequest $request,
+        ?WorkflowEmailContext $context = null,
+    ): void {
+        $user->notify(new RequisitionWorkflowDatabaseNotification(
+            $title,
+            $body,
+            propertyActionRequestId: (int) $request->id,
+        ));
+
+        app(WorkflowEmailNotifier::class)->queue(
+            $user,
+            $title,
+            $body,
+            ['property_action_request_id' => (int) $request->id],
+            $user->isUnitConsolidator()
+                ? ($context ?? WorkflowEmailContext::fromPropertyActionRequest($request))
+                : $context,
+        );
     }
 }

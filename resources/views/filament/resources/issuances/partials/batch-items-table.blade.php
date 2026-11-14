@@ -1,13 +1,16 @@
 @php
     /** @var \Illuminate\Support\Collection<int, \App\Models\Issuance> $lines */
     $lines = $lines ?? collect();
+    $identifierHeader = \App\Support\OwwaReferenceLabels::assetIdentifierTableHeaderForSlugs(
+        $lines->map(fn (\App\Models\Issuance $line): ?string => $line->item?->category?->getTemplateSlug())
+    );
 @endphp
 
 <div class="owwa-issuance-batch-table-wrap">
     <table class="owwa-issuance-batch-table">
         <thead>
             <tr>
-                <th scope="col">Stock / property no.</th>
+                <th scope="col">{{ $identifierHeader }}</th>
                 <th scope="col">Item</th>
                 <th scope="col">Unit</th>
                 <th scope="col" class="owwa-issuance-batch-num">Qty</th>

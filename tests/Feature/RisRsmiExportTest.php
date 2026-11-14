@@ -142,6 +142,11 @@ class RisRsmiExportTest extends TestCase
             'office_id' => $office->id,
             'requested_by' => $uc->id,
             'status' => Requisition::STATUS_PENDING,
+            'ris_approval_status' => Requisition::RIS_APPROVAL_FOR_APPROVAL,
+            'pending_issue_payload' => [
+                'issuance_date' => now()->toDateString(),
+                'lines' => [],
+            ],
         ]);
 
         /** @var User $custodian */

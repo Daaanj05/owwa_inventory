@@ -7,6 +7,8 @@ use App\Models\PropertyActionRequestLine;
 use App\Models\User;
 use App\Notifications\RequisitionWorkflowDatabaseNotification;
 use App\Support\NotificationRecipientResolver;
+use App\Support\WorkflowEmailContext;
+use App\Support\WorkflowEmailNotifier;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Collection as SupportCollection;
@@ -215,34 +217,65 @@ class PropertyActionRequestCompileService
             ],
         );
 
+        $batch->loadMissing(['office', 'department']);
+        $office = $batch->office?->name ?? 'Office';
+        $department = $batch->department?->name;
+        $location = filled($department) ? "{$office} / {$department}" : $office;
+
         $custodians = app(NotificationRecipientResolver::class)->supplyCustodiansForRegionalOffice();
+        $scTitle = 'Property return awaiting SC approval';
+        $scBody = sprintf(
+            '%s — consolidated from %d employee return%s. %s.',
+            $batch->reference_code,
+            $eligible->count(),
+            $eligible->count() === 1 ? '' : 's',
+            $location,
+        );
+        $scContext = WorkflowEmailContext::fromSourceRecords(
+            $eligible,
+            $batch->office?->name,
+            $batch->department?->name,
+        );
 
         foreach ($custodians as $custodian) {
             $custodian->notify(new RequisitionWorkflowDatabaseNotification(
-                'Property return awaiting SC approval',
-                sprintf(
-                    '%s — consolidated from %d employee return%s.',
-                    $batch->reference_code,
-                    $eligible->count(),
-                    $eligible->count() === 1 ? '' : 's',
-                ),
+                $scTitle,
+                $scBody,
                 propertyActionRequestId: (int) $batch->id,
             ));
+
+            app(WorkflowEmailNotifier::class)->queue(
+                $custodian,
+                $scTitle,
+                $scBody,
+                ['property_action_request_id' => (int) $batch->id],
+                $scContext,
+            );
         }
 
         foreach ($eligible as $source) {
             $requester = $source->requestedBy;
 
             if ($requester instanceof User) {
+                $title = 'Property return status updated';
+                $body = sprintf(
+                    '%s was compiled and submitted to Supply Custodian as %s.',
+                    $source->reference_code,
+                    $batch->reference_code,
+                );
+
                 $requester->notify(new RequisitionWorkflowDatabaseNotification(
-                    'Property return status updated',
-                    sprintf(
-                        '%s was compiled and submitted to Supply Custodian as %s.',
-                        $source->reference_code,
-                        $batch->reference_code,
-                    ),
+                    $title,
+                    $body,
                     propertyActionRequestId: (int) $source->id,
                 ));
+
+                app(WorkflowEmailNotifier::class)->queue(
+                    $requester,
+                    $title,
+                    $body,
+                    ['property_action_request_id' => (int) $source->id],
+                );
             }
         }
 
