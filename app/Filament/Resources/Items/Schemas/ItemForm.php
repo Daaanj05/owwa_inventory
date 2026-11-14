@@ -126,7 +126,7 @@ class ItemForm
                             ->disabled()
                             ->dehydrated(false)
                             ->placeholder('Assigned automatically on save')
-                            ->helperText('Catalog number for the first unit (TEMP-… until that unit’s cost finalizes SPLV/SPHV). Each additional stock unit takes the next sequence.')
+                            ->helperText('Catalog pattern only (no unit sequence). TEMP-… until first acquisition cost finalizes SPLV/SPHV. Each physical unit gets its own sequenced number.')
                             ->visible(fn (string $operation, Get $get): bool => $operation !== 'create'
                                 && self::isSemiExpendableCategory($get('item_category_id'))),
                         TextInput::make('ppe_property_number')
@@ -134,7 +134,7 @@ class ItemForm
                             ->disabled()
                             ->dehydrated(false)
                             ->placeholder('Assigned automatically on save')
-                            ->helperText('One Property No. per catalog PPE item.')
+                            ->helperText('Catalog pattern only (no unit sequence). Each physical PPE unit gets its own sequenced Property No.')
                             ->visible(fn (string $operation, Get $get): bool => $operation !== 'create'
                                 && self::isPpeCategory($get('item_category_id'))),
                         TextInput::make('value_type_display')

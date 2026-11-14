@@ -18,6 +18,8 @@ class LogUserLogin
 
     public function handle(Login $event): void
     {
+        Session::put('owwa_sidebar_reset', true);
+
         $user = $event->user;
 
         if (! $user instanceof User) {

@@ -35,8 +35,8 @@ class PpePerUnitPropertyNumberTest extends TestCase
 
         $this->assertCount(3, $numbers);
         $this->assertCount(3, $numbers->unique());
-        $this->assertSame('PPE-2026-LAPTOP', $numbers->first());
         $this->assertSame('PPE-2026-LAPTOP', $item->fresh()->ppe_property_number);
+        $this->assertNotSame('PPE-2026-LAPTOP', $numbers->first());
 
         $labels = app(InventoryQrLabelService::class)->labelsForOpeningBalanceBatch($confirmed);
         $this->assertCount(3, $labels);

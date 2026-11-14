@@ -7,6 +7,7 @@ use App\Filament\Support\OwwaFormModalDefaults;
 use App\Models\PurchaseOrder;
 use App\Models\Supplier;
 use App\Services\PurchaseOrderWorkflowService;
+use App\Support\InventoryCategoryUnitCost;
 use App\Support\OwwaExportBusyDispatcher;
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
@@ -56,6 +57,9 @@ class PurchaseOrderActions
 
                 return $data;
             })
+            ->extraModalFooterActions(fn (EditAction $editAction): array => [
+                self::voidDraftAndArchivePrAction($editAction),
+            ])
             ->after(function (PurchaseOrder $record, EditAction $action): void {
                 app(PurchaseOrderWorkflowService::class)->rememberSupplier($record);
 
@@ -73,6 +77,86 @@ class PurchaseOrderActions
                     $action->redirect(PurchaseOrderResource::viewModalUrl($submitted));
                 }
             });
+    }
+
+    public static function voidDraftAndArchivePrAction(?EditAction $editAction = null): Action
+    {
+        return Action::make('voidDraftAndArchivePr')
+            ->label('Void draft and archive PR')
+            ->icon('heroicon-o-x-circle')
+            ->color('danger')
+            ->visible(function (PurchaseOrder $record) use ($editAction): bool {
+                if (! $record->isUnsavedPoDraft()) {
+                    return false;
+                }
+
+                if ($editAction !== null) {
+                    $lineStates = self::mountedEditFormLines($editAction);
+
+                    if ($lineStates !== []) {
+                        return InventoryCategoryUnitCost::lineStatesHaveOutOfRangeCost($lineStates);
+                    }
+                }
+
+                return InventoryCategoryUnitCost::purchaseOrderHasOutOfRangeCost($record);
+            })
+            ->requiresConfirmation()
+            ->modalHeading('Void this draft PO and archive the PR?')
+            ->modalDescription('The unit cost belongs in another category. This closes the whole purchase request, including any lines with a correct price. Create a new PR under the correct category with the correct catalog item.')
+            ->modalSubmitActionLabel('Void PO and archive PR')
+            ->action(function (PurchaseOrder $record, Action $action) use ($editAction): void {
+                $lineStates = $editAction !== null ? self::mountedEditFormLines($editAction) : [];
+
+                try {
+                    app(PurchaseOrderWorkflowService::class)->voidDraftAndArchivePr(
+                        $record,
+                        $lineStates !== [] ? $lineStates : null,
+                    );
+                } catch (ValidationException $exception) {
+                    Notification::make()
+                        ->title('Action blocked')
+                        ->body(collect($exception->errors())->flatten()->first() ?? 'Validation failed.')
+                        ->danger()
+                        ->send();
+                    $action->halt();
+
+                    return;
+                }
+
+                Notification::make()
+                    ->title('Draft PO voided')
+                    ->body('The purchase request was archived. Create a new PR in the correct category.')
+                    ->success()
+                    ->send();
+
+                $action->redirect(PurchaseOrderResource::getUrl('index'));
+            });
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    protected static function mountedEditFormLines(EditAction $editAction): array
+    {
+        $livewire = $editAction->getLivewire();
+
+        if (! is_object($livewire)) {
+            return [];
+        }
+
+        $data = [];
+
+        if (property_exists($livewire, 'mountedTableActionsData') && is_array($livewire->mountedTableActionsData)) {
+            $data = $livewire->mountedTableActionsData[0] ?? [];
+        }
+
+        $lines = is_array($data) ? ($data['lines'] ?? []) : [];
+
+        if (! is_array($lines)) {
+            return [];
+        }
+
+        return array_values($lines);
     }
 
     /**

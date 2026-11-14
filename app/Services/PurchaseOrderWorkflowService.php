@@ -2,11 +2,13 @@
 
 namespace App\Services;
 
+use App\Models\Acquisition;
 use App\Models\AcquisitionPaperwork;
 use App\Models\PurchaseOrder;
 use App\Models\PurchaseOrderLine;
 use App\Models\Supplier;
 use App\Support\DashboardKpiCache;
+use App\Support\InventoryCategoryUnitCost;
 use App\Support\SupplyOfficeResolver;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -123,6 +125,8 @@ class PurchaseOrderWorkflowService
             ]);
         }
 
+        InventoryCategoryUnitCost::assertPurchaseOrder($purchaseOrder->fresh(['lines.item.category']) ?? $purchaseOrder);
+
         $number = $purchaseOrder->number;
         if (blank($number)) {
             $number = $this->referenceCodes->forAcquisitionPaperworkPo();
@@ -181,6 +185,8 @@ class PurchaseOrderWorkflowService
             ]);
         }
 
+        InventoryCategoryUnitCost::assertPurchaseOrder($purchaseOrder->fresh(['lines.item.category']) ?? $purchaseOrder);
+
         $number = $purchaseOrder->number;
         if (blank($number)) {
             $number = $this->referenceCodes->forAcquisitionPaperworkPo();
@@ -231,5 +237,82 @@ class PurchaseOrderWorkflowService
         DashboardKpiCache::bump();
 
         return $purchaseOrder;
+    }
+
+    /**
+     * Delete an unsaved draft PO and archive its purchase request.
+     * Use when the true unit cost belongs in another inventory category.
+     *
+     * @param  array<int, array<string, mixed>>|null  $lineStates  Live form lines; falls back to saved lines.
+     *
+     * @throws ValidationException
+     */
+    public function voidDraftAndArchivePr(PurchaseOrder $purchaseOrder, ?array $lineStates = null): AcquisitionPaperwork
+    {
+        return DB::transaction(function () use ($purchaseOrder, $lineStates): AcquisitionPaperwork {
+            $purchaseOrder = PurchaseOrder::query()
+                ->whereKey($purchaseOrder->id)
+                ->lockForUpdate()
+                ->with(['lines.item.category', 'purchaseRequest'])
+                ->firstOrFail();
+
+            if (! $purchaseOrder->isUnsavedPoDraft()) {
+                throw ValidationException::withMessages([
+                    'phase' => 'Only an unsaved draft purchase order can be voided with its purchase request.',
+                ]);
+            }
+
+            if ($purchaseOrder->inspectionAcceptanceReport()->exists()) {
+                throw ValidationException::withMessages([
+                    'phase' => 'This purchase order already has an inspection and acceptance report.',
+                ]);
+            }
+
+            if (Acquisition::query()->where('purchase_order_id', $purchaseOrder->id)->exists()) {
+                throw ValidationException::withMessages([
+                    'phase' => 'This purchase order already has stock receipts and cannot be voided.',
+                ]);
+            }
+
+            $hasOutOfRange = is_array($lineStates)
+                ? InventoryCategoryUnitCost::lineStatesHaveOutOfRangeCost($lineStates)
+                : InventoryCategoryUnitCost::purchaseOrderHasOutOfRangeCost($purchaseOrder);
+
+            if (! $hasOutOfRange) {
+                throw ValidationException::withMessages([
+                    'unit_cost' => 'Enter the unit cost that belongs in another category before voiding this draft and archiving the purchase request.',
+                ]);
+            }
+
+            $paperwork = $purchaseOrder->purchaseRequest;
+
+            if ($paperwork === null) {
+                throw ValidationException::withMessages([
+                    'purchase_request' => 'This purchase order has no purchase request to archive.',
+                ]);
+            }
+
+            $paperwork = AcquisitionPaperwork::query()
+                ->whereKey($paperwork->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            $purchaseOrder->delete();
+
+            $paperwork->update([
+                'phase' => AcquisitionPaperwork::PHASE_PR,
+                'po_status' => AcquisitionPaperwork::STATUS_DRAFT,
+                'po_number' => null,
+                'po_date' => null,
+                'po_submitted_at' => null,
+                'po_completed_at' => null,
+                'po_data' => null,
+                'archived_at' => now(),
+            ]);
+
+            DashboardKpiCache::bump();
+
+            return $paperwork->fresh() ?? $paperwork;
+        });
     }
 }

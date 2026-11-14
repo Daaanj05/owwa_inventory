@@ -57,7 +57,11 @@ class SemiExpendablePropertyNumberTest extends TestCase
         app(AcquisitionUnitService::class)->generateUnitsForAcquisition($acquisition->fresh(['item.category', 'office']));
 
         $expected = 'SPHV-'.now()->format('Y').'-IT-106-001-01';
-        $this->assertSame($expected, $item->fresh()->semi_expendable_property_number);
+        $this->assertSame('SPHV-'.now()->format('Y').'-IT-106-01', $item->fresh()->semi_expendable_property_number);
+        $this->assertSame(
+            $expected,
+            \App\Models\InventoryUnit::query()->where('item_id', $item->id)->value('property_number'),
+        );
 
         $requisition = Requisition::query()->create([
             'reference_code' => '2026-01-0099',

@@ -100,49 +100,38 @@ class AcquisitionUnitService
     }
 
     /**
-     * First unit reuses the catalog TEMP sequence. Each later unit takes the next yearly sequence.
+     * Every unit takes the next yearly sequence. Catalog keeps the pattern only (no seq).
      */
     protected function mintNextSemiUnitNumber(Item $item, ?float $unitCost): string
     {
-        $current = (string) ($item->semi_expendable_property_number ?? '');
+        $this->catalogNumbers->finalizeSemiWithUnitCost($item, $unitCost);
 
-        if ($current === '' || str_starts_with($current, 'TEMP-')) {
-            $number = $this->catalogNumbers->finalizeSemiWithUnitCost($item, $unitCost);
-            $this->semiBuilder->persistBucketPropertyNumber($item, $unitCost, $number);
+        $number = $this->catalogNumbers->mintSemiForUnitCost($item->fresh(), $unitCost);
 
-            return $number;
-        }
+        $canonical = InventoryUnit::query()
+            ->where('item_id', $item->id)
+            ->whereNotNull('property_number')
+            ->orderBy('id')
+            ->value('property_number');
 
-        $number = $this->catalogNumbers->mintSemiForUnitCost($item, $unitCost);
-        $catalogNumber = (string) $item->semi_expendable_property_number;
-        if ($catalogNumber !== '') {
-            $this->semiBuilder->persistBucketPropertyNumber($item, $unitCost, $catalogNumber);
-        }
+        $this->semiBuilder->persistBucketPropertyNumber(
+            $item,
+            $unitCost,
+            filled($canonical) ? (string) $canonical : $number,
+        );
 
         return $number;
     }
 
     /**
-     * First unit uses the catalog Property No. Each later unit takes the next yearly PPE sequence.
+     * Every PPE unit takes the next yearly sequence. Catalog keeps the pattern only (no seq).
      */
     protected function mintNextPpeUnitNumber(Item $item): string
     {
-        $catalogNumber = (string) ($item->ppe_property_number ?? '');
-
-        if ($catalogNumber === '') {
-            $catalogNumber = $this->catalogNumbers->mintPpe($item);
-            $item->forceFill(['ppe_property_number' => $catalogNumber])->saveQuietly();
-
-            return $catalogNumber;
-        }
-
-        $catalogNumberInUse = InventoryUnit::query()
-            ->where('item_id', $item->id)
-            ->where('property_number', $catalogNumber)
-            ->exists();
-
-        if (! $catalogNumberInUse) {
-            return $catalogNumber;
+        if (blank($item->ppe_property_number)) {
+            $item->forceFill([
+                'ppe_property_number' => $this->catalogNumbers->patternPpe($item),
+            ])->saveQuietly();
         }
 
         return $this->catalogNumbers->mintPpeForUnit($item);

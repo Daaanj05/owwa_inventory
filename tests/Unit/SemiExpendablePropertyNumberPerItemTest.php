@@ -30,11 +30,17 @@ class SemiExpendablePropertyNumberPerItemTest extends TestCase
 
     public function test_acquisition_assigns_the_next_sequence_to_each_unit(): void
     {
-        $office = Office::factory()->create(['code' => 'OWWA-IVA']);
+        $office = Office::factory()->create(['code' => 'OWWA-IVA', 'is_regional_supply' => true]);
+        $uacs = UacsObjectCode::query()->create([
+            'code' => '106',
+            'name' => 'Placeholder',
+            'is_active' => true,
+        ]);
         $category = ItemCategory::factory()->create(['name' => 'Semi-Expendable']);
         $item = Item::factory()->create([
             'item_category_id' => $category->id,
             'property_class' => ItemPropertyClass::OfficeEquipment,
+            'uacs_object_code_id' => $uacs->id,
         ]);
         $user = User::factory()->create();
 
@@ -57,7 +63,11 @@ class SemiExpendablePropertyNumberPerItemTest extends TestCase
         $this->assertSame(5, $units->pluck('property_number')->unique()->count());
         $this->assertNotNull($bucket?->property_number);
         $this->assertSame($units->first()->property_number, $bucket->property_number);
-        $this->assertSame($units->first()->property_number, $item->fresh()->semi_expendable_property_number);
+        $this->assertSame(
+            'SPLV-'.now()->format('Y').'-OE-106-OWWA-IVA',
+            $item->fresh()->semi_expendable_property_number,
+        );
+        $this->assertNotSame($units->first()->property_number, $item->fresh()->semi_expendable_property_number);
     }
 
     public function test_quantity_two_uses_the_next_two_yearly_sequences(): void
@@ -106,16 +116,22 @@ class SemiExpendablePropertyNumberPerItemTest extends TestCase
             "SPHV-{$year}-OE-106-083-OWWA-IVA",
             "SPHV-{$year}-OE-106-084-OWWA-IVA",
         ], $numbers);
-        $this->assertSame("SPHV-{$year}-OE-106-083-OWWA-IVA", $item->fresh()->semi_expendable_property_number);
+        $this->assertSame("SPHV-{$year}-OE-106-OWWA-IVA", $item->fresh()->semi_expendable_property_number);
     }
 
     public function test_different_unit_costs_share_one_property_number(): void
     {
-        $office = Office::factory()->create(['code' => 'OWWA-IVA']);
+        $office = Office::factory()->create(['code' => 'OWWA-IVA', 'is_regional_supply' => true]);
+        $uacs = UacsObjectCode::query()->create([
+            'code' => '106',
+            'name' => 'Placeholder',
+            'is_active' => true,
+        ]);
         $category = ItemCategory::factory()->create(['name' => 'Semi-Expendable']);
         $item = Item::factory()->create([
             'item_category_id' => $category->id,
             'property_class' => ItemPropertyClass::OfficeEquipment,
+            'uacs_object_code_id' => $uacs->id,
         ]);
         $user = User::factory()->create();
 
@@ -151,23 +167,33 @@ class SemiExpendablePropertyNumberPerItemTest extends TestCase
         $this->assertNotNull($lowUnit?->property_number);
         $this->assertNotNull($highUnit?->property_number);
         $this->assertNotSame($lowUnit->property_number, $highUnit->property_number);
-        $this->assertSame($lowUnit->property_number, $item->fresh()->semi_expendable_property_number);
+        $this->assertSame(
+            'SPLV-'.now()->format('Y').'-OE-106-OWWA-IVA',
+            $item->fresh()->semi_expendable_property_number,
+        );
         $this->assertSame($lowUnit->property_number, $lowBucket?->property_number);
-        $this->assertSame($item->fresh()->semi_expendable_property_number, $highBucket?->property_number);
+        // Cost buckets keep the first unit number as the stock reference; units stay unique.
+        $this->assertSame($lowUnit->property_number, $highBucket?->property_number);
     }
 
     public function test_second_issuance_for_same_cost_reuses_acquisition_property_number(): void
     {
-        $office = Office::factory()->create(['code' => 'OWWA-IVA']);
+        $office = Office::factory()->create(['code' => 'OWWA-IVA', 'is_regional_supply' => true]);
         $department = Department::query()->create([
             'office_id' => $office->id,
             'name' => 'Admin',
             'code' => '01',
         ]);
+        $uacs = UacsObjectCode::query()->create([
+            'code' => '106',
+            'name' => 'Placeholder',
+            'is_active' => true,
+        ]);
         $category = ItemCategory::factory()->create(['name' => 'Semi-Expendable']);
         $item = Item::factory()->create([
             'item_category_id' => $category->id,
             'property_class' => ItemPropertyClass::Ict,
+            'uacs_object_code_id' => $uacs->id,
         ]);
         $custodian = User::factory()->create();
         $user = User::factory()->create();
@@ -184,8 +210,15 @@ class SemiExpendablePropertyNumberPerItemTest extends TestCase
 
         app(AcquisitionUnitService::class)->generateUnitsForAcquisition($acquisition->fresh(['item.category', 'office']));
 
-        $canonicalNumber = $item->fresh()->semi_expendable_property_number;
+        $canonicalNumber = InventoryUnit::query()
+            ->where('item_id', $item->id)
+            ->orderBy('id')
+            ->value('property_number');
         $this->assertNotNull($canonicalNumber);
+        $this->assertSame(
+            'SPLV-'.now()->format('Y').'-IT-106-OWWA-IVA',
+            $item->fresh()->semi_expendable_property_number,
+        );
 
         $requisition = Requisition::query()->create([
             'reference_code' => '2026-01-0100',

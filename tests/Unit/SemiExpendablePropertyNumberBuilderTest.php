@@ -52,10 +52,11 @@ class SemiExpendablePropertyNumberBuilderTest extends TestCase
         $number = app(SemiExpendablePropertyNumberBuilder::class)->assignForAcquisition($acquisition->fresh(['item.category', 'office']));
 
         $this->assertSame('SPLV-'.now()->format('Y').'-IT-106-001-RWO4A', $number);
-        $this->assertSame($number, $item->fresh()->semi_expendable_property_number);
+        $this->assertSame('SPLV-'.now()->format('Y').'-IT-106-RWO4A', $item->fresh()->semi_expendable_property_number);
+        $this->assertNotSame($number, $item->fresh()->semi_expendable_property_number);
     }
 
-    public function test_ppe_units_get_their_own_property_numbers_starting_with_the_item_number(): void
+    public function test_ppe_units_get_sequenced_property_numbers_not_the_catalog_pattern(): void
     {
         Office::factory()->create([
             'code' => 'OWWAIVA',
@@ -78,8 +79,9 @@ class SemiExpendablePropertyNumberBuilderTest extends TestCase
             'uacs_object_code_id' => $uacs->id,
         ]);
 
-        $propertyNumber = $ppeItem->fresh()->ppe_property_number;
-        $this->assertNotEmpty($propertyNumber);
+        $catalogPattern = $ppeItem->fresh()->ppe_property_number;
+        $this->assertNotEmpty($catalogPattern);
+        $this->assertSame(now()->format('Y').'-OE-106-OWWAIVA', $catalogPattern);
 
         $acquisition = Acquisition::query()->create([
             'reference_code' => 'ACQ-PPE-1',
@@ -94,8 +96,9 @@ class SemiExpendablePropertyNumberBuilderTest extends TestCase
         $units = app(AcquisitionUnitService::class)->generateUnitsForAcquisition($acquisition->fresh(['item.category', 'office']));
 
         $this->assertCount(2, $units);
-        $this->assertSame($propertyNumber, $units[0]->property_number);
-        $this->assertNotEmpty($units[1]->property_number);
-        $this->assertNotSame($propertyNumber, $units[1]->property_number);
+        $this->assertNotSame($catalogPattern, $units[0]->property_number);
+        $this->assertNotSame($catalogPattern, $units[1]->property_number);
+        $this->assertNotSame($units[0]->property_number, $units[1]->property_number);
+        $this->assertSame($catalogPattern, $ppeItem->fresh()->ppe_property_number);
     }
 }

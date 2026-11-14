@@ -10,9 +10,11 @@ use App\Filament\Support\OwwaFormModalDefaults;
 use App\Filament\Support\OwwaModalSchema;
 use App\Filament\Support\OwwaTableDefaults;
 use App\Models\Item;
+use App\Models\ItemAttributeOption;
 use App\Models\ItemCategory;
 use App\Services\CatalogAssetNumberService;
 use App\Support\OwwaTransactionViewPresenter;
+use App\Support\PpePropertyType;
 use App\Support\SemiExpendableValueCategory;
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
@@ -169,6 +171,35 @@ class ItemsTable
                 ->grow(false);
         }
 
+        if (self::isActivePpeCategory()) {
+            $columns[] = TextColumn::make('ppe_type')
+                ->label('Type of PPE')
+                ->formatStateUsing(fn (?string $state): string => filled($state)
+                    ? ItemAttributeOption::labelFor(ItemAttributeOption::KIND_PPE_TYPE, $state)
+                    : '—')
+                ->placeholder('—')
+                ->searchable(query: function ($query, string $search): void {
+                    $matchingValues = collect(ItemAttributeOption::optionsForKind(ItemAttributeOption::KIND_PPE_TYPE))
+                        ->filter(fn (string $label): bool => str_contains(strtolower($label), strtolower($search)))
+                        ->keys()
+                        ->all();
+
+                    $query->where(function ($inner) use ($search, $matchingValues): void {
+                        $inner->where('ppe_type', 'like', "%{$search}%");
+
+                        if ($matchingValues !== []) {
+                            $inner->orWhereIn('ppe_type', $matchingValues);
+                        }
+                    });
+                })
+                ->sortable()
+                ->tooltip(fn (?string $state): ?string => filled($state)
+                    ? ItemAttributeOption::labelFor(ItemAttributeOption::KIND_PPE_TYPE, $state)
+                    : null)
+                ->extraAttributes(['class' => 'owwa-item-ppe-type-column'])
+                ->grow(false);
+        }
+
         if (self::isActiveConsumablesCategory()) {
             $columns[] = TextColumn::make('reorder_level')
                 ->label('Reorder point')
@@ -187,24 +218,41 @@ class ItemsTable
      */
     public static function filters(): array
     {
-        if (! self::isActiveSemiExpendableCategory()) {
-            return [];
+        if (self::isActiveSemiExpendableCategory()) {
+            return [
+                SelectFilter::make('value_type')
+                    ->label('Value type')
+                    ->options([
+                        'low' => 'Low value',
+                        'high' => 'High value',
+                    ])
+                    ->placeholder('All types'),
+            ];
         }
 
-        return [
-            SelectFilter::make('value_type')
-                ->label('Value type')
-                ->options([
-                    'low' => 'Low value',
-                    'high' => 'High value',
-                ])
-                ->placeholder('All types'),
-        ];
+        if (self::isActivePpeCategory()) {
+            return [
+                SelectFilter::make('ppe_type')
+                    ->label('Type of PPE')
+                    ->options(fn (): array => ItemAttributeOption::optionsForKindIncluding(
+                        ItemAttributeOption::KIND_PPE_TYPE,
+                        null,
+                    ) ?: PpePropertyType::options())
+                    ->placeholder('All types'),
+            ];
+        }
+
+        return [];
     }
 
     public static function isActiveSemiExpendableCategory(): bool
     {
         return self::activeCategorySlug() === 'semi_expendable';
+    }
+
+    public static function isActivePpeCategory(): bool
+    {
+        return self::activeCategorySlug() === 'ppe';
     }
 
     public static function isActiveConsumablesCategory(): bool

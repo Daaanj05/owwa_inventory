@@ -15,7 +15,7 @@ class CatalogAssetNumberServiceTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_semi_item_gets_provisional_temp_number_at_register(): void
+    public function test_semi_item_gets_provisional_temp_pattern_at_register(): void
     {
         Office::factory()->create([
             'code' => 'RWO4A',
@@ -35,12 +35,12 @@ class CatalogAssetNumberServiceTest extends TestCase
         ]);
 
         $this->assertSame(
-            'TEMP-'.now()->format('Y').'-IT-106-001-RWO4A',
+            'TEMP-'.now()->format('Y').'-IT-106-RWO4A',
             $item->fresh()->semi_expendable_property_number,
         );
     }
 
-    public function test_finalize_semi_replaces_temp_with_splv_or_sphv(): void
+    public function test_finalize_semi_replaces_temp_with_splv_or_sphv_without_sequence(): void
     {
         Office::factory()->create([
             'code' => 'RWO4A',
@@ -61,17 +61,17 @@ class CatalogAssetNumberServiceTest extends TestCase
         $service = app(CatalogAssetNumberService::class);
 
         $low = $service->finalizeSemiWithUnitCost($item->fresh(), 4500);
-        $this->assertSame('SPLV-'.now()->format('Y').'-IT-106-001-RWO4A', $low);
+        $this->assertSame('SPLV-'.now()->format('Y').'-IT-106-RWO4A', $low);
 
-        $item->forceFill([
-            'semi_expendable_property_number' => 'TEMP-'.now()->format('Y').'-IT-106-002-RWO4A',
-        ])->saveQuietly();
+        Item::query()->whereKey($item->id)->update([
+            'semi_expendable_property_number' => 'TEMP-'.now()->format('Y').'-IT-106-RWO4A',
+        ]);
 
         $high = $service->finalizeSemiWithUnitCost($item->fresh(), 8000);
-        $this->assertSame('SPHV-'.now()->format('Y').'-IT-106-002-RWO4A', $high);
+        $this->assertSame('SPHV-'.now()->format('Y').'-IT-106-RWO4A', $high);
     }
 
-    public function test_ppe_item_gets_property_number_at_register(): void
+    public function test_ppe_item_gets_property_number_pattern_at_register(): void
     {
         Office::factory()->create([
             'code' => 'RWO4A',
@@ -94,7 +94,7 @@ class CatalogAssetNumberServiceTest extends TestCase
         ]);
 
         $this->assertSame(
-            now()->format('Y').'-OE-106-03-001-RWO4A',
+            now()->format('Y').'-OE-106-03-RWO4A',
             $item->fresh()->ppe_property_number,
         );
     }

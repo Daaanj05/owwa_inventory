@@ -42,12 +42,17 @@ return [
 
     'semi_cap_threshold' => 50000,
 
+    // Catalog item fields omit {seq}. Per-unit inventory_units.property_number includes {seq:3}.
     'semi_property_number' => [
+        'catalog_pattern' => '{value_category}-{acq_year}-{class_code}-{uacs_code}-{location}',
+        'unit_pattern' => '{value_category}-{acq_year}-{class_code}-{uacs_code}-{seq:3}-{location}',
         'pattern' => '{value_category}-{acq_year}-{class_code}-{uacs_code}-{seq:3}-{location}',
         'provisional_prefix' => 'TEMP',
     ],
 
     'ppe_property_number' => [
+        'catalog_pattern' => '{acq_year}-{class_code}-{uacs_code}-{location}',
+        'unit_pattern' => '{acq_year}-{class_code}-{uacs_code}-{seq:3}-{location}',
         'pattern' => '{acq_year}-{class_code}-{uacs_code}-{seq:3}-{location}',
     ],
 

@@ -36,13 +36,7 @@
             localStorage.setItem(sectionFlag, '1');
         }
 
-        var resetSidebar = false;
-
-        try {
-            resetSidebar = sessionStorage.getItem('owwaSidebarReset') === '1';
-        } catch (error) {
-            resetSidebar = false;
-        }
+        var resetSidebar = window.owwaSidebarReset === true;
 
         if (! resetSidebar) {
             var active = document.querySelector('.fi-sidebar-group.fi-active');

@@ -78,7 +78,7 @@ class CatalogAssetNumberService
                     return;
                 }
 
-                $item->semi_expendable_property_number = $this->mintSemiProvisional($item);
+                $item->semi_expendable_property_number = $this->patternSemiProvisional($item);
 
                 return;
             }
@@ -87,39 +87,62 @@ class CatalogAssetNumberService
                 return;
             }
 
-            $item->ppe_property_number = $this->mintPpe($item);
+            $item->ppe_property_number = $this->patternPpe($item);
         } catch (ValidationException) {
             // Location/UACS may be incomplete during tests or partial creates — leave blank.
         }
     }
 
-    public function mintSemiProvisional(Item $item): string
+    /**
+     * Catalog inventory item no. pattern (no unit sequence).
+     */
+    public function patternSemiProvisional(Item $item): string
     {
         $segments = $this->semiSegments($item, (string) config('inventory.semi_property_number.provisional_prefix', 'TEMP'));
 
-        return $this->mintFromSegments(self::SERIES_SEMI, $segments);
+        return $this->formatPattern(self::SERIES_SEMI, $segments);
     }
 
-    public function mintPpe(Item $item): string
+    /**
+     * Catalog Property No. pattern (no unit sequence).
+     */
+    public function patternPpe(Item $item): string
     {
         $segments = $this->ppeSegments($item);
 
-        return $this->mintFromSegments(self::SERIES_PPE, $segments);
+        return $this->formatPattern(self::SERIES_PPE, $segments);
+    }
+
+    /**
+     * @deprecated Use patternSemiProvisional(); catalog numbers do not consume sequence.
+     */
+    public function mintSemiProvisional(Item $item): string
+    {
+        return $this->patternSemiProvisional($item);
+    }
+
+    /**
+     * @deprecated Use patternPpe(); catalog numbers do not consume sequence.
+     */
+    public function mintPpe(Item $item): string
+    {
+        return $this->patternPpe($item);
     }
 
     /**
      * Next yearly sequence for one physical PPE unit.
-     * Does not replace the catalog Property No.
+     * Does not replace the catalog Property No. pattern.
      */
     public function mintPpeForUnit(Item $item): string
     {
         $item->loadMissing(['category', 'uacsObjectCode']);
 
-        return $this->mintPpe($item);
+        return $this->mintFromSegments(self::SERIES_PPE, $this->ppeSegments($item));
     }
 
     /**
-     * Finalize TEMP-* inventory item number using first acquisition unit cost.
+     * Finalize TEMP-* catalog pattern using first acquisition unit cost.
+     * Does not mint or attach a unit sequence.
      */
     public function finalizeSemiWithUnitCost(Item $item, ?float $unitCost): string
     {
@@ -128,7 +151,7 @@ class CatalogAssetNumberService
 
         if (blank($current)) {
             $prefix = SemiExpendableValueCategory::prefixForUnitCost($unitCost);
-            $number = $this->mintFromSegments(self::SERIES_SEMI, $this->semiSegments($item, $prefix));
+            $number = $this->formatPattern(self::SERIES_SEMI, $this->semiSegments($item, $prefix));
             $item->forceFill(['semi_expendable_property_number' => $number])->saveQuietly();
 
             return $number;
@@ -149,7 +172,7 @@ class CatalogAssetNumberService
 
     /**
      * Next yearly sequence for one physical semi-expendable unit.
-     * Does not replace the catalog inventory item number.
+     * Does not replace the catalog inventory item number pattern.
      */
     public function mintSemiForUnitCost(Item $item, ?float $unitCost): string
     {
@@ -237,14 +260,41 @@ class CatalogAssetNumberService
             $seq = (int) $bucket->next_sequence;
             $bucket->update(['next_sequence' => $seq + 1]);
 
-            return $this->format($series, $segments, $seq);
+            return $this->formatWithSequence($series, $segments, $seq);
         });
     }
 
     /**
+     * Catalog pattern: same segments as unit numbers, without the yearly sequence.
+     *
      * @param  array<string, string>  $segments
      */
-    protected function format(string $series, array $segments, int $seq): string
+    protected function formatPattern(string $series, array $segments): string
+    {
+        if ($series === self::SERIES_SEMI) {
+            return implode('-', [
+                $segments['value_category'],
+                $segments['acq_year'],
+                $segments['class_code'],
+                $segments['uacs_code'],
+                $segments['location'],
+            ]);
+        }
+
+        return implode('-', [
+            $segments['acq_year'],
+            $segments['class_code'],
+            $segments['uacs_code'],
+            $segments['location'],
+        ]);
+    }
+
+    /**
+     * Per-unit number: catalog pattern segments plus yearly sequence.
+     *
+     * @param  array<string, string>  $segments
+     */
+    protected function formatWithSequence(string $series, array $segments, int $seq): string
     {
         $padded = str_pad((string) $seq, 3, '0', STR_PAD_LEFT);
 

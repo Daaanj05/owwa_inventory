@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Acquisition;
 use App\Models\Department;
+use App\Models\InventoryUnit;
 use App\Models\Issuance;
 use App\Models\Item;
 use App\Models\ItemStockBucket;
@@ -119,18 +120,25 @@ class SemiExpendablePropertyNumberBuilder
 
     public function resolveExistingPropertyNumberForItem(Item $item): ?string
     {
-        if (filled($item->semi_expendable_property_number)) {
-            return (string) $item->semi_expendable_property_number;
-        }
-
         $fromBucket = ItemStockBucket::query()
             ->where('item_id', $item->id)
             ->whereNotNull('property_number')
+            ->where('property_number', 'not like', 'TEMP-%')
             ->orderBy('id')
             ->value('property_number');
 
         if (filled($fromBucket)) {
             return (string) $fromBucket;
+        }
+
+        $fromUnit = InventoryUnit::query()
+            ->where('item_id', $item->id)
+            ->whereNotNull('property_number')
+            ->orderBy('id')
+            ->value('property_number');
+
+        if (filled($fromUnit)) {
+            return (string) $fromUnit;
         }
 
         $fromIssuance = Issuance::query()
@@ -164,7 +172,19 @@ class SemiExpendablePropertyNumberBuilder
             ]);
         }
 
-        $number = app(CatalogAssetNumberService::class)->finalizeSemiWithUnitCost($item, $unitCost);
+        $catalog = app(CatalogAssetNumberService::class);
+        $catalog->finalizeSemiWithUnitCost($item, $unitCost);
+
+        $existingUnitNumber = InventoryUnit::query()
+            ->where('item_id', $item->id)
+            ->whereNotNull('property_number')
+            ->orderBy('id')
+            ->value('property_number');
+
+        $number = filled($existingUnitNumber)
+            ? (string) $existingUnitNumber
+            : $catalog->mintSemiForUnitCost($item->fresh(), $unitCost);
+
         $this->persistBucketPropertyNumber($item, $unitCost, $number);
         StockPositionRestockFlag::reactivateOnAcquisition(
             (int) $item->id,
@@ -215,17 +235,8 @@ class SemiExpendablePropertyNumberBuilder
     public function persistBucketPropertyNumber(Item $item, ?float $unitCost, string $number): void
     {
         if (blank($item->semi_expendable_property_number) || str_starts_with((string) $item->semi_expendable_property_number, 'TEMP-')) {
-            $item->forceFill(['semi_expendable_property_number' => $number])->save();
+            app(CatalogAssetNumberService::class)->finalizeSemiWithUnitCost($item, $unitCost);
         }
-
-        ItemStockBucket::query()
-            ->where('item_id', $item->id)
-            ->where(function ($query) use ($number): void {
-                $query->whereNull('property_number')
-                    ->orWhere('property_number', '!=', $number)
-                    ->orWhere('property_number', 'like', 'TEMP-%');
-            })
-            ->update(['property_number' => $number]);
 
         $bucket = ItemStockBucket::firstOrCreateForItemCost((int) $item->id, $unitCost);
         if (blank($bucket->property_number) || str_starts_with((string) $bucket->property_number, 'TEMP-')) {

@@ -180,9 +180,13 @@ class AdminPanelProvider extends PanelProvider
                     }
                 }
 
-                return $folders.view('filament.partials.sidebar-groups-reset', [
-                    'when' => 'signed-in',
-                ])->render();
+                return view('filament.partials.sidebar-groups-reset', [
+                    'when' => 'marker',
+                ])->render()
+                    .$folders
+                    .view('filament.partials.sidebar-groups-reset', [
+                        'when' => 'signed-in',
+                    ])->render();
             })
             ->renderHook(PanelsRenderHook::SIDEBAR_NAV_START, function (): string {
                 $user = Filament::auth()->user();

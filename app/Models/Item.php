@@ -122,24 +122,32 @@ class Item extends Model
 
     public function resolvedSemiExpendablePropertyNumber(?float $unitCost = null): ?string
     {
-        if (filled($this->semi_expendable_property_number)) {
-            return (string) $this->semi_expendable_property_number;
-        }
-
         if ($unitCost !== null) {
             $bucket = ItemStockBucket::findForItemCost((int) $this->id, $unitCost);
 
-            return filled($bucket?->property_number) ? (string) $bucket->property_number : null;
+            if (filled($bucket?->property_number)) {
+                return (string) $bucket->property_number;
+            }
         }
 
         $fromBucket = ItemStockBucket::query()
             ->where('item_id', $this->id)
             ->whereNotNull('property_number')
+            ->where('property_number', 'not like', 'TEMP-%')
             ->orderBy('id')
             ->value('property_number');
 
         if (filled($fromBucket)) {
             return (string) $fromBucket;
+        }
+
+        $fromUnit = $this->inventoryUnits()
+            ->whereNotNull('property_number')
+            ->orderBy('id')
+            ->value('property_number');
+
+        if (filled($fromUnit)) {
+            return (string) $fromUnit;
         }
 
         $fromIssuance = $this->issuances()
@@ -148,17 +156,37 @@ class Item extends Model
             ->orderBy('id')
             ->value('property_number');
 
-        return filled($fromIssuance) ? (string) $fromIssuance : null;
+        if (filled($fromIssuance)) {
+            return (string) $fromIssuance;
+        }
+
+        return filled($this->semi_expendable_property_number)
+            ? (string) $this->semi_expendable_property_number
+            : null;
     }
 
     public function resolvedPpePropertyNumber(): ?string
     {
+        $fromUnit = $this->inventoryUnits()
+            ->whereNotNull('property_number')
+            ->orderBy('id')
+            ->value('property_number');
+
+        if (filled($fromUnit)) {
+            return (string) $fromUnit;
+        }
+
         return filled($this->ppe_property_number) ? (string) $this->ppe_property_number : null;
     }
 
     public function catalogAssetIdentifier(): ?string
     {
         return app(\App\Services\CatalogAssetNumberService::class)->catalogIdentifierForItem($this);
+    }
+
+    public function inventoryUnits(): HasMany
+    {
+        return $this->hasMany(InventoryUnit::class);
     }
 
     public function stockBuckets(): HasMany

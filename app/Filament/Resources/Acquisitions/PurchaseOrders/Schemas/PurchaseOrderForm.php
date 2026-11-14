@@ -3,10 +3,14 @@
 namespace App\Filament\Resources\Acquisitions\PurchaseOrders\Schemas;
 
 use App\Models\DeliveryTerm;
+use App\Models\Item;
 use App\Models\PurchaseOrder;
 use App\Models\Supplier;
 use App\Models\SupplierAddress;
+use App\Support\InventoryCategoryUnitCost;
 use App\Support\ModeOfProcurementOptions;
+use App\Support\PpeValueCategory;
+use App\Support\SemiExpendableValueCategory;
 use App\Support\SupplyOfficeResolver;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Placeholder;
@@ -326,6 +330,40 @@ class PurchaseOrderForm
                     ->minValue(0.01)
                     ->rule('gt:0')
                     ->required()
+                    ->helperText(function (Get $get): ?string {
+                        $itemId = $get('item_id');
+                        if (blank($itemId)) {
+                            return null;
+                        }
+
+                        $slug = Item::query()->with('category')->find($itemId)?->category?->getTemplateSlug();
+
+                        return match ($slug) {
+                            'semi_expendable' => SemiExpendableValueCategory::tierRuleSummary(),
+                            'ppe' => PpeValueCategory::minimumRuleSummary(),
+                            default => null,
+                        };
+                    })
+                    ->rule(function (Get $get) {
+                        return function (string $attribute, $value, \Closure $fail) use ($get): void {
+                            if ($value === null || $value === '') {
+                                return;
+                            }
+
+                            $itemId = $get('item_id');
+                            if (blank($itemId)) {
+                                return;
+                            }
+
+                            $item = Item::query()->with('category')->find($itemId);
+
+                            try {
+                                InventoryCategoryUnitCost::assertForItem($item, (float) $value);
+                            } catch (\Illuminate\Validation\ValidationException $exception) {
+                                $fail($exception->validator->errors()->first('unit_cost') ?? 'Invalid unit cost for this category.');
+                            }
+                        };
+                    })
                     ->disabled(fn (mixed $record): bool => ! self::isEditable($record))
                     ->dehydrated()
                     ->live()

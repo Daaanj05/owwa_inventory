@@ -117,8 +117,11 @@ class SystemAdminPanelProvider extends PanelProvider
             })
             ->renderHook(PanelsRenderHook::SIDEBAR_NAV_END, function (): string {
                 return view('filament.partials.sidebar-groups-reset', [
-                    'when' => 'signed-in',
-                ])->render();
+                    'when' => 'marker',
+                ])->render()
+                    .view('filament.partials.sidebar-groups-reset', [
+                        'when' => 'signed-in',
+                    ])->render();
             })
             ->renderHook(PanelsRenderHook::BODY_END, function (): string {
                 if (! Filament::auth()->check()) {
