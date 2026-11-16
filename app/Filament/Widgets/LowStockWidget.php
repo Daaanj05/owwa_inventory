@@ -7,8 +7,10 @@ use App\Filament\Pages\ProcurementAnalytics;
 use App\Filament\Pages\StockLevels;
 use App\Filament\Resources\Acquisitions\AcquisitionResource;
 use App\Filament\Resources\Acquisitions\PurchaseOrders\PurchaseOrderResource;
+use App\Filament\Resources\Disposals\DisposalResource;
 use App\Filament\Resources\PropertyActionRequests\PropertyActionRequestResource;
 use App\Filament\Resources\Requisitions\RequisitionResource;
+use App\Filament\Resources\Transfers\TransferResource;
 use App\Models\AcquisitionPaperwork;
 use App\Models\Issuance;
 use App\Models\ItemCategory;
@@ -617,17 +619,35 @@ class LowStockWidget extends StatsOverviewWidget implements HasActions
     protected function buildPendingPropertyReturnRows(): Collection
     {
         return $this->pendingPropertyReturnsQuery()
-            ->with(['requestedBy', 'office'])
+            ->with(['requestedBy', 'office', 'lines'])
             ->latest('created_at')
             ->get()
-            ->map(fn (PropertyActionRequest $request): array => [
-                'reference' => $request->reference_code ?? '#'.$request->id,
-                'transaction_type' => 'Property return',
-                'office' => $request->office?->name,
-                'requested_by' => $request->requestedBy?->name,
-                'created' => optional($request->created_at)?->format('M j, Y'),
-                'record_url' => PropertyActionRequestResource::viewModalUrl($request),
-            ])
+            ->map(function (PropertyActionRequest $request): array {
+                $recordUrl = PropertyActionRequestResource::viewModalUrl($request);
+
+                if ($request->status === PropertyActionRequest::STATUS_PENDING_TRANSFER) {
+                    $transferId = $request->linkedTransferId();
+
+                    if ($transferId !== null) {
+                        $recordUrl = TransferResource::viewModalUrl($transferId);
+                    }
+                } elseif ($request->status === PropertyActionRequest::STATUS_PENDING_DISPOSAL) {
+                    $disposalId = $request->linkedDisposalId();
+
+                    if ($disposalId !== null) {
+                        $recordUrl = DisposalResource::viewModalUrl($disposalId);
+                    }
+                }
+
+                return [
+                    'reference' => $request->reference_code ?? '#'.$request->id,
+                    'transaction_type' => 'Property return',
+                    'office' => $request->office?->name,
+                    'requested_by' => $request->requestedBy?->name,
+                    'created' => optional($request->created_at)?->format('M j, Y'),
+                    'record_url' => $recordUrl,
+                ];
+            })
             ->values();
     }
 
@@ -666,7 +686,7 @@ class LowStockWidget extends StatsOverviewWidget implements HasActions
     protected function pendingPropertyReturnsQuery(): Builder
     {
         return PropertyActionRequest::query()
-            ->where('status', PropertyActionRequest::STATUS_PENDING_SC);
+            ->whereIn('status', PropertyActionRequest::pendingScBadgeStatuses());
     }
 
     /**

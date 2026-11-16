@@ -869,18 +869,8 @@ class ProcurementAnalytics extends Page
         $view ??= $this->atRiskView;
 
         if ($view === 'stockouts') {
-            $rows = $rows->filter(function ($row): bool {
-                if ($row->priority === 'High' && ! ($row->has_recent_usage ?? true)) {
-                    return true;
-                }
-
-                if (! ($row->has_recent_usage ?? true)) {
-                    return false;
-                }
-
-                return $row->months_cover !== null
-                    && (float) $row->months_cover <= self::STOCKOUT_WITHIN_MONTHS;
-            });
+            $rows = $rows->filter(fn ($row): bool => $row->months_cover !== null
+                && (float) $row->months_cover <= self::STOCKOUT_WITHIN_MONTHS);
         }
 
         return $this->sortAtRiskRows($rows)->values();

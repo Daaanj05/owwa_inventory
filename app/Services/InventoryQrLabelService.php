@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Acquisition;
 use App\Models\AcquisitionPaperwork;
 use App\Models\InventoryUnit;
+use App\Models\Issuance;
 use App\Models\ProcurementSignatoryName;
 use App\Models\StockOpeningBalance;
 use App\Models\StockOpeningBalanceBatch;
@@ -135,6 +136,47 @@ class InventoryQrLabelService
         return collect([$this->labelRowFromUnit($unit, $unit->office?->name ?? '')]);
     }
 
+    public function supportsIssuanceQrLabels(Issuance $issuance): bool
+    {
+        $issuance->loadMissing('item.category');
+
+        if (! in_array($issuance->item?->category?->getTemplateSlug(), ['ppe', 'semi_expendable'], true)) {
+            return false;
+        }
+
+        return $issuance->inventoryUnits()->exists();
+    }
+
+    /**
+     * QR labels for units linked to an issuance (end-user available after issue).
+     *
+     * @return Collection<int, array<string, string|null>>
+     */
+    public function labelsForIssuance(Issuance $issuance): Collection
+    {
+        if (! $this->supportsIssuanceQrLabels($issuance)) {
+            return collect();
+        }
+
+        $issuance->loadMissing([
+            'office',
+            'department',
+            'inventoryUnits.item.category',
+            'inventoryUnits.office',
+            'inventoryUnits.acquisition',
+            'inventoryUnits.issuance.issuedTo',
+            'inventoryUnits.issuance.department',
+        ]);
+
+        return $issuance->inventoryUnits
+            ->map(fn (InventoryUnit $unit) => $this->labelRowFromUnit(
+                $unit,
+                $unit->office?->name ?? $issuance->office?->name ?? '',
+                $issuance->department?->name,
+            ))
+            ->values();
+    }
+
     public function supportsOpeningBalanceQrLabels(StockOpeningBalanceBatch $batch): bool
     {
         if (! $batch->isConfirmed()) {
@@ -262,7 +304,6 @@ class InventoryQrLabelService
         $signatories = $this->propertyTagSignatories();
 
         return [
-            'sp_tag_no' => '',
             'unit_section' => $unitSection,
             'property_number_label' => $this->propertyNumberLabel($categorySlug),
             'property_name_label' => $this->propertyNameLabel($categorySlug),
@@ -317,7 +358,7 @@ class InventoryQrLabelService
     {
         return match ($categorySlug) {
             'ppe' => OwwaReferenceLabels::PROPERTY_NO,
-            'semi_expendable' => 'Semi-Expendable Property no.',
+            'semi_expendable' => 'SP Tag No.',
             default => OwwaReferenceLabels::assetIdentifierLabel($categorySlug),
         };
     }

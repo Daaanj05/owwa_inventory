@@ -486,19 +486,7 @@ class ListPropertyActionRequests extends ListRecords
             ->whereNotNull('archived_at');
 
         if (($this->ucTab ?? 'received') === 'sent') {
-            return (int) $query->where(function (Builder $scope) use ($user): void {
-                $scope
-                    ->where('requested_by', $user->id)
-                    ->orWhere(function (Builder $endorsed) use ($user): void {
-                        $endorsed
-                            ->where('uc_approved_by', $user->id)
-                            ->where('status', '!=', PropertyActionRequest::STATUS_PENDING_UC)
-                            ->whereHas(
-                                'requestedBy',
-                                fn (Builder $requester): Builder => $requester->where('role', User::ROLE_EMPLOYEE),
-                            );
-                    });
-            })->count();
+            return (int) $this->applyUcSentScope($query, $user)->count();
         }
 
         return (int) $this->applyUcReceivedScope(
@@ -520,19 +508,7 @@ class ListPropertyActionRequests extends ListRecords
             $uc = $this->ucTab ?? 'received';
 
             if ($uc === 'sent') {
-                return $query->where(function (Builder $scope) use ($user): void {
-                    $scope
-                        ->where('requested_by', $user->id)
-                        ->orWhere(function (Builder $endorsed) use ($user): void {
-                            $endorsed
-                                ->where('uc_approved_by', $user->id)
-                                ->where('status', '!=', PropertyActionRequest::STATUS_PENDING_UC)
-                                ->whereHas(
-                                    'requestedBy',
-                                    fn (Builder $requester): Builder => $requester->where('role', User::ROLE_EMPLOYEE),
-                                );
-                        });
-                });
+                return $this->applyUcSentScope($query, $user);
             }
 
             $query = $query
@@ -550,6 +526,31 @@ class ListPropertyActionRequests extends ListRecords
     {
         // Null office and department mean All assigned offices and departments.
         // A notification deep-link may already have set a specific pair.
+    }
+
+    /**
+     * UC submissions to Supply Custodian. Employee returns already folded into
+     * a compiled batch stay off this list so the same property is not shown twice.
+     *
+     * @param  Builder<PropertyActionRequest>  $query
+     * @return Builder<PropertyActionRequest>
+     */
+    protected function applyUcSentScope(Builder $query, User $user): Builder
+    {
+        return $query->where(function (Builder $scope) use ($user): void {
+            $scope
+                ->where('requested_by', $user->id)
+                ->orWhere(function (Builder $endorsed) use ($user): void {
+                    $endorsed
+                        ->where('uc_approved_by', $user->id)
+                        ->where('status', '!=', PropertyActionRequest::STATUS_PENDING_UC)
+                        ->whereNull('compiled_into_property_action_request_id')
+                        ->whereHas(
+                            'requestedBy',
+                            fn (Builder $requester): Builder => $requester->where('role', User::ROLE_EMPLOYEE),
+                        );
+                });
+        });
     }
 
     /**

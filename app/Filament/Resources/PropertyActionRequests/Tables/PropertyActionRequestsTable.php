@@ -2,15 +2,19 @@
 
 namespace App\Filament\Resources\PropertyActionRequests\Tables;
 
+use App\Filament\Resources\Disposals\DisposalResource;
 use App\Filament\Resources\PropertyActionRequests\Actions\PropertyActionRequestEmployeeActions;
 use App\Filament\Resources\PropertyActionRequests\Actions\PropertyActionRequestTableActions;
 use App\Filament\Resources\PropertyActionRequests\Pages\ListPropertyActionRequests;
 use App\Filament\Resources\PropertyActionRequests\PropertyActionRequestResource;
 use App\Filament\Resources\PropertyActionRequests\Schemas\PropertyActionRequestInfolistSchema;
+use App\Filament\Resources\Transfers\TransferResource;
 use App\Filament\Support\ConfiguresOwwaViewAction;
 use App\Filament\Support\OwwaModalSchema;
+use App\Models\Disposal;
 use App\Models\PropertyActionRequest;
 use App\Models\PropertyActionRequestLine;
+use App\Models\Transfer;
 use App\Models\User;
 use App\Services\PropertyActionRequestCompileService;
 use App\Support\InventoryCategoryOptions;
@@ -53,7 +57,11 @@ class PropertyActionRequestsTable
                     ->color(fn (?string $state): string => match ($state) {
                         PropertyActionRequest::STATUS_APPROVED, PropertyActionRequest::STATUS_EXECUTED => 'success',
                         PropertyActionRequest::STATUS_REJECTED => 'danger',
-                        PropertyActionRequest::STATUS_PENDING_UC, PropertyActionRequest::STATUS_PENDING_SC => 'warning',
+                        PropertyActionRequest::STATUS_PENDING_UC,
+                        PropertyActionRequest::STATUS_PENDING_SC,
+                        PropertyActionRequest::STATUS_PENDING_DECISION,
+                        PropertyActionRequest::STATUS_PENDING_TRANSFER,
+                        PropertyActionRequest::STATUS_PENDING_DISPOSAL => 'warning',
                         default => 'gray',
                     })
                     ->description(function (PropertyActionRequest $record) use ($isSupplyCustodianViewer): ?string {
@@ -74,7 +82,16 @@ class PropertyActionRequestsTable
                 TextColumn::make('requestedBy.name')
                     ->label('Requested by')
                     ->placeholder('—')
+                    ->searchable()
                     ->visible(fn (): bool => ! $isEmployeeViewer),
+                TextColumn::make('office.name')
+                    ->label('Office')
+                    ->searchable()
+                    ->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('department.name')
+                    ->label('Department')
+                    ->searchable()
+                    ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('created_at')
                     ->label('Filed')
                     ->date('M d, Y')
@@ -110,9 +127,9 @@ class PropertyActionRequestsTable
                         PropertyActionRequestTableActions::ucApproveFromViewAction(),
                         PropertyActionRequestTableActions::ucCompileFromViewAction(),
                         PropertyActionRequestTableActions::ucRejectFromViewAction(),
-                        PropertyActionRequestTableActions::scApproveAction(),
+                        PropertyActionRequestTableActions::scForTransferAction(),
+                        PropertyActionRequestTableActions::scForDisposalAction(),
                         PropertyActionRequestTableActions::scRejectAction(),
-                        PropertyActionRequestTableActions::scReceiveAndRouteAction(),
                         PropertyActionRequestTableActions::scResolveRepairAction(),
                         PropertyActionRequestTableActions::openDisposalAction(),
                         PropertyActionRequestTableActions::openTransferAction(),
@@ -195,6 +212,35 @@ class PropertyActionRequestsTable
                         }),
                 ]),
             ])
-            ->recordUrl(null);
+            ->recordUrl(function (PropertyActionRequest $record): ?string {
+                if ($record->status === PropertyActionRequest::STATUS_PENDING_TRANSFER) {
+                    $transferId = $record->linkedTransferId();
+                    if ($transferId === null) {
+                        return null;
+                    }
+
+                    $transfer = Transfer::query()->with('item')->find($transferId);
+
+                    return TransferResource::viewModalUrl($transferId, array_filter([
+                        'category' => $transfer?->item?->item_category_id,
+                    ]));
+                }
+
+                if ($record->status === PropertyActionRequest::STATUS_PENDING_DISPOSAL) {
+                    $disposalId = $record->linkedDisposalId();
+                    if ($disposalId === null) {
+                        return null;
+                    }
+
+                    $disposal = Disposal::query()->with('item')->find($disposalId);
+
+                    return DisposalResource::viewModalUrl($disposalId, array_filter([
+                        'category' => $disposal?->item?->item_category_id,
+                    ]));
+                }
+
+                return null;
+            })
+            ->recordAction('view');
     }
 }

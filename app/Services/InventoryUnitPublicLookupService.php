@@ -76,7 +76,6 @@ class InventoryUnitPublicLookupService
                 'owwa_mail.agency_address',
                 'G/F Parian Commerce Center II, National Highway, Brgy. Parian, Calamba, Laguna',
             ),
-            spTagNo: '',
             propertyNumberLabel: $this->propertyNumberLabel($slug),
             propertyNameLabel: $this->propertyNameLabel($slug),
             endUser: (string) ($issuance?->issuedTo?->name ?? ''),
@@ -101,7 +100,6 @@ class InventoryUnitPublicLookupService
                 'owwa_mail.agency_address',
                 'G/F Parian Commerce Center II, National Highway, Brgy. Parian, Calamba, Laguna',
             ),
-            spTagNo: '',
             propertyNumberLabel: $this->propertyNumberLabel($slug),
             propertyNameLabel: $this->propertyNameLabel($slug),
             endUser: (string) ($issuance->issuedTo?->name ?? ''),
@@ -126,7 +124,7 @@ class InventoryUnitPublicLookupService
     {
         return match ($categorySlug) {
             'ppe' => OwwaReferenceLabels::PROPERTY_NO,
-            'semi_expendable' => 'Semi-Expendable Property no.',
+            'semi_expendable' => 'SP Tag No.',
             default => OwwaReferenceLabels::assetIdentifierLabel($categorySlug),
         };
     }

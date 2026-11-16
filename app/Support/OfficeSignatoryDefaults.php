@@ -16,14 +16,17 @@ class OfficeSignatoryDefaults
         $toOffice = $toOfficeId ? Office::query()->find($toOfficeId) : null;
         $recorder ??= auth()->user();
 
+        $fromAccountableOfficer = self::accountableOfficerForOffice($fromOfficeId, $fromOffice);
+        $toAccountableOfficer = self::accountableOfficerForOffice($toOfficeId, $toOffice);
+
         return [
-            'from_accountable_officer' => self::accountableOfficerForOffice($fromOfficeId, $fromOffice),
-            'to_accountable_officer' => self::accountableOfficerForOffice($toOfficeId, $toOffice),
-            'released_by_printed_name' => $recorder instanceof User ? $recorder->name : $fromOffice?->supply_custodian_name,
+            'from_accountable_officer' => $fromAccountableOfficer,
+            'to_accountable_officer' => $toAccountableOfficer,
+            'released_by_printed_name' => $fromAccountableOfficer ?? $fromOffice?->supply_custodian_name,
             'released_by_designation' => $fromOffice?->supply_custodian_designation,
             'approved_by_printed_name' => $fromOffice?->authorized_officer_name,
             'approved_by_designation' => $fromOffice?->authorized_officer_designation,
-            'received_by_printed_name' => $toOffice?->supply_custodian_name,
+            'received_by_printed_name' => $toAccountableOfficer ?? $toOffice?->supply_custodian_name,
             'received_by_designation' => $toOffice?->supply_custodian_designation,
         ];
     }

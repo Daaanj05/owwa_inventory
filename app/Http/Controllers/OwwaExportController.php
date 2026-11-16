@@ -261,6 +261,8 @@ class OwwaExportController extends Controller
             ['form' => $formSlug, 'format' => $asPdf ? 'pdf' : 'xlsx'],
         );
 
+        app(\App\Services\PropertyReturnDecisionService::class)->recordTransferExported($transfer);
+
         if ($asPdf) {
             return $this->owwaExport->downloadTransferPdf($transfer, null, $formSlug);
         }
@@ -285,6 +287,8 @@ class OwwaExportController extends Controller
             $disposal,
             ['form' => $formSlug, 'format' => $asPdf ? 'pdf' : 'xlsx'],
         );
+
+        app(\App\Services\PropertyReturnDecisionService::class)->recordDisposalExported($disposal);
 
         if ($asPdf) {
             return $this->owwaExport->downloadDisposalPdf($disposal, null, $formSlug);

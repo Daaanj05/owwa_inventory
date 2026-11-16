@@ -105,7 +105,7 @@ class PropertyActionRequestWorkflowService
 
     public function approveBySupplyCustodian(PropertyActionRequest $request, User $custodian, ?string $remarks = null): void
     {
-        if ($request->status !== PropertyActionRequest::STATUS_PENDING_SC) {
+        if (! $request->isPendingDecision()) {
             throw new InvalidArgumentException('Request is not pending SC approval.');
         }
 
@@ -131,7 +131,10 @@ class PropertyActionRequestWorkflowService
 
     public function rejectBySupplyCustodian(PropertyActionRequest $request, User $custodian, ?string $remarks = null): void
     {
-        if ($request->status !== PropertyActionRequest::STATUS_PENDING_SC) {
+        if (! in_array($request->status, [
+            PropertyActionRequest::STATUS_PENDING_SC,
+            PropertyActionRequest::STATUS_PENDING_DECISION,
+        ], true)) {
             throw new InvalidArgumentException('Request is not pending SC approval.');
         }
 
@@ -419,6 +422,7 @@ class PropertyActionRequestWorkflowService
             'from_accountable_officer' => $issuance->issuedTo?->name,
             'to_accountable_officer' => Office::query()->find($toOffice)?->name,
             'recorded_by' => $custodian->id,
+            'approved_at' => now(),
         ]));
 
         app(PropertyReturnService::class)->processReturnTransfer($transfer);
@@ -524,7 +528,7 @@ class PropertyActionRequestWorkflowService
      * @param  array<string, mixed>  $attributes
      * @param  callable(PropertyActionRequest): string  $body
      */
-    protected function syncCompiledSources(PropertyActionRequest $request, array $attributes, string $title, callable $body): void
+    public function syncCompiledSources(PropertyActionRequest $request, array $attributes, string $title, callable $body): void
     {
         $sources = $request->compiledSourcePropertyActionRequests()->with('requestedBy')->get();
 
@@ -619,7 +623,7 @@ class PropertyActionRequestWorkflowService
         }
 
         $request->update([
-            'status' => PropertyActionRequest::STATUS_PENDING_SC,
+            'status' => PropertyActionRequest::STATUS_PENDING_DECISION,
             'uc_approved_by' => $uc->id,
             'uc_approved_at' => now(),
             'uc_remarks' => $remarks,

@@ -171,7 +171,6 @@ class AiProcurementRecommendationService
                 'cover' => (float) ($row->months_cover ?? 0),
                 'forecast' => (float) $row->forecast_monthly_usage,
                 'suggested' => $row->suggested_reorder_qty ?? null,
-                'has_recent_usage' => (bool) ($row->has_recent_usage ?? true),
             ])->values()->all();
 
             $summary = $this->rag->generateNarrativeSummary($facts, $itemFacts, [

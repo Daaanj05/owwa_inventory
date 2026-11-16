@@ -26,7 +26,7 @@
                     selector: '[data-tour="filters"]',
                     slide: 'reorders',
                     title: 'List filters',
-                    body: 'All at-risk shows every pair that needs attention. Stocking out in 2 months shows items projected to run out within 2 months, plus high-priority items at or below reorder with no recent usage.',
+                    body: 'All at-risk shows every pair that needs attention. Stocking out in 2 months shows items projected to run out within 2 months based on issuance pace from the supply office.',
                 },
                 {
                     key: 'useful-life',

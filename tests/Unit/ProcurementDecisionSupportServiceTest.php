@@ -194,7 +194,7 @@ class ProcurementDecisionSupportServiceTest extends TestCase
         $this->assertSame(2, $match->suggested_reorder_qty);
     }
 
-    public function test_stock_equal_to_reorder_without_usage_is_at_risk(): void
+    public function test_stock_equal_to_reorder_without_issuance_is_excluded(): void
     {
         $office = Office::factory()->create();
         $category = ItemCategory::factory()->create();
@@ -213,11 +213,7 @@ class ProcurementDecisionSupportServiceTest extends TestCase
             limit: 50,
         );
 
-        $match = $rows->first(fn ($row) => $row->item_id === $item->id);
-        $this->assertNotNull($match);
-        $this->assertSame('High', $match->priority);
-        $this->assertNull($match->suggested_reorder_qty);
-        $this->assertNull($match->projected_stockout_date);
+        $this->assertNull($rows->first(fn ($row) => $row->item_id === $item->id));
     }
 
     public function test_forecast_uses_twelve_month_lookback_when_ui_window_is_short(): void
@@ -272,7 +268,8 @@ class ProcurementDecisionSupportServiceTest extends TestCase
             'reorder_level' => 0,
         ]);
 
-        $this->createAcquisition($consumable->id, $office->id, 4);
+        $this->seedMonthlyIssuances($consumable->id, $office->id, 4, 6);
+        $this->createAcquisition($consumable->id, $office->id, 4 + 24);
         $this->seedMonthlyIssuances($semiItem->id, $office->id, 4, 6);
         $this->createAcquisition($semiItem->id, $office->id, 24);
 
@@ -289,7 +286,7 @@ class ProcurementDecisionSupportServiceTest extends TestCase
         $this->assertNull($rows->first(fn ($row) => $row->item_id === $semiItem->id));
     }
 
-    public function test_includes_low_stock_pairs_without_recent_issuances(): void
+    public function test_excludes_low_stock_pairs_without_issuances(): void
     {
         $office = Office::factory()->create();
         $category = ItemCategory::factory()->create();
@@ -308,12 +305,48 @@ class ProcurementDecisionSupportServiceTest extends TestCase
             limit: 50,
         );
 
-        $match = $rows->first(fn ($row) => $row->item_id === $item->id);
+        $this->assertNull($rows->first(fn ($row) => $row->item_id === $item->id));
+    }
+
+    public function test_forecast_includes_issuances_to_other_offices_from_supply_office(): void
+    {
+        $supplyOffice = Office::factory()->create(['name' => 'Regional Supply']);
+        $receivingOffice = Office::factory()->create(['name' => 'Field Office']);
+        $category = ItemCategory::factory()->create(['name' => 'Consumables']);
+        $item = Item::factory()->create([
+            'item_category_id' => $category->id,
+            'reorder_level' => 2,
+        ]);
+
+        for ($i = 5; $i >= 0; $i--) {
+            $date = now()->subMonths($i)->startOfMonth()->toDateString();
+            DB::table('issuances')->insert([
+                'reference_code' => 'ISS-SUPPLY-'.$item->id.'-'.$i.'-'.uniqid(),
+                'item_id' => $item->id,
+                'office_id' => $receivingOffice->id,
+                'issued_from_office_id' => $supplyOffice->id,
+                'quantity' => 10,
+                'issuance_date' => $date,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+
+        $this->createAcquisition($item->id, $supplyOffice->id, 5 + 60);
+
+        $rows = $this->service->getAtRiskRows(
+            from: now()->subMonths(5)->startOfMonth(),
+            to: now()->endOfMonth(),
+            categoryId: null,
+            officeIds: [$supplyOffice->id],
+            limit: 50,
+        );
+
+        $match = $rows->first(fn ($row) => $row->item_id === $item->id && $row->office_id === $supplyOffice->id);
         $this->assertNotNull($match);
-        $this->assertFalse($match->has_recent_usage);
+        $this->assertGreaterThan(0, (float) $match->forecast_monthly_usage);
         $this->assertSame('High', $match->priority);
-        $this->assertSame(0.0, (float) $match->forecast_monthly_usage);
-        $this->assertSame(6, $match->suggested_reorder_qty);
+        $this->assertNull($rows->first(fn ($row) => $row->office_id === $receivingOffice->id));
     }
 
     /**

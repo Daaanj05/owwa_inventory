@@ -284,22 +284,6 @@ class DisposalForm
                                 : (self::isIirupCategory()
                                     ? 'Required by '.(self::activeCategorySlug() === 'semi_expendable' ? 'IIRUSP' : 'IIRUP').'. Total cost is computed as quantity × unit cost.'
                                     : 'Enter acquisition cost if not available from records.')),
-                        TextInput::make('accumulated_depreciation')
-                            ->label('Accumulated depreciation')
-                            ->numeric()
-                            ->prefix('₱')
-                            ->minValue(0)
-                            ->default(0)
-                            ->required(fn (): bool => self::isIirupCategory())
-                            ->visible(fn (): bool => self::isIirupCategory()),
-                        TextInput::make('accumulated_impairment_losses')
-                            ->label('Accumulated impairment losses')
-                            ->numeric()
-                            ->prefix('₱')
-                            ->minValue(0)
-                            ->default(0)
-                            ->required(fn (): bool => self::isIirupCategory())
-                            ->visible(fn (): bool => self::isIirupCategory()),
                         Textarea::make('remarks')
                             ->label('Remarks')
                             ->columnSpanFull()
@@ -366,10 +350,12 @@ class DisposalForm
                             ->visible(fn (Get $get): bool => self::isIirupCategory()
                                 && $get('iirup_disposal_mode') === 'others')
                             ->columnSpanFull(),
-                        SignatorySelect::makeDesignation('accountable_officer_designation', ProcurementSignatoryName::ROLE_DISPOSAL_ACCOUNTABLE_OFFICER)
-                            ->label('Accountable officer designation')
+                        TextInput::make('accountable_officer_designation')
+                            ->label('Requested by designation')
+                            ->maxLength(255)
                             ->required(fn (): bool => self::isIirupCategory())
-                            ->visible(fn (): bool => self::isIirupCategory()),
+                            ->visible(fn (): bool => self::isIirupCategory())
+                            ->helperText('Typed designation of the accountable officer / Requested by.'),
                         TextInput::make('accountable_officer_station')
                             ->label('Station / office')
                             ->maxLength(255)
@@ -378,7 +364,8 @@ class DisposalForm
                         TextInput::make('reason')
                             ->label('Reason')
                             ->placeholder('Why this item was disposed')
-                            ->columnSpanFull(),
+                            ->columnSpanFull()
+                            ->visible(fn (): bool => self::activeCategorySlug() === 'consumables'),
                     ])
                     ->columns(2),
 
@@ -410,7 +397,9 @@ class DisposalForm
                     ->compact()
                     ->schema([
                         SignatorySelect::make('custodian_printed_name', ProcurementSignatoryName::ROLE_DISPOSAL_ACCOUNTABLE_OFFICER)
-                            ->label('Certified Correct')
+                            ->label(fn (): string => self::activeCategorySlug() === 'consumables'
+                                ? 'Certified Correct'
+                                : 'Requested by')
                             ->helperText(fn (): ?string => SignatorySelect::disposalInstruction(
                                 self::activeCategorySlug() === 'consumables'
                                     ? 'custodian_consumables'
@@ -418,15 +407,12 @@ class DisposalForm
                             ))
                             ->required()
                             ->placeholder('Full name')
-                            ->live()
-                            ->afterStateUpdated(function ($state, Set $set): void {
-                                $set('accountable_officer_designation', ProcurementSignatoryName::designationFor(
-                                    ProcurementSignatoryName::ROLE_DISPOSAL_ACCOUNTABLE_OFFICER,
-                                    is_string($state) ? $state : null,
-                                ));
-                            }),
+                            ->dehydrated()
+                            ->live(),
                         SignatorySelect::make('approved_by_printed_name', ProcurementSignatoryName::ROLE_DISPOSAL_AUTHORIZED_OFFICIAL)
-                            ->label('Disposal Approved')
+                            ->label(fn (): string => self::activeCategorySlug() === 'consumables'
+                                ? 'Disposal Approved'
+                                : 'Approved by')
                             ->helperText(fn (): ?string => SignatorySelect::disposalInstruction(
                                 self::activeCategorySlug() === 'consumables'
                                     ? 'approved_consumables'
@@ -443,17 +429,20 @@ class DisposalForm
                             }),
                         SignatorySelect::makeDesignation('authorized_official_designation', ProcurementSignatoryName::ROLE_DISPOSAL_AUTHORIZED_OFFICIAL)
                             ->label('Designation of authorized official')
-                            ->required(fn (): bool => self::isPpeCategory())
-                            ->visible(fn (): bool => self::isPpeCategory()),
+                            ->required(fn (): bool => self::isIirupCategory())
+                            ->visible(fn (): bool => self::isIirupCategory()),
                         SignatorySelect::make('inspection_officer_printed_name', ProcurementSignatoryName::ROLE_DISPOSAL_INSPECTION_OFFICER)
-                            ->label('Inspection officer name')
+                            ->label('Inspection officer')
                             ->helperText(fn (): ?string => SignatorySelect::disposalInstruction('inspection_officer'))
                             ->required()
                             ->placeholder('Full name'),
-                        SignatorySelect::make('witness_printed_name', ProcurementSignatoryName::ROLE_DISPOSAL_WITNESS)
-                            ->label('Witness to Disposal')
-                            ->helperText(fn (): ?string => SignatorySelect::disposalInstruction('witness'))
-                            ->placeholder('Full name'),
+                        TextInput::make('witness_printed_name')
+                            ->label(fn (): string => self::isIirupCategory() ? 'Witness' : 'Witness to Disposal')
+                            ->helperText(fn (): ?string => self::isIirupCategory()
+                                ? 'Typed name. The “this day of” date stays blank for handwriting.'
+                                : SignatorySelect::disposalInstruction('witness'))
+                            ->placeholder('Full name')
+                            ->maxLength(255),
                     ])
                     ->columns(2),
             ]);

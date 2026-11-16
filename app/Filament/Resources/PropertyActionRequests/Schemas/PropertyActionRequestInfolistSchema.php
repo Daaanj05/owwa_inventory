@@ -4,10 +4,8 @@ namespace App\Filament\Resources\PropertyActionRequests\Schemas;
 
 use App\Filament\Resources\Disposals\DisposalResource;
 use App\Filament\Resources\Transfers\TransferResource;
-use App\Filament\Support\WorkflowEmailNotificationsInfolist;
 use App\Models\PropertyActionRequest;
 use App\Models\PropertyActionRequestLine;
-use App\Support\OwwaReferenceLabels;
 use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\RepeatableEntry\TableColumn;
 use Filament\Infolists\Components\TextEntry;
@@ -26,7 +24,6 @@ class PropertyActionRequestInfolistSchema
                 ->schema(self::detailFields()),
             self::requestedItemsSection(),
             self::outcomeLinksSection(),
-            WorkflowEmailNotificationsInfolist::section(),
         ];
     }
 
@@ -36,24 +33,6 @@ class PropertyActionRequestInfolistSchema
     protected static function detailFields(): array
     {
         return [
-            TextEntry::make('reference_code')
-                ->label(OwwaReferenceLabels::propertyActionRequest())
-                ->placeholder('—')
-                ->visible(self::hideOnEmployeeRequest()),
-            TextEntry::make('action_type')
-                ->label('Action')
-                ->formatStateUsing(fn (PropertyActionRequest $record): string => $record->actionTypeLabel())
-                ->placeholder('—')
-                ->visible(self::hideOnEmployeeRequest()),
-            TextEntry::make('reason_code')
-                ->label('Reason')
-                ->formatStateUsing(fn (PropertyActionRequest $record): string => $record->reasonLabel())
-                ->placeholder('—')
-                ->visible(self::hideOnEmployeeRequest()),
-            TextEntry::make('reason_detail')
-                ->label('Details')
-                ->placeholder('—')
-                ->columnSpanFull(),
             TextEntry::make('category')
                 ->label('Category')
                 ->state(function (PropertyActionRequest $record): string {
@@ -74,25 +53,21 @@ class PropertyActionRequestInfolistSchema
                 ->placeholder('—'),
             TextEntry::make('requestedBy.name')
                 ->label('Requested by')
-                ->placeholder('—')
-                ->visible(self::hideOnEmployeeRequest()),
+                ->placeholder('—'),
             TextEntry::make('accountableUser.name')
                 ->label('Accountable UC')
                 ->placeholder('—')
-                ->visible(self::hideOnEmployeeRequest()),
+                ->visible(fn (PropertyActionRequest $record): bool => self::showAccountableUser($record)),
             TextEntry::make('office.name')
                 ->label('Office')
-                ->placeholder('—')
-                ->visible(self::hideOnEmployeeRequest()),
+                ->placeholder('—'),
             TextEntry::make('department.name')
                 ->label('Department')
-                ->placeholder('—')
-                ->visible(self::hideOnEmployeeRequest()),
+                ->placeholder('—'),
             TextEntry::make('created_at')
                 ->label('Date filed')
                 ->date('M d, Y')
-                ->placeholder('—')
-                ->visible(self::hideOnEmployeeRequest()),
+                ->placeholder('—'),
             TextEntry::make('status')
                 ->label('Status')
                 ->badge()
@@ -102,56 +77,61 @@ class PropertyActionRequestInfolistSchema
                     PropertyActionRequest::STATUS_REJECTED => 'danger',
                     PropertyActionRequest::STATUS_PENDING_UC, PropertyActionRequest::STATUS_PENDING_SC => 'warning',
                     default => 'gray',
-                })
-                ->visible(self::hideOnEmployeeRequest()),
+                }),
+            TextEntry::make('action_type')
+                ->label('Action')
+                ->formatStateUsing(fn (PropertyActionRequest $record): string => $record->actionTypeLabel())
+                ->placeholder('—'),
+            TextEntry::make('reason_code')
+                ->label('Reason')
+                ->formatStateUsing(fn (PropertyActionRequest $record): string => $record->reasonLabel())
+                ->placeholder('—'),
+            TextEntry::make('reason_detail')
+                ->label('Details')
+                ->placeholder('—')
+                ->columnSpanFull()
+                ->visible(fn (PropertyActionRequest $record): bool => filled($record->reason_detail)),
             TextEntry::make('uc_approvedBy.name')
                 ->label('UC actioned by')
                 ->placeholder('—')
-                ->visible(fn (PropertyActionRequest $record): bool => self::showApprovalField($record, filled($record->uc_approved_by))),
+                ->visible(fn (PropertyActionRequest $record): bool => filled($record->uc_approved_by)),
             TextEntry::make('uc_approved_at')
                 ->label('UC actioned on')
                 ->dateTime('M d, Y h:i A')
                 ->placeholder('—')
-                ->visible(fn (PropertyActionRequest $record): bool => self::showApprovalField($record, $record->uc_approved_at !== null)),
+                ->visible(fn (PropertyActionRequest $record): bool => $record->uc_approved_at !== null),
             TextEntry::make('uc_remarks')
                 ->label('UC remarks')
                 ->placeholder('—')
-                ->columnSpanFull()
-                ->visible(fn (PropertyActionRequest $record): bool => self::showApprovalField($record, filled($record->uc_remarks))),
+                ->visible(fn (PropertyActionRequest $record): bool => filled($record->uc_remarks)),
             TextEntry::make('sc_approvedBy.name')
                 ->label('SC actioned by')
                 ->placeholder('—')
-                ->visible(fn (PropertyActionRequest $record): bool => self::showApprovalField($record, filled($record->sc_approved_by))),
+                ->visible(fn (PropertyActionRequest $record): bool => filled($record->sc_approved_by)),
             TextEntry::make('sc_approved_at')
                 ->label('SC actioned on')
                 ->dateTime('M d, Y h:i A')
                 ->placeholder('—')
-                ->visible(fn (PropertyActionRequest $record): bool => self::showApprovalField($record, $record->sc_approved_at !== null)),
+                ->visible(fn (PropertyActionRequest $record): bool => $record->sc_approved_at !== null),
             TextEntry::make('sc_remarks')
                 ->label('SC remarks')
                 ->placeholder('—')
-                ->columnSpanFull()
-                ->visible(fn (PropertyActionRequest $record): bool => self::showApprovalField($record, filled($record->sc_remarks))),
+                ->visible(fn (PropertyActionRequest $record): bool => filled($record->sc_remarks)),
             TextEntry::make('executed_at')
                 ->label('Received & routed on')
                 ->dateTime('M d, Y h:i A')
                 ->placeholder('—')
-                ->visible(fn (PropertyActionRequest $record): bool => self::showApprovalField($record, $record->executed_at !== null)),
+                ->visible(fn (PropertyActionRequest $record): bool => $record->executed_at !== null),
         ];
     }
 
-    protected static function hideOnEmployeeRequest(): \Closure
+    protected static function showAccountableUser(PropertyActionRequest $record): bool
     {
-        return fn (PropertyActionRequest $record): bool => ! $record->isEmployeeRequest();
-    }
-
-    protected static function showApprovalField(PropertyActionRequest $record, bool $filled): bool
-    {
-        if (! $record->isEmployeeRequest()) {
-            return true;
+        if ($record->isEmployeeRequest() && (int) $record->accountable_user_id === (int) $record->requested_by) {
+            return false;
         }
 
-        return $filled;
+        return true;
     }
 
     protected static function requestedItemsSection(): Section

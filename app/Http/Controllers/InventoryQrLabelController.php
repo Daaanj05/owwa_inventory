@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\AcquisitionPaperwork;
 use App\Models\InventoryUnit;
+use App\Models\Issuance;
 use App\Models\StockOpeningBalanceBatch;
 use App\Models\User;
 use App\Services\InventoryQrLabelService;
@@ -89,6 +90,28 @@ class InventoryQrLabelController extends Controller
         ])->setPaper('a4', 'portrait');
 
         return $pdf->download(OwwaExportFilename::qrLabel('OpeningBalance', (string) $stockOpeningBalanceBatch->reference_code));
+    }
+
+    public function issuance(Issuance $issuance, InventoryQrLabelService $labels): SymfonyResponse
+    {
+        $this->authorizeSupplyCustodian();
+
+        if (! $labels->supportsIssuanceQrLabels($issuance)) {
+            abort(404, 'QR labels are only available for PPE and semi-expendable issuances with linked inventory units.');
+        }
+
+        $labelRows = $labels->labelsForIssuance($issuance);
+
+        if ($labelRows->isEmpty()) {
+            abort(404, 'No inventory units on this issuance.');
+        }
+
+        $pdf = Pdf::loadView('reports.qr-labels', [
+            'title' => 'Unit QR labels — '.$issuance->reference_code,
+            'labels' => $labelRows,
+        ])->setPaper('a4', 'portrait');
+
+        return $pdf->download(OwwaExportFilename::qrLabel('Issuance', (string) $issuance->reference_code));
     }
 
     protected function authorizeSupplyCustodian(): User

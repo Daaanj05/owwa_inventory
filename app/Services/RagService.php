@@ -20,7 +20,7 @@ class RagService
      * Generate a short narrative summary for a deterministic, pre-computed recommendation set.
      *
      * @param  array{from:string,to:string,category:string|null,pairs:int,high:int,medium:int,headline?:string}  $facts
-     * @param  array<int, array{priority:string,item:string,office:string,cover:float,forecast:float,suggested:int|null,has_recent_usage?:bool}>  $items
+     * @param  array<int, array{priority:string,item:string,office:string,cover:float,forecast:float,suggested:int|null}>  $items
      */
     public function generateNarrativeSummary(array $facts, array $items, array $filters = []): ?string
     {
@@ -34,9 +34,8 @@ class RagService
             ->take(8)
             ->map(function (array $i): string {
                 $suggested = $i['suggested'] ?? 0;
-                $usageNote = ($i['has_recent_usage'] ?? true) ? '' : ', no recent usage';
 
-                return "- {$i['priority']}: {$i['item']} (cover {$i['cover']} mo, forecast {$i['forecast']}/mo, suggested {$suggested}{$usageNote})";
+                return "- {$i['priority']}: {$i['item']} (cover {$i['cover']} mo, forecast {$i['forecast']}/mo, suggested {$suggested})";
             })
             ->implode("\n");
 

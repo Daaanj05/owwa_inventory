@@ -5,14 +5,19 @@ namespace App\Filament\Resources\Disposals\Actions;
 use App\Filament\Resources\Disposals\DisposalResource;
 use App\Filament\Support\OwwaFormModalDefaults;
 use App\Models\Disposal;
+use App\Models\User;
 use App\Services\DisposalStockValidator;
 use App\Services\DisposalWorkflowService;
 use App\Services\OwwaTemplateExportService;
+use App\Services\PropertyReturnDecisionService;
 use App\Support\OwwaExportBusyDispatcher;
 use Filament\Actions\Action;
 use Filament\Actions\EditAction;
+use Filament\Facades\Filament;
 use Filament\Notifications\Notification;
+use InvalidArgumentException;
 use Livewire\Component as LivewireComponent;
+use RuntimeException;
 use Throwable;
 
 class DisposalViewActions
@@ -28,32 +33,57 @@ class DisposalViewActions
             });
     }
 
-    public static function confirmAction(): Action
+    public static function markAsApprovedAction(): Action
     {
-        return Action::make('confirmDisposal')
-            ->label('Confirm Disposal')
+        return Action::make('markAsApproved')
+            ->label('Mark as approved')
             ->icon('heroicon-o-check-circle')
             ->color('success')
             ->requiresConfirmation()
-            ->modalHeading('Confirm disposal?')
+            ->modalHeading('Mark disposal as approved?')
             ->modalDescription('This applies the stock write-off and locks the record from further edits.')
-            ->modalSubmitActionLabel('Confirm')
-            ->visible(fn (Disposal $record): bool => ! $record->isConfirmed())
+            ->modalSubmitActionLabel('Mark as approved')
+            ->visible(fn (Disposal $record): bool => ! $record->isConfirmed()
+                && ($user = Filament::auth()->user()) instanceof User
+                && $user->isSupplyCustodian())
+            ->disabled(fn (Disposal $record): bool => $record->exported_at === null)
+            ->tooltip(fn (Disposal $record): ?string => $record->exported_at === null
+                ? 'Export the disposal form before marking as approved.'
+                : null)
             ->action(function (Disposal $record): void {
+                $user = Filament::auth()->user();
+                if (! $user instanceof User) {
+                    return;
+                }
+
                 try {
-                    app(DisposalWorkflowService::class)->confirm($record);
+                    if ($record->isFromPropertyReturn()) {
+                        app(PropertyReturnDecisionService::class)->markDisposalApproved($record, $user);
+                    } else {
+                        if ($record->exported_at === null) {
+                            throw new InvalidArgumentException('Export the disposal form before marking as approved.');
+                        }
+                        app(DisposalWorkflowService::class)->confirm($record);
+                    }
+
                     Notification::make()
-                        ->title('Disposal confirmed')
+                        ->title('Disposal marked as approved')
                         ->success()
                         ->send();
-                } catch (Throwable $exception) {
+                } catch (InvalidArgumentException|RuntimeException|Throwable $exception) {
                     Notification::make()
-                        ->title('Could not confirm disposal')
+                        ->title('Could not mark as approved')
                         ->body($exception->getMessage())
                         ->danger()
                         ->send();
                 }
             });
+    }
+
+    /** @deprecated Use markAsApprovedAction() */
+    public static function confirmAction(): Action
+    {
+        return self::markAsApprovedAction();
     }
 
     public static function exportOwwaAction(): Action

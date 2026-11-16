@@ -82,7 +82,7 @@ class DisposalExportLayout
         $values = [];
         OwwaCellMapping::applyHeader($values, (array) ($map['header'] ?? []), [
             'as_at' => $disposal->disposal_date?->format('Y-m-d') ?? '',
-            'entity_name' => $office?->name ?? '',
+            'entity_name' => (string) config('owwa_export_standards.entity_name'),
             'fund_cluster' => '',
             'accountable_officer' => $disposal->custodian_printed_name ?? '',
             'accountable_designation' => $disposal->accountable_officer_designation ?? '',

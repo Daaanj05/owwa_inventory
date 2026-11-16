@@ -152,7 +152,17 @@ class IssuancesTable
                 AcquisitionDateRangeFilter::make('issuance_date', 'Date'),
             ])
             ->emptyStateHeading('No issuances recorded')
-            ->emptyStateDescription('Issuances are created from Requisitions → Review & issue (or Issue remainder). Export RSMI here after issue; export RIS from Requisitions.')
+            ->emptyStateDescription(function (): string {
+                $slug = \App\Models\ItemCategory::query()
+                    ->find(\App\Filament\Concerns\SyncsActiveItemCategory::resolveCategoryIdFromContext())
+                    ?->getTemplateSlug();
+
+                return match ($slug) {
+                    'ppe' => 'Issuances are created from Requisitions → Review & issue (or Issue remainder). Export PAR here after issue; export RIS from Requisitions.',
+                    'semi_expendable' => 'Issuances are created from Requisitions → Review & issue (or Issue remainder). Export ICS here after issue; export RIS from Requisitions.',
+                    default => 'Issuances are created from Requisitions → Review & issue (or Issue remainder). Export RSMI here after issue; export RIS from Requisitions.',
+                };
+            })
             ->emptyStateIcon('heroicon-o-arrow-up-tray')
             ->recordActions([
                 ConfiguresOwwaViewAction::make(
@@ -161,6 +171,7 @@ class IssuancesTable
                         IssuanceResource::modalDetailSections(),
                     ),
                     [
+                        IssuanceViewActions::printQrLabelsAction(),
                         IssuanceViewActions::extendUsefulLifeAction(),
                         IssuanceViewActions::exportOwwaAction(),
                         IssuanceViewActions::exportPdfAction(),

@@ -86,13 +86,9 @@ class ProcurementAnalyticsPageTest extends TestCase
             ->call('setAtRiskView', 'stockouts')
             ->tap(function ($component) use ($fastItem, $slowItem): void {
                 $rows = $component->instance()->getAtRiskPreviewRows();
-                $this->assertTrue($rows->every(function ($row): bool {
-                    if ($row->priority === 'High' && ! ($row->has_recent_usage ?? true)) {
-                        return true;
-                    }
-
-                    return $row->months_cover !== null && (float) $row->months_cover <= 2.0;
-                }));
+                $this->assertTrue($rows->every(
+                    fn ($row): bool => $row->months_cover !== null && (float) $row->months_cover <= 2.0
+                ));
                 $itemIds = $rows->pluck('item_id')->all();
                 $this->assertContains($fastItem->id, $itemIds);
                 $this->assertNotContains($slowItem->id, $itemIds);
@@ -123,7 +119,7 @@ class ProcurementAnalyticsPageTest extends TestCase
             });
     }
 
-    public function test_stockout_tab_includes_high_priority_without_recent_usage(): void
+    public function test_stockout_tab_excludes_items_without_issuance_history(): void
     {
         Filament::setCurrentPanel(Filament::getPanel('admin'));
 
@@ -146,9 +142,7 @@ class ProcurementAnalyticsPageTest extends TestCase
             ->call('setAtRiskView', 'stockouts')
             ->tap(function ($component) use ($item): void {
                 $rows = $component->instance()->getAtRiskPreviewRows();
-                $match = $rows->first(fn ($row) => $row->item_id === $item->id);
-                $this->assertNotNull($match);
-                $this->assertFalse($match->has_recent_usage);
+                $this->assertNull($rows->first(fn ($row) => $row->item_id === $item->id));
             });
     }
 

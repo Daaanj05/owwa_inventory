@@ -23,7 +23,8 @@ class ProcurementDecisionSupportService
      * Build at-risk procurement rows based on consumption trend (forecast) + current stock.
      *
      * Forecast approach:
-     * - build monthly series of issued quantities per (item, office)
+     * - build monthly series of issued quantities per (item, supply office)
+     * - supply office is COALESCE(issued_from_office_id, office_id)
      * - compute last-N moving average
      * - add a simple linear trend slope adjustment
      *
@@ -43,7 +44,6 @@ class ProcurementDecisionSupportService
      *   projected_stockout_date:string|null,
      *   latest_unit_cost:float|null,
      *   item_category_id:int,
-     *   has_recent_usage:bool,
      *   priority:string
      * }>
      */
@@ -67,17 +67,21 @@ class ProcurementDecisionSupportService
         );
 
         $forecastFrom = $to->copy()->subMonths(self::FORECAST_LOOKBACK_MONTHS - 1)->startOfMonth();
+        $supplyOfficeExpr = 'COALESCE(issued_from_office_id, office_id)';
 
         $issuances = Issuance::query()
             ->whereBetween('issuance_date', [$forecastFrom->copy()->startOfDay(), $to->copy()->endOfDay()])
-            ->when($officeIds !== [], fn ($q) => $q->whereIn('office_id', $officeIds))
+            ->when($officeIds !== [], function ($q) use ($supplyOfficeExpr, $officeIds): void {
+                $placeholders = implode(',', array_fill(0, count($officeIds), '?'));
+                $q->whereRaw("{$supplyOfficeExpr} IN ({$placeholders})", $officeIds);
+            })
             ->select([
                 'item_id',
-                'office_id',
+                DB::raw("{$supplyOfficeExpr} as office_id"),
                 $this->monthYearSqlExpression('issuance_date'),
                 DB::raw('SUM(quantity) as total_qty'),
             ])
-            ->groupBy('item_id', 'office_id', 'ym')
+            ->groupBy('item_id', DB::raw($supplyOfficeExpr), 'ym')
             ->get();
 
         $periodKeys = $this->buildMonthKeys($forecastFrom, $to);
@@ -111,7 +115,6 @@ class ProcurementDecisionSupportService
         $latestUnitCosts = $this->getLatestUnitCosts($itemIds);
 
         $rows = collect();
-        $seenKeys = [];
 
         foreach ($series as $key => $values) {
             [$itemId, $officeId] = array_map('intval', explode('_', $key, 2));
@@ -147,8 +150,6 @@ class ProcurementDecisionSupportService
                 ? now()->addDays((int) round($monthsCover * 30))->toDateString()
                 : now()->toDateString();
 
-            $seenKeys[$key] = true;
-
             $rows->push($this->makeAtRiskRow(
                 item: $item,
                 office: $office,
@@ -158,19 +159,10 @@ class ProcurementDecisionSupportService
                 suggested: $suggested,
                 stockoutDate: $stockoutDate,
                 latestUnitCosts: $latestUnitCosts,
-                hasRecentUsage: true,
                 priority: $priority,
                 legacyOnHand: $legacyOnHand,
             ));
         }
-
-        $rows = $this->appendLowStockWithoutRecentUsage(
-            $rows,
-            $seenKeys,
-            $resolvedCategoryIds,
-            $officeIds,
-            $latestUnitCosts,
-        );
 
         return $rows
             ->sort(function (object $a, object $b): int {
@@ -374,73 +366,6 @@ class ProcurementDecisionSupportService
     }
 
     /**
-     * @param  array<string, true>  $seenKeys
-     * @param  array<int>  $categoryIds
-     * @param  array<int, float>  $latestUnitCosts
-     */
-    protected function appendLowStockWithoutRecentUsage(
-        Collection $rows,
-        array $seenKeys,
-        array $categoryIds,
-        array $officeIds,
-        array $latestUnitCosts,
-    ): Collection {
-        if ($officeIds === []) {
-            return $rows;
-        }
-
-        $items = Item::query()
-            ->active()
-            ->with('category:id,name')
-            ->where('reorder_level', '>', 0)
-            ->when($categoryIds !== [], fn ($q) => $q->whereIn('item_category_id', $categoryIds))
-            ->get(['id', 'name', 'reorder_level', 'item_category_id']);
-
-        $offices = Office::query()
-            ->active()
-            ->whereIn('id', $officeIds)
-            ->get(['id', 'name']);
-
-        foreach ($offices as $office) {
-            foreach ($items as $item) {
-                $key = "{$item->id}_{$office->id}";
-                if (isset($seenKeys[$key])) {
-                    continue;
-                }
-
-                $currentStock = $this->stockService->getActiveRestockStock((int) $item->id, (int) $office->id);
-                $legacyOnHand = $this->stockService->getLegacyOnHandStock((int) $item->id, (int) $office->id);
-                if ($currentStock > (int) $item->reorder_level) {
-                    continue;
-                }
-
-                $suggested = $this->resolveSuggestedReorderQty(
-                    currentStock: $currentStock,
-                    reorderLevel: (int) $item->reorder_level,
-                    forecastMonthly: 0.0,
-                    targetCoverMonths: 3,
-                );
-
-                $rows->push($this->makeAtRiskRow(
-                    item: $item,
-                    office: $office,
-                    currentStock: $currentStock,
-                    forecastMonthly: 0.0,
-                    monthsCover: null,
-                    suggested: $suggested,
-                    stockoutDate: null,
-                    latestUnitCosts: $latestUnitCosts,
-                    hasRecentUsage: false,
-                    priority: 'High',
-                    legacyOnHand: $legacyOnHand,
-                ));
-            }
-        }
-
-        return $rows;
-    }
-
-    /**
      * @param  array<int, float>  $latestUnitCosts
      */
     protected function makeAtRiskRow(
@@ -452,7 +377,6 @@ class ProcurementDecisionSupportService
         ?int $suggested,
         ?string $stockoutDate,
         array $latestUnitCosts,
-        bool $hasRecentUsage,
         string $priority,
         int $legacyOnHand = 0,
     ): object {
@@ -473,7 +397,6 @@ class ProcurementDecisionSupportService
             'suggested_reorder_qty' => $suggested,
             'projected_stockout_date' => $stockoutDate,
             'latest_unit_cost' => $latestUnitCosts[(int) $item->id] ?? null,
-            'has_recent_usage' => $hasRecentUsage,
             'priority' => $priority,
         ];
     }

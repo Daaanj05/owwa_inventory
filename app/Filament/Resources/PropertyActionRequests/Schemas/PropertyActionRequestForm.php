@@ -209,10 +209,10 @@ class PropertyActionRequestForm
                                     self::intOrNull($get('item_category_id')),
                                 ))
                                     ->alignment(Alignment::Start)
-                                    ->width('13rem'),
+                                    ->width('18rem'),
                                 TableColumn::make('Issued')
                                     ->alignment(Alignment::End)
-                                    ->width('9rem'),
+                                    ->width('6.5rem'),
                             ])
                             ->compact()
                             ->columnSpanFull()

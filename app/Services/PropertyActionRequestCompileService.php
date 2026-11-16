@@ -176,7 +176,7 @@ class PropertyActionRequestCompileService
             'accountable_user_id' => $unitConsolidator->id,
             'office_id' => $officeId,
             'department_id' => $departmentId,
-            'status' => PropertyActionRequest::STATUS_PENDING_SC,
+            'status' => PropertyActionRequest::STATUS_PENDING_DECISION,
             'uc_approved_by' => $unitConsolidator->id,
             'uc_approved_at' => now(),
             'uc_remarks' => $remarks,
@@ -202,7 +202,7 @@ class PropertyActionRequestCompileService
                 'uc_approved_by' => $unitConsolidator->id,
                 'uc_approved_at' => $source->uc_approved_at ?? now(),
                 'uc_remarks' => $remarks ?? $source->uc_remarks,
-                'status' => PropertyActionRequest::STATUS_PENDING_SC,
+                'status' => PropertyActionRequest::STATUS_PENDING_DECISION,
             ]);
         }
 

@@ -36,11 +36,23 @@ class AiProcurementRecommendationContextTest extends TestCase
             'name' => 'Office Chair',
         ]);
 
+        for ($i = 5; $i >= 0; $i--) {
+            DB::table('issuances')->insert([
+                'reference_code' => 'ISS-AI-CONS-'.$i.'-'.uniqid(),
+                'item_id' => $consumable->id,
+                'office_id' => $office->id,
+                'quantity' => 4,
+                'issuance_date' => now()->subMonths($i)->startOfMonth()->toDateString(),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+
         DB::table('acquisitions')->insert([
             'reference_code' => 'ACQ-AI-CONS-'.uniqid(),
             'item_id' => $consumable->id,
             'office_id' => $office->id,
-            'quantity' => 4,
+            'quantity' => 4 + 24,
             'acquisition_date' => now()->toDateString(),
             'created_at' => now(),
             'updated_at' => now(),

@@ -105,7 +105,7 @@ class TransferForm
                         Select::make('to_office_id')
                             ->label('To office')
                             ->options(function (Get $get): array {
-                                if ($get('transfer_type') === Transfer::TYPE_RETURN) {
+                                if (self::locksToRegionalOffice($get('transfer_type'))) {
                                     return self::regionalOfficeOption();
                                 }
 
@@ -124,9 +124,9 @@ class TransferForm
                             ->required()
                             ->searchable()
                             ->preload()
-                            ->disabled(fn (Get $get): bool => blank($get('from_office_id')) || $get('transfer_type') === Transfer::TYPE_RETURN)
+                            ->disabled(fn (Get $get): bool => blank($get('from_office_id')) || self::locksToRegionalOffice($get('transfer_type')))
                             ->dehydrated()
-                            ->rules(fn (Get $get): array => $get('transfer_type') === Transfer::TYPE_RETURN
+                            ->rules(fn (Get $get): array => self::locksToRegionalOffice($get('transfer_type'))
                                 ? []
                                 : ['different:from_office_id'])
                             ->validationMessages([
@@ -134,7 +134,7 @@ class TransferForm
                             ])
                             ->live()
                             ->afterStateUpdated(function ($state, Set $set, Get $get): void {
-                                if ($get('transfer_type') === Transfer::TYPE_RETURN) {
+                                if (self::locksToRegionalOffice($get('transfer_type'))) {
                                     return;
                                 }
 
@@ -147,7 +147,7 @@ class TransferForm
                         Placeholder::make('return_to_stock_hint')
                             ->hiddenLabel()
                             ->content('This quantity returns to regional stock. It is not taken from another office’s on-hand.')
-                            ->visible(fn (Get $get): bool => $get('transfer_type') === Transfer::TYPE_RETURN)
+                            ->visible(fn (Get $get): bool => self::locksToRegionalOffice($get('transfer_type')))
                             ->columnSpanFull()
                             ->extraAttributes(['class' => 'owwa-transfer-return-hint']),
                     ])
@@ -388,19 +388,26 @@ class TransferForm
                             ->placeholder('Select condition'),
                         Select::make('transfer_type')
                             ->label('Transfer type')
-                            ->options(Transfer::typeOptions())
+                            ->options(fn (Get $get): array => self::usesPtrForm($get('item_category_filter'))
+                                ? Transfer::ptrTypeOptions()
+                                : Transfer::typeOptions())
                             ->placeholder('Select type')
                             ->selectablePlaceholder(false)
                             ->required()
                             ->live()
-                            ->afterStateUpdated(function ($state, Set $set): void {
-                                $set('item_id', null);
-                                $set('return_issuance_id', null);
-                                $set('property_number', null);
-                                $set('inventory_unit_id', null);
+                            ->afterStateUpdated(function ($state, Set $set, Get $get): void {
+                                if (blank($get('inventory_unit_id')) || ! $get('inventory_unit_id')) {
+                                    $set('item_id', null);
+                                    $set('return_issuance_id', null);
+                                    $set('property_number', null);
+                                    $set('inventory_unit_id', null);
+                                }
 
-                                if ($state === Transfer::TYPE_RETURN) {
+                                if (in_array($state, [Transfer::TYPE_RETURN, Transfer::TYPE_RELOCATE], true)) {
                                     self::lockReturnDestination($set);
+                                    if ($state === Transfer::TYPE_RELOCATE) {
+                                        $set('to_accountable_officer', app(SupplyOfficeResolver::class)->resolveOfficeName());
+                                    }
 
                                     return;
                                 }
@@ -428,7 +435,11 @@ class TransferForm
                         TextInput::make('to_accountable_officer')
                             ->label('To accountable officer')
                             ->maxLength(255)
-                            ->helperText('Accountable officer’s name only.'),
+                            ->helperText(fn (Get $get): string => $get('transfer_type') === Transfer::TYPE_RELOCATE
+                                ? 'Regional Office for Relocate.'
+                                : 'Accountable officer’s name only.')
+                            ->disabled(fn (Get $get): bool => $get('transfer_type') === Transfer::TYPE_RELOCATE)
+                            ->dehydrated(),
                         Textarea::make('reason_for_transfer')
                             ->label('Reason for transfer')
                             ->rows(2)
@@ -534,6 +545,15 @@ class TransferForm
                         SignatorySelect::makeDesignation('received_by_designation', ProcurementSignatoryName::ROLE_TRANSFER_RECEIVED)
                             ->label('Designation')
                             ->helperText('Designation of the selected person'),
+                        DatePicker::make('date_of_approval')
+                            ->label('Date of approval')
+                            ->default(now()),
+                        DatePicker::make('date_released')
+                            ->label('Date released')
+                            ->default(now()),
+                        DatePicker::make('date_received')
+                            ->label('Date received')
+                            ->default(now()),
                     ])
                     ->columns(2)
                     ->visible(fn (Get $get): bool => self::usesPtrForm($get('item_category_filter'))),
@@ -607,7 +627,16 @@ class TransferForm
     {
         $regionalOfficeId = app(SupplyOfficeResolver::class)->resolve();
         $set('to_office_id', $regionalOfficeId);
-        $set('to_accountable_officer', self::defaultAccountableOfficerName($regionalOfficeId));
+        $set(
+            'to_accountable_officer',
+            app(SupplyOfficeResolver::class)->resolveOfficeName()
+                ?? self::defaultAccountableOfficerName($regionalOfficeId),
+        );
+    }
+
+    public static function locksToRegionalOffice(mixed $transferType): bool
+    {
+        return in_array($transferType, [Transfer::TYPE_RETURN, Transfer::TYPE_RELOCATE], true);
     }
 
     public static function quantityMaximum(Get $get, mixed $livewire): int

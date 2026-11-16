@@ -48,17 +48,17 @@ class PropertyActionRequestResource extends Resource
                 return null;
             }
 
-            $status = match (true) {
-                $user->isSupplyCustodian() => PropertyActionRequest::STATUS_PENDING_SC,
-                $user->isUnitConsolidator(), $user->isEmployee() => PropertyActionRequest::STATUS_PENDING_UC,
-                default => null,
-            };
-
-            if ($status === null) {
+            if ($user->isSupplyCustodian()) {
+                $pending = static::getEloquentQuery()
+                    ->whereIn('status', PropertyActionRequest::pendingScBadgeStatuses())
+                    ->count();
+            } elseif ($user->isUnitConsolidator() || $user->isEmployee()) {
+                $pending = static::getEloquentQuery()
+                    ->where('status', PropertyActionRequest::STATUS_PENDING_UC)
+                    ->count();
+            } else {
                 return null;
             }
-
-            $pending = static::getEloquentQuery()->where('status', $status)->count();
 
             return $pending > 0 ? (string) $pending : null;
         } catch (\Throwable) {

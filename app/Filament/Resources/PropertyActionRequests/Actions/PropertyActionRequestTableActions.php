@@ -14,7 +14,6 @@ use Filament\Facades\Filament;
 use Filament\Forms\Components\Radio;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
-use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Schemas\Components\Utilities\Get;
 use InvalidArgumentException;
@@ -151,29 +150,77 @@ class PropertyActionRequestTableActions
             });
     }
 
-    public static function scApproveAction(): Action
+    public static function scForTransferAction(): Action
     {
-        return Action::make('scApprove')
-            ->label('Approve')
-            ->icon('heroicon-o-check-badge')
-            ->color('success')
+        return Action::make('scForTransfer')
+            ->label('For transfer')
+            ->icon('heroicon-o-arrows-right-left')
+            ->color('primary')
             ->requiresConfirmation()
-            ->modalHeading('Approve property return')
-            ->modalDescription('Approve in the system while the item is still in transit. You will Receive & route after the physical item arrives.')
+            ->modalHeading('Send to Property Transfer Report?')
+            ->modalDescription('Opens a PTR draft. Complete the form, export, then Mark as approved on the transfer page.')
             ->visible(fn (PropertyActionRequest $record): bool => ($user = Filament::auth()->user()) instanceof User
                 && $user->isSupplyCustodian()
-                && $record->status === PropertyActionRequest::STATUS_PENDING_SC)
-            ->action(function (PropertyActionRequest $record): void {
+                && $record->isPendingDecision())
+            ->action(function (PropertyActionRequest $record, Action $action): void {
                 $user = Filament::auth()->user();
                 if (! $user instanceof User) {
                     return;
                 }
 
-                app(PropertyActionRequestWorkflowService::class)->approveBySupplyCustodian($record, $user);
-                Notification::make()
-                    ->title('Approved — awaiting physical item')
-                    ->success()
-                    ->send();
+                try {
+                    $transfer = app(\App\Services\PropertyReturnDecisionService::class)
+                        ->decideForTransfer($record, $user);
+                } catch (InvalidArgumentException|RuntimeException $exception) {
+                    Notification::make()->title('Cannot open transfer')->body($exception->getMessage())->danger()->send();
+
+                    return;
+                }
+
+                $transfer->loadMissing('item');
+                $url = TransferResource::viewModalUrl($transfer->id, array_filter([
+                    'category' => $transfer->item?->item_category_id,
+                ]));
+
+                Notification::make()->title('PTR draft opened')->success()->send();
+                $action->getLivewire()->redirect($url);
+            });
+    }
+
+    public static function scForDisposalAction(): Action
+    {
+        return Action::make('scForDisposal')
+            ->label('For disposal')
+            ->icon('heroicon-o-trash')
+            ->color('danger')
+            ->requiresConfirmation()
+            ->modalHeading('Send to disposal report?')
+            ->modalDescription('Opens an IIRUP or IIRUSP draft. Complete the form, export, then Mark as approved on the disposal page.')
+            ->visible(fn (PropertyActionRequest $record): bool => ($user = Filament::auth()->user()) instanceof User
+                && $user->isSupplyCustodian()
+                && $record->isPendingDecision())
+            ->action(function (PropertyActionRequest $record, Action $action): void {
+                $user = Filament::auth()->user();
+                if (! $user instanceof User) {
+                    return;
+                }
+
+                try {
+                    $disposal = app(\App\Services\PropertyReturnDecisionService::class)
+                        ->decideForDisposal($record, $user);
+                } catch (InvalidArgumentException|RuntimeException $exception) {
+                    Notification::make()->title('Cannot open disposal')->body($exception->getMessage())->danger()->send();
+
+                    return;
+                }
+
+                $disposal->loadMissing('item');
+                $url = DisposalResource::viewModalUrl($disposal->id, array_filter([
+                    'category' => $disposal->item?->item_category_id,
+                ]));
+
+                Notification::make()->title('Disposal draft opened')->success()->send();
+                $action->getLivewire()->redirect($url);
             });
     }
 
@@ -190,7 +237,7 @@ class PropertyActionRequestTableActions
             ])
             ->visible(fn (PropertyActionRequest $record): bool => ($user = Filament::auth()->user()) instanceof User
                 && $user->isSupplyCustodian()
-                && $record->status === PropertyActionRequest::STATUS_PENDING_SC)
+                && $record->isPendingDecision())
             ->action(function (PropertyActionRequest $record, array $data): void {
                 $user = Filament::auth()->user();
                 if (! $user instanceof User) {
@@ -203,69 +250,6 @@ class PropertyActionRequestTableActions
                     $data['remarks'] ?? null,
                 );
                 Notification::make()->title('Request rejected')->success()->send();
-            });
-    }
-
-    public static function scReceiveAndRouteAction(): Action
-    {
-        return Action::make('scReceiveAndRoute')
-            ->label('Receive & route')
-            ->icon('heroicon-o-inbox-arrow-down')
-            ->color('primary')
-            ->modalHeading('Receive item and route outcome')
-            ->modalDescription('Confirm physical receipt, then choose Return to stock (serviceable), Under repair (held at supply, not issuable), or Dispose (unserviceable).')
-            ->schema([
-                Select::make('outcome')
-                    ->label('Outcome')
-                    ->options(PropertyActionRequest::receiveOutcomeOptions())
-                    ->required()
-                    ->live()
-                    ->default(fn (PropertyActionRequest $record): string => $record->suggestedReceiveOutcome()),
-                TextInput::make('new_estimated_useful_life')
-                    ->label('New estimated useful life (months)')
-                    ->placeholder('e.g. 36')
-                    ->helperText('Optional. Resets catalog EUL for reissue after return to stock. Enter months; labels show months and years.')
-                    ->visible(function (Get $get, PropertyActionRequest $record): bool {
-                        if ($get('outcome') !== PropertyActionRequest::OUTCOME_RETURN_TO_STOCK) {
-                            return false;
-                        }
-
-                        $record->loadMissing('lines.issuance.item.category');
-
-                        return $record->lines->contains(function ($line): bool {
-                            $slug = $line->issuance?->item?->category?->getTemplateSlug();
-
-                            return $slug === 'semi_expendable';
-                        });
-                    }),
-                Textarea::make('receipt_remarks')
-                    ->label('Receipt remarks')
-                    ->rows(2),
-            ])
-            ->visible(fn (PropertyActionRequest $record): bool => ($user = Filament::auth()->user()) instanceof User
-                && $user->isSupplyCustodian()
-                && $record->status === PropertyActionRequest::STATUS_APPROVED)
-            ->action(function (PropertyActionRequest $record, array $data): void {
-                $user = Filament::auth()->user();
-                if (! $user instanceof User) {
-                    return;
-                }
-
-                try {
-                    app(PropertyActionRequestWorkflowService::class)->receiveAndRoute(
-                        $record,
-                        $user,
-                        (string) ($data['outcome'] ?? $record->suggestedReceiveOutcome()),
-                        isset($data['new_estimated_useful_life']) ? (string) $data['new_estimated_useful_life'] : null,
-                        isset($data['receipt_remarks']) ? (string) $data['receipt_remarks'] : null,
-                    );
-                } catch (InvalidArgumentException|RuntimeException $exception) {
-                    Notification::make()->title('Cannot route this return')->body($exception->getMessage())->danger()->send();
-
-                    return;
-                }
-
-                Notification::make()->title('Item received and routed')->success()->send();
             });
     }
 
@@ -346,12 +330,6 @@ class PropertyActionRequestTableActions
             });
     }
 
-    /** @deprecated Use scReceiveAndRouteAction() */
-    public static function scExecuteAction(): Action
-    {
-        return self::scReceiveAndRouteAction();
-    }
-
     public static function openDisposalAction(): Action
     {
         return Action::make('openDisposal')
@@ -361,13 +339,20 @@ class PropertyActionRequestTableActions
             ->url(function (PropertyActionRequest $record): ?string {
                 $disposalId = $record->linkedDisposalId();
 
-                return $disposalId
-                    ? DisposalResource::getUrl('view', ['record' => $disposalId])
-                    : null;
+                if ($disposalId === null) {
+                    return null;
+                }
+
+                $disposal = \App\Models\Disposal::query()->with('item')->find($disposalId);
+
+                return DisposalResource::viewModalUrl($disposalId, array_filter([
+                    'category' => $disposal?->item?->item_category_id,
+                ]));
             })
-            ->visible(fn (PropertyActionRequest $record): bool => $record->status === PropertyActionRequest::STATUS_EXECUTED
-                && $record->linkedDisposalId() !== null)
-            ->openUrlInNewTab();
+            ->visible(fn (PropertyActionRequest $record): bool => in_array($record->status, [
+                PropertyActionRequest::STATUS_PENDING_DISPOSAL,
+                PropertyActionRequest::STATUS_EXECUTED,
+            ], true) && $record->linkedDisposalId() !== null);
     }
 
     public static function openTransferAction(): Action
@@ -390,8 +375,9 @@ class PropertyActionRequestTableActions
                     'category' => $categoryId,
                 ]));
             })
-            ->visible(fn (PropertyActionRequest $record): bool => $record->status === PropertyActionRequest::STATUS_EXECUTED
-                && $record->linkedTransferId() !== null)
-            ->openUrlInNewTab();
+            ->visible(fn (PropertyActionRequest $record): bool => in_array($record->status, [
+                PropertyActionRequest::STATUS_PENDING_TRANSFER,
+                PropertyActionRequest::STATUS_EXECUTED,
+            ], true) && $record->linkedTransferId() !== null);
     }
 }

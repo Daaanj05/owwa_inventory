@@ -29,14 +29,52 @@ class Transfer extends Model
         'remarks', 'property_number', 'condition',
         'approved_by_printed_name', 'released_by_printed_name', 'received_by_printed_name',
         'approved_by_designation', 'released_by_designation', 'received_by_designation',
-        'recorded_by',
+        'date_of_approval', 'date_released', 'date_received',
+        'recorded_by', 'exported_at', 'approved_at',
     ];
 
     protected function casts(): array
     {
         return [
             'transfer_date' => 'date',
+            'date_of_approval' => 'date',
+            'date_released' => 'date',
+            'date_received' => 'date',
             'unit_cost' => 'decimal:2',
+            'exported_at' => 'datetime',
+            'approved_at' => 'datetime',
+        ];
+    }
+
+    public function isApproved(): bool
+    {
+        return $this->approved_at !== null;
+    }
+
+    public function isEditable(): bool
+    {
+        return ! $this->isApproved();
+    }
+
+    public function isFromPropertyReturn(): bool
+    {
+        return PropertyActionRequestLine::query()
+            ->where('transfer_id', $this->id)
+            ->exists();
+    }
+
+    /**
+     * Official PTR type options (no Return to stock).
+     *
+     * @return array<string, string>
+     */
+    public static function ptrTypeOptions(): array
+    {
+        return [
+            self::TYPE_DONATION => 'Donation',
+            self::TYPE_RELOCATE => 'Relocate',
+            self::TYPE_REASSIGNMENT => 'Reassignment',
+            self::TYPE_OTHERS => 'Others',
         ];
     }
 

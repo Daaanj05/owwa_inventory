@@ -187,6 +187,48 @@ class IcsFastExportTest extends TestCase
         );
     }
 
+    public function test_ics_fast_pdf_allows_custodian_who_issued_from_their_supply_office(): void
+    {
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+
+        $issuance = $this->createSemiExpendableIssuance(
+            serial: '2026-01-0510',
+            itemName: 'Office Chair',
+            itemCode: 'SE-051',
+        );
+        $supply = Office::factory()->create(['code' => 'SUP']);
+        $issuance->forceFill(['issued_from_office_id' => $supply->id])->save();
+
+        $custodian = User::factory()->create([
+            'role' => User::ROLE_SUPPLY_CUSTODIAN,
+            'office_id' => $supply->id,
+        ]);
+
+        $this->actingAs($custodian)
+            ->get(route('owwa.export.issuance.ics-fast-pdf', $issuance))
+            ->assertOk();
+    }
+
+    public function test_ics_fast_pdf_forbids_custodian_from_another_supply_office(): void
+    {
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+
+        $issuance = $this->createSemiExpendableIssuance(
+            serial: '2026-01-0520',
+            itemName: 'Office Table',
+            itemCode: 'SE-052',
+        );
+        $otherSupply = Office::factory()->create(['code' => 'OTH']);
+        $custodian = User::factory()->create([
+            'role' => User::ROLE_SUPPLY_CUSTODIAN,
+            'office_id' => $otherSupply->id,
+        ]);
+
+        $this->actingAs($custodian)
+            ->get(route('owwa.export.issuance.ics-fast-pdf', $issuance))
+            ->assertForbidden();
+    }
+
     public function test_semi_expendable_issuance_excel_route_returns_fast_xlsx(): void
     {
         Filament::setCurrentPanel(Filament::getPanel('admin'));

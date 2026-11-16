@@ -2,7 +2,6 @@
 
 namespace App\Filament\Resources\PhysicalInventoryPlans\Schemas;
 
-use App\Filament\Support\WorkflowEmailNotificationsInfolist;
 use App\Models\PhysicalInventoryPlan;
 use App\Support\OwwaReferenceLabels;
 use Filament\Infolists\Components\TextEntry;
@@ -19,7 +18,6 @@ class PhysicalInventoryPlanInfolist
         return [
             self::modalDetailsSection(),
             self::modalCommitteeSection(),
-            WorkflowEmailNotificationsInfolist::section(),
         ];
     }
 
@@ -29,7 +27,6 @@ class PhysicalInventoryPlanInfolist
             ->components([
                 self::overviewSection(),
                 self::committeeSection(),
-                WorkflowEmailNotificationsInfolist::section(),
             ]);
     }
 

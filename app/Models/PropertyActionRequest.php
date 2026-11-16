@@ -24,6 +24,12 @@ class PropertyActionRequest extends Model
 
     public const STATUS_PENDING_SC = 'pending_sc';
 
+    public const STATUS_PENDING_DECISION = 'pending_decision';
+
+    public const STATUS_PENDING_TRANSFER = 'pending_transfer';
+
+    public const STATUS_PENDING_DISPOSAL = 'pending_disposal';
+
     public const STATUS_APPROVED = 'approved';
 
     public const STATUS_REJECTED = 'rejected';
@@ -264,19 +270,57 @@ class PropertyActionRequest extends Model
             && $this->isDraft();
     }
 
+    public function isPendingDecision(): bool
+    {
+        return $this->status === self::STATUS_PENDING_DECISION
+            || $this->status === self::STATUS_PENDING_SC;
+    }
+
+    public function isAwaitingScWork(): bool
+    {
+        return in_array($this->status, [
+            self::STATUS_PENDING_DECISION,
+            self::STATUS_PENDING_SC,
+            self::STATUS_PENDING_TRANSFER,
+            self::STATUS_PENDING_DISPOSAL,
+        ], true);
+    }
+
+    public static function statusLabelFor(string $status): string
+    {
+        return match ($status) {
+            self::STATUS_APPROVED => 'Approved — awaiting item',
+            self::STATUS_EXECUTED => 'Received & routed',
+            self::STATUS_PENDING_UC => 'Pending UC',
+            self::STATUS_PENDING_DECISION, self::STATUS_PENDING_SC => 'Pending decision',
+            self::STATUS_PENDING_TRANSFER => 'Pending transfer',
+            self::STATUS_PENDING_DISPOSAL => 'Pending disposal',
+            self::STATUS_REJECTED => 'Rejected',
+            self::STATUS_DRAFT => 'Draft',
+            default => str_replace('_', ' ', ucwords($status, '_')),
+        };
+    }
+
+    /**
+     * @return list<string>
+     */
+    public static function pendingScBadgeStatuses(): array
+    {
+        return [
+            self::STATUS_PENDING_DECISION,
+            self::STATUS_PENDING_TRANSFER,
+            self::STATUS_PENDING_DISPOSAL,
+            self::STATUS_PENDING_SC,
+        ];
+    }
+
     public function statusLabel(): string
     {
         if ($this->status === self::STATUS_PENDING_UC && $this->uc_approved_at !== null) {
             return 'Approved — ready to compile';
         }
 
-        return match ($this->status) {
-            self::STATUS_APPROVED => 'Approved — awaiting item',
-            self::STATUS_EXECUTED => 'Received & routed',
-            self::STATUS_PENDING_UC => 'Pending UC',
-            self::STATUS_PENDING_SC => 'Pending SC',
-            default => str_replace('_', ' ', ucwords((string) $this->status, '_')),
-        };
+        return self::statusLabelFor((string) $this->status);
     }
 
     public function suggestedReceiveOutcome(): string

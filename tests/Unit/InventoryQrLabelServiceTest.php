@@ -48,9 +48,9 @@ class InventoryQrLabelServiceTest extends TestCase
         $this->assertSame('Republic of the Philippines', $row['agency_line_1']);
         $this->assertSame('OVERSEAS WORKERS WELFARE ADMINISTRATION', $row['agency_line_2']);
         $this->assertStringContainsString('Parian, Calamba, Laguna', $row['agency_address']);
-        $this->assertSame('', $row['sp_tag_no']);
+        $this->assertArrayNotHasKey('sp_tag_no', $row);
         $this->assertSame('OWWA Regional Office IV-A - Administrative Division', $row['unit_section']);
-        $this->assertSame('Semi-Expendable Property no.', $row['property_number_label']);
+        $this->assertSame('SP Tag No.', $row['property_number_label']);
         $this->assertSame('Semi-Expendable Property', $row['property_name_label']);
         $this->assertSame('SEM-2026-DEMO-0001', $row['property_number']);
         $this->assertSame('Office Chair', $row['item_name']);

@@ -57,6 +57,7 @@ class Disposal extends Model
         'iirup_disposal_amount',
         'iirup_other_mode',
         'recorded_by',
+        'exported_at',
     ];
 
     protected function casts(): array
@@ -73,7 +74,15 @@ class Disposal extends Model
             'accumulated_impairment_losses' => 'decimal:2',
             'appraised_value' => 'decimal:2',
             'iirup_disposal_amount' => 'decimal:2',
+            'exported_at' => 'datetime',
         ];
+    }
+
+    public function isFromPropertyReturn(): bool
+    {
+        return PropertyActionRequestLine::query()
+            ->where('disposal_id', $this->id)
+            ->exists();
     }
 
     public function controlNumber(): ?string

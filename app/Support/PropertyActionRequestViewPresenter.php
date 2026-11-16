@@ -18,7 +18,7 @@ class PropertyActionRequestViewPresenter
                 PropertyActionRequest::STATUS_REJECTED => 'owwa-pc-status-badge--incomplete',
                 default => 'owwa-pc-status-badge--progress',
             },
-            meta: self::heroMeta($record),
+            meta: [],
             workflowSteps: self::workflowSteps($record),
             hint: 'Review property return details below.',
             workflowTitle: 'Workflow',
@@ -27,31 +27,6 @@ class PropertyActionRequestViewPresenter
         $hero['referenceLabel'] = OwwaReferenceLabels::propertyActionRequest();
 
         return $hero;
-    }
-
-    /**
-     * @return array<int, array{label: string, value: string}>
-     */
-    protected static function heroMeta(PropertyActionRequest $record): array
-    {
-        $meta = [
-            ['label' => 'Action', 'value' => $record->actionTypeLabel()],
-            ['label' => 'Reason', 'value' => $record->reasonLabel()],
-            ['label' => 'Requested by', 'value' => $record->requestedBy?->name ?? '—'],
-        ];
-
-        $sameAccountableEmployee = $record->isEmployeeRequest()
-            && (int) $record->accountable_user_id === (int) $record->requested_by;
-
-        if (! $sameAccountableEmployee) {
-            $meta[] = ['label' => 'Accountable UC', 'value' => $record->accountableUser?->name ?? '—'];
-        }
-
-        $meta[] = ['label' => 'Office', 'value' => $record->office?->name ?? '—'];
-        $meta[] = ['label' => 'Department', 'value' => $record->department?->name ?? '—'];
-        $meta[] = ['label' => 'Date filed', 'value' => $record->created_at?->format('M j, Y') ?? '—'];
-
-        return $meta;
     }
 
     public static function workflowSteps(PropertyActionRequest $record): array

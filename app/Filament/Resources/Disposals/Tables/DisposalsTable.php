@@ -84,7 +84,7 @@ class DisposalsTable
                         DisposalResource::modalDetailSections(),
                     ),
                     [
-                        DisposalViewActions::confirmAction(),
+                        DisposalViewActions::markAsApprovedAction(),
                         DisposalViewActions::editAction(),
                         DisposalViewActions::exportOwwaAction(),
                         DisposalViewActions::exportPdfAction(),

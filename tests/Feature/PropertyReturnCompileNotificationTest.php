@@ -124,7 +124,7 @@ class PropertyReturnCompileNotificationTest extends TestCase
             },
         );
 
-        $this->assertSame(PropertyActionRequest::STATUS_PENDING_SC, $batch->status);
+        $this->assertSame(PropertyActionRequest::STATUS_PENDING_DECISION, $batch->status);
     }
 
     public function test_sc_decisions_on_compiled_return_sync_and_notify_the_employee_source(): void
@@ -144,20 +144,25 @@ class PropertyReturnCompileNotificationTest extends TestCase
 
         Notification::fake();
 
-        $workflow->approveBySupplyCustodian($batch->fresh(), $custodian);
-        $this->assertSame(PropertyActionRequest::STATUS_APPROVED, $request->fresh()->status);
+        $decision = app(\App\Services\PropertyReturnDecisionService::class);
+        $transfer = $decision->decideForTransfer($batch->fresh(), $custodian);
+        $this->assertSame(PropertyActionRequest::STATUS_PENDING_TRANSFER, $request->fresh()->status);
         Notification::assertSentTo(
             $employee,
             RequisitionWorkflowDatabaseNotification::class,
             fn (RequisitionWorkflowDatabaseNotification $notification): bool => $notification->propertyActionRequestId === (int) $request->id,
         );
 
-        $workflow->execute($batch->fresh(), $custodian);
+        $transfer->forceFill([
+            'transfer_type' => \App\Models\Transfer::TYPE_RELOCATE,
+            'exported_at' => now(),
+        ])->saveQuietly();
+        $decision->markTransferApproved($transfer->fresh(), $custodian);
         $this->assertSame(PropertyActionRequest::STATUS_EXECUTED, $request->fresh()->status);
         Notification::assertSentTo(
             $employee,
             RequisitionWorkflowDatabaseNotification::class,
-            fn (RequisitionWorkflowDatabaseNotification $notification): bool => $notification->title === 'Property return received'
+            fn (RequisitionWorkflowDatabaseNotification $notification): bool => $notification->title === 'Property return completed'
                 && $notification->propertyActionRequestId === (int) $request->id,
         );
     }

@@ -97,7 +97,6 @@ class AcquisitionPaperworkQrLabelsTest extends TestCase
             'item_name' => 'Wall Clock',
             'office_name' => 'OWWA Regional Office IV-A',
             'unit_section' => 'OWWA Regional Office IV-A - Administrative Division',
-            'sp_tag_no' => '',
             'property_number_label' => 'Property No.',
             'property_name_label' => 'Property',
             'description' => 'Analog wall clock',

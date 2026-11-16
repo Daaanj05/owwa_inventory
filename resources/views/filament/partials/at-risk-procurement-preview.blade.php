@@ -57,8 +57,7 @@
             </button>
         </div>
         <p class="owwa-pa-tab-helper">
-            Stocking-out view includes items projected to run out within 2 months (based on 12-month issuance forecast)
-            and High-priority items at or below reorder with no recent usage.
+            Stocking-out view includes items projected to run out within 2 months, based on the last 12 months of issuances from the supply office.
         </p>
     </div>
     <div class="owwa-pa-slide-table">
@@ -76,8 +75,7 @@
                 <p class="owwa-empty-state-text">
                     @if($atRiskView === 'stockouts')
                         No items are projected to run out within 2 months at the current issuing pace.
-                        High-priority items at or below reorder without recent usage would also appear here.
-                        Forecast uses the last 12 months of issuances; try All at-risk or a different category.
+                        Forecast uses the last 12 months of issuances from the supply office; try All at-risk or a different category.
                     @else
                         Try another category or date range, or confirm issuance history exists for the selected period.
                     @endif
@@ -139,20 +137,13 @@
                             <td class="owwa-cell-muted">{{ $row->category_name ?? '—' }}</td>
                             <td class="owwa-cell-primary">
                                 {{ $row->item_name }}
-                                @if(! ($row->has_recent_usage ?? true))
-                                    <span class="owwa-pa-usage-badge">No recent usage</span>
-                                @endif
                             </td>
                             <td class="owwa-cell-muted">{{ $row->office_name }}</td>
                             <td class="owwa-num {{ $row->current_stock <= $row->reorder_level ? 'owwa-cell-danger' : 'owwa-cell-primary' }}">
                                 {{ number_format($row->current_stock) }}
                             </td>
                             <td class="owwa-num owwa-cell-muted">
-                                @if($row->has_recent_usage ?? true)
-                                    {{ number_format($row->forecast_monthly_usage, 1) }}
-                                @else
-                                    —
-                                @endif
+                                {{ number_format($row->forecast_monthly_usage, 1) }}
                             </td>
                             <td class="owwa-num owwa-cell-muted owwa-pa-cover-cell">
                                 @if($row->months_cover !== null)

@@ -1718,19 +1718,6 @@ select.owwa-search-bar {
     padding: 0;
 }
 
-.owwa-pa-usage-badge {
-    display: inline-block;
-    margin-left: 0.35rem;
-    padding: 0.1rem 0.4rem;
-    border-radius: 9999px;
-    font-size: 0.65rem;
-    font-weight: 600;
-    color: #92400e;
-    background: #fffbeb;
-    border: 1px solid #fcd34d;
-    vertical-align: middle;
-}
-
 .owwa-pa-row-actions {
     display: flex;
     gap: 0.35rem;

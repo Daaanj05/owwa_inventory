@@ -61,6 +61,12 @@ class TransfersTable
                     })
                     ->placeholder('—')
                     ->toggleable(isToggledHiddenByDefault: false),
+                TextColumn::make('property_return')
+                    ->label('')
+                    ->badge()
+                    ->state(fn (Transfer $record): ?string => $record->isFromPropertyReturn() ? 'Property return' : null)
+                    ->color('info')
+                    ->visible(fn (?Transfer $record): bool => $record?->isFromPropertyReturn() ?? true),
             ])
             ->defaultSort('transfer_date', 'desc')
             ->emptyStateHeading('No transfers recorded')
@@ -77,6 +83,7 @@ class TransfersTable
                         TransferViewActions::exportOwwaAction(),
                         TransferViewActions::exportPdfAction(),
                         TransferViewActions::printViewAction(),
+                        TransferViewActions::markAsApprovedAction(),
                     ],
                     '3xl',
                     modelLabel: TransferResource::getModelLabel(),

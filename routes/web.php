@@ -125,6 +125,7 @@ Route::middleware(['auth', 'web'])->group(function () {
     Route::get('reports/owwa/inventory-units/{inventoryUnit}/qr-label', [InventoryQrLabelController::class, 'unit'])->name('owwa.qr-labels.unit');
     Route::get('reports/owwa/acquisition-paperwork/{acquisitionPaperwork}/qr-labels', [InventoryQrLabelController::class, 'acquisitionPaperwork'])->name('owwa.qr-labels.acquisition-paperwork');
     Route::get('reports/owwa/opening-balances/{stockOpeningBalanceBatch}/qr-labels', [InventoryQrLabelController::class, 'openingBalance'])->name('owwa.qr-labels.opening-balance');
+    Route::get('reports/owwa/issuances/{issuance}/qr-labels', [InventoryQrLabelController::class, 'issuance'])->name('owwa.qr-labels.issuance');
     Route::get('reports/owwa/issuance/{issuance}/print', [OwwaPrintController::class, 'issuance'])->name('owwa.print.issuance');
     Route::get('reports/owwa/transfer/{transfer}/print', [OwwaPrintController::class, 'transfer'])->name('owwa.print.transfer');
     Route::get('reports/owwa/disposal/{disposal}/print', [OwwaPrintController::class, 'disposal'])->name('owwa.print.disposal');

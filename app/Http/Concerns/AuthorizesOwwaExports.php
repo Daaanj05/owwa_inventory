@@ -35,7 +35,19 @@ trait AuthorizesOwwaExports
     protected function authorizeIssuanceExport(Issuance $issuance): void
     {
         abort_unless(IssuanceResource::canViewAny(), 403);
-        $this->assertCustodianOffice((int) $issuance->office_id);
+
+        $fixedOfficeId = CustodianOfficeScope::inventoryOfficeId();
+
+        if ($fixedOfficeId === null) {
+            return;
+        }
+
+        $issuingOfficeId = (int) ($issuance->issued_from_office_id ?? $issuance->office_id);
+
+        abort_unless(
+            $issuingOfficeId === $fixedOfficeId || (int) $issuance->office_id === $fixedOfficeId,
+            403,
+        );
     }
 
     protected function authorizeTransferExport(Transfer $transfer): void

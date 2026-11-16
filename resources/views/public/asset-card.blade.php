@@ -167,7 +167,6 @@
             return ['text' => $trimmed, 'empty' => false];
         };
 
-        $spTag = $display($asset->spTagNo);
         $unitSection = $display($asset->unitSection);
         $description = $display($asset->description);
         $endUser = $display($asset->endUser);
@@ -202,10 +201,6 @@
                 <div class="row is-primary">
                     <dt>{{ $asset->propertyNumberLabel }}</dt>
                     <dd>{{ $asset->propertyNumber }}</dd>
-                </div>
-                <div class="row">
-                    <dt>SP Tag No.</dt>
-                    <dd @class(['is-empty' => $spTag['empty']])>{{ $spTag['text'] }}</dd>
                 </div>
                 <div class="row">
                     <dt>Unit/Section</dt>

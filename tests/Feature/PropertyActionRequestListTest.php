@@ -443,6 +443,43 @@ class PropertyActionRequestListTest extends TestCase
             ->assertCanNotSeeTableRecords([$pending]);
     }
 
+    public function test_uc_sent_list_hides_employee_returns_already_compiled_into_a_batch(): void
+    {
+        [$employee, $uc, , $issuance] = $this->seedPropertyContext();
+
+        $batch = PropertyActionRequest::query()->create([
+            'reference_code' => 'PAREQ-BATCH',
+            'action_type' => PropertyActionRequest::ACTION_RETURN,
+            'reason_code' => 'needs_repair',
+            'requested_by' => $uc->id,
+            'accountable_user_id' => $uc->id,
+            'office_id' => $issuance->office_id,
+            'department_id' => $issuance->department_id,
+            'status' => PropertyActionRequest::STATUS_PENDING_SC,
+        ]);
+
+        $source = PropertyActionRequest::query()->create([
+            'reference_code' => 'PAREQ-SOURCE',
+            'action_type' => PropertyActionRequest::ACTION_RETURN,
+            'reason_code' => 'needs_repair',
+            'requested_by' => $employee->id,
+            'accountable_user_id' => $uc->id,
+            'office_id' => $issuance->office_id,
+            'department_id' => $issuance->department_id,
+            'status' => PropertyActionRequest::STATUS_PENDING_SC,
+            'uc_approved_by' => $uc->id,
+            'uc_approved_at' => now(),
+            'compiled_into_property_action_request_id' => $batch->id,
+        ]);
+
+        Livewire::actingAs($uc)
+            ->test(ListPropertyActionRequests::class, [
+                'ucTab' => 'sent',
+            ])
+            ->assertCanSeeTableRecords([$batch])
+            ->assertCanNotSeeTableRecords([$source]);
+    }
+
     public function test_uc_create_compiles_selected_employee_returns_to_sc(): void
     {
         [$employee, $uc, $custodian, $issuance] = $this->seedPropertyContext();
@@ -489,12 +526,12 @@ class PropertyActionRequestListTest extends TestCase
             ->assertSet('ucTab', 'sent');
 
         $pending->refresh();
-        $this->assertSame(PropertyActionRequest::STATUS_PENDING_SC, $pending->status);
+        $this->assertSame(PropertyActionRequest::STATUS_PENDING_DECISION, $pending->status);
         $this->assertNotNull($pending->compiled_into_property_action_request_id);
 
         $batch = PropertyActionRequest::query()->find($pending->compiled_into_property_action_request_id);
         $this->assertNotNull($batch);
-        $this->assertSame(PropertyActionRequest::STATUS_PENDING_SC, $batch->status);
+        $this->assertSame(PropertyActionRequest::STATUS_PENDING_DECISION, $batch->status);
         $this->assertSame($uc->id, $batch->requested_by);
         $this->assertSame($uc->id, $batch->accountable_user_id);
         $this->assertSame($custodian->role, User::ROLE_SUPPLY_CUSTODIAN);
@@ -587,12 +624,12 @@ class PropertyActionRequestListTest extends TestCase
             ->assertSet('ucTab', 'sent');
 
         $pending->refresh();
-        $this->assertSame(PropertyActionRequest::STATUS_PENDING_SC, $pending->status);
+        $this->assertSame(PropertyActionRequest::STATUS_PENDING_DECISION, $pending->status);
         $this->assertNotNull($pending->compiled_into_property_action_request_id);
 
         $batch = PropertyActionRequest::query()->find($pending->compiled_into_property_action_request_id);
         $this->assertNotNull($batch);
-        $this->assertSame(PropertyActionRequest::STATUS_PENDING_SC, $batch->status);
+        $this->assertSame(PropertyActionRequest::STATUS_PENDING_DECISION, $batch->status);
         $this->assertSame($uc->id, $batch->requested_by);
         $this->assertSame($custodian->role, User::ROLE_SUPPLY_CUSTODIAN);
     }
@@ -621,7 +658,7 @@ class PropertyActionRequestListTest extends TestCase
         app(PropertyActionRequestWorkflowService::class)->sendToSupplyCustodian($request->fresh(), $uc);
 
         $request->refresh();
-        $this->assertSame(PropertyActionRequest::STATUS_PENDING_SC, $request->status);
+        $this->assertSame(PropertyActionRequest::STATUS_PENDING_DECISION, $request->status);
         $this->assertSame($uc->id, $request->uc_approved_by);
     }
 

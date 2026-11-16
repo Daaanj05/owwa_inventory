@@ -39,7 +39,7 @@
                     <td>{{ $row->office_name }}</td>
                     <td class="num">{{ number_format((int) $row->current_stock) }}</td>
                     <td class="num">{{ number_format((int) $row->reorder_level) }}</td>
-                    <td class="num">{{ ($row->has_recent_usage ?? true) ? number_format((float) $row->forecast_monthly_usage, 1) : '—' }}</td>
+                    <td class="num">{{ number_format((float) $row->forecast_monthly_usage, 1) }}</td>
                     <td class="num">{{ $row->months_cover !== null ? number_format((float) $row->months_cover, 1) : '—' }}</td>
                     <td>{{ $row->projected_stockout_date ?? '—' }}</td>
                     <td class="num">{{ $row->latest_unit_cost !== null ? number_format((float) $row->latest_unit_cost, 2) : '—' }}</td>

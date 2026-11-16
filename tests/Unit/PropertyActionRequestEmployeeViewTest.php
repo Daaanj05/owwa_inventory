@@ -12,47 +12,35 @@ use Tests\TestCase;
 
 class PropertyActionRequestEmployeeViewTest extends TestCase
 {
-    public function test_employee_return_header_does_not_repeat_the_requester_as_accountable_uc(): void
+    public function test_return_header_leaves_identity_fields_to_the_details_grid(): void
     {
         $labels = collect(PropertyActionRequestViewPresenter::forRecord($this->employeeReturn())['meta'])
             ->pluck('label');
 
         $this->assertFalse($labels->contains('Accountable UC'));
-        $this->assertTrue($labels->contains('Requested by'));
-        $this->assertTrue($labels->contains('Office'));
+        $this->assertFalse($labels->contains('Requested by'));
+        $this->assertFalse($labels->contains('Office'));
     }
 
-    public function test_non_employee_return_header_keeps_accountable_uc(): void
+    public function test_employee_return_details_hide_accountable_uc_when_it_is_the_requester(): void
+    {
+        $record = $this->employeeReturn();
+        $showAccountableUser = new ReflectionMethod(PropertyActionRequestInfolistSchema::class, 'showAccountableUser');
+
+        $this->assertFalse($showAccountableUser->invoke(null, $record));
+    }
+
+    public function test_compiled_return_details_keep_accountable_uc_and_hide_empty_sc_fields(): void
     {
         $record = $this->employeeReturn();
         $record->requestedBy->role = User::ROLE_UNIT_CONSOLIDATOR;
+        $record->status = PropertyActionRequest::STATUS_PENDING_SC;
+        $showAccountableUser = new ReflectionMethod(PropertyActionRequestInfolistSchema::class, 'showAccountableUser');
 
-        $labels = collect(PropertyActionRequestViewPresenter::forRecord($record)['meta'])
-            ->pluck('label');
-
-        $this->assertTrue($labels->contains('Accountable UC'));
-    }
-
-    public function test_employee_return_details_omit_fields_already_shown_in_the_header(): void
-    {
-        $record = $this->employeeReturn();
-        $hideOnEmployeeRequest = new ReflectionMethod(PropertyActionRequestInfolistSchema::class, 'hideOnEmployeeRequest');
-        $showApprovalField = new ReflectionMethod(PropertyActionRequestInfolistSchema::class, 'showApprovalField');
-
-        $this->assertFalse($hideOnEmployeeRequest->invoke(null)($record));
-        $this->assertFalse($showApprovalField->invoke(null, $record, false));
-        $this->assertTrue($showApprovalField->invoke(null, $record, true));
-    }
-
-    public function test_non_employee_return_details_keep_the_full_field_set(): void
-    {
-        $record = $this->employeeReturn();
-        $record->requestedBy->role = User::ROLE_UNIT_CONSOLIDATOR;
-        $hideOnEmployeeRequest = new ReflectionMethod(PropertyActionRequestInfolistSchema::class, 'hideOnEmployeeRequest');
-        $showApprovalField = new ReflectionMethod(PropertyActionRequestInfolistSchema::class, 'showApprovalField');
-
-        $this->assertTrue($hideOnEmployeeRequest->invoke(null)($record));
-        $this->assertTrue($showApprovalField->invoke(null, $record, false));
+        $this->assertTrue($showAccountableUser->invoke(null, $record));
+        $this->assertNull($record->sc_approved_by);
+        $this->assertNull($record->sc_approved_at);
+        $this->assertNull($record->executed_at);
     }
 
     protected function employeeReturn(): PropertyActionRequest

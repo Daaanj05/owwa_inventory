@@ -1526,7 +1526,18 @@ class InventoryStockService
     {
         return DB::table('transfers')
             ->whereNull('deleted_at')
-            ->where('transfer_type', Transfer::TYPE_RETURN)
+            ->where(function ($query): void {
+                $query->where('transfer_type', Transfer::TYPE_RETURN)
+                    ->orWhere(function ($relocate): void {
+                        $relocate->where('transfer_type', Transfer::TYPE_RELOCATE)
+                            ->whereNotNull('approved_at')
+                            ->whereExists(function ($exists): void {
+                                $exists->selectRaw('1')
+                                    ->from('property_action_request_lines')
+                                    ->whereColumn('property_action_request_lines.transfer_id', 'transfers.id');
+                            });
+                    });
+            })
             ->when($itemIds !== null, fn ($q) => $q->whereIn('item_id', $itemIds))
             ->when($officeId !== null, fn ($q) => $q->where('to_office_id', $officeId))
             ->select(

@@ -34,13 +34,18 @@ class CreateTransfer extends CreateRecord
             $data['property_number'] = TransferForm::catalogPropertyNumberForItem((int) $data['item_id']);
         }
 
-        return OfficeSignatoryDefaults::mergeNonBlank(
+        $data = OfficeSignatoryDefaults::mergeNonBlank(
             OfficeSignatoryDefaults::forTransfer(
                 isset($data['from_office_id']) ? (int) $data['from_office_id'] : null,
                 isset($data['to_office_id']) ? (int) $data['to_office_id'] : null,
             ),
             $data,
         );
+
+        // Ordinary create posts stock immediately; property-return drafts stay unapproved.
+        $data['approved_at'] = now();
+
+        return $data;
     }
 
     /**
@@ -49,13 +54,17 @@ class CreateTransfer extends CreateRecord
      */
     protected function applyReturnDestination(array $data): array
     {
-        if (($data['transfer_type'] ?? null) !== Transfer::TYPE_RETURN) {
+        if (! in_array($data['transfer_type'] ?? null, [Transfer::TYPE_RETURN, Transfer::TYPE_RELOCATE], true)) {
             return $data;
         }
 
         $regionalOfficeId = app(SupplyOfficeResolver::class)->resolve();
         if ($regionalOfficeId !== null) {
             $data['to_office_id'] = $regionalOfficeId;
+            if (($data['transfer_type'] ?? null) === Transfer::TYPE_RELOCATE) {
+                $data['to_accountable_officer'] = app(SupplyOfficeResolver::class)->resolveOfficeName()
+                    ?? ($data['to_accountable_officer'] ?? null);
+            }
         }
 
         return $data;

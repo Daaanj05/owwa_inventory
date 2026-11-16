@@ -48,7 +48,7 @@ class PtrSignatureLayout
     public static function applySignatureBlock(array $values, Transfer $transfer): array
     {
         $signatures = (array) (OwwaCellMapping::form('PTR')['signatures'] ?? []);
-        $date = $transfer->transfer_date?->format('Y-m-d') ?? '';
+        $fallbackDate = $transfer->transfer_date?->format('Y-m-d') ?? '';
         $from = $transfer->fromOffice;
         $to = $transfer->toOffice;
 
@@ -59,9 +59,9 @@ class PtrSignatureLayout
             'released_designation' => $transfer->released_by_designation ?? '',
             'received_name' => $transfer->received_by_printed_name ?? $to?->name ?? '',
             'received_designation' => $transfer->received_by_designation ?? '',
-            'approved_date' => $date,
-            'released_date' => $date,
-            'received_date' => $date,
+            'approved_date' => $transfer->date_of_approval?->format('Y-m-d') ?? $fallbackDate,
+            'released_date' => $transfer->date_released?->format('Y-m-d') ?? $fallbackDate,
+            'received_date' => $transfer->date_received?->format('Y-m-d') ?? $fallbackDate,
         ];
 
         foreach ($pairs as $field => $value) {

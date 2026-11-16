@@ -56,17 +56,21 @@ class PropertyActionRequestWorkflowTest extends TestCase
         $batch = app(\App\Services\PropertyActionRequestCompileService::class)
             ->createCompiledSubmissions($uc, [$request->fresh()])
             ->sole();
-        $this->assertSame(PropertyActionRequest::STATUS_PENDING_SC, $batch->status);
+        $this->assertSame(PropertyActionRequest::STATUS_PENDING_DECISION, $batch->status);
         $this->assertSame($batch->id, $request->fresh()->compiled_into_property_action_request_id);
-        $this->assertSame(PropertyActionRequest::STATUS_PENDING_SC, $request->fresh()->status);
+        $this->assertSame(PropertyActionRequest::STATUS_PENDING_DECISION, $request->fresh()->status);
 
-        $workflow->approveBySupplyCustodian($batch->fresh(), $custodian);
-        $this->assertSame(PropertyActionRequest::STATUS_APPROVED, $batch->fresh()->status);
-        $this->assertSame(PropertyActionRequest::STATUS_APPROVED, $request->fresh()->status);
+        $decision = app(\App\Services\PropertyReturnDecisionService::class);
+        $disposal = $decision->decideForDisposal($batch->fresh(), $custodian);
+
+        $this->assertSame(PropertyActionRequest::STATUS_PENDING_DISPOSAL, $batch->fresh()->status);
+        $this->assertSame(PropertyActionRequest::STATUS_PENDING_DISPOSAL, $request->fresh()->status);
+        $this->assertFalse($disposal->isConfirmed());
+        $this->assertSame(InventoryUnit::STATUS_ISSUED, $unit->fresh()->status);
 
         $propertyNumber = $issuance->property_number;
-
-        $workflow->execute($batch->fresh(), $custodian);
+        $disposal->forceFill(['exported_at' => now()])->saveQuietly();
+        $decision->markDisposalApproved($disposal->fresh(), $custodian);
 
         $batch->refresh();
         $line = $batch->lines()->first();
@@ -80,11 +84,11 @@ class PropertyActionRequestWorkflowTest extends TestCase
         $this->assertNotNull($issuance->fresh()->custody_ended_at);
         $this->assertSame('disposal', $issuance->fresh()->custody_end_type);
         $this->assertSame($unit->id, Disposal::query()->find($line->disposal_id)?->inventory_unit_id);
-        $this->assertSame('Approved — awaiting item', (new PropertyActionRequest(['status' => PropertyActionRequest::STATUS_APPROVED]))->statusLabel());
+        $this->assertSame('Pending decision', (new PropertyActionRequest(['status' => PropertyActionRequest::STATUS_PENDING_DECISION]))->statusLabel());
         $this->assertSame('Received & routed', $batch->statusLabel());
     }
 
-    public function test_receive_and_route_dispose_overrides_return_action_type(): void
+    public function test_for_disposal_from_return_action_type(): void
     {
         [$employee, $uc, $custodian, $issuance, $unit] = $this->seedPropertyContext();
 
@@ -94,14 +98,13 @@ class PropertyActionRequestWorkflowTest extends TestCase
             'requested_by' => $employee->id,
             'accountable_user_id' => $uc->id,
             'office_id' => $issuance->office_id,
-            'status' => PropertyActionRequest::STATUS_APPROVED,
+            'status' => PropertyActionRequest::STATUS_PENDING_DECISION,
         ], $issuance, $unit);
 
-        app(PropertyActionRequestWorkflowService::class)->receiveAndRoute(
-            $request,
-            $custodian,
-            PropertyActionRequest::OUTCOME_DISPOSE,
-        );
+        $decision = app(\App\Services\PropertyReturnDecisionService::class);
+        $disposal = $decision->decideForDisposal($request, $custodian);
+        $disposal->forceFill(['exported_at' => now()])->saveQuietly();
+        $decision->markDisposalApproved($disposal->fresh(), $custodian);
 
         $request->refresh();
         $line = $request->lines()->first();
@@ -112,12 +115,9 @@ class PropertyActionRequestWorkflowTest extends TestCase
         $this->assertSame(InventoryUnit::STATUS_DISPOSED, $unit->fresh()->status);
     }
 
-    public function test_return_to_stock_can_reset_estimated_useful_life(): void
+    public function test_for_transfer_relocate_returns_unit_to_stock(): void
     {
         [$employee, $uc, $custodian, $issuance, $unit] = $this->seedPropertyContext();
-        $item = $issuance->item;
-        $this->assertNotNull($item);
-        $item->update(['estimated_useful_life' => '2 years']);
 
         $request = $this->createRequestWithLine([
             'action_type' => PropertyActionRequest::ACTION_RETURN,
@@ -125,20 +125,26 @@ class PropertyActionRequestWorkflowTest extends TestCase
             'requested_by' => $employee->id,
             'accountable_user_id' => $uc->id,
             'office_id' => $issuance->office_id,
-            'status' => PropertyActionRequest::STATUS_APPROVED,
+            'status' => PropertyActionRequest::STATUS_PENDING_DECISION,
         ], $issuance, $unit);
 
-        app(PropertyActionRequestWorkflowService::class)->receiveAndRoute(
-            $request,
-            $custodian,
-            PropertyActionRequest::OUTCOME_RETURN_TO_STOCK,
-            '5 years',
-        );
+        $decision = app(\App\Services\PropertyReturnDecisionService::class);
+        $transfer = $decision->decideForTransfer($request, $custodian);
+        $this->assertSame(PropertyActionRequest::STATUS_PENDING_TRANSFER, $request->fresh()->status);
+        $this->assertNull($transfer->approved_at);
 
-        $this->assertSame('5 years', $item->fresh()->estimated_useful_life);
+        $transfer->forceFill([
+            'transfer_type' => Transfer::TYPE_RELOCATE,
+            'exported_at' => now(),
+        ])->saveQuietly();
+
+        $decision->markTransferApproved($transfer->fresh(), $custodian);
+
         $this->assertSame(InventoryUnit::STATUS_IN_STOCK, $unit->fresh()->status);
         $this->assertSame($unit->property_number, $issuance->fresh()->property_number);
         $this->assertNotNull($request->fresh()->lines->first()?->transfer_id);
+        $this->assertSame(PropertyActionRequest::STATUS_EXECUTED, $request->fresh()->status);
+        $this->assertNotNull($transfer->fresh()->approved_at);
     }
 
     public function test_suggested_outcome_follows_reason(): void
@@ -364,12 +370,17 @@ class PropertyActionRequestWorkflowTest extends TestCase
             'requested_by' => $employee->id,
             'accountable_user_id' => $uc->id,
             'office_id' => $issuance->office_id,
-            'status' => PropertyActionRequest::STATUS_APPROVED,
+            'status' => PropertyActionRequest::STATUS_PENDING_DECISION,
         ], $issuance, $unit);
 
         $propertyNumber = $issuance->property_number;
-
-        app(PropertyActionRequestWorkflowService::class)->execute($request, $custodian);
+        $decision = app(\App\Services\PropertyReturnDecisionService::class);
+        $transfer = $decision->decideForTransfer($request, $custodian);
+        $transfer->forceFill([
+            'transfer_type' => Transfer::TYPE_RELOCATE,
+            'exported_at' => now(),
+        ])->saveQuietly();
+        $decision->markTransferApproved($transfer->fresh(), $custodian);
 
         $request->refresh();
         $line = $request->lines->first();
@@ -378,16 +389,14 @@ class PropertyActionRequestWorkflowTest extends TestCase
         $this->assertSame(PropertyActionRequest::STATUS_EXECUTED, $request->status);
         $this->assertSame(InventoryUnit::STATUS_IN_STOCK, $unit->fresh()->status);
         $this->assertNull($unit->fresh()->issuance_id);
-        $this->assertSame($issuance->office_id, $unit->fresh()->office_id);
         $this->assertSame($propertyNumber, $issuance->fresh()->property_number);
         $this->assertNull($line?->disposal_id);
         $this->assertNotNull($line?->transfer_id);
         $this->assertNotNull($transfer);
-        $this->assertSame('return', $transfer->transfer_type);
-        $this->assertSame($issuance->office_id, $transfer->to_office_id);
+        $this->assertSame(Transfer::TYPE_RELOCATE, $transfer->transfer_type);
         $this->assertNotNull($issuance->fresh()->custody_ended_at);
-        $this->assertSame('return', $issuance->fresh()->custody_end_type);
-        $this->assertSame($request->reference_code, $issuance->fresh()->custody_end_reference);
+        $this->assertSame('transfer', $issuance->fresh()->custody_end_type);
+        $this->assertSame($transfer->reference_code, $issuance->fresh()->custody_end_reference);
     }
 
     /**

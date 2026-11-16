@@ -6,6 +6,7 @@ use App\Filament\Resources\Issuances\IssuanceResource;
 use App\Filament\Support\OwwaFormModalDefaults;
 use App\Models\Issuance;
 use App\Models\User;
+use App\Services\InventoryQrLabelService;
 use App\Services\UsefulLifeExtensionService;
 use App\Support\OwwaExportBusyDispatcher;
 use App\Support\SemiExpendableUsefulLife;
@@ -23,6 +24,16 @@ class IssuanceViewActions
     public static function editAction(): EditAction
     {
         return OwwaFormModalDefaults::editActionForResource(IssuanceResource::class, OwwaFormModalDefaults::WIDTH_WIDE);
+    }
+
+    public static function printQrLabelsAction(): Action
+    {
+        return Action::make('printUnitQrLabels')
+            ->label('Print QR labels')
+            ->icon('heroicon-o-qr-code')
+            ->visible(fn (Issuance $record): bool => app(InventoryQrLabelService::class)->supportsIssuanceQrLabels($record))
+            ->url(fn (Issuance $record): string => route('owwa.qr-labels.issuance', $record))
+            ->openUrlInNewTab();
     }
 
     public static function exportOwwaAction(): Action

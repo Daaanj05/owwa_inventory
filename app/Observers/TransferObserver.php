@@ -20,6 +20,10 @@ class TransferObserver
         if (empty($transfer->recorded_by) && auth()->check()) {
             $transfer->recorded_by = auth()->id();
         }
+        // Property-return drafts keep transfer_type and approved_at null until Mark as approved.
+        if ($transfer->approved_at === null && filled($transfer->transfer_type)) {
+            $transfer->approved_at = now();
+        }
     }
 
     public function created(Transfer $transfer): void
