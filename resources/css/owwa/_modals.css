@@ -244,6 +244,101 @@
     color: #374151;
 }
 
+.fi-modal-window.owwa-view-record-modal .owwa-employee-allocation-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    width: 100%;
+}
+
+.fi-modal-window.owwa-view-record-modal .owwa-employee-allocation-actions .fi-ac-btn-ctn,
+.fi-modal-window.owwa-view-record-modal .owwa-employee-allocation-actions .fi-btn {
+    width: 100%;
+}
+
+.fi-modal-window.owwa-view-record-modal .owwa-employee-allocation-row.fi-btn {
+    display: flex !important;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    width: 100%;
+    min-height: 2.75rem;
+    padding: 0.7rem 0.9rem !important;
+    border: 1px solid #cbd5e1 !important;
+    border-radius: 0.65rem !important;
+    background: #f8fafc !important;
+    box-shadow: none !important;
+    color: #0f172a !important;
+    cursor: pointer;
+    text-align: left;
+    transition: background-color 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
+}
+
+.fi-modal-window.owwa-view-record-modal .owwa-employee-allocation-row.fi-btn:hover,
+.fi-modal-window.owwa-view-record-modal .owwa-employee-allocation-row.fi-btn:focus-visible {
+    background: #eff6ff !important;
+    border-color: #93c5fd !important;
+    box-shadow: 0 0 0 3px rgb(59 130 246 / 0.15) !important;
+}
+
+.fi-modal-window.owwa-view-record-modal .owwa-employee-allocation-row .fi-btn-label {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    width: 100%;
+}
+
+.fi-modal-window.owwa-view-record-modal .owwa-employee-allocation-row__main {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    min-width: 0;
+}
+
+.fi-modal-window.owwa-view-record-modal .owwa-employee-allocation-row__name {
+    font-size: 0.9375rem;
+    font-weight: 700;
+    color: #1d4ed8;
+    line-height: 1.25;
+}
+
+.fi-modal-window.owwa-view-record-modal .owwa-employee-allocation-row__meta {
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: #64748b;
+    line-height: 1.25;
+}
+
+.fi-modal-window.owwa-view-record-modal .owwa-employee-allocation-row__aside {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.55rem;
+    flex-shrink: 0;
+}
+
+.fi-modal-window.owwa-view-record-modal .owwa-employee-allocation-row__lines {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #334155;
+    white-space: nowrap;
+}
+
+.fi-modal-window.owwa-view-record-modal .owwa-employee-allocation-row__hint {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 1.5rem;
+    padding: 0.15rem 0.55rem;
+    border-radius: 9999px;
+    background: #dbeafe;
+    color: #1d4ed8;
+    font-size: 0.6875rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+}
+
 .fi-modal-window.owwa-view-record-modal .owwa-requisition-items-table table {
     width: 100%;
 }

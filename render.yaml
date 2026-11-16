@@ -11,8 +11,9 @@ services:
     envVars:
       - key: APP_ENV
         value: production
+      # Dashboard-controlled so local/demo toggles are not wiped on every deploy.
       - key: APP_DEBUG
-        value: false
+        sync: false
       - key: LOG_CHANNEL
         value: stderr
       - key: LOG_LEVEL

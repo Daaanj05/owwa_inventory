@@ -29,9 +29,11 @@ class RequisitionInfolistSchemaTest extends TestCase
         $this->assertStringContainsString("'Date processed'", $source);
         $this->assertStringContainsString('filled(self::processedByName($record))', $source);
         $this->assertStringContainsString('filled(self::processedAtText($record))', $source);
-        $this->assertStringContainsString('employee_allocation_groups', $source);
-        $this->assertStringContainsString('viewEmployeeAllocation', $source);
+        $this->assertStringContainsString('employeeAllocationGroups', $source);
+        $this->assertStringContainsString('viewEmployeeAllocation_', $source);
+        $this->assertStringContainsString('owwa-employee-allocation-row', $source);
         $this->assertStringContainsString('overlayParentActions()', $source);
+        $this->assertStringNotContainsString("'View items'", $source);
         $this->assertStringContainsString('sortedRequestedItems', $source);
         $this->assertStringContainsString('sortLinesForDisplay', $source);
     }

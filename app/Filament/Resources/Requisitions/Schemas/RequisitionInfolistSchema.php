@@ -21,8 +21,8 @@ use Filament\Facades\Filament;
 use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\RepeatableEntry\TableColumn;
 use Filament\Infolists\Components\TextEntry;
+use Filament\Schemas\Components\Actions as SchemaActions;
 use Filament\Schemas\Components\Section;
-use Filament\Support\Enums\FontWeight;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Support\Collection;
 use Illuminate\Support\HtmlString;
@@ -333,54 +333,71 @@ class RequisitionInfolistSchema
     protected static function employeeAllocationsSection(): Section
     {
         return Section::make('Employee allocations')
-            ->description('Open an employee to see their endorsed lines. The requisition view stays open underneath.')
+            ->description('Click an employee row to see their endorsed lines. The requisition view stays open underneath.')
             ->visible(fn (Requisition $record): bool => ! $record->isEmployeeRequest()
                 && $record->sourceEndorsements()->exists())
             ->schema([
-                RepeatableEntry::make('employee_allocation_groups')
-                    ->hiddenLabel()
-                    ->extraAttributes(['class' => 'owwa-requisition-items-table'])
-                    ->getStateUsing(fn (Requisition $record): array => self::employeeAllocationGroups($record))
-                    ->table([
-                        TableColumn::make('Employee'),
-                        TableColumn::make('Department'),
-                        TableColumn::make('Lines'),
-                    ])
-                    ->schema([
-                        TextEntry::make('employee_name')
-                            ->label('Employee')
-                            ->placeholder('—')
-                            ->weight(FontWeight::SemiBold)
-                            ->color('primary')
-                            ->suffixAction(self::viewEmployeeAllocationAction()),
-                        TextEntry::make('department_name')
-                            ->label('Department')
-                            ->placeholder('—'),
-                        TextEntry::make('line_count')
-                            ->label('Lines'),
-                    ]),
+                SchemaActions::make(fn (Requisition $record): array => collect(self::employeeAllocationGroups($record))
+                    ->map(fn (array $group): Action => self::viewEmployeeAllocationAction($group))
+                    ->all())
+                    ->extraAttributes(['class' => 'owwa-employee-allocation-actions'])
+                    ->fullWidth(),
             ]);
     }
 
-    protected static function viewEmployeeAllocationAction(): Action
+    /**
+     * @param  array<string, mixed>  $group
+     */
+    protected static function viewEmployeeAllocationAction(array $group): Action
     {
-        return Action::make('viewEmployeeAllocation')
-            ->label('View items')
-            ->link()
-            ->color('primary')
+        $employeeUserId = (int) ($group['employee_user_id'] ?? 0);
+        $employeeName = (string) ($group['employee_name'] ?? 'Employee');
+        $department = (string) ($group['department_name'] ?? '—');
+        $lineCount = (int) ($group['line_count'] ?? 0);
+
+        return Action::make('viewEmployeeAllocation_'.$employeeUserId)
+            ->label(new HtmlString(
+                '<span class="owwa-employee-allocation-row__main">'
+                .'<span class="owwa-employee-allocation-row__name">'.e($employeeName).'</span>'
+                .'<span class="owwa-employee-allocation-row__meta">'.e($department).'</span>'
+                .'</span>'
+                .'<span class="owwa-employee-allocation-row__aside">'
+                .'<span class="owwa-employee-allocation-row__lines">'.$lineCount.' '.($lineCount === 1 ? 'line' : 'lines').'</span>'
+                .'<span class="owwa-employee-allocation-row__hint" aria-hidden="true">Open</span>'
+                .'</span>'
+            ))
+            ->extraAttributes([
+                'class' => 'owwa-employee-allocation-row',
+                'title' => 'Open endorsed items for '.$employeeName,
+            ])
+            ->color('gray')
+            ->arguments([
+                'employee_user_id' => $employeeUserId,
+                'employee_name' => $employeeName,
+            ])
             ->overlayParentActions()
-            ->modalHeading(fn (array $schemaState): string => ($schemaState['employee_name'] ?? 'Employee').' — endorsed items')
+            ->modalHeading(fn (array $arguments): string => ((string) ($arguments['employee_name'] ?? $employeeName)).' — endorsed items')
             ->modalWidth(OwwaFormModalDefaults::WIDTH_WIDE)
             ->extraModalWindowAttributes(['class' => OwwaFormModalDefaults::MODAL_WINDOW_CLASS], merge: true)
             ->closeModalByClickingAway(false)
             ->closeModalByEscaping(false)
             ->modalSubmitAction(false)
             ->modalCancelActionLabel('Close')
-            ->schema(fn (array $schemaState): array => [
+            ->schema(fn (array $arguments, ?Requisition $record): array => [
                 RepeatableEntry::make('lines')
                     ->hiddenLabel()
                     ->extraAttributes(['class' => 'owwa-requisition-items-table'])
-                    ->getStateUsing(fn (): array => $schemaState['lines'] ?? [])
+                    ->getStateUsing(function () use ($arguments, $record): array {
+                        if (! $record instanceof Requisition) {
+                            return [];
+                        }
+
+                        $userId = (int) ($arguments['employee_user_id'] ?? 0);
+                        $group = collect(self::employeeAllocationGroups($record))
+                            ->firstWhere('employee_user_id', $userId);
+
+                        return is_array($group['lines'] ?? null) ? $group['lines'] : [];
+                    })
                     ->table([
                         TableColumn::make(OwwaReferenceLabels::TRANSACTION_NO),
                         TableColumn::make('Category'),
