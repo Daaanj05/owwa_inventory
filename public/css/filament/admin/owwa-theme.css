@@ -98,9 +98,19 @@
     user-select: none;
 }
 
-/* SPA / x-persist can leave a second bell or user menu in the topbar end. */
+/* SPA history can clone the topbar end: a second profile stays in the bar, and another lands above the sidebar. */
+.fi-topbar > .fi-topbar-end ~ .fi-topbar-end,
 .fi-topbar-end > .owwa-notif-root ~ .owwa-notif-root,
-.fi-topbar-end > .fi-user-menu ~ .fi-user-menu {
+.fi-topbar-end > .fi-user-menu ~ .fi-user-menu,
+.fi-sidebar .fi-topbar-end,
+.fi-sidebar .fi-user-menu,
+.fi-sidebar .fi-user-avatar,
+.fi-layout .fi-topbar-end,
+.fi-layout .fi-user-menu,
+.fi-main .fi-topbar-end,
+.fi-main .fi-user-menu,
+body > .fi-user-menu,
+body > .fi-topbar-end {
     display: none !important;
 }
 

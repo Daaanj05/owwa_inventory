@@ -29,7 +29,10 @@ class AdminDashboardTest extends TestCase
 
         $this->actingAs($user);
 
-        $this->get('/')->assertOk();
+        $this->get('/')
+            ->assertOk()
+            ->assertSee('owwaTopbarDedupeBound', false)
+            ->assertSee('data-navigate-once', false);
 
         Livewire::test(Dashboard::class)->assertOk();
     }

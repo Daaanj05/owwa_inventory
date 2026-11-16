@@ -129,7 +129,8 @@ class SystemAdminPanelProvider extends PanelProvider
                 }
 
                 return view('filament.partials.livewire-page-expired')->render()
-                    .FilamentSessionAudit::idleLogoutMonitorHtml();
+                    .FilamentSessionAudit::idleLogoutMonitorHtml()
+                    .view('filament.partials.owwa-topbar-dedupe')->render();
             })
             ->navigationGroups([
                 NavigationGroup::make('Setup')->collapsed(),
