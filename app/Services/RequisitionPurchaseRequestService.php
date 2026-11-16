@@ -225,6 +225,7 @@ class RequisitionPurchaseRequestService
             'requisitions' => [(int) $requisition->id],
             'lines' => $lines,
             'requested_by_name' => $this->requesterNames([(int) $requisition->id])->first(),
+            'requested_by_designation' => $this->requesterDesignation([(int) $requisition->id]),
         ];
     }
 
@@ -249,6 +250,29 @@ class RequisitionPurchaseRequestService
             ->filter()
             ->unique()
             ->values();
+    }
+
+    /**
+     * Shared RIS requester designation when every linked requisition prints the same one.
+     *
+     * @param  array<int, int>  $requisitionIds
+     */
+    public function requesterDesignation(array $requisitionIds): ?string
+    {
+        if ($requisitionIds === []) {
+            return null;
+        }
+
+        $designations = Requisition::query()
+            ->whereIn('id', $requisitionIds)
+            ->orderBy('id')
+            ->get()
+            ->map(fn (Requisition $requisition): string => trim((string) $requisition->ris_requested_by_designation))
+            ->filter()
+            ->unique()
+            ->values();
+
+        return $designations->count() === 1 ? $designations->first() : null;
     }
 
     /**

@@ -9,7 +9,7 @@ use Filament\Schemas\Components\Utilities\Get;
 class SignatorySelect
 {
     /**
-     * Searchable Select of saved signatory names for a role (Setup → Signatories only; no inline create).
+     * Select of saved signatory names for a role (Setup → Signatories only; no inline create).
      */
     public static function make(string $name, string $role): Select
     {
@@ -17,8 +17,7 @@ class SignatorySelect
             ->options(function (Get $get) use ($name, $role): array {
                 return self::optionsIncludingCurrent($role, $get($name));
             })
-            ->searchable()
-            ->preload()
+            ->placeholder('Select name')
             ->helperText(fn (): ?string => self::roleInstruction($role));
     }
 
@@ -40,8 +39,7 @@ class SignatorySelect
 
                 return $options;
             })
-            ->searchable()
-            ->preload()
+            ->placeholder('Select name')
             ->helperText(fn (): ?string => self::roleInstruction($role));
     }
 
@@ -51,7 +49,7 @@ class SignatorySelect
     public static function makeDesignation(string $name, string $printedNameRole): Select
     {
         return Select::make($name)
-            ->label('Designation')
+            ->label('Designation/Role/Position')
             ->options(function (Get $get) use ($name, $printedNameRole): array {
                 $options = collect(ProcurementSignatoryName::designationsForRole($printedNameRole))
                     ->mapWithKeys(fn (string $value): array => [$value => $value])
@@ -63,9 +61,8 @@ class SignatorySelect
 
                 return $options;
             })
-            ->searchable()
-            ->preload()
-            ->helperText('Designation of the selected person');
+            ->placeholder('Select designation/role/position')
+            ->helperText('Designation/Role/Position of the selected person');
     }
 
     /**

@@ -7,7 +7,17 @@ Hello {{ $recipient->name }},
 
 @php
     $context = $context ?? null;
+    $requestedItems = $requestedItems ?? [];
 @endphp
+
+@if ($requestedItems !== [])
+<x-mail::panel>
+**Requested items:**
+@foreach ($requestedItems as $line)
+- {{ $line['name'] }} — {{ $line['quantity'] }}@if (filled($line['unit'] ?? null)) {{ $line['unit'] }}@endif
+@endforeach
+</x-mail::panel>
+@endif
 
 @if ($context && $context->hasPanelDetails())
 <x-mail::panel>

@@ -61,6 +61,17 @@ class WorkflowEmailNotificationTest extends TestCase
             'status' => Requisition::STATUS_PENDING,
             'transaction_number' => '2026-01-5001',
         ]);
+        $item = Item::factory()->create([
+            'name' => 'Air Freshener',
+            'base_name' => 'Air Freshener',
+            'sub_item' => null,
+            'unit' => 'bottle',
+        ]);
+        RequisitionItem::query()->create([
+            'requisition_id' => $requisition->id,
+            'item_id' => $item->id,
+            'quantity' => 14,
+        ]);
 
         Notification::assertSentTo($uc, RequisitionWorkflowDatabaseNotification::class);
         Notification::assertSentTo($uc, WorkflowUpdateMailNotification::class);
@@ -88,6 +99,9 @@ class WorkflowEmailNotificationTest extends TestCase
         $this->assertStringContainsString('Jane Employee', $rendered);
         $this->assertStringContainsString('Regional Office IV-A', $rendered);
         $this->assertStringContainsString('Admin', $rendered);
+        $this->assertStringContainsString('Requested items:', $rendered);
+        $this->assertStringContainsString('Air Freshener', $rendered);
+        $this->assertStringContainsString('14 bottle', $rendered);
     }
 
     public function test_workflow_email_is_skipped_when_recipient_has_no_email(): void

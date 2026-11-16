@@ -55,9 +55,8 @@ class ProcurementSignatoryNameResource extends Resource
                     ->autocomplete(false)
                     ->extraInputAttributes(['autocomplete' => 'off']),
                 TextInput::make('designation')
-                    ->label('Designation')
-                    ->required(fn (Get $get): bool => ProcurementSignatoryName::roleStoresDesignation((string) ($get('role') ?? '')))
-                    ->visible(fn (Get $get): bool => ProcurementSignatoryName::roleStoresDesignation((string) ($get('role') ?? '')))
+                    ->label('Designation/Role/Position')
+                    ->required()
                     ->maxLength(255)
                     ->autocomplete(false)
                     ->extraInputAttributes(['autocomplete' => 'off'])
@@ -76,7 +75,7 @@ class ProcurementSignatoryNameResource extends Resource
                     ->searchable()
                     ->sortable(),
                 TextColumn::make('designation')
-                    ->label('Designation')
+                    ->label('Designation/Role/Position')
                     ->placeholder('—')
                     ->searchable()
                     ->sortable(),

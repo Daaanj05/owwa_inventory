@@ -38,6 +38,10 @@ class WorkflowUpdateMailNotification extends Notification implements ShouldQueue
                 'body' => $this->body,
                 'recipient' => $notifiable,
                 'context' => $this->context,
+                'requestedItems' => WorkflowEmailContext::requestedLineItemsForMail(
+                    $this->context,
+                    $this->workflowEmailNotificationId,
+                ),
             ]);
     }
 }

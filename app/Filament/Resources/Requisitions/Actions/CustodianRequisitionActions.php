@@ -627,12 +627,22 @@ class CustodianRequisitionActions
             ->unique(fn (array $row): string => ($row['source_endorsement_id'] ?? null) !== null
                 ? 'endorsement:'.(int) $row['source_endorsement_id']
                 : 'item:'.(int) $row['requisition_item_id'])
-            ->map(fn (array $row): array => [
-                'requisition_item_id' => (int) ($row['requisition_item_id'] ?? 0) ?: null,
-                'source_endorsement_id' => (int) ($row['source_endorsement_id'] ?? 0) ?: null,
-                'quantity_to_issue' => (int) ($row['quantity_to_issue'] ?? 0),
-                'issue_remarks' => filled($row['issue_remarks'] ?? null) ? (string) $row['issue_remarks'] : null,
-            ])
+            ->map(function (array $row): array {
+                $unitIds = collect($row['inventory_unit_ids'] ?? [])
+                    ->map(fn (mixed $id): int => (int) $id)
+                    ->filter(fn (int $id): bool => $id > 0)
+                    ->unique()
+                    ->values()
+                    ->all();
+
+                return [
+                    'requisition_item_id' => (int) ($row['requisition_item_id'] ?? 0) ?: null,
+                    'source_endorsement_id' => (int) ($row['source_endorsement_id'] ?? 0) ?: null,
+                    'quantity_to_issue' => (int) ($row['quantity_to_issue'] ?? 0),
+                    'issue_remarks' => filled($row['issue_remarks'] ?? null) ? (string) $row['issue_remarks'] : null,
+                    'inventory_unit_ids' => $unitIds,
+                ];
+            })
             ->values()
             ->all();
     }

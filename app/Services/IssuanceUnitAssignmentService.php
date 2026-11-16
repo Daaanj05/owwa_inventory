@@ -23,6 +23,16 @@ class IssuanceUnitAssignmentService
             return;
         }
 
+        if ($issuance->reservedInventoryUnitIds !== []) {
+            $this->reserveUnitsForIssuance(
+                $issuance,
+                $issuance->reservedInventoryUnitIds,
+                max(1, (int) $issuance->quantity),
+            );
+
+            return;
+        }
+
         if (filled($issuance->property_number)) {
             return;
         }
@@ -40,6 +50,25 @@ class IssuanceUnitAssignmentService
             ]);
         }
 
+        $this->reserveUnitsForIssuance($issuance, $unitIds->all(), $needed);
+    }
+
+    /**
+     * Reserve specific in-stock units for this issuance (Review & issue selection).
+     *
+     * @param  list<int>  $unitIds
+     */
+    public function assignSpecificUnits(Issuance $issuance, array $unitIds): void
+    {
+        $needed = max(1, (int) $issuance->quantity);
+        $this->reserveUnitsForIssuance($issuance, $unitIds, $needed);
+    }
+
+    /**
+     * @param  list<int>  $unitIds
+     */
+    protected function reserveUnitsForIssuance(Issuance $issuance, array $unitIds, int $needed): void
+    {
         DB::transaction(function () use ($issuance, $unitIds, $needed): void {
             $locked = InventoryUnit::query()
                 ->whereIn('id', $unitIds)
@@ -47,35 +76,58 @@ class IssuanceUnitAssignmentService
                 ->orderBy('id')
                 ->get();
 
-            $available = $locked->filter(
-                fn (InventoryUnit $unit): bool => $unit->status === InventoryUnit::STATUS_IN_STOCK,
-            );
+            $byId = $locked->keyBy('id');
+            $ordered = collect($unitIds)
+                ->map(fn (mixed $id): ?InventoryUnit => $byId->get((int) $id))
+                ->filter(fn (?InventoryUnit $unit): bool => $unit instanceof InventoryUnit
+                    && $unit->status === InventoryUnit::STATUS_IN_STOCK)
+                ->values();
 
-            if ($available->count() < $needed) {
+            if ($ordered->count() < $needed) {
                 throw ValidationException::withMessages([
-                    'property_number' => 'No in-stock inventory unit with an assigned property or inventory number. Record acquisition first.',
+                    'property_number' => 'One or more selected inventory units are no longer in regional stock.',
                 ]);
             }
 
-            $reserved = $available->take($needed)->values();
-
-            InventoryUnit::query()
-                ->whereIn('id', $reserved->pluck('id'))
-                ->update([
-                    'status' => InventoryUnit::STATUS_ISSUED,
-                ]);
-
-            $issuance->property_number = $reserved->first()?->property_number;
-            $issuance->issued_property_numbers = $reserved
-                ->pluck('property_number')
-                ->filter()
-                ->values()
-                ->all();
-            $issuance->reservedInventoryUnitIds = $reserved
-                ->pluck('id')
-                ->map(fn (mixed $id): int => (int) $id)
-                ->all();
+            $reserved = $ordered->take($needed)->values();
+            $this->applyReservedUnits($issuance, $reserved->pluck('id')->all(), $reserved);
         });
+    }
+
+    /**
+     * @param  list<int>|Collection<int, int>  $unitIds
+     * @param  Collection<int, InventoryUnit>|null  $units
+     */
+    protected function applyReservedUnits(Issuance $issuance, array|Collection $unitIds, ?Collection $units = null): void
+    {
+        $ids = collect($unitIds)
+            ->map(fn (mixed $id): int => (int) $id)
+            ->filter(fn (int $id): bool => $id > 0)
+            ->values();
+
+        if ($ids->isEmpty()) {
+            return;
+        }
+
+        $units ??= InventoryUnit::query()
+            ->whereIn('id', $ids->all())
+            ->get()
+            ->sortBy(fn (InventoryUnit $unit): int => $ids->search($unit->id))
+            ->values();
+
+        InventoryUnit::query()
+            ->whereIn('id', $ids->all())
+            ->update([
+                'status' => InventoryUnit::STATUS_ISSUED,
+            ]);
+
+        $issuance->property_number = $units->first()?->property_number;
+        $issuance->issued_property_numbers = $units
+            ->pluck('property_number')
+            ->filter()
+            ->values()
+            ->all();
+        $issuance->reservedInventoryUnitIds = $ids->all();
     }
 
     /**

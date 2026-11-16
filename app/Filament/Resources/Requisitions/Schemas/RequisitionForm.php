@@ -123,8 +123,7 @@ class RequisitionForm
                                 }
                             )
                             ->required()
-                            ->searchable()
-                            ->preload()
+                            ->placeholder('Select office')
                             ->selectablePlaceholder(false)
                             ->default(function () use ($user, $isUnitConsolidator): ?int {
                                 if (! $user instanceof User) {
@@ -185,8 +184,7 @@ class RequisitionForm
                         Select::make('department_id')
                             ->label('Department')
                             ->options(fn (Get $get): array => self::departmentOptionsForRequisition($get, $isUnitConsolidator, $user, $scopeActive))
-                            ->searchable()
-                            ->preload()
+                            ->placeholder('Select department')
                             ->selectablePlaceholder(false)
                             ->required(fn (): bool => $isUnitConsolidator)
                             ->default(function (Get $get) use ($user, $isUnitConsolidator): ?int {
@@ -809,16 +807,22 @@ class RequisitionForm
     {
         return Select::make('item_id')
             ->label('Item')
-            ->options(function (Get $get): array {
+            ->options(function (Get $get, Select $component): array {
                 $categoryId = self::resolvedRequestCategoryId($get);
 
                 if ($categoryId < 1) {
                     return [];
                 }
 
+                $excludedIds = self::itemIdsSelectedOnSiblingLines($component);
+
                 $items = Item::query()
                     ->active()
                     ->where('item_category_id', $categoryId)
+                    ->when(
+                        $excludedIds !== [],
+                        fn ($query) => $query->whereNotIn('id', $excludedIds),
+                    )
                     ->orderBy('name')
                     ->get(['id', 'name']);
 
@@ -826,6 +830,7 @@ class RequisitionForm
                     ->mapWithKeys(fn (Item $item): array => [$item->id => $item->name])
                     ->all();
             })
+            ->distinct()
             ->searchable()
             ->preload()
             ->required()
@@ -836,6 +841,40 @@ class RequisitionForm
             ->placeholder(fn (Get $get): string => self::resolvedRequestCategoryId($get) < 1
                 ? 'Choose a category first'
                 : 'Select an item');
+    }
+
+    /**
+     * Item ids already chosen on other lines, so a new line cannot pick them again.
+     *
+     * @return list<int>
+     */
+    private static function itemIdsSelectedOnSiblingLines(Select $component): array
+    {
+        $repeater = $component->getParentRepeater();
+
+        if ($repeater === null) {
+            return [];
+        }
+
+        $rawState = $repeater->getRawState();
+
+        if (! is_array($rawState)) {
+            return [];
+        }
+
+        $relativePath = (string) str($component->getStatePath())
+            ->after($repeater->getStatePath().'.')
+            ->after('.');
+
+        $currentId = (int) ($component->getState() ?? 0);
+
+        return collect($rawState)
+            ->pluck($relativePath)
+            ->map(fn (mixed $value): int => (int) $value)
+            ->filter(fn (int $id): bool => $id > 0 && $id !== $currentId)
+            ->unique()
+            ->values()
+            ->all();
     }
 
     /**

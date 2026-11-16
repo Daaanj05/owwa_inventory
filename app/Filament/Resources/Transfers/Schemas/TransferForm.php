@@ -71,8 +71,7 @@ class TransferForm
                                 $scopeActive,
                             )
                             ->required()
-                            ->searchable()
-                            ->preload()
+                            ->placeholder('Select office')
                             ->default(fn (): ?int => CustodianOfficeScope::inventoryOfficeId())
                             ->helperText(fn (Get $get): string => filled($get('inventory_unit_id'))
                                 ? 'Locked from the scanned property tag.'
@@ -122,8 +121,7 @@ class TransferForm
                                     ->all();
                             })
                             ->required()
-                            ->searchable()
-                            ->preload()
+                            ->placeholder('Select office')
                             ->disabled(fn (Get $get): bool => blank($get('from_office_id')) || self::locksToRegionalOffice($get('transfer_type')))
                             ->dehydrated()
                             ->rules(fn (Get $get): array => self::locksToRegionalOffice($get('transfer_type'))
@@ -385,13 +383,13 @@ class TransferForm
                                 'Good' => 'Good',
                                 'Poor' => 'Poor',
                             ])
-                            ->placeholder('Select condition'),
+                            ->placeholder('Select condition of property'),
                         Select::make('transfer_type')
                             ->label('Transfer type')
                             ->options(fn (Get $get): array => self::usesPtrForm($get('item_category_filter'))
                                 ? Transfer::ptrTypeOptions()
                                 : Transfer::typeOptions())
-                            ->placeholder('Select type')
+                            ->placeholder('Select transfer type')
                             ->selectablePlaceholder(false)
                             ->required()
                             ->live()

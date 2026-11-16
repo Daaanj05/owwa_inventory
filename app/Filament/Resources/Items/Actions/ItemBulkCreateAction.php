@@ -184,6 +184,7 @@ class ItemBulkCreateAction
                             ItemAttributeOption::KIND_INVENTORY_TYPE,
                             $get('inventory_type'),
                         )),
+                    'Select inventory type',
                 ),
                 TextInput::make('days_to_consume')
                     ->hiddenLabel()
@@ -244,11 +245,13 @@ class ItemBulkCreateAction
                                 $set('property_class', $resolved);
                             }
                         }),
+                    'Select property class',
                 ),
                 Select::make('uacs_object_code_id')
                     ->hiddenLabel()
                     ->options(fn (): array => self::uacsOptions())
-                    ->searchable(),
+                    ->searchable()
+                    ->placeholder('Select UACS object code'),
                 TextInput::make('estimated_useful_life')
                     ->hiddenLabel()
                     ->placeholder('Months, e.g. 36'),
@@ -292,11 +295,13 @@ class ItemBulkCreateAction
                                 $state,
                             ) ?? trim((string) $state);
                         }),
+                    'Select type of PPE',
                 ),
                 Select::make('uacs_object_code_id')
                     ->hiddenLabel()
                     ->options(fn (): array => self::uacsOptions())
-                    ->searchable(),
+                    ->searchable()
+                    ->placeholder('Select UACS object code'),
                 TextInput::make('description')
                     ->hiddenLabel()
                     ->maxLength(500),
@@ -304,12 +309,12 @@ class ItemBulkCreateAction
         ];
     }
 
-    protected static function lockedChoice(Select $select): Select
+    protected static function lockedChoice(Select $select, string $placeholder): Select
     {
         return $select
             ->native(false)
             ->selectablePlaceholder(false)
-            ->placeholder('Select an option')
+            ->placeholder($placeholder)
             ->extraAttributes(['class' => 'owwa-locked-choice']);
     }
 
@@ -322,7 +327,8 @@ class ItemBulkCreateAction
             CatalogNameSuggestions::apply(
                 TextInput::make('base_name')
                     ->hiddenLabel()
-                    ->maxLength(255),
+                    ->maxLength(255)
+                    ->live(onBlur: true),
                 fn (Get $get): array => Item::familySuggestionsForCategory(
                     filled($get('item_category_id')) ? (int) $get('item_category_id') : $categoryId,
                 ),
@@ -330,17 +336,19 @@ class ItemBulkCreateAction
             CatalogNameSuggestions::apply(
                 TextInput::make('sub_item')
                     ->hiddenLabel()
-                    ->maxLength(255),
+                    ->maxLength(255)
+                    ->live(onBlur: true),
                 fn (Get $get): array => Item::variantSuggestionsForCategory($categoryId, $get('base_name')),
+                suggestSpelling: true,
             ),
             self::lockedChoice(
                 Select::make('unit')
                     ->hiddenLabel()
-                    ->searchable()
                     ->options(fn (Get $get): array => ItemAttributeOption::optionsForKindIncluding(
                         ItemAttributeOption::KIND_UNIT,
                         $get('unit'),
                     )),
+                'Select unit',
             ),
         ];
     }

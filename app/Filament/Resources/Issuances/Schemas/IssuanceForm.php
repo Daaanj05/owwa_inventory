@@ -89,6 +89,7 @@ class IssuanceForm
                                 }
                             )
                             ->required()
+                            ->placeholder('Select an item')
                             ->searchable()
                             ->preload()
                             ->live()
@@ -208,8 +209,7 @@ class IssuanceForm
                                 }
                             )
                             ->required()
-                            ->searchable()
-                            ->preload()
+                            ->placeholder('Select office')
                             ->default($isUnitConsolidator ? $user->office_id : null)
                             ->live()
                             ->afterStateUpdated(function ($state, Set $set, Get $get): void {
@@ -249,8 +249,6 @@ class IssuanceForm
                                 return $query->orderBy('name')->pluck('name', 'id')->all();
                             })
                             ->required(fn (Get $get): bool => self::isSemiExpendableCategory($get('item_category_filter')))
-                            ->searchable()
-                            ->preload()
                             ->live()
                             ->placeholder('—')
                             ->helperText(fn (Get $get): ?string => self::isSemiExpendableCategory($get('item_category_filter'))

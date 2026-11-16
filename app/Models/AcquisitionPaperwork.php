@@ -104,15 +104,13 @@ class AcquisitionPaperwork extends Model
         });
 
         static::saving(function (AcquisitionPaperwork $paperwork): void {
-            if ($paperwork->isDirty('requested_by_name') && ! $paperwork->isDirty('requested_by_designation')) {
-                $paperwork->requested_by_designation = null;
+            if (blank($paperwork->approved_by_designation)) {
+                $paperwork->applyPrintedNameDesignation(
+                    'approved_by_name',
+                    'approved_by_designation',
+                    ProcurementSignatoryName::ROLE_APPROVED,
+                );
             }
-
-            $paperwork->applyPrintedNameDesignation(
-                'approved_by_name',
-                'approved_by_designation',
-                ProcurementSignatoryName::ROLE_APPROVED,
-            );
         });
 
         static::saved(function (AcquisitionPaperwork $paperwork): void {

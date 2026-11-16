@@ -106,7 +106,54 @@
             });
         };
 
+        document.addEventListener('click', (event) => {
+            const form = event.target instanceof Element ? event.target.closest('form') : null;
+
+            if (form instanceof HTMLFormElement) {
+                form.noValidate = true;
+            }
+        }, true);
+
+        document.addEventListener('keydown', (event) => {
+            if (event.key !== 'Enter') {
+                return;
+            }
+
+            const form = event.target instanceof Element ? event.target.closest('form') : null;
+
+            if (form instanceof HTMLFormElement) {
+                form.noValidate = true;
+            }
+        }, true);
+
+        document.addEventListener('click', (event) => {
+            const button = event.target instanceof Element
+                ? event.target.closest('.owwa-spell-suggestion')
+                : null;
+
+            if (! (button instanceof HTMLButtonElement)) {
+                return;
+            }
+
+            event.preventDefault();
+
+            const input = button.closest('.fi-fo-field')?.querySelector('input.fi-input');
+
+            if (! (input instanceof HTMLInputElement)) {
+                return;
+            }
+
+            input.value = button.dataset.value || button.textContent || '';
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+            input.dispatchEvent(new Event('change', { bubbles: true }));
+            input.dispatchEvent(new FocusEvent('blur', { bubbles: true }));
+        });
+
         const scan = () => {
+            document.querySelectorAll('form').forEach((form) => {
+                form.noValidate = true;
+            });
+
             document.querySelectorAll('input[data-owwa-saved-suggestions]').forEach((node) => {
                 if (node instanceof HTMLInputElement) {
                     bind(node);

@@ -12,11 +12,13 @@ Input labels name the person. View screens, employee screens, and the activity l
 - Certifying officer
 - Approving officer
 - COA representative
+- Designation/Role/Position
 
 ## Purchase request
 
 - Requester's name
 - Approver's name
+- Designation/Role/Position
 
 ## Requisition and issuance
 

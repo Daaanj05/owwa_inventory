@@ -63,8 +63,7 @@ class PhysicalCountSessionForm
                                 fn ($query) => CustodianOfficeScope::officeQuery($query),
                             )
                             ->required()
-                            ->searchable()
-                            ->preload()
+                            ->placeholder('Select office')
                             ->default(fn (): ?int => CustodianOfficeScope::inventoryOfficeId())
                             ->disabled(fn (): bool => CustodianOfficeScope::hasFixedInventoryOffice())
                             ->dehydrated()
@@ -265,6 +264,7 @@ class PhysicalCountSessionForm
                 Select::make('item_id')
                     ->label('Article (Item)')
                     ->hiddenLabel()
+                    ->placeholder('Select an item')
                     ->searchable()
                     ->optionsLimit(30)
                     ->getSearchResultsUsing(fn (string $search, Get $get): array => self::searchCountLineItems($search, $get))

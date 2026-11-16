@@ -51,8 +51,6 @@ class DepartmentsTable
                         'name',
                         fn ($query) => $query->active()
                     )
-                    ->searchable()
-                    ->preload()
                     ->placeholder('All offices'),
             ])
             ->emptyStateHeading('No sub-offices/departments yet')

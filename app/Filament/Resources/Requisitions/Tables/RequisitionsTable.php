@@ -129,8 +129,6 @@ class RequisitionsTable
                         'name',
                         fn ($query) => $query->active()
                     )
-                    ->searchable()
-                    ->preload()
                     ->placeholder('All departments')
                     ->visible(! $isEmployeeViewer),
             ])

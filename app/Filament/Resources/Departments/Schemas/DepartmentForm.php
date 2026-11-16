@@ -23,11 +23,10 @@ class DepartmentForm
                     ->label('Office')
                     ->relationship('office', 'name', $scopeActive)
                     ->required()
+                    ->placeholder('Select office')
                     ->validationMessages([
                         'required' => 'Please select an office.',
                     ])
-                    ->searchable()
-                    ->preload()
                     ->visible(fn (string $operation): bool => self::isCreateOperation($operation) || self::isEditOperation($operation)),
                 TextInput::make('name')
                     ->required()

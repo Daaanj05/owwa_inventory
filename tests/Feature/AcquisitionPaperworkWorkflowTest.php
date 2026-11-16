@@ -548,7 +548,9 @@ class AcquisitionPaperworkWorkflowTest extends TestCase
             ->fillForm([
                 'purpose' => 'Printer supplies for RO',
                 'requested_by_name' => 'Juan Dela Cruz',
+                'requested_by_designation' => 'Administrative Aide',
                 'approved_by_name' => 'Maria Santos',
+                'approved_by_designation' => 'OIC Regional Director',
                 'lines' => [
                     $lineKey => [
                         'item_id' => $item->id,
@@ -566,9 +568,9 @@ class AcquisitionPaperworkWorkflowTest extends TestCase
             'office_id' => $office->id,
             'purpose' => 'Printer supplies for RO',
             'requested_by_name' => 'Juan Dela Cruz',
-            'requested_by_designation' => null,
+            'requested_by_designation' => 'Administrative Aide',
             'approved_by_name' => 'Maria Santos',
-            'approved_by_designation' => 'Regional Director',
+            'approved_by_designation' => 'OIC Regional Director',
         ]);
     }
 

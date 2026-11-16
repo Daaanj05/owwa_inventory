@@ -134,6 +134,7 @@ class ListInspectionAcceptanceReports extends ListRecordsWithoutFilterUrl
                     Select::make('purchase_order_id')
                         ->label('Approved PO')
                         ->required()
+                        ->placeholder('Select approved PO')
                         ->searchable()
                         ->allowHtml()
                         ->optionsLimit(40)

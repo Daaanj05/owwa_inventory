@@ -7,6 +7,7 @@ use App\Filament\Support\OwwaFormModalDefaults;
 use App\Models\Requisition;
 use App\Models\RequisitionItem;
 use App\Models\RequisitionSourceEndorsement;
+use App\Services\CatalogAssetNumberService;
 use App\Services\RequisitionFulfillmentService;
 use App\Services\RequisitionStockSnapshotService;
 use App\Support\EmployeeRequisitionOriginalSubmission;
@@ -392,11 +393,10 @@ class RequisitionInfolistSchema
                             return [];
                         }
 
-                        $userId = (int) ($arguments['employee_user_id'] ?? 0);
-                        $group = collect(self::employeeAllocationGroups($record))
-                            ->firstWhere('employee_user_id', $userId);
-
-                        return is_array($group['lines'] ?? null) ? $group['lines'] : [];
+                        return self::employeeAllocationLinesForUser(
+                            $record,
+                            (int) ($arguments['employee_user_id'] ?? 0),
+                        );
                     })
                     ->table([
                         TableColumn::make(OwwaReferenceLabels::TRANSACTION_NO),
@@ -435,6 +435,8 @@ class RequisitionInfolistSchema
     }
 
     /**
+     * Parent list only: name, department, and line count. Line detail is loaded on Open.
+     *
      * @return array<int, array<string, mixed>>
      */
     public static function employeeAllocationGroups(Requisition $record): array
@@ -442,9 +444,6 @@ class RequisitionInfolistSchema
         $record->loadMissing([
             'sourceEndorsements.requestedBy',
             'sourceEndorsements.sourceRequisition.department',
-            'sourceEndorsements.item.category',
-            'sourceEndorsements.requisitionItem.item.category',
-            'sourceEndorsements.requisitionItem.requisition',
         ]);
 
         return $record->sourceEndorsements
@@ -452,20 +451,36 @@ class RequisitionInfolistSchema
             ->map(function (Collection $lines): array {
                 /** @var RequisitionSourceEndorsement|null $first */
                 $first = $lines->first();
-                $sortedLines = self::sortEndorsementLinesForDisplay($lines);
 
                 return [
                     'employee_user_id' => (int) ($first?->requested_by_user_id ?? 0),
                     'employee_name' => $first?->requestedBy?->name ?? '—',
                     'department_name' => $first?->sourceRequisition?->department?->name ?? '—',
-                    'line_count' => $sortedLines->count(),
-                    'lines' => $sortedLines
-                        ->map(fn (RequisitionSourceEndorsement $endorsement): array => self::endorsementLineState($endorsement))
-                        ->values()
-                        ->all(),
+                    'line_count' => $lines->count(),
                 ];
             })
             ->sortBy(fn (array $group): string => mb_strtolower((string) $group['employee_name']), SORT_NATURAL)
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    public static function employeeAllocationLinesForUser(Requisition $record, int $employeeUserId): array
+    {
+        $record->loadMissing([
+            'sourceEndorsements.requestedBy',
+            'sourceEndorsements.sourceRequisition.department',
+            'sourceEndorsements.item.category',
+        ]);
+
+        $lines = $record->sourceEndorsements
+            ->filter(fn (RequisitionSourceEndorsement $endorsement): bool => (int) ($endorsement->requested_by_user_id ?? 0) === $employeeUserId)
+            ->values();
+
+        return self::sortEndorsementLinesForDisplay($lines)
+            ->map(fn (RequisitionSourceEndorsement $endorsement): array => self::endorsementLineState($endorsement))
             ->values()
             ->all();
     }
@@ -478,8 +493,8 @@ class RequisitionInfolistSchema
     {
         return $lines
             ->sort(function (RequisitionSourceEndorsement $left, RequisitionSourceEndorsement $right): int {
-                $left->loadMissing(['item.category', 'requisitionItem.item.category', 'requisitionItem.requisition']);
-                $right->loadMissing(['item.category', 'requisitionItem.item.category', 'requisitionItem.requisition']);
+                $left->loadMissing('item.category');
+                $right->loadMissing('item.category');
 
                 $categoryCompare = InventoryCategoryOptions::sortRankForCategory($left->item?->category)
                     <=> InventoryCategoryOptions::sortRankForCategory($right->item?->category);
@@ -519,19 +534,18 @@ class RequisitionInfolistSchema
         ];
     }
 
+    /**
+     * Catalog stock/property number only — no issuance queries.
+     */
     protected static function endorsementIdentifier(RequisitionSourceEndorsement $endorsement): ?string
     {
-        if ($endorsement->requisitionItem instanceof RequisitionItem) {
-            return RequisitionLineDisplay::identifierValue($endorsement->requisitionItem);
-        }
-
         $endorsement->loadMissing('item.category');
 
-        return OwwaReferenceLabels::assetIdentifierValue(
-            $endorsement->item?->category?->getTemplateSlug(),
-            null,
-            $endorsement->item?->item_code,
-        );
+        if ($endorsement->item === null) {
+            return null;
+        }
+
+        return app(CatalogAssetNumberService::class)->catalogIdentifierForItem($endorsement->item);
     }
 
     protected static function employeeRequestedItemsRepeatable(): RepeatableEntry

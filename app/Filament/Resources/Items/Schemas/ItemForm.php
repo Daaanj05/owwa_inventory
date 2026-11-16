@@ -91,12 +91,13 @@ class ItemForm
                             TextInput::make('sub_item')
                                 ->label('Variant')
                                 ->maxLength(255)
-                                ->live(onBlur: true)
-                                ->helperText('Optional size or kind (e.g. A4, Long, Letter).'),
+                                ->live(onBlur: true),
                             fn (Get $get): array => Item::variantSuggestionsForCategory(
                                 self::categoryIdFromForm($get),
                                 $get('base_name'),
                             ),
+                            helperText: 'Optional size or kind (e.g. A4, Long, Letter).',
+                            suggestSpelling: true,
                         ),
                         Placeholder::make('name_preview')
                             ->label('Catalog name')
@@ -153,8 +154,7 @@ class ItemForm
                             ->required()
                             ->native(false)
                             ->selectablePlaceholder(false)
-                            ->placeholder('Select an option')
-                            ->searchable()
+                            ->placeholder('Select measurement unit')
                             ->options(fn (Get $get): array => ItemAttributeOption::optionsForKindIncluding(
                                 ItemAttributeOption::KIND_UNIT,
                                 $get('unit'),
@@ -201,7 +201,7 @@ class ItemForm
                             ->label('Inventory type')
                             ->native(false)
                             ->selectablePlaceholder(false)
-                            ->placeholder('Select an option')
+                            ->placeholder('Select inventory type')
                             ->options(fn (Get $get): array => ItemAttributeOption::optionsForKindIncluding(
                                 ItemAttributeOption::KIND_INVENTORY_TYPE,
                                 $get('inventory_type'),
@@ -255,7 +255,7 @@ class ItemForm
                             ->label('Property class')
                             ->native(false)
                             ->selectablePlaceholder(false)
-                            ->placeholder('Select an option')
+                            ->placeholder('Select property class')
                             ->options(fn (Get $get): array => ItemAttributeOption::optionsForKindIncluding(
                                 ItemAttributeOption::KIND_PROPERTY_CLASS,
                                 $get('property_class'),
@@ -310,7 +310,7 @@ class ItemForm
                             ->label('Type of PPE')
                             ->native(false)
                             ->selectablePlaceholder(false)
-                            ->placeholder('Select an option')
+                            ->placeholder('Select type of PPE')
                             ->options(fn (Get $get): array => ItemAttributeOption::optionsForKindIncluding(
                                 ItemAttributeOption::KIND_PPE_TYPE,
                                 $get('ppe_type'),

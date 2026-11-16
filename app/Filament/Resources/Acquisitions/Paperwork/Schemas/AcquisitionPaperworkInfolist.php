@@ -44,7 +44,9 @@ class AcquisitionPaperworkInfolist
                     TextEntry::make('requestingOffice.name')->label('Requesting office')->placeholder('—'),
                     TextEntry::make('purpose')->label('Purpose')->columnSpanFull()->placeholder('—'),
                     TextEntry::make('requested_by_name')->label('Requested By')->placeholder('—'),
+                    TextEntry::make('requested_by_designation')->label('Designation/Role/Position')->placeholder('—'),
                     TextEntry::make('approved_by_name')->label('Approve By')->placeholder('—'),
+                    TextEntry::make('approved_by_designation')->label('Designation/Role/Position')->placeholder('—'),
                 ]),
             self::linkedRequisitionsSection(),
             Section::make('Line items')
@@ -175,7 +177,9 @@ class AcquisitionPaperworkInfolist
                 TextEntry::make('pr_date')->label('PR date')->date('M d, Y'),
                 TextEntry::make('purpose')->label('Purpose')->columnSpanFull(),
                 TextEntry::make('requested_by_name')->label('Requested By')->placeholder('—'),
+                TextEntry::make('requested_by_designation')->label('Designation/Role/Position')->placeholder('—'),
                 TextEntry::make('approved_by_name')->label('Approve By')->placeholder('—'),
+                TextEntry::make('approved_by_designation')->label('Designation/Role/Position')->placeholder('—'),
                 RepeatableEntry::make('lines')
                     ->label('Line items')
                     ->schema([

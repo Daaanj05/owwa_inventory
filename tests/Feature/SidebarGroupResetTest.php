@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Filament\Pages\Auth\Login;
 use App\Filament\Pages\Dashboard;
+use App\Models\ItemCategory;
 use App\Models\Office;
 use App\Models\User;
 use App\Providers\Filament\AdminPanelProvider;
@@ -37,6 +38,7 @@ class SidebarGroupResetTest extends TestCase
 
     public function test_signed_in_pages_close_every_collapsible_sidebar_group_after_sign_in(): void
     {
+        ItemCategory::factory()->create(['name' => 'Consumables']);
         $supply = User::factory()->create(['role' => User::ROLE_SUPPLY_CUSTODIAN]);
         $employee = User::factory()->create(['role' => User::ROLE_EMPLOYEE]);
         $systemAdmin = User::factory()->create(['role' => User::ROLE_SYSTEM_ADMIN]);
@@ -47,6 +49,7 @@ class SidebarGroupResetTest extends TestCase
             ->get(Dashboard::getUrl())
             ->assertOk()
             ->assertSee('.fi-sidebar-group.fi-collapsible[data-group-label]', false)
+            ->assertSee('.fi-sidebar-group.owwa-nav-plain', false)
             ->assertSee('window.owwaSidebarReset = false', false)
             ->assertSee('alpine:initialized', false);
 

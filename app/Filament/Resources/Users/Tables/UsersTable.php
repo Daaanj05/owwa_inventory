@@ -99,8 +99,6 @@ class UsersTable
                 SelectFilter::make('office_id')
                     ->label('Office')
                     ->relationship('office', 'name')
-                    ->searchable()
-                    ->preload()
                     ->placeholder('All offices'),
                 SelectFilter::make('verification_status')
                     ->label('Verification')

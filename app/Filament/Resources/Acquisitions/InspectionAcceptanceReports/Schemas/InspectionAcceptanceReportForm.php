@@ -66,6 +66,8 @@ class InspectionAcceptanceReportForm
                 ->label('Invoice No.')
                 ->required()
                 ->rule('regex:/^[A-Za-z0-9]+$/')
+                ->autocomplete(false)
+                ->extraInputAttributes(['autocomplete' => 'off'])
                 ->disabled(fn (?InspectionAcceptanceReport $record): bool => ! self::isEditable($record)),
             DatePicker::make('invoice_date')
                 ->label('Invoice date')

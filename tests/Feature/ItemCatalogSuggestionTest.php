@@ -112,6 +112,64 @@ class ItemCatalogSuggestionTest extends TestCase
         $this->assertNotContains('Blue', $afterTyping);
     }
 
+    public function test_variant_field_offers_a_close_saved_spelling(): void
+    {
+        $office = Office::factory()->create(['is_regional_supply' => true]);
+        $category = ItemCategory::factory()->create(['name' => 'Consumables']);
+        $user = User::factory()->create([
+            'role' => User::ROLE_SUPPLY_CUSTODIAN,
+            'office_id' => $office->id,
+            'email_verified_at' => now(),
+        ]);
+
+        Item::factory()->create([
+            'item_category_id' => $category->id,
+            'base_name' => 'Alcohol',
+            'sub_item' => 'Gallon',
+            'name' => 'Alcohol Gallon',
+            'unit' => 'gallon',
+        ]);
+        Item::factory()->create([
+            'item_category_id' => $category->id,
+            'base_name' => 'Bond Paper',
+            'sub_item' => 'Letter',
+            'name' => 'Bond Paper Letter',
+            'unit' => 'ream',
+        ]);
+
+        $this->actingAs($user);
+        session(['active_item_category_id' => $category->id]);
+
+        Livewire::actingAs($user)
+            ->test(CreateItem::class)
+            ->fillForm([
+                'item_category_id' => $category->id,
+                'base_name' => 'Alcohol',
+                'sub_item' => 'galon',
+            ])
+            ->assertSee('Did you mean')
+            ->assertSee('Gallon')
+            ->assertSee('Optional size or kind (e.g. A4, Long, Letter).');
+
+        Livewire::actingAs($user)
+            ->test(CreateItem::class)
+            ->fillForm([
+                'item_category_id' => $category->id,
+                'base_name' => 'Alcohol',
+                'sub_item' => 'Gallon',
+            ])
+            ->assertDontSee('Did you mean');
+
+        Livewire::actingAs($user)
+            ->test(CreateItem::class)
+            ->fillForm([
+                'item_category_id' => $category->id,
+                'base_name' => 'Bond Paper',
+                'sub_item' => 'Long',
+            ])
+            ->assertDontSee('Did you mean');
+    }
+
     public function test_variant_suggestions_follow_the_saved_family(): void
     {
         $category = ItemCategory::factory()->create(['name' => 'Consumables']);

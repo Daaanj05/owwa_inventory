@@ -127,6 +127,7 @@ class DisposalForm
                                 }
                             )
                             ->required()
+                            ->placeholder('Select an item')
                             ->searchable()
                             ->preload()
                             ->disabled(fn (Get $get): bool => filled($get('inventory_unit_id')))
@@ -305,7 +306,7 @@ class DisposalForm
                                 'sold_public' => 'Sold at public auction',
                                 'transferred_without_cost' => 'Transferred without cost',
                             ])
-                            ->placeholder('Select mode')
+                            ->placeholder('Select disposal mode')
                             ->selectablePlaceholder(false)
                             ->required(fn (): bool => self::activeCategorySlug() === 'consumables')
                             ->live()
@@ -330,7 +331,7 @@ class DisposalForm
                                 'destruction' => 'Destruction',
                                 'others' => 'Others',
                             ])
-                            ->placeholder('Select mode')
+                            ->placeholder('Select disposal mode')
                             ->selectablePlaceholder(false)
                             ->required(fn (): bool => self::isIirupCategory())
                             ->live()
@@ -494,8 +495,7 @@ class DisposalForm
                     fn ($query) => CustodianOfficeScope::officeQuery($query),
                 )
                 ->required()
-                ->searchable()
-                ->preload()
+                ->placeholder('Select office')
                 ->default(fn (): ?int => CustodianOfficeScope::inventoryOfficeId())
                 ->disabled(fn (Get $get): bool => filled($get('inventory_unit_id')))
                 ->dehydrated()

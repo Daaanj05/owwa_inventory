@@ -40,6 +40,7 @@ class RequisitionRejectedMailNotification extends Notification implements Should
                 'requisition' => $this->requisition,
                 'recipient' => $notifiable,
                 'context' => $this->context,
+                'requestedItems' => WorkflowEmailContext::requestedLineItems($this->requisition),
             ]);
     }
 }

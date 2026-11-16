@@ -134,6 +134,7 @@ class ListPurchaseOrders extends ListRecordsWithoutFilterUrl
                     Select::make('acquisition_paperwork_id')
                         ->label('Approved PR')
                         ->required()
+                        ->placeholder('Select approved PR')
                         ->searchable()
                         ->allowHtml()
                         ->optionsLimit(40)

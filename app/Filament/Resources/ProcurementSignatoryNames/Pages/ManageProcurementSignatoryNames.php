@@ -247,7 +247,7 @@ class ManageProcurementSignatoryNames extends ManageRecords
             Select::make('form')
                 ->label('Form')
                 ->options(SignatorySelect::tabLabels())
-                ->placeholder('Select an option')
+                ->placeholder('Select form')
                 ->selectablePlaceholder(false)
                 ->default(function (?ProcurementSignatoryName $record): ?string {
                     if ($record !== null) {
@@ -281,6 +281,7 @@ class ManageProcurementSignatoryNames extends ManageRecords
 
                     return SignatorySelect::roleOptionsForTabIncluding($tab, $record?->role);
                 })
+                ->placeholder('Select role')
                 ->required()
                 ->live()
                 ->rules([
@@ -331,9 +332,8 @@ class ManageProcurementSignatoryNames extends ManageRecords
                 ->autocomplete(false)
                 ->extraInputAttributes(['autocomplete' => 'off']),
             TextInput::make('designation')
-                ->label('Designation')
-                ->required(fn (Get $get): bool => ProcurementSignatoryName::roleStoresDesignation((string) ($get('role') ?? '')))
-                ->visible(fn (Get $get): bool => ProcurementSignatoryName::roleStoresDesignation((string) ($get('role') ?? '')))
+                ->label('Designation/Role/Position')
+                ->required()
                 ->maxLength(255)
                 ->autocomplete(false)
                 ->extraInputAttributes(['autocomplete' => 'off'])
@@ -348,10 +348,6 @@ class ManageProcurementSignatoryNames extends ManageRecords
     protected function clearUnusedDesignation(array $data): array
     {
         unset($data['form']);
-
-        if (! ProcurementSignatoryName::roleStoresDesignation((string) ($data['role'] ?? ''))) {
-            $data['designation'] = null;
-        }
 
         return $data;
     }

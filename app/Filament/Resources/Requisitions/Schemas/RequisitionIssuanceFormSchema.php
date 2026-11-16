@@ -8,15 +8,18 @@ use App\Models\RequisitionItem;
 use App\Models\User;
 use App\Services\RequisitionFulfillmentService;
 use App\Services\RequisitionStockSnapshotService;
+use App\Support\IssuableInventoryUnitOptions;
 use App\Support\OfficeSignatoryDefaults;
 use App\Support\RequisitionLineDisplay;
 use App\Support\SignatorySelect;
+use App\Support\SupplyOfficeResolver;
 use Carbon\Carbon;
 use Closure;
 use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Repeater\TableColumn;
+use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Get;
@@ -197,6 +200,14 @@ class RequisitionIssuanceFormSchema
                     $line['issue_remarks'] = (string) ($saved['issue_remarks'] ?? '');
                 }
 
+                if (array_key_exists('inventory_unit_ids', $saved) && is_array($saved['inventory_unit_ids'])) {
+                    $line['inventory_unit_ids'] = collect($saved['inventory_unit_ids'])
+                        ->map(fn (mixed $id): int => (int) $id)
+                        ->filter(fn (int $id): bool => $id > 0)
+                        ->values()
+                        ->all();
+                }
+
                 return $line;
             })
             ->values()
@@ -227,9 +238,14 @@ class RequisitionIssuanceFormSchema
             ->map(function (RequisitionItem $line) use ($fulfillment, $stockSnapshot): array {
                 $remaining = $fulfillment->remainingQuantity($line);
                 $stock = $stockSnapshot->issuableStockForItem((int) $line->item_id);
+                $itemId = (int) $line->item_id;
+                $categorySlug = $line->item?->category?->getTemplateSlug() ?? 'consumables';
+                $qtyToIssue = min($remaining, $stock);
 
                 return [
                     'requisition_item_id' => $line->id,
+                    'item_id' => $itemId,
+                    'category_slug' => $categorySlug,
                     'category_label' => $line->item?->category?->name ?? '—',
                     'item_label' => $line->item?->name ?? "Item #{$line->item_id}",
                     'identifier_value' => RequisitionLineDisplay::identifierValue($line) ?? '—',
@@ -239,7 +255,8 @@ class RequisitionIssuanceFormSchema
                     'stock_at_request' => $line->stock_at_request,
                     'stock_available' => $stock,
                     'is_backordered' => $line->isBackordered(),
-                    'quantity_to_issue' => min($remaining, $stock),
+                    'quantity_to_issue' => $qtyToIssue,
+                    'inventory_unit_ids' => self::defaultInventoryUnitIds($itemId, $categorySlug, $qtyToIssue),
                     'issue_remarks' => $line->issue_remarks ?? '',
                 ];
             })
@@ -282,12 +299,15 @@ class RequisitionIssuanceFormSchema
             self::numericTableColumn('Stock', '5rem'),
             self::numericTableColumn('Requested', '5.5rem'),
             self::numericTableColumn('Qty to issue', '6rem'),
+            self::textTableColumn('Units', '14%'),
             self::numericTableColumn('Remaining', '5.5rem'),
-            self::textTableColumn('Issue remarks', '16%'),
+            self::textTableColumn('Issue remarks', '14%'),
         ];
 
         $lineSchema = [
             Hidden::make('requisition_item_id')->required(),
+            Hidden::make('item_id')->dehydrated(),
+            Hidden::make('category_slug')->dehydrated(),
             Hidden::make('stock_at_request'),
             Hidden::make('is_backordered'),
             Hidden::make('category_label')->dehydrated(),
@@ -312,37 +332,8 @@ class RequisitionIssuanceFormSchema
             Hidden::make('quantity_remaining')->dehydrated(),
             self::wrappingCell('stock_available', numeric: true),
             self::wrappingCell('quantity_requested', numeric: true),
-            TextInput::make('quantity_to_issue')
-                ->hiddenLabel()
-                ->numeric()
-                ->minValue(0)
-                ->maxValue(fn (Get $get): int => max(0, min(
-                    (int) ($get('quantity_remaining') ?? 0),
-                    (int) ($get('stock_available') ?? 0),
-                )))
-                ->rules([
-                    fn (Get $get): Closure => function (string $attribute, mixed $value, Closure $fail) use ($get): void {
-                        $qty = (int) $value;
-                        $remaining = (int) ($get('quantity_remaining') ?? 0);
-                        $requested = (int) ($get('quantity_requested') ?? 0);
-                        $stock = (int) ($get('stock_available') ?? 0);
-
-                        if ($qty > $remaining) {
-                            $fail("Quantity to issue cannot exceed remaining requested quantity ({$remaining}).");
-                        }
-
-                        if ($qty > $requested) {
-                            $fail("Quantity to issue cannot exceed requested quantity ({$requested}).");
-                        }
-
-                        if ($qty > $stock) {
-                            $fail("Quantity to issue cannot exceed available stock ({$stock}).");
-                        }
-                    },
-                ])
-                ->required()
-                ->default(0)
-                ->live(),
+            self::quantityToIssueInput(isEndorsement: false),
+            self::inventoryUnitSelect(),
             self::wrappingCell('quantity_remaining', numeric: true),
             TextInput::make('issue_remarks')
                 ->hiddenLabel()
@@ -374,12 +365,15 @@ class RequisitionIssuanceFormSchema
             self::numericTableColumn('Stock', '5rem'),
             self::numericTableColumn('Endorsed', '5.5rem'),
             self::numericTableColumn('Qty to issue', '6rem'),
+            self::textTableColumn('Units', '12%'),
             self::numericTableColumn('Remaining', '5.5rem'),
-            self::textTableColumn('Issue remarks', '14%'),
+            self::textTableColumn('Issue remarks', '12%'),
         ];
 
         $lineSchema = [
             Hidden::make('source_endorsement_id')->required(),
+            Hidden::make('item_id')->dehydrated(),
+            Hidden::make('category_slug')->dehydrated(),
             Hidden::make('employee_name')->dehydrated(),
             Hidden::make('transaction_number')->dehydrated(),
             Hidden::make('category_label')->dehydrated(),
@@ -404,37 +398,8 @@ class RequisitionIssuanceFormSchema
             Hidden::make('quantity_remaining')->dehydrated(),
             self::wrappingCell('stock_available', numeric: true),
             self::wrappingCell('quantity_endorsed', numeric: true),
-            TextInput::make('quantity_to_issue')
-                ->hiddenLabel()
-                ->numeric()
-                ->minValue(0)
-                ->maxValue(fn (Get $get): int => max(0, min(
-                    (int) ($get('quantity_remaining') ?? 0),
-                    (int) ($get('stock_available') ?? 0),
-                )))
-                ->rules([
-                    fn (Get $get): Closure => function (string $attribute, mixed $value, Closure $fail) use ($get): void {
-                        $qty = (int) $value;
-                        $remaining = (int) ($get('quantity_remaining') ?? 0);
-                        $endorsed = (int) ($get('quantity_endorsed') ?? 0);
-                        $stock = (int) ($get('stock_available') ?? 0);
-
-                        if ($qty > $remaining) {
-                            $fail("Quantity to issue cannot exceed remaining endorsed quantity ({$remaining}).");
-                        }
-
-                        if ($qty > $endorsed) {
-                            $fail("Quantity to issue cannot exceed endorsed quantity ({$endorsed}).");
-                        }
-
-                        if ($qty > $stock) {
-                            $fail("Quantity to issue cannot exceed available stock ({$stock}).");
-                        }
-                    },
-                ])
-                ->required()
-                ->default(0)
-                ->live(),
+            self::quantityToIssueInput(isEndorsement: true),
+            self::inventoryUnitSelect(),
             self::wrappingCell('quantity_remaining', numeric: true),
             TextInput::make('issue_remarks')
                 ->hiddenLabel()
@@ -619,5 +584,150 @@ class RequisitionIssuanceFormSchema
         $remaining = (int) ($get('quantity_remaining') ?? 0);
 
         return $qtyToIssue !== $remaining;
+    }
+
+    protected static function quantityToIssueInput(bool $isEndorsement): TextInput
+    {
+        return TextInput::make('quantity_to_issue')
+            ->hiddenLabel()
+            ->numeric()
+            ->minValue(0)
+            ->maxValue(fn (Get $get): int => max(0, min(
+                (int) ($get('quantity_remaining') ?? 0),
+                (int) ($get('stock_available') ?? 0),
+            )))
+            ->rules([
+                fn (Get $get): Closure => function (string $attribute, mixed $value, Closure $fail) use ($get, $isEndorsement): void {
+                    $qty = (int) $value;
+                    $remaining = (int) ($get('quantity_remaining') ?? 0);
+                    $stock = (int) ($get('stock_available') ?? 0);
+
+                    if ($qty > $remaining) {
+                        $fail($isEndorsement
+                            ? "Quantity to issue cannot exceed remaining endorsed quantity ({$remaining})."
+                            : "Quantity to issue cannot exceed remaining requested quantity ({$remaining}).");
+                    }
+
+                    if ($isEndorsement) {
+                        $endorsed = (int) ($get('quantity_endorsed') ?? 0);
+                        if ($qty > $endorsed) {
+                            $fail("Quantity to issue cannot exceed endorsed quantity ({$endorsed}).");
+                        }
+                    } else {
+                        $requested = (int) ($get('quantity_requested') ?? 0);
+                        if ($qty > $requested) {
+                            $fail("Quantity to issue cannot exceed requested quantity ({$requested}).");
+                        }
+                    }
+
+                    if ($qty > $stock) {
+                        $fail("Quantity to issue cannot exceed available stock ({$stock}).");
+                    }
+                },
+            ])
+            ->required()
+            ->default(0)
+            ->live()
+            ->afterStateUpdated(function (mixed $state, Get $get, Set $set): void {
+                self::syncInventoryUnitDefaults((int) $state, $get, $set);
+            });
+    }
+
+    protected static function inventoryUnitSelect(): Select
+    {
+        return Select::make('inventory_unit_ids')
+            ->hiddenLabel()
+            ->multiple()
+            ->searchable()
+            ->options(function (Get $get): array {
+                if (! self::lineTracksInventoryUnits($get)) {
+                    return [];
+                }
+
+                $officeId = (int) (app(SupplyOfficeResolver::class)->resolve() ?? 0);
+                $itemId = (int) ($get('item_id') ?? 0);
+
+                return app(IssuableInventoryUnitOptions::class)->optionsForItem($itemId, $officeId);
+            })
+            ->disabled(fn (Get $get): bool => ! self::lineTracksInventoryUnits($get))
+            ->required(fn (Get $get): bool => self::lineTracksInventoryUnits($get) && (int) ($get('quantity_to_issue') ?? 0) > 0)
+            ->rules([
+                fn (Get $get): Closure => function (string $attribute, mixed $value, Closure $fail) use ($get): void {
+                    if (! self::lineTracksInventoryUnits($get)) {
+                        return;
+                    }
+
+                    $qty = (int) ($get('quantity_to_issue') ?? 0);
+                    if ($qty <= 0) {
+                        return;
+                    }
+
+                    $selected = collect(is_array($value) ? $value : [])
+                        ->map(fn (mixed $id): int => (int) $id)
+                        ->filter(fn (int $id): bool => $id > 0)
+                        ->unique()
+                        ->values();
+
+                    if ($selected->count() !== $qty) {
+                        $fail('Select exactly '.$qty.' inventory unit'.($qty === 1 ? '' : 's').' to issue.');
+                    }
+                },
+            ])
+            ->dehydrated(fn (Get $get): bool => self::lineTracksInventoryUnits($get))
+            ->disableOptionsWhenSelectedInSiblingRepeaterItems()
+            ->placeholder(fn (Get $get): string => self::lineTracksInventoryUnits($get) ? 'Select units' : '—')
+            ->helperText(null);
+    }
+
+    protected static function syncInventoryUnitDefaults(int $quantity, Get $get, Set $set): void
+    {
+        if (! self::lineTracksInventoryUnits($get)) {
+            $set('inventory_unit_ids', []);
+
+            return;
+        }
+
+        $current = collect($get('inventory_unit_ids') ?? [])
+            ->map(fn (mixed $id): int => (int) $id)
+            ->filter(fn (int $id): bool => $id > 0)
+            ->values()
+            ->all();
+
+        if ($quantity <= 0) {
+            $set('inventory_unit_ids', []);
+
+            return;
+        }
+
+        if ($current !== [] && count($current) === $quantity) {
+            return;
+        }
+
+        $officeId = (int) (app(SupplyOfficeResolver::class)->resolve() ?? 0);
+        $itemId = (int) ($get('item_id') ?? 0);
+
+        $set(
+            'inventory_unit_ids',
+            app(IssuableInventoryUnitOptions::class)->defaultUnitIds($itemId, $officeId, $quantity),
+        );
+    }
+
+    protected static function lineTracksInventoryUnits(Get $get): bool
+    {
+        return in_array((string) ($get('category_slug') ?? ''), ['ppe', 'semi_expendable'], true);
+    }
+
+    /**
+     * @return list<int>
+     */
+    protected static function defaultInventoryUnitIds(int $itemId, string $categorySlug, int $quantity): array
+    {
+        if ($quantity <= 0 || ! in_array($categorySlug, ['ppe', 'semi_expendable'], true)) {
+            return [];
+        }
+
+        $officeId = (int) (app(SupplyOfficeResolver::class)->resolve() ?? 0);
+
+        return app(IssuableInventoryUnitOptions::class)->defaultUnitIds($itemId, $officeId, $quantity);
     }
 }

@@ -76,8 +76,7 @@ class PropertyActionRequestForm
                                     ->all();
                             })
                             ->required(fn (): bool => $isUnitConsolidator)
-                            ->searchable()
-                            ->preload()
+                            ->placeholder('Select office')
                             ->selectablePlaceholder(false)
                             ->dehydrated()
                             ->live()
@@ -144,8 +143,7 @@ class PropertyActionRequestForm
                                     ->all();
                             })
                             ->required(fn (): bool => $isUnitConsolidator)
-                            ->searchable()
-                            ->preload()
+                            ->placeholder('Select department')
                             ->selectablePlaceholder(false)
                             ->dehydrated()
                             ->live()

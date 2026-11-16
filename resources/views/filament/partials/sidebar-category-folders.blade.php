@@ -15,6 +15,22 @@
             collapsed = [];
         }
 
+        collapsed = collapsed.filter(function (label) {
+            var group = document.querySelector('.fi-sidebar-group[data-group-label="' + String(label).replace(/"/g, '\\"') + '"]');
+
+            return ! group || group.classList.contains('fi-collapsible');
+        });
+
+        document.querySelectorAll('.fi-sidebar-group.owwa-nav-plain').forEach(function (group) {
+            var groupItems = group.querySelector('.fi-sidebar-group-items');
+
+            if (groupItems) {
+                groupItems.style.display = '';
+            }
+
+            group.classList.remove('fi-collapsed');
+        });
+
         if (! localStorage.getItem(flag)) {
             labels.forEach(function (label) {
                 if (! collapsed.includes(label)) {
@@ -103,7 +119,7 @@
                 var group = button.closest('.fi-sidebar-group');
                 var label = group ? group.dataset.groupLabel : null;
 
-                if (! label) {
+                if (! label || ! group.classList.contains('fi-collapsible')) {
                     return;
                 }
 
@@ -117,7 +133,7 @@
 
                     var others = [];
 
-                    document.querySelectorAll('.fi-sidebar-group[data-group-label]').forEach(function (other) {
+                    document.querySelectorAll('.fi-sidebar-group.fi-collapsible[data-group-label]').forEach(function (other) {
                         var otherLabel = other.dataset.groupLabel;
 
                         if (otherLabel && otherLabel !== label) {

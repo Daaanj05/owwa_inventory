@@ -145,8 +145,6 @@ class UserForm
                     return $query;
                 }
             )
-            ->searchable()
-            ->preload()
             ->placeholder('None')
             ->default($isUnitConsolidator ? $user?->office_id : null)
             ->required(fn (Get $get): bool => self::officeIsRequired($get, $isUnitConsolidator))
@@ -163,9 +161,8 @@ class UserForm
         return Select::make('department_id')
             ->label('Sub-Office/Department')
             ->options(fn (Get $get): array => self::departmentOptions($get, $isUnitConsolidator, $user))
-            ->searchable()
             ->placeholder(fn (Get $get): string => filled($get('office_id'))
-                ? 'Select department'
+                ? 'Select sub-office/department'
                 : 'Select office first')
             ->default($isUnitConsolidator ? $user?->department_id : null)
             ->disabled(fn (Get $get): bool => blank($get('office_id')))
@@ -198,7 +195,7 @@ class UserForm
                         ->pluck('name', 'id')
                         ->all())
                     ->required()
-                    ->searchable()
+                    ->placeholder('Select office')
                     ->selectablePlaceholder(false)
                     ->live()
                     ->afterStateUpdated(function (Set $set): void {
@@ -211,7 +208,8 @@ class UserForm
                     ->options(fn (Get $get): array => self::groupedDepartmentOptions($get))
                     ->required()
                     ->minItems(1)
-                    ->searchable()
+                    ->searchable(false)
+                    ->placeholder('Select sub-office/department')
                     ->disabled(fn (Get $get): bool => blank($get('office_id')))
                     ->rules(fn (Get $get): array => self::groupedAssignmentDepartmentRules($get))
                     ->extraAttributes(['class' => 'owwa-uc-departments-select']),

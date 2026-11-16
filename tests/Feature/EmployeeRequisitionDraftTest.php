@@ -11,11 +11,14 @@ use App\Models\Requisition;
 use App\Models\RequisitionItem;
 use App\Models\User;
 use App\Notifications\RequisitionWorkflowDatabaseNotification;
+use App\Notifications\WorkflowUpdateMailNotification;
 use App\Support\EmployeeRequisitionStatus;
 use Filament\Actions\Testing\TestAction;
 use Filament\Facades\Filament;
+use Filament\Forms\Components\Select;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Notification;
+use Illuminate\Support\Str;
 use Livewire\Livewire;
 use Tests\TestCase;
 
@@ -86,7 +89,12 @@ class EmployeeRequisitionDraftTest extends TestCase
             'role' => User::ROLE_UNIT_CONSOLIDATOR,
             'office_id' => $office->id,
         ]);
-        $item = Item::factory()->create();
+        $item = Item::factory()->create([
+            'name' => 'Air Freshener',
+            'base_name' => 'Air Freshener',
+            'sub_item' => null,
+            'unit' => 'bottle',
+        ]);
 
         $this->actingAs($employee);
 
@@ -94,7 +102,7 @@ class EmployeeRequisitionDraftTest extends TestCase
             ->mountAction(TestAction::make('create')->schemaComponent(true, 'content'));
 
         $items = $test->get('mountedActions')[0]['data']['items'] ?? [];
-        $key = is_array($items) && $items !== [] ? array_key_first($items) : (string) \Illuminate\Support\Str::uuid();
+        $key = is_array($items) && $items !== [] ? array_key_first($items) : (string) Str::uuid();
 
         $test->fillForm([
             'purpose' => 'Quarterly office supplies',
@@ -102,7 +110,7 @@ class EmployeeRequisitionDraftTest extends TestCase
                 $key => [
                     'item_category_id' => $item->item_category_id,
                     'item_id' => $item->id,
-                    'quantity' => 2,
+                    'quantity' => 14,
                 ],
             ],
         ])
@@ -113,6 +121,87 @@ class EmployeeRequisitionDraftTest extends TestCase
         $this->assertNotNull($requisition);
         $this->assertSame(Requisition::STATUS_PENDING, $requisition->status);
         Notification::assertSentTo($uc, RequisitionWorkflowDatabaseNotification::class);
+
+        $mail = null;
+        Notification::assertSentTo(
+            $uc,
+            WorkflowUpdateMailNotification::class,
+            function (WorkflowUpdateMailNotification $notification) use (&$mail): bool {
+                $mail = $notification;
+
+                return true;
+            },
+        );
+
+        $this->assertNotNull($mail);
+        $rendered = (string) $mail->toMail($uc)->render();
+        $this->assertStringContainsString('Requested items:', $rendered);
+        $this->assertStringContainsString('Air Freshener', $rendered);
+        $this->assertStringContainsString('14 bottle', $rendered);
+    }
+
+    public function test_selected_item_is_omitted_from_the_next_request_line(): void
+    {
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+
+        $office = Office::factory()->create();
+        $employee = User::factory()->create([
+            'role' => User::ROLE_EMPLOYEE,
+            'office_id' => $office->id,
+        ]);
+        $category = ItemCategory::factory()->create(['name' => 'Consumables']);
+        $selected = Item::factory()->create([
+            'item_category_id' => $category->id,
+            'name' => 'Air Freshener',
+            'base_name' => 'Air Freshener',
+            'sub_item' => null,
+        ]);
+        $other = Item::factory()->create([
+            'item_category_id' => $category->id,
+            'name' => 'Bond Paper',
+            'base_name' => 'Bond Paper',
+            'sub_item' => null,
+        ]);
+
+        $this->actingAs($employee);
+
+        $test = Livewire::test(ListRequisitions::class)
+            ->mountAction(TestAction::make('create')->schemaComponent(true, 'content'));
+
+        $items = $test->get('mountedActions')[0]['data']['items'] ?? [];
+        $firstKey = is_array($items) && $items !== [] ? array_key_first($items) : (string) Str::uuid();
+        $secondKey = (string) Str::uuid();
+
+        $test->fillForm([
+            'items' => [
+                $firstKey => [
+                    'item_category_id' => $category->id,
+                    'item_id' => $selected->id,
+                    'quantity' => 1,
+                ],
+                $secondKey => [
+                    'item_category_id' => $category->id,
+                    'item_id' => null,
+                    'quantity' => null,
+                ],
+            ],
+        ]);
+
+        $formName = $test->instance()->getMountedActionSchemaName();
+        $fields = $test->instance()->{$formName}->getFlatFields(withHidden: true);
+
+        $firstSelect = $fields['items.'.$firstKey.'.item_id'] ?? null;
+        $secondSelect = $fields['items.'.$secondKey.'.item_id'] ?? null;
+
+        $this->assertInstanceOf(Select::class, $firstSelect);
+        $this->assertInstanceOf(Select::class, $secondSelect);
+
+        $firstOptions = $firstSelect->getOptions();
+        $secondOptions = $secondSelect->getOptions();
+
+        $this->assertTrue(array_key_exists($selected->id, $firstOptions) || array_key_exists((string) $selected->id, $firstOptions));
+        $this->assertFalse(array_key_exists($selected->id, $secondOptions) || array_key_exists((string) $selected->id, $secondOptions));
+        $this->assertTrue(array_key_exists($other->id, $secondOptions) || array_key_exists((string) $other->id, $secondOptions));
     }
 
     public function test_employee_create_draft_does_not_notify_unit_consolidator(): void

@@ -833,6 +833,38 @@
     color: #eff6ff;
 }
 
+.owwa-did-you-mean {
+    font-size: 0.75rem;
+    line-height: 1rem;
+}
+
+.owwa-spell-suggestion {
+    border: 0;
+    padding: 0;
+    background: transparent;
+    color: #1d4ed8;
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+.owwa-spell-suggestion:hover,
+.owwa-spell-suggestion:focus {
+    color: #1e3a8a;
+    outline: none;
+}
+
+.dark .owwa-spell-suggestion {
+    color: #93c5fd;
+}
+
+.dark .owwa-spell-suggestion:hover,
+.dark .owwa-spell-suggestion:focus {
+    color: #dbeafe;
+}
+
 /* ═══════════════════════════════════════════════════════════
    SYSTEM HEALTH PAGE
 ═══════════════════════════════════════════════════════════ */

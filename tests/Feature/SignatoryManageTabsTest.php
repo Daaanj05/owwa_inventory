@@ -303,14 +303,14 @@ class SignatoryManageTabsTest extends TestCase
                 'form' => 'physical_count',
                 'role' => ProcurementSignatoryName::ROLE_PHYSICAL_COUNT_CERTIFIED,
                 'name' => 'Committee Chair',
-                'designation' => 'Should Clear',
+                'designation' => 'Inventory Committee Chair',
             ])
             ->assertHasNoFormErrors();
 
         $this->assertDatabaseHas(ProcurementSignatoryName::class, [
             'role' => ProcurementSignatoryName::ROLE_PHYSICAL_COUNT_CERTIFIED,
             'name' => 'Committee Chair',
-            'designation' => null,
+            'designation' => 'Inventory Committee Chair',
         ]);
 
         Livewire::test(ManageProcurementSignatoryNames::class)
@@ -351,7 +351,7 @@ class SignatoryManageTabsTest extends TestCase
         ]);
     }
 
-    public function test_witness_and_iar_inspection_officer_clear_designation(): void
+    public function test_witness_and_iar_inspection_officer_keep_designation(): void
     {
         Filament::setCurrentPanel(Filament::getPanel('admin'));
 
@@ -364,14 +364,14 @@ class SignatoryManageTabsTest extends TestCase
                 'form' => 'pr_iar',
                 'role' => ProcurementSignatoryName::ROLE_INSPECTION_OFFICER,
                 'name' => 'IAR Inspector',
-                'designation' => 'Should Clear',
+                'designation' => 'Inspection Officer',
             ])
             ->assertHasNoFormErrors();
 
         $this->assertDatabaseHas(ProcurementSignatoryName::class, [
             'role' => ProcurementSignatoryName::ROLE_INSPECTION_OFFICER,
             'name' => 'IAR Inspector',
-            'designation' => null,
+            'designation' => 'Inspection Officer',
         ]);
 
         Livewire::test(ManageProcurementSignatoryNames::class)
@@ -380,18 +380,18 @@ class SignatoryManageTabsTest extends TestCase
                 'form' => 'disposal',
                 'role' => ProcurementSignatoryName::ROLE_DISPOSAL_WITNESS,
                 'name' => 'Witness Person',
-                'designation' => 'Should Clear Too',
+                'designation' => 'Witness',
             ])
             ->assertHasNoFormErrors();
 
         $this->assertDatabaseHas(ProcurementSignatoryName::class, [
             'role' => ProcurementSignatoryName::ROLE_DISPOSAL_WITNESS,
             'name' => 'Witness Person',
-            'designation' => null,
+            'designation' => 'Witness',
         ]);
     }
 
-    public function test_disposal_tab_saves_inspection_officer_name_without_designation(): void
+    public function test_disposal_tab_requires_inspection_officer_designation(): void
     {
         Filament::setCurrentPanel(Filament::getPanel('admin'));
 
@@ -410,12 +410,22 @@ class SignatoryManageTabsTest extends TestCase
                 'role' => ProcurementSignatoryName::ROLE_DISPOSAL_INSPECTION_OFFICER,
                 'name' => 'Disposal Inspector',
             ])
+            ->assertHasFormErrors(['designation' => 'required']);
+
+        Livewire::test(ManageProcurementSignatoryNames::class)
+            ->set('activeTab', 'disposal')
+            ->callAction('create', [
+                'form' => 'disposal',
+                'role' => ProcurementSignatoryName::ROLE_DISPOSAL_INSPECTION_OFFICER,
+                'name' => 'Disposal Inspector',
+                'designation' => 'Inspection Officer',
+            ])
             ->assertHasNoFormErrors();
 
         $this->assertDatabaseHas(ProcurementSignatoryName::class, [
             'role' => ProcurementSignatoryName::ROLE_DISPOSAL_INSPECTION_OFFICER,
             'name' => 'Disposal Inspector',
-            'designation' => null,
+            'designation' => 'Inspection Officer',
         ]);
     }
 

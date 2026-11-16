@@ -24,6 +24,13 @@ Your requisition was rejected.
 @if (filled($requisition->remarks))
 **Reason:** {{ $requisition->remarks }}
 @endif
+
+@if (($requestedItems ?? []) !== [])
+**Requested items:**
+@foreach ($requestedItems as $line)
+- {{ $line['name'] }} — {{ $line['quantity'] }}@if (filled($line['unit'] ?? null)) {{ $line['unit'] }}@endif
+@endforeach
+@endif
 </x-mail::panel>
 
 <x-mail::button :url="url('/login')">

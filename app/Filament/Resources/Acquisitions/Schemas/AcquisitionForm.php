@@ -69,6 +69,7 @@ class AcquisitionForm
                                 }
                             )
                             ->required()
+                            ->placeholder('Select an item')
                             ->searchable()
                             ->preload()
                             ->live()

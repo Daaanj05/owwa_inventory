@@ -51,7 +51,8 @@ class IncidentReportForm
                     ->dehydrated(false)
                     ->default(false),
 
-                Section::make('Incident report')
+                Section::make()
+                    ->heading(null)
                     ->columnSpanFull()
                     ->schema([
                         TextInput::make('reference_code')
@@ -92,6 +93,7 @@ class IncidentReportForm
                                 }
                             )
                             ->required()
+                            ->placeholder('Select an item')
                             ->searchable()
                             ->preload()
                             ->live()
@@ -153,9 +155,7 @@ class IncidentReportForm
                                         fn (Builder $scoped): Builder => $scoped->where('office_id', $get('office_id')),
                                     ),
                             )
-                            ->searchable()
-                            ->preload()
-                            ->placeholder('—')
+                            ->placeholder('Select department')
                             ->visible(fn (Get $get): bool => filled($get('office_id')))
                             ->required(fn (Get $get): bool => self::itemCategorySlug($get) === 'semi_expendable'),
                         TextInput::make('custodian_printed_name')
@@ -324,8 +324,7 @@ class IncidentReportForm
                         Select::make('gov_id_type')
                             ->label('Government ID type')
                             ->options(self::governmentIdTypeOptions())
-                            ->searchable()
-                            ->placeholder('Select a government ID'),
+                            ->placeholder('Select government ID type'),
                         TextInput::make('gov_id_no')
                             ->label('ID number'),
                         DatePicker::make('gov_id_date_issued')
@@ -421,8 +420,7 @@ class IncidentReportForm
                 ->label('Office')
                 ->options(fn (): array => Office::query()->active()->orderBy('name')->pluck('name', 'id')->all())
                 ->required()
-                ->searchable()
-                ->preload()
+                ->placeholder('Select office')
                 ->default(fn (): ?int => self::defaultOfficeId())
                 ->dehydrated()
                 ->live()

@@ -8,8 +8,10 @@ use App\Models\Requisition;
 use App\Models\RequisitionItem;
 use App\Models\RequisitionSourceEndorsement;
 use App\Models\User;
+use App\Support\IssuableInventoryUnitOptions;
 use App\Support\SemiExpendableUsefulLife;
 use App\Support\SupplyOfficeResolver;
+use App\Support\UnitCostKey;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
@@ -80,9 +82,13 @@ class RequisitionFulfillmentService
                 $employee = $endorsement->sourceRequisition?->requestedBy;
                 $transactionNumber = $endorsement->sourceRequisition?->transaction_number
                     ?? ('#'.$endorsement->source_requisition_id);
+                $categorySlug = $endorsement->item?->category?->getTemplateSlug() ?? 'consumables';
+                $qtyToIssue = min($remaining, $stock);
 
                 return [
                     'source_endorsement_id' => $endorsement->id,
+                    'item_id' => $itemId,
+                    'category_slug' => $categorySlug,
                     'employee_name' => $employee?->name ?? 'Employee',
                     'transaction_number' => $transactionNumber,
                     'category_label' => $endorsement->item?->category?->name ?? '—',
@@ -93,7 +99,8 @@ class RequisitionFulfillmentService
                     'quantity_issued' => $issued,
                     'quantity_remaining' => $remaining,
                     'stock_available' => $stock,
-                    'quantity_to_issue' => min($remaining, $stock),
+                    'quantity_to_issue' => $qtyToIssue,
+                    'inventory_unit_ids' => $this->defaultInventoryUnitIds($itemId, $categorySlug, $qtyToIssue),
                     'issue_remarks' => $endorsement->requisitionItem?->issue_remarks ?? '',
                 ];
             })
@@ -213,16 +220,21 @@ class RequisitionFulfillmentService
                     );
                 }
 
-                $qtyToIssue = min($qtyToIssue, $stock);
+                $inventoryUnitIds = $this->normalizeInventoryUnitIds($row['inventory_unit_ids'] ?? null);
 
-                if ($qtyToIssue <= 0) {
-                    continue;
+                if ($inventoryUnitIds === []) {
+                    $qtyToIssue = min($qtyToIssue, $stock);
+
+                    if ($qtyToIssue <= 0) {
+                        continue;
+                    }
                 }
 
                 $issueQueue->push([
                     'line' => $line,
                     'qty' => $qtyToIssue,
                     'remarks' => filled($row['issue_remarks'] ?? null) ? (string) $row['issue_remarks'] : null,
+                    'inventory_unit_ids' => $inventoryUnitIds,
                 ]);
             }
 
@@ -259,6 +271,7 @@ class RequisitionFulfillmentService
                             signatories: $signatories,
                             stock: $stock,
                             remarks: $entry['remarks'],
+                            inventoryUnitIds: $entry['inventory_unit_ids'],
                         );
 
                         $categoryName = $line->item?->category?->name ?? 'Other';
@@ -363,16 +376,21 @@ class RequisitionFulfillmentService
                     );
                 }
 
-                $qtyToIssue = min($qtyToIssue, $stock);
+                $inventoryUnitIds = $this->normalizeInventoryUnitIds($row['inventory_unit_ids'] ?? null);
 
-                if ($qtyToIssue <= 0) {
-                    continue;
+                if ($inventoryUnitIds === []) {
+                    $qtyToIssue = min($qtyToIssue, $stock);
+
+                    if ($qtyToIssue <= 0) {
+                        continue;
+                    }
                 }
 
                 $issueQueue->push([
                     'endorsement' => $endorsement,
                     'qty' => $qtyToIssue,
                     'remarks' => filled($row['issue_remarks'] ?? null) ? (string) $row['issue_remarks'] : null,
+                    'inventory_unit_ids' => $inventoryUnitIds,
                 ]);
             }
 
@@ -433,6 +451,7 @@ class RequisitionFulfillmentService
                             remarks: $entry['remarks'],
                             consolidatedRequisitionId: $consolidated->id,
                             sourceEndorsementId: $endorsement->id,
+                            inventoryUnitIds: $entry['inventory_unit_ids'],
                         );
 
                         if ($consolidatedLine) {
@@ -539,6 +558,7 @@ class RequisitionFulfillmentService
      * Issue a line from regional supply, one issuance row per lot used (oldest lot first).
      *
      * @param  array<string, mixed>  $signatories
+     * @param  list<int>  $inventoryUnitIds
      */
     protected function createIssuanceRecord(
         IssuanceBatch $batch,
@@ -553,22 +573,12 @@ class RequisitionFulfillmentService
         ?string $remarks = null,
         ?int $consolidatedRequisitionId = null,
         ?int $sourceEndorsementId = null,
+        array $inventoryUnitIds = [],
     ): void {
         $supplyOfficeId = app(SupplyOfficeResolver::class)->resolve();
 
         if ($supplyOfficeId === null) {
             throw new InvalidArgumentException('Regional supply office is not configured.');
-        }
-
-        $lots = app(InventoryStockService::class)->availableLotsForIssue((int) $line->item_id, $supplyOfficeId);
-        $available = array_sum(array_column($lots, 'quantity'));
-
-        if ($available < $qtyToIssue) {
-            $itemName = $line->item?->name ?? "Item #{$line->item_id}";
-
-            throw new InvalidArgumentException(
-                "Only {$available} of {$itemName} can be issued from regional supply (requested {$qtyToIssue})."
-            );
         }
 
         $basePayload = [
@@ -595,22 +605,45 @@ class RequisitionFulfillmentService
             }
         }
 
-        $left = $qtyToIssue;
+        $categorySlug = $line->item?->category?->getTemplateSlug() ?? 'consumables';
 
-        foreach ($lots as $lot) {
-            if ($left <= 0) {
-                break;
+        if (in_array($categorySlug, ['ppe', 'semi_expendable'], true) && $inventoryUnitIds !== []) {
+            $this->createIssuanceRecordsForSelectedUnits(
+                $basePayload,
+                (int) $line->item_id,
+                $supplyOfficeId,
+                $qtyToIssue,
+                $inventoryUnitIds,
+            );
+        } else {
+            $lots = app(InventoryStockService::class)->availableLotsForIssue((int) $line->item_id, $supplyOfficeId);
+            $available = array_sum(array_column($lots, 'quantity'));
+
+            if ($available < $qtyToIssue) {
+                $itemName = $line->item?->name ?? "Item #{$line->item_id}";
+
+                throw new InvalidArgumentException(
+                    "Only {$available} of {$itemName} can be issued from regional supply (requested {$qtyToIssue})."
+                );
             }
 
-            $take = min($left, $lot['quantity']);
+            $left = $qtyToIssue;
 
-            Issuance::create([
-                ...$basePayload,
-                'unit_cost' => $lot['unit_cost'],
-                'quantity' => $take,
-            ]);
+            foreach ($lots as $lot) {
+                if ($left <= 0) {
+                    break;
+                }
 
-            $left -= $take;
+                $take = min($left, $lot['quantity']);
+
+                Issuance::create([
+                    ...$basePayload,
+                    'unit_cost' => $lot['unit_cost'],
+                    'quantity' => $take,
+                ]);
+
+                $left -= $take;
+            }
         }
 
         $line->update([
@@ -618,6 +651,84 @@ class RequisitionFulfillmentService
             'stock_available' => $stock,
             'issue_remarks' => $remarks ?? $line->issue_remarks,
         ]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $basePayload
+     * @param  list<int>  $inventoryUnitIds
+     */
+    protected function createIssuanceRecordsForSelectedUnits(
+        array $basePayload,
+        int $itemId,
+        int $supplyOfficeId,
+        int $qtyToIssue,
+        array $inventoryUnitIds,
+    ): void {
+        $units = app(IssuableInventoryUnitOptions::class)->lockIssuableUnits(
+            $inventoryUnitIds,
+            $itemId,
+            $supplyOfficeId,
+            $qtyToIssue,
+        );
+
+        $units
+            ->groupBy(fn ($unit): string => UnitCostKey::normalize(
+                $unit->unit_cost !== null ? (float) $unit->unit_cost : null,
+            ))
+            ->each(function (Collection $group) use ($basePayload): void {
+                $ids = $group->pluck('id')
+                    ->map(fn (mixed $id): int => (int) $id)
+                    ->values()
+                    ->all();
+                $numbers = $group->pluck('property_number')
+                    ->filter()
+                    ->map(fn (mixed $number): string => (string) $number)
+                    ->values()
+                    ->all();
+                $first = $group->first();
+                $unitCost = $first?->unit_cost !== null ? (float) $first->unit_cost : 0.0;
+
+                $issuance = new Issuance([
+                    ...$basePayload,
+                    'unit_cost' => $unitCost,
+                    'quantity' => $group->count(),
+                    'property_number' => $numbers[0] ?? null,
+                    'issued_property_numbers' => $numbers,
+                ]);
+                $issuance->reservedInventoryUnitIds = $ids;
+                $issuance->save();
+            });
+    }
+
+    /**
+     * @return list<int>
+     */
+    protected function normalizeInventoryUnitIds(mixed $value): array
+    {
+        if (! is_array($value)) {
+            return [];
+        }
+
+        return collect($value)
+            ->map(fn (mixed $id): int => (int) $id)
+            ->filter(fn (int $id): bool => $id > 0)
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @return list<int>
+     */
+    protected function defaultInventoryUnitIds(int $itemId, string $categorySlug, int $quantity): array
+    {
+        if ($quantity <= 0 || ! in_array($categorySlug, ['ppe', 'semi_expendable'], true)) {
+            return [];
+        }
+
+        $officeId = (int) (app(SupplyOfficeResolver::class)->resolve() ?? 0);
+
+        return app(IssuableInventoryUnitOptions::class)->defaultUnitIds($itemId, $officeId, $quantity);
     }
 
     /**

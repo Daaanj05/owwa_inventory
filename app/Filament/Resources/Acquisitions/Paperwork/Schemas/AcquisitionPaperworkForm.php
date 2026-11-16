@@ -95,7 +95,7 @@ class AcquisitionPaperworkForm
                         self::prLineItemsRepeater($scopeActive)->columnSpanFull(),
                     ]),
                 Section::make('Purpose and signatories')
-                    ->description('Purpose and printed names for the purchase request form.')
+                    ->description('Purpose, printed names, and Designation/Role/Position for the purchase request form.')
                     ->visible(fn (string $operation, ?AcquisitionPaperwork $record): bool => $operation === 'create'
                         || ! ($record?->isPrApproved() ?? false))
                     ->columns(2)
@@ -408,8 +408,22 @@ class AcquisitionPaperworkForm
                     return SignatorySelect::roleInstruction(ProcurementSignatoryName::ROLE_REQUESTED);
                 })
                 ->disabled(fn (?AcquisitionPaperwork $record): bool => ! self::isPrEditable($record)),
+            TextInput::make('requested_by_designation')
+                ->label('Designation/Role/Position')
+                ->maxLength(255)
+                ->helperText('Designation/Role/Position of the person requesting the purchase of the item/s.')
+                ->disabled(fn (?AcquisitionPaperwork $record): bool => ! self::isPrEditable($record)),
             SignatorySelect::make('approved_by_name', ProcurementSignatoryName::ROLE_APPROVED)
                 ->label("Approver's name")
+                ->live()
+                ->afterStateUpdated(function ($state, Set $set): void {
+                    $set('approved_by_designation', ProcurementSignatoryName::designationFor(
+                        ProcurementSignatoryName::ROLE_APPROVED,
+                        is_string($state) ? $state : null,
+                    ));
+                })
+                ->disabled(fn (?AcquisitionPaperwork $record): bool => ! self::isPrEditable($record)),
+            SignatorySelect::makeDesignation('approved_by_designation', ProcurementSignatoryName::ROLE_APPROVED)
                 ->disabled(fn (?AcquisitionPaperwork $record): bool => ! self::isPrEditable($record)),
         ];
     }
@@ -435,8 +449,13 @@ class AcquisitionPaperworkForm
 
         if ($requesters->count() === 1) {
             $set('requested_by_name', $requesters->first());
+            $set(
+                'requested_by_designation',
+                app(RequisitionPurchaseRequestService::class)->requesterDesignation($requisitionIds),
+            );
         } elseif ($requesters->count() > 1) {
             $set('requested_by_name', null);
+            $set('requested_by_designation', null);
         }
     }
 
@@ -496,6 +515,7 @@ class AcquisitionPaperworkForm
                 Select::make('item_id')
                     ->label('Item')
                     ->hiddenLabel()
+                    ->placeholder('Select an item')
                     ->searchable()
                     ->options(function (Get $get) use ($scopeActive): array {
                         $query = Item::query();
@@ -704,7 +724,9 @@ class AcquisitionPaperworkForm
                 ->default(now())
                 ->required(fn (?AcquisitionPaperwork $record): bool => $record?->isPoApproved() ?? false),
             TextInput::make('iar_data.invoice_no')
-                ->label('Invoice No.'),
+                ->label('Invoice No.')
+                ->autocomplete(false)
+                ->extraInputAttributes(['autocomplete' => 'off']),
             DatePicker::make('iar_data.invoice_date')
                 ->label('Invoice date'),
             DatePicker::make('iar_data.date_inspected')

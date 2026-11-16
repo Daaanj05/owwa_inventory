@@ -8347,10 +8347,16 @@ body.owwa-busy-active .fi-topbar a {
     padding-right: 1.75rem;
 }
 
-/* Tighten gap between modal title and first form fields (e.g. Item create) */
+/* Title and close button share one header bar. */
 .fi-modal-window.owwa-view-record-modal .fi-modal-header {
-    padding-top: 0.75rem !important;
-    padding-bottom: 0.15rem !important;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-start;
+    column-gap: 0.75rem;
+    padding-top: 0.85rem !important;
+    padding-bottom: 0.85rem !important;
+    border-bottom: 1px solid #e5e7eb;
 }
 
 .fi-modal-window.owwa-view-record-modal .fi-modal-content {
@@ -9850,11 +9856,17 @@ body.owwa-busy-active .fi-topbar a {
 }
 
 /* OWWA record modal shell (view + create + edit) */
-.fi-modal-window-ctn:has(.owwa-record-modal),
+.fi-modal-window-ctn:has(.owwa-record-modal):not(:has(.owwa-view-record-modal)),
 .fi-modal-window-ctn:has(.owwa-physical-count-modal) {
     border-radius: 0.75rem !important;
     overflow: hidden !important;
     isolation: isolate;
+}
+
+.fi-modal-window-ctn:has(.owwa-view-record-modal) {
+    border-radius: 0.75rem !important;
+    overflow: clip !important;
+    isolation: auto;
 }
 
 .fi-modal-window.owwa-record-modal,
@@ -9882,10 +9894,12 @@ body.owwa-busy-active .fi-topbar a {
  * Tall record/view modals: keep the shell fixed and scroll only content.
  * Sticky header/footer on a scrolling window drifts hit targets for Close and X
  * under the blurred overlay. overflow:clip keeps the card from scrolling.
+ * Selectors mirror Filament's fi-modal-has-sticky-footer chain in app.css.
  */
 .fi-modal:has(.owwa-acquisition-paperwork-modal) > .fi-modal-window-ctn,
 .fi-modal:has(.owwa-po-modal) > .fi-modal-window-ctn,
-.fi-modal:has(.owwa-view-record-modal) > .fi-modal-window-ctn {
+.fi-modal:has(.owwa-view-record-modal) > .fi-modal-window-ctn,
+.fi-modal:not(.fi-modal-slide-over):not(.fi-width-screen).fi-modal-has-sticky-footer:has(.owwa-view-record-modal) > .fi-modal-window-ctn {
     overflow: clip !important;
     overflow-x: clip !important;
     overflow-y: clip !important;
@@ -9899,6 +9913,7 @@ body.owwa-busy-active .fi-topbar a {
 .fi-modal.fi-modal-has-sticky-footer:has(.owwa-acquisition-paperwork-modal) > .fi-modal-window-ctn > .fi-modal-window,
 .fi-modal.fi-modal-has-sticky-footer:has(.owwa-po-modal) > .fi-modal-window-ctn > .fi-modal-window,
 .fi-modal.fi-modal-has-sticky-footer:has(.owwa-view-record-modal) > .fi-modal-window-ctn > .fi-modal-window,
+.fi-modal:not(.fi-modal-slide-over):not(.fi-width-screen).fi-modal-has-sticky-footer:has(.owwa-view-record-modal) > .fi-modal-window-ctn > .fi-modal-window,
 .fi-modal-window.owwa-record-modal.owwa-acquisition-paperwork-modal,
 .fi-modal-window.owwa-record-modal.owwa-po-modal,
 .fi-modal-window.owwa-view-record-modal {
@@ -9915,6 +9930,8 @@ body.owwa-busy-active .fi-topbar a {
     align-self: center !important;
 }
 
+.fi-modal:not(.fi-modal-slide-over).fi-modal-has-sticky-footer:has(.owwa-view-record-modal) > .fi-modal-window-ctn > .fi-modal-window > .fi-modal-header,
+.fi-modal:not(.fi-modal-slide-over).fi-modal-has-sticky-footer:has(.owwa-view-record-modal) > .fi-modal-window-ctn > .fi-modal-window > .fi-modal-footer,
 .fi-modal-window.owwa-record-modal.owwa-acquisition-paperwork-modal .fi-modal-header,
 .fi-modal-window.owwa-record-modal.owwa-po-modal .fi-modal-header,
 .fi-modal-window.owwa-view-record-modal .fi-modal-header,
@@ -9922,9 +9939,24 @@ body.owwa-busy-active .fi-topbar a {
 .fi-modal-window.owwa-record-modal.owwa-po-modal .fi-modal-footer,
 .fi-modal-window.owwa-view-record-modal .fi-modal-footer {
     flex: 0 0 auto !important;
+    flex-shrink: 0 !important;
     position: relative !important;
+    top: auto !important;
+    bottom: auto !important;
     pointer-events: auto;
     z-index: 30;
+}
+
+.fi-modal-window.owwa-view-record-modal .fi-modal-close-btn {
+    position: relative;
+    top: auto;
+    inset-inline: auto;
+    z-index: 31;
+    order: 2;
+    align-self: center;
+    margin-inline-start: auto;
+    flex-shrink: 0;
+    pointer-events: auto;
 }
 
 .fi-modal-window.owwa-record-modal.owwa-acquisition-paperwork-modal .fi-modal-content,
@@ -9994,7 +10026,7 @@ body.owwa-busy-active .fi-topbar a {
     box-shadow: none !important;
 }
 
-.fi-modal-window.owwa-record-modal .fi-modal-footer,
+.fi-modal-window.owwa-record-modal:not(.owwa-view-record-modal) .fi-modal-footer,
 .fi-modal-window.owwa-physical-count-modal .fi-modal-footer {
     position: sticky;
     bottom: 0;
@@ -10010,10 +10042,9 @@ body.owwa-busy-active .fi-topbar a {
     pointer-events: auto;
 }
 
-/* PO/PR/IAR/view: footer must stay in normal flow (override sticky above). */
+/* PO/PR/IAR: footer must stay in normal flow (override sticky above). */
 .fi-modal-window.owwa-record-modal.owwa-acquisition-paperwork-modal .fi-modal-footer,
-.fi-modal-window.owwa-record-modal.owwa-po-modal .fi-modal-footer,
-.fi-modal-window.owwa-view-record-modal .fi-modal-footer {
+.fi-modal-window.owwa-record-modal.owwa-po-modal .fi-modal-footer {
     position: relative !important;
     bottom: auto !important;
 }
@@ -13443,6 +13474,38 @@ body.owwa-busy-active .fi-topbar a {
 .dark .owwa-styled-datalist-option:focus {
     background: #1e3a8a;
     color: #eff6ff;
+}
+
+.owwa-did-you-mean {
+    font-size: 0.75rem;
+    line-height: 1rem;
+}
+
+.owwa-spell-suggestion {
+    border: 0;
+    padding: 0;
+    background: transparent;
+    color: #1d4ed8;
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+.owwa-spell-suggestion:hover,
+.owwa-spell-suggestion:focus {
+    color: #1e3a8a;
+    outline: none;
+}
+
+.dark .owwa-spell-suggestion {
+    color: #93c5fd;
+}
+
+.dark .owwa-spell-suggestion:hover,
+.dark .owwa-spell-suggestion:focus {
+    color: #dbeafe;
 }
 
 /* ═══════════════════════════════════════════════════════════

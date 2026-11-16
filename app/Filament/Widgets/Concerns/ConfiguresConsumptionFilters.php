@@ -101,6 +101,7 @@ trait ConfiguresConsumptionFilters
             Select::make('office_ids')
                 ->label('Offices')
                 ->multiple()
+                ->searchable(false)
                 ->options($officeOptions)
                 ->default([])
                 ->placeholder('All offices')
@@ -114,6 +115,7 @@ trait ConfiguresConsumptionFilters
             Select::make('department_ids')
                 ->label('Departments')
                 ->multiple()
+                ->searchable(false)
                 ->key(fn (): string => 'department_ids_'.$this->filterOptionsKey('office_ids'))
                 ->placeholder(function (): string {
                     $officeCount = count($this->filterIdList('office_ids'));

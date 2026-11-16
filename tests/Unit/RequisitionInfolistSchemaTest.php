@@ -30,12 +30,34 @@ class RequisitionInfolistSchemaTest extends TestCase
         $this->assertStringContainsString('filled(self::processedByName($record))', $source);
         $this->assertStringContainsString('filled(self::processedAtText($record))', $source);
         $this->assertStringContainsString('employeeAllocationGroups', $source);
+        $this->assertStringContainsString('employeeAllocationLinesForUser', $source);
         $this->assertStringContainsString('viewEmployeeAllocation_', $source);
         $this->assertStringContainsString('owwa-employee-allocation-row', $source);
         $this->assertStringContainsString('overlayParentActions()', $source);
+        $this->assertStringContainsString('catalogIdentifierForItem', $source);
         $this->assertStringNotContainsString("'View items'", $source);
         $this->assertStringContainsString('sortedRequestedItems', $source);
         $this->assertStringContainsString('sortLinesForDisplay', $source);
+
+        $endorsementIdentifier = self::methodSource($source, 'endorsementIdentifier');
+        $this->assertStringContainsString('catalogIdentifierForItem', $endorsementIdentifier);
+        $this->assertStringNotContainsString('identifierValue', $endorsementIdentifier);
+        $this->assertStringNotContainsString('issuances', $endorsementIdentifier);
+
+        $groups = self::methodSource($source, 'employeeAllocationGroups');
+        $this->assertStringNotContainsString('endorsementLineState', $groups);
+        $this->assertStringContainsString("'line_count'", $groups);
+    }
+
+    protected static function methodSource(string $source, string $method): string
+    {
+        if (preg_match('/function '.$method.'\b.*?\n    (?:protected|public|private) static function /s', $source, $match) !== 1) {
+            if (preg_match('/function '.$method.'\b.*?\n\}/s', $source, $match) !== 1) {
+                return '';
+            }
+        }
+
+        return $match[0];
     }
 
     public function test_requested_items_section_is_exposed_for_modal(): void

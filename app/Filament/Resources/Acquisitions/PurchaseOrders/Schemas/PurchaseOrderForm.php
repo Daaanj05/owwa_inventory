@@ -108,6 +108,7 @@ class PurchaseOrderForm
 
                     return $options;
                 })
+                ->placeholder('Select supplier')
                 ->searchable()
                 ->preload()
                 ->required()
@@ -135,6 +136,7 @@ class PurchaseOrderForm
             Select::make('mode_of_procurement')
                 ->label('Mode of procurement')
                 ->options(ModeOfProcurementOptions::options())
+                ->placeholder('Select mode of procurement')
                 ->required()
                 ->disabled(fn (?PurchaseOrder $record): bool => ! self::isEditable($record)),
             TextInput::make('supplier_tin')
@@ -162,15 +164,14 @@ class PurchaseOrderForm
                         ->mapWithKeys(fn (string $address): array => [$address => $address])
                         ->all();
                 })
-                ->searchable()
+                ->placeholder('Select supplier address')
                 ->required()
                 ->columnSpanFull()
                 ->disabled(fn (?PurchaseOrder $record): bool => ! self::isEditable($record)),
             Select::make('delivery_term')
                 ->label('Delivery term')
                 ->options(fn (Get $get): array => DeliveryTerm::optionsIncluding($get('delivery_term')))
-                ->searchable()
-                ->preload()
+                ->placeholder('Select delivery term')
                 ->disabled(fn (?PurchaseOrder $record): bool => ! self::isEditable($record)),
             DatePicker::make('date_of_delivery')
                 ->label('Date of delivery')
