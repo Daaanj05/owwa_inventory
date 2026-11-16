@@ -3,22 +3,28 @@
 namespace App\Filament\Resources\Requisitions\Schemas;
 
 use App\Filament\Resources\Acquisitions\AcquisitionResource;
+use App\Filament\Support\OwwaFormModalDefaults;
 use App\Models\Requisition;
 use App\Models\RequisitionItem;
+use App\Models\RequisitionSourceEndorsement;
 use App\Services\RequisitionFulfillmentService;
 use App\Services\RequisitionStockSnapshotService;
 use App\Support\EmployeeRequisitionOriginalSubmission;
 use App\Support\EmployeeRequisitionStatus;
+use App\Support\InventoryCategoryOptions;
 use App\Support\OwwaReferenceLabels;
 use App\Support\RequisitionLineDisplay;
 use App\Support\RequisitionLineFulfillmentState;
 use App\Support\RequisitionStatus;
+use Filament\Actions\Action;
 use Filament\Facades\Filament;
 use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\RepeatableEntry\TableColumn;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Components\Section;
+use Filament\Support\Enums\FontWeight;
 use Illuminate\Contracts\Support\Htmlable;
+use Illuminate\Support\Collection;
 use Illuminate\Support\HtmlString;
 
 class RequisitionInfolistSchema
@@ -208,31 +214,13 @@ class RequisitionInfolistSchema
             TextEntry::make('approvedBy.name')
                 ->label('Processed by')
                 ->placeholder('—')
-                ->state(function (Requisition $record): ?string {
-                    if ($record->approved_at === null || $record->created_at === null) {
-                        return $record->approvedBy?->name;
-                    }
-
-                    if ($record->approved_at->lt($record->created_at)) {
-                        return null;
-                    }
-
-                    return $record->approvedBy?->name;
-                }),
+                ->state(fn (Requisition $record): ?string => self::processedByName($record))
+                ->visible(fn (Requisition $record): bool => filled(self::processedByName($record))),
             TextEntry::make('approved_at')
                 ->label('Date processed')
                 ->placeholder('—')
-                ->state(function (Requisition $record): ?string {
-                    if ($record->approved_at === null) {
-                        return null;
-                    }
-
-                    if ($record->created_at !== null && $record->approved_at->lt($record->created_at)) {
-                        return null;
-                    }
-
-                    return $record->approved_at->format('M d, Y h:i A');
-                }),
+                ->state(fn (Requisition $record): ?string => self::processedAtText($record))
+                ->visible(fn (Requisition $record): bool => filled(self::processedAtText($record))),
             TextEntry::make('original_purpose')
                 ->label('Original purpose (at submit)')
                 ->state(fn (Requisition $record): ?string => EmployeeRequisitionOriginalSubmission::originalPurpose($record))
@@ -255,6 +243,32 @@ class RequisitionInfolistSchema
                 ->columnSpanFull()
                 ->visible(fn (Requisition $record): bool => $record->status === Requisition::STATUS_REJECTED),
         ];
+    }
+
+    protected static function processedByName(Requisition $record): ?string
+    {
+        if ($record->approved_at === null || $record->created_at === null) {
+            return $record->approvedBy?->name;
+        }
+
+        if ($record->approved_at->lt($record->created_at)) {
+            return null;
+        }
+
+        return $record->approvedBy?->name;
+    }
+
+    protected static function processedAtText(Requisition $record): ?string
+    {
+        if ($record->approved_at === null) {
+            return null;
+        }
+
+        if ($record->created_at !== null && $record->approved_at->lt($record->created_at)) {
+            return null;
+        }
+
+        return $record->approved_at->format('M d, Y h:i A');
     }
 
     public static function requestedItemsSection(): Section
@@ -319,34 +333,81 @@ class RequisitionInfolistSchema
     protected static function employeeAllocationsSection(): Section
     {
         return Section::make('Employee allocations')
-            ->description('Per-employee breakdown of endorsed quantities on this consolidated RIS.')
+            ->description('Open an employee to see their endorsed lines. The requisition view stays open underneath.')
             ->visible(fn (Requisition $record): bool => ! $record->isEmployeeRequest()
                 && $record->sourceEndorsements()->exists())
             ->schema([
-                RepeatableEntry::make('sourceEndorsements')
+                RepeatableEntry::make('employee_allocation_groups')
                     ->hiddenLabel()
+                    ->extraAttributes(['class' => 'owwa-requisition-items-table'])
+                    ->getStateUsing(fn (Requisition $record): array => self::employeeAllocationGroups($record))
                     ->table([
                         TableColumn::make('Employee'),
-                        TableColumn::make(OwwaReferenceLabels::TRANSACTION_NO),
                         TableColumn::make('Department'),
+                        TableColumn::make('Lines'),
+                    ])
+                    ->schema([
+                        TextEntry::make('employee_name')
+                            ->label('Employee')
+                            ->placeholder('—')
+                            ->weight(FontWeight::SemiBold)
+                            ->color('primary')
+                            ->suffixAction(self::viewEmployeeAllocationAction()),
+                        TextEntry::make('department_name')
+                            ->label('Department')
+                            ->placeholder('—'),
+                        TextEntry::make('line_count')
+                            ->label('Lines'),
+                    ]),
+            ]);
+    }
+
+    protected static function viewEmployeeAllocationAction(): Action
+    {
+        return Action::make('viewEmployeeAllocation')
+            ->label('View items')
+            ->link()
+            ->color('primary')
+            ->overlayParentActions()
+            ->modalHeading(fn (array $schemaState): string => ($schemaState['employee_name'] ?? 'Employee').' — endorsed items')
+            ->modalWidth(OwwaFormModalDefaults::WIDTH_WIDE)
+            ->extraModalWindowAttributes(['class' => OwwaFormModalDefaults::MODAL_WINDOW_CLASS], merge: true)
+            ->closeModalByClickingAway(false)
+            ->closeModalByEscaping(false)
+            ->modalSubmitAction(false)
+            ->modalCancelActionLabel('Close')
+            ->schema(fn (array $schemaState): array => [
+                RepeatableEntry::make('lines')
+                    ->hiddenLabel()
+                    ->extraAttributes(['class' => 'owwa-requisition-items-table'])
+                    ->getStateUsing(fn (): array => $schemaState['lines'] ?? [])
+                    ->table([
+                        TableColumn::make(OwwaReferenceLabels::TRANSACTION_NO),
+                        TableColumn::make('Category'),
                         TableColumn::make('Item'),
+                        TableColumn::make(OwwaReferenceLabels::STOCK_NO),
                         TableColumn::make('Requested'),
                         TableColumn::make('Endorsed'),
                         TableColumn::make('Source purpose'),
                         TableColumn::make('Endorsement note'),
                     ])
                     ->schema([
-                        TextEntry::make('requestedBy.name')->label('Employee')->placeholder('—'),
-                        TextEntry::make('sourceRequisition.transaction_number')
+                        TextEntry::make('transaction_number')
                             ->label(OwwaReferenceLabels::employeeRequisitionTransaction())
                             ->placeholder('—'),
-                        TextEntry::make('sourceRequisition.department.name')
-                            ->label('Department')
+                        TextEntry::make('category_name')
+                            ->label('Category')
+                            ->badge()
                             ->placeholder('—'),
-                        TextEntry::make('item.name')->label('Item')->placeholder('—'),
+                        TextEntry::make('item_name')
+                            ->label('Item')
+                            ->placeholder('—'),
+                        TextEntry::make('identifier')
+                            ->label(OwwaReferenceLabels::STOCK_NO)
+                            ->placeholder('—'),
                         TextEntry::make('requested_quantity')->label('Requested'),
                         TextEntry::make('endorsed_quantity')->label('Endorsed'),
-                        TextEntry::make('sourceRequisition.purpose')
+                        TextEntry::make('purpose')
                             ->label('Source purpose')
                             ->placeholder('—'),
                         TextEntry::make('employee_remarks')
@@ -356,11 +417,112 @@ class RequisitionInfolistSchema
             ]);
     }
 
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    public static function employeeAllocationGroups(Requisition $record): array
+    {
+        $record->loadMissing([
+            'sourceEndorsements.requestedBy',
+            'sourceEndorsements.sourceRequisition.department',
+            'sourceEndorsements.item.category',
+            'sourceEndorsements.requisitionItem.item.category',
+            'sourceEndorsements.requisitionItem.requisition',
+        ]);
+
+        return $record->sourceEndorsements
+            ->groupBy(fn (RequisitionSourceEndorsement $endorsement): int => (int) ($endorsement->requested_by_user_id ?? 0))
+            ->map(function (Collection $lines): array {
+                /** @var RequisitionSourceEndorsement|null $first */
+                $first = $lines->first();
+                $sortedLines = self::sortEndorsementLinesForDisplay($lines);
+
+                return [
+                    'employee_user_id' => (int) ($first?->requested_by_user_id ?? 0),
+                    'employee_name' => $first?->requestedBy?->name ?? '—',
+                    'department_name' => $first?->sourceRequisition?->department?->name ?? '—',
+                    'line_count' => $sortedLines->count(),
+                    'lines' => $sortedLines
+                        ->map(fn (RequisitionSourceEndorsement $endorsement): array => self::endorsementLineState($endorsement))
+                        ->values()
+                        ->all(),
+                ];
+            })
+            ->sortBy(fn (array $group): string => mb_strtolower((string) $group['employee_name']), SORT_NATURAL)
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @param  Collection<int, RequisitionSourceEndorsement>  $lines
+     * @return Collection<int, RequisitionSourceEndorsement>
+     */
+    protected static function sortEndorsementLinesForDisplay(Collection $lines): Collection
+    {
+        return $lines
+            ->sort(function (RequisitionSourceEndorsement $left, RequisitionSourceEndorsement $right): int {
+                $left->loadMissing(['item.category', 'requisitionItem.item.category', 'requisitionItem.requisition']);
+                $right->loadMissing(['item.category', 'requisitionItem.item.category', 'requisitionItem.requisition']);
+
+                $categoryCompare = InventoryCategoryOptions::sortRankForCategory($left->item?->category)
+                    <=> InventoryCategoryOptions::sortRankForCategory($right->item?->category);
+
+                if ($categoryCompare !== 0) {
+                    return $categoryCompare;
+                }
+
+                $nameCompare = strcasecmp((string) ($left->item?->name ?? ''), (string) ($right->item?->name ?? ''));
+
+                if ($nameCompare !== 0) {
+                    return $nameCompare;
+                }
+
+                return RequisitionLineDisplay::compareStockNumberKeys(
+                    self::endorsementIdentifier($left),
+                    self::endorsementIdentifier($right),
+                );
+            })
+            ->values();
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected static function endorsementLineState(RequisitionSourceEndorsement $endorsement): array
+    {
+        return [
+            'transaction_number' => $endorsement->sourceRequisition?->transaction_number,
+            'category_name' => $endorsement->item?->category?->name,
+            'item_name' => $endorsement->item?->name,
+            'identifier' => self::endorsementIdentifier($endorsement),
+            'requested_quantity' => $endorsement->requested_quantity,
+            'endorsed_quantity' => $endorsement->endorsed_quantity,
+            'purpose' => $endorsement->sourceRequisition?->purpose,
+            'employee_remarks' => $endorsement->employee_remarks,
+        ];
+    }
+
+    protected static function endorsementIdentifier(RequisitionSourceEndorsement $endorsement): ?string
+    {
+        if ($endorsement->requisitionItem instanceof RequisitionItem) {
+            return RequisitionLineDisplay::identifierValue($endorsement->requisitionItem);
+        }
+
+        $endorsement->loadMissing('item.category');
+
+        return OwwaReferenceLabels::assetIdentifierValue(
+            $endorsement->item?->category?->getTemplateSlug(),
+            null,
+            $endorsement->item?->item_code,
+        );
+    }
+
     protected static function employeeRequestedItemsRepeatable(): RepeatableEntry
     {
         return RepeatableEntry::make('items')
             ->hiddenLabel()
             ->visible(fn (Requisition $record): bool => $record->isEmployeeRequest())
+            ->getStateUsing(fn (Requisition $record): array => self::sortedRequestedItems($record))
             ->table(fn (Requisition $record): array => $record->endorsed_at !== null
                 ? [
                     TableColumn::make('Category'),
@@ -433,6 +595,7 @@ class RequisitionInfolistSchema
             ->hiddenLabel()
             ->visible(fn (Requisition $record): bool => ! $record->isEmployeeRequest())
             ->extraAttributes(['class' => 'owwa-requisition-items-table'])
+            ->getStateUsing(fn (Requisition $record): array => self::sortedRequestedItems($record))
             ->table(fn (Requisition $record): array => [
                 TableColumn::make('Category'),
                 TableColumn::make('Item'),
@@ -449,6 +612,16 @@ class RequisitionInfolistSchema
                 includeIssued: true,
                 includeRemaining: true,
             ));
+    }
+
+    /**
+     * @return array<int, RequisitionItem>
+     */
+    protected static function sortedRequestedItems(Requisition $record): array
+    {
+        $record->loadMissing('items.item.category');
+
+        return RequisitionLineDisplay::sortLinesForDisplay($record->items)->all();
     }
 
     protected static function identifierHeaderForRequisition(Requisition $record): string

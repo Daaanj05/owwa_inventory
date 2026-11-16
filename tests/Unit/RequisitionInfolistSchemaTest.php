@@ -27,6 +27,13 @@ class RequisitionInfolistSchemaTest extends TestCase
         $this->assertStringNotContainsString("TableColumn::make('Fulfillment')", $source);
         $this->assertStringContainsString("'Processed by'", $source);
         $this->assertStringContainsString("'Date processed'", $source);
+        $this->assertStringContainsString('filled(self::processedByName($record))', $source);
+        $this->assertStringContainsString('filled(self::processedAtText($record))', $source);
+        $this->assertStringContainsString('employee_allocation_groups', $source);
+        $this->assertStringContainsString('viewEmployeeAllocation', $source);
+        $this->assertStringContainsString('overlayParentActions()', $source);
+        $this->assertStringContainsString('sortedRequestedItems', $source);
+        $this->assertStringContainsString('sortLinesForDisplay', $source);
     }
 
     public function test_requested_items_section_is_exposed_for_modal(): void
@@ -38,6 +45,7 @@ class RequisitionInfolistSchemaTest extends TestCase
 
         $this->assertContains('Requested items', $headings);
         $this->assertContains('Printed RIS signatories', $headings);
+        $this->assertContains('Employee allocations', $headings);
         $this->assertNotContains('Email notifications', $headings);
     }
 }

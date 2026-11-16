@@ -136,6 +136,75 @@ class RequisitionLineDisplay
     }
 
     /**
+     * View-only order: category (Consumables → Semi-Expendable → PPE), item name A–Z,
+     * then stock/property number by year and sequence ascending.
+     *
+     * @param  Collection<int, RequisitionItem>  $lines
+     * @return Collection<int, RequisitionItem>
+     */
+    public static function sortLinesForDisplay(Collection $lines): Collection
+    {
+        return $lines
+            ->sort(function (RequisitionItem $left, RequisitionItem $right): int {
+                $left->loadMissing('item.category');
+                $right->loadMissing('item.category');
+
+                $categoryCompare = InventoryCategoryOptions::sortRankForCategory($left->item?->category)
+                    <=> InventoryCategoryOptions::sortRankForCategory($right->item?->category);
+
+                if ($categoryCompare !== 0) {
+                    return $categoryCompare;
+                }
+
+                $nameCompare = strcasecmp((string) ($left->item?->name ?? ''), (string) ($right->item?->name ?? ''));
+
+                if ($nameCompare !== 0) {
+                    return $nameCompare;
+                }
+
+                return self::compareStockNumberKeys(
+                    self::identifierValue($left),
+                    self::identifierValue($right),
+                );
+            })
+            ->values();
+    }
+
+    /**
+     * @return array{0: int, 1: int, 2: string}
+     */
+    public static function stockNumberSortKey(?string $identifier): array
+    {
+        $value = trim((string) $identifier);
+
+        if ($value === '') {
+            return [PHP_INT_MAX, PHP_INT_MAX, ''];
+        }
+
+        if (preg_match('/(\d{4})/', $value, $yearMatch, PREG_OFFSET_CAPTURE) !== 1) {
+            return [PHP_INT_MAX, PHP_INT_MAX, $value];
+        }
+
+        $year = (int) $yearMatch[1][0];
+        $afterYear = substr($value, ((int) $yearMatch[1][1]) + 4);
+        $sequence = PHP_INT_MAX;
+
+        if (preg_match('/(\d+)/', $afterYear, $sequenceMatch) === 1) {
+            $sequence = (int) $sequenceMatch[1];
+        }
+
+        return [$year, $sequence, $value];
+    }
+
+    public static function compareStockNumberKeys(?string $left, ?string $right): int
+    {
+        $leftKey = self::stockNumberSortKey($left);
+        $rightKey = self::stockNumberSortKey($right);
+
+        return $leftKey <=> $rightKey;
+    }
+
+    /**
      * @param  array<string, int>  $categoryCounts
      */
     public static function formatIssuanceCategorySummary(int $created, array $categoryCounts): string
