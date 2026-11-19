@@ -28,11 +28,14 @@ class AiProcurementSummaryRestore
 
     public static function remember(int $userId, int $runId): void
     {
-        if (self::hasBeenShown($userId, $runId)) {
-            return;
-        }
+        Cache::put(self::cacheKey($userId), $runId, now()->addDays(7));
+    }
 
-        Cache::put(self::cacheKey($userId), $runId, now()->addDay());
+    public static function active(int $userId): ?int
+    {
+        $runId = Cache::get(self::cacheKey($userId));
+
+        return is_numeric($runId) ? (int) $runId : null;
     }
 
     public static function pull(int $userId): ?int

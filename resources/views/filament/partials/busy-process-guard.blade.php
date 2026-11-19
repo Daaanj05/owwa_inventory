@@ -127,6 +127,8 @@
                 aiClearTimer: null,
                 expectedToken: null,
                 suppressBusySync: false,
+                expectingAiStart: false,
+                expectingAiStartTimer: null,
                 allowUnload: false,
                 init() {
                     if (this.allowMinimize) {
@@ -198,10 +200,36 @@
                         this.aiClearTimer = null;
                     }
                 },
+                forceStartAiBusy(detail = {}) {
+                    this.cancelAiBusyClear();
+                    this.suppressBusySync = false;
+                    this.expectingAiStart = true;
+                    if (this.expectingAiStartTimer) {
+                        clearTimeout(this.expectingAiStartTimer);
+                    }
+                    this.expectingAiStartTimer = setTimeout(() => {
+                        this.expectingAiStart = false;
+                        this.expectingAiStartTimer = null;
+                        if (this.busy && ! this.isAiStillProcessing()) {
+                            this.scheduleAiBusyClear();
+                        }
+                    }, 20000);
+                    document.getElementById('procurement-summary')?.classList.remove('owwa-pa-summary-awaiting-reveal');
+                    this.minimized = false;
+                    window.__owwaAiBusyMinimized = false;
+                    this.busy = true;
+                    this.title = detail.title || config.defaultTitle || this.title || 'Generating recommendation…';
+                    this.message = detail.message || config.defaultMessage || this.message || '';
+                    this.syncBusyActiveClass();
+                },
                 scheduleAiBusyClear() {
                     this.cancelAiBusyClear();
 
                     if (this.suppressBusySync) {
+                        return;
+                    }
+
+                    if (this.expectingAiStart) {
                         return;
                     }
 
@@ -367,6 +395,7 @@
                     }
 
                     if (stillProcessing && onAnalytics) {
+                        this.expectingAiStart = false;
                         this.cancelAiBusyClear();
                         document.getElementById('procurement-summary')?.classList.remove('owwa-pa-summary-awaiting-reveal');
 
@@ -377,6 +406,7 @@
                         this.busy = true;
                         this.title = config.defaultTitle || this.title;
                         this.message = config.defaultMessage || this.message;
+                        this.syncBusyActiveClass();
                     } else if (this.busy) {
                         this.scheduleAiBusyClear();
                     }
@@ -653,13 +683,23 @@
             }
         });
 
+        window.addEventListener('owwa-ai-busy-force-start', (event) => {
+            const instance = window.__owwaAiBusyGuardInstance;
+            if (! instance || ! instance.allowMinimize || typeof instance.forceStartAiBusy !== 'function') {
+                return;
+            }
+
+            instance.forceStartAiBusy(event.detail || {});
+        });
+
         /**
          * Hide the AI busy modal first, then show the completion toast so they feel simultaneous.
          * detail: { title, body, danger?, seconds?, actionLabel?, actionUrl? }
          */
         window.owwaAnnounceAiRecommendationDone = function (detail = {}) {
+            const silent = Boolean(detail.silent);
             const showToast = () => {
-                if (typeof window.FilamentNotification !== 'function') {
+                if (silent || typeof window.FilamentNotification !== 'function') {
                     return;
                 }
 
@@ -689,14 +729,33 @@
                 notification.send();
             };
 
-            const guard = window.__owwaAiBusyGuardInstance;
-            if (guard && guard.allowMinimize && guard.busy) {
+            const clearGuard = () => {
+                const guard = window.__owwaAiBusyGuardInstance;
+                if (! guard) {
+                    return false;
+                }
+
+                guard.expectingAiStart = false;
+                if (guard.expectingAiStartTimer) {
+                    clearTimeout(guard.expectingAiStartTimer);
+                    guard.expectingAiStartTimer = null;
+                }
                 guard.cancelAiBusyClear?.();
                 document.getElementById('procurement-summary')?.classList.remove('owwa-pa-summary-awaiting-reveal');
-                guard.busy = false;
-                guard.minimized = false;
-                window.__owwaAiBusyMinimized = false;
-                guard.syncBusyActiveClass?.();
+
+                if (guard.allowMinimize && guard.busy) {
+                    guard.busy = false;
+                    guard.minimized = false;
+                    window.__owwaAiBusyMinimized = false;
+                    guard.syncBusyActiveClass?.();
+
+                    return true;
+                }
+
+                return false;
+            };
+
+            if (clearGuard()) {
                 requestAnimationFrame(() => setTimeout(showToast, 40));
 
                 return;

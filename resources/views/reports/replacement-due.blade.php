@@ -24,7 +24,6 @@
                 <th>EUL</th>
                 <th>Expires</th>
                 <th>Status</th>
-                <th>Action</th>
             </tr>
         </thead>
         <tbody>
@@ -36,11 +35,10 @@
                     <td>{{ $row->estimated_useful_life ?? '—' }}</td>
                     <td>{{ $row->eul_expires_at ?? '—' }}</td>
                     <td>{{ $row->status_label }}</td>
-                    <td>{{ $row->action_label ?? 'Awaiting review' }}</td>
                 </tr>
             @empty
                 <tr>
-                    <td colspan="7">No semi-expendable units are due for replacement review.</td>
+                    <td colspan="6">No semi-expendable units are due for replacement review.</td>
                 </tr>
             @endforelse
         </tbody>

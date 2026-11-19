@@ -31,6 +31,13 @@ class InventoryStockService
      */
     protected static ?array $movementTotalsMaps = null;
 
+    /**
+     * Active and legacy restock totals keyed by "{item_id}_{office_id}".
+     *
+     * @var array<string, array{active: int, legacy: int}>|null
+     */
+    protected static ?array $itemOfficeStockTotals = null;
+
     /** @var array<int, bool>|null */
     protected static ?array $propertyTrackedItemIds = null;
 
@@ -241,6 +248,7 @@ class InventoryStockService
     public function forgetMovementTotalsCache(): void
     {
         self::$movementTotalsMaps = null;
+        self::$itemOfficeStockTotals = null;
         self::$propertyTrackedItemIds = null;
         $this->bumpStockSummaryCacheVersion();
     }
@@ -420,28 +428,7 @@ class InventoryStockService
      */
     public function getActiveRestockStock(int $itemId, int $officeId): int
     {
-        $maps = $this->getMovementTotalsMaps();
-        $prefix = "{$itemId}_{$officeId}_";
-        $total = 0;
-
-        foreach ($this->positionKeysFromMaps($maps) as $key) {
-            if (! str_starts_with($key, $prefix)) {
-                continue;
-            }
-
-            $parsed = UnitCostKey::parsePositionKey($key);
-            if ($parsed === null) {
-                continue;
-            }
-
-            if (StockPositionRestockFlag::isInactiveForRestock($itemId, $officeId, $parsed['unit_cost'])) {
-                continue;
-            }
-
-            $total += $this->calculateStockFromMaps($key, $maps);
-        }
-
-        return $total;
+        return $this->getRestockStockPair($itemId, $officeId)['active'];
     }
 
     /**
@@ -449,28 +436,103 @@ class InventoryStockService
      */
     public function getLegacyOnHandStock(int $itemId, int $officeId): int
     {
+        return $this->getRestockStockPair($itemId, $officeId)['legacy'];
+    }
+
+    /**
+     * Active and legacy stock for one item at one office, from a request-scoped index.
+     *
+     * @return array{active: int, legacy: int}
+     */
+    public function getRestockStockPair(int $itemId, int $officeId): array
+    {
+        $totals = $this->itemOfficeStockTotals()["{$itemId}_{$officeId}"] ?? null;
+
+        return [
+            'active' => (int) ($totals['active'] ?? 0),
+            'legacy' => (int) ($totals['legacy'] ?? 0),
+        ];
+    }
+
+    /**
+     * @return array<string, array{active: int, legacy: int}>
+     */
+    protected function itemOfficeStockTotals(): array
+    {
+        if (self::$itemOfficeStockTotals !== null) {
+            return self::$itemOfficeStockTotals;
+        }
+
         $maps = $this->getMovementTotalsMaps();
-        $prefix = "{$itemId}_{$officeId}_";
-        $total = 0;
+        $keys = $this->positionKeysFromMaps($maps);
+        $inactiveKeys = $this->inactiveRestockPositionKeys($keys);
 
-        foreach ($this->positionKeysFromMaps($maps) as $key) {
-            if (! str_starts_with($key, $prefix)) {
-                continue;
-            }
+        $totals = [];
 
+        foreach ($keys as $key) {
             $parsed = UnitCostKey::parsePositionKey($key);
             if ($parsed === null) {
                 continue;
             }
 
-            if (! StockPositionRestockFlag::isInactiveForRestock($itemId, $officeId, $parsed['unit_cost'])) {
+            $poolKey = $parsed['item_id'].'_'.$parsed['office_id'];
+            if (! isset($totals[$poolKey])) {
+                $totals[$poolKey] = ['active' => 0, 'legacy' => 0];
+            }
+
+            $qty = $this->calculateStockFromMaps($key, $maps);
+            if ($qty === 0) {
                 continue;
             }
 
-            $total += $this->calculateStockFromMaps($key, $maps);
+            if (isset($inactiveKeys[$key])) {
+                $totals[$poolKey]['legacy'] += $qty;
+            } else {
+                $totals[$poolKey]['active'] += $qty;
+            }
         }
 
-        return $total;
+        return self::$itemOfficeStockTotals = $totals;
+    }
+
+    /**
+     * @param  array<int, string>  $positionKeys
+     * @return array<string, true>
+     */
+    protected function inactiveRestockPositionKeys(array $positionKeys): array
+    {
+        if ($positionKeys === []) {
+            return [];
+        }
+
+        $itemIds = [];
+        foreach ($positionKeys as $key) {
+            $parsed = UnitCostKey::parsePositionKey($key);
+            if ($parsed !== null) {
+                $itemIds[$parsed['item_id']] = true;
+            }
+        }
+
+        if ($itemIds === []) {
+            return [];
+        }
+
+        $inactive = [];
+
+        StockPositionRestockFlag::query()
+            ->whereIn('item_id', array_keys($itemIds))
+            ->where('is_inactive_for_restock', true)
+            ->get(['item_id', 'office_id', 'unit_cost'])
+            ->each(function (StockPositionRestockFlag $flag) use (&$inactive): void {
+                $key = UnitCostKey::positionKey(
+                    (int) $flag->item_id,
+                    (int) $flag->office_id,
+                    $flag->unit_cost !== null ? (float) $flag->unit_cost : null,
+                );
+                $inactive[$key] = true;
+            });
+
+        return $inactive;
     }
 
     /**

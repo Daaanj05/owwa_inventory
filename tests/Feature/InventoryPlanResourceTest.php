@@ -7,6 +7,7 @@ use App\Filament\Resources\PhysicalInventoryPlans\Pages\ListPhysicalInventoryPla
 use App\Filament\Resources\PhysicalInventoryPlans\PhysicalInventoryPlanResource;
 use App\Models\ItemCategory;
 use App\Models\Office;
+use App\Models\PhysicalCountSession;
 use App\Models\PhysicalInventoryPlan;
 use App\Models\PhysicalInventoryPlanLine;
 use App\Models\User;
@@ -24,11 +25,13 @@ class InventoryPlanResourceTest extends TestCase
     {
         Filament::setCurrentPanel(Filament::getPanel('admin'));
 
-        $office = Office::factory()->create();
+        $officeA = Office::factory()->create(['name' => 'Office A']);
+        $officeB = Office::factory()->create(['name' => 'Office B']);
         $category = ItemCategory::factory()->create(['name' => 'Consumables']);
         $custodian = User::factory()->create([
             'role' => User::ROLE_SUPPLY_CUSTODIAN,
-            'office_id' => $office->id,
+            'office_id' => $officeA->id,
+            'name' => 'SC Preparer',
         ]);
 
         $cutOff = now()->addMonth()->toDateString();
@@ -40,7 +43,7 @@ class InventoryPlanResourceTest extends TestCase
         $livewire = Livewire::test(ListPhysicalInventoryPlans::class)
             ->mountAction(TestAction::make('create'));
 
-        $lineKey = array_key_first($livewire->get('mountedActions')[0]['data']['lines'] ?? []);
+        $slotKey = array_key_first($livewire->get('mountedActions')[0]['data']['schedule_slots'] ?? []);
 
         $livewire
             ->fillForm([
@@ -48,9 +51,8 @@ class InventoryPlanResourceTest extends TestCase
                 'period_label' => 'FY 2026',
                 'cut_off_date' => $cutOff,
                 'item_category_id' => $category->id,
-                'lines' => [
-                    $lineKey => [
-                        'office_id' => $office->id,
+                'schedule_slots' => [
+                    $slotKey => [
                         'item_category_id' => $category->id,
                         'planned_date' => $planned,
                     ],
@@ -63,15 +65,47 @@ class InventoryPlanResourceTest extends TestCase
         $this->assertDatabaseHas(PhysicalInventoryPlan::class, [
             'title' => 'Year-end inventory FY 2026',
             'status' => PhysicalInventoryPlan::STATUS_DRAFT,
+            'recorded_by' => $custodian->id,
         ]);
 
         $plan = PhysicalInventoryPlan::query()->where('title', 'Year-end inventory FY 2026')->first();
         $this->assertNotNull($plan);
         $this->assertDatabaseHas(PhysicalInventoryPlanLine::class, [
             'physical_inventory_plan_id' => $plan->id,
-            'office_id' => $office->id,
+            'office_id' => $officeA->id,
             'item_category_id' => $category->id,
         ]);
+        $this->assertDatabaseHas(PhysicalInventoryPlanLine::class, [
+            'physical_inventory_plan_id' => $plan->id,
+            'office_id' => $officeB->id,
+            'item_category_id' => $category->id,
+        ]);
+        $this->assertSame(2, $plan->lines()->count());
+    }
+
+    public function test_draft_schedule_stays_editable_until_count_starts(): void
+    {
+        $plan = PhysicalInventoryPlan::factory()->create([
+            'status' => PhysicalInventoryPlan::STATUS_DRAFT,
+        ]);
+
+        PhysicalInventoryPlanLine::factory()->create([
+            'physical_inventory_plan_id' => $plan->id,
+            'planned_date' => now()->addWeek()->toDateString(),
+        ]);
+
+        $this->assertTrue($plan->fresh()->isEditable());
+
+        $session = PhysicalCountSession::query()->create([
+            'count_type' => PhysicalCountSession::TYPE_RPCI,
+            'office_id' => $plan->lines()->first()->office_id,
+            'item_category_id' => $plan->lines()->first()->item_category_id,
+            'count_date' => now()->addWeek(),
+        ]);
+
+        $plan->lines()->first()->update(['physical_count_session_id' => $session->id]);
+
+        $this->assertFalse($plan->fresh()->isEditable());
     }
 
     public function test_start_count_action_links_session_and_redirects(): void
@@ -85,8 +119,9 @@ class InventoryPlanResourceTest extends TestCase
             'office_id' => $office->id,
         ]);
 
-        $plan = PhysicalInventoryPlan::factory()->approved()->create([
+        $plan = PhysicalInventoryPlan::factory()->create([
             'item_category_id' => $category->id,
+            'status' => PhysicalInventoryPlan::STATUS_DRAFT,
         ]);
 
         $line = PhysicalInventoryPlanLine::factory()->create([

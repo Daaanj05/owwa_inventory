@@ -130,8 +130,9 @@ class ProcurementDecisionSupportService
                 continue;
             }
 
-            $currentStock = $this->stockService->getActiveRestockStock($itemId, $officeId);
-            $legacyOnHand = $this->stockService->getLegacyOnHandStock($itemId, $officeId);
+            $stockPair = $this->stockService->getRestockStockPair($itemId, $officeId);
+            $currentStock = $stockPair['active'];
+            $legacyOnHand = $stockPair['legacy'];
             $monthsCover = $currentStock > 0 ? ($currentStock / $forecastMonthly) : 0.0;
             $suggested = $this->resolveSuggestedReorderQty(
                 currentStock: $currentStock,

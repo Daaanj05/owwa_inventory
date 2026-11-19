@@ -21,6 +21,7 @@ class AiProcurementRunInfolist
                     TextEntry::make('summary')
                         ->hiddenLabel()
                         ->markdown()
+                        ->formatStateUsing(fn (?string $state, AiProcurementRun $record): string => AiProcurementRunViewPresenter::fullRecommendationNarrative($record))
                         ->placeholder('No recommendation text was saved for this run.')
                         ->columnSpanFull(),
                 ]),
@@ -28,7 +29,8 @@ class AiProcurementRunInfolist
                 ->schema([
                     SchemaView::make('filament.resources.ai-procurement-run-resource.partials.modal-items-table')
                         ->viewData(fn (AiProcurementRun $record): array => [
-                            'items' => AiProcurementRunViewPresenter::itemsForRecord($record),
+                            'consumableItems' => AiProcurementRunViewPresenter::consumableItemsForRecord($record),
+                            'replacementItems' => AiProcurementRunViewPresenter::replacementItemsForRecord($record),
                         ]),
                 ]),
         ];

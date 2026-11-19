@@ -194,6 +194,27 @@ class InventoryStockServiceTest extends TestCase
         $this->assertFalse($this->service->isLowStock($item, $office->id));
     }
 
+    public function test_restock_stock_pair_splits_active_and_legacy_totals(): void
+    {
+        $category = ItemCategory::factory()->create();
+        $item = Item::factory()->create(['item_category_id' => $category->id]);
+        $office = Office::factory()->create();
+        $user = \App\Models\User::factory()->create(['office_id' => $office->id]);
+
+        $this->createAcquisition($item->id, $office->id, 10, 50.0);
+        $this->createAcquisition($item->id, $office->id, 7, 100.0);
+
+        \App\Models\StockPositionRestockFlag::markInactive($item->id, $office->id, 100.0, $user->id);
+        $this->service->forgetMovementTotalsCache();
+
+        $pair = $this->service->getRestockStockPair($item->id, $office->id);
+
+        $this->assertSame(10, $pair['active']);
+        $this->assertSame(7, $pair['legacy']);
+        $this->assertSame(10, $this->service->getActiveRestockStock($item->id, $office->id));
+        $this->assertSame(7, $this->service->getLegacyOnHandStock($item->id, $office->id));
+    }
+
     protected function createAcquisition(int $itemId, int $officeId, int $quantity, ?float $unitCost = null): void
     {
         DB::table('acquisitions')->insert([

@@ -5,6 +5,7 @@ namespace App\Filament\Resources\PhysicalInventoryPlans\Actions;
 use App\Filament\Resources\PhysicalInventoryPlans\PhysicalInventoryPlanResource;
 use App\Filament\Support\OwwaFormModalDefaults;
 use App\Models\PhysicalInventoryPlan;
+use App\Services\InventoryPlanScheduleSyncService;
 use App\Services\InventoryPlanValidator;
 use Filament\Actions\Action;
 use Filament\Actions\EditAction;
@@ -17,38 +18,31 @@ class PhysicalInventoryPlanActions
     {
         return OwwaFormModalDefaults::editActionForResource(PhysicalInventoryPlanResource::class, OwwaFormModalDefaults::WIDTH_STANDARD)
             ->extraModalWindowAttributes(['class' => OwwaFormModalDefaults::MODAL_WINDOW_CLASS.' owwa-inventory-plan-modal'])
-            ->visible(fn (PhysicalInventoryPlan $record): bool => ! $record->isCompleted())
+            ->visible(fn (PhysicalInventoryPlan $record): bool => $record->isEditable())
+            ->mutateRecordDataUsing(function (array $data, PhysicalInventoryPlan $record): array {
+                $data['schedule_slots'] = app(InventoryPlanScheduleSyncService::class)->slotsFromPlan($record);
+
+                return $data;
+            })
             ->before(function (EditAction $action, PhysicalInventoryPlan $record): void {
                 $data = $action->getFormData();
+                $expanded = app(InventoryPlanScheduleSyncService::class)
+                    ->expandSlotsToLines($data['schedule_slots'] ?? []);
 
                 app(InventoryPlanValidator::class)->validateForSave(
                     array_merge($record->attributesToArray(), $data),
                     $record,
-                    $data['lines'] ?? [],
+                    $expanded,
                 );
-            });
-    }
+            })
+            ->using(function (PhysicalInventoryPlan $record, array $data): PhysicalInventoryPlan {
+                $slots = array_values($data['schedule_slots'] ?? []);
+                unset($data['schedule_slots'], $data['lines']);
 
-    public static function approveAction(): Action
-    {
-        return Action::make('approvePlan')
-            ->label('Approve schedule')
-            ->icon('heroicon-o-check-badge')
-            ->color('success')
-            ->requiresConfirmation()
-            ->visible(fn (PhysicalInventoryPlan $record): bool => $record->isDraft())
-            ->action(function (PhysicalInventoryPlan $record, Action $action): void {
-                $record->update([
-                    'status' => PhysicalInventoryPlan::STATUS_APPROVED,
-                    'approved_at' => now(),
-                ]);
+                $record->update($data);
+                app(InventoryPlanScheduleSyncService::class)->syncPlanLines($record, $slots);
 
-                Notification::make()
-                    ->title('Inventory Schedule approved')
-                    ->success()
-                    ->send();
-
-                $action->halt();
+                return $record->refresh();
             });
     }
 
@@ -59,7 +53,7 @@ class PhysicalInventoryPlanActions
             ->icon('heroicon-o-flag')
             ->color('primary')
             ->requiresConfirmation()
-            ->visible(fn (PhysicalInventoryPlan $record): bool => ! $record->isCompleted() && ! $record->isDraft())
+            ->visible(fn (PhysicalInventoryPlan $record): bool => $record->isInProgress())
             ->action(function (PhysicalInventoryPlan $record, Action $action): void {
                 try {
                     app(InventoryPlanValidator::class)->validateCanComplete($record);
@@ -83,8 +77,6 @@ class PhysicalInventoryPlanActions
                     ->title('Inventory Schedule completed')
                     ->success()
                     ->send();
-
-                $action->halt();
             });
     }
 
@@ -94,7 +86,6 @@ class PhysicalInventoryPlanActions
     public static function modalFooterActions(): array
     {
         return [
-            self::approveAction(),
             self::markCompletedAction(),
             self::editAction(),
         ];

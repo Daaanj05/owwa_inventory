@@ -26,15 +26,16 @@ class InventoryPlanStartCountServiceTest extends TestCase
             'office_id' => $office->id,
         ]);
 
-        $plan = PhysicalInventoryPlan::factory()->approved()->create([
+        $plan = PhysicalInventoryPlan::factory()->create([
             'item_category_id' => $category->id,
+            'status' => PhysicalInventoryPlan::STATUS_DRAFT,
         ]);
 
         $line = PhysicalInventoryPlanLine::factory()->create([
             'physical_inventory_plan_id' => $plan->id,
             'office_id' => $office->id,
             'item_category_id' => $category->id,
-            'planned_date' => '2026-06-30',
+            'planned_date' => now()->addWeek()->toDateString(),
         ]);
 
         $session = app(InventoryPlanStartCountService::class)->startCount($line, $custodian);
@@ -43,7 +44,7 @@ class InventoryPlanStartCountServiceTest extends TestCase
         $this->assertSame(PhysicalCountSession::TYPE_RPCPPE, $session->count_type);
         $this->assertSame($office->id, $session->office_id);
         $this->assertSame($category->id, $session->item_category_id);
-        $this->assertSame('2026-06-30', $session->count_date->toDateString());
+        $this->assertSame(now()->addWeek()->toDateString(), $session->count_date->toDateString());
         $this->assertSame($session->id, $line->fresh()->physical_count_session_id);
         $this->assertSame(PhysicalInventoryPlan::STATUS_IN_PROGRESS, $plan->fresh()->status);
     }
@@ -51,7 +52,9 @@ class InventoryPlanStartCountServiceTest extends TestCase
     public function test_rejects_second_start_on_same_line(): void
     {
         $custodian = User::factory()->create(['role' => User::ROLE_SUPPLY_CUSTODIAN]);
-        $line = PhysicalInventoryPlanLine::factory()->create();
+        $line = PhysicalInventoryPlanLine::factory()->create([
+            'planned_date' => now()->addWeek()->toDateString(),
+        ]);
 
         $session = PhysicalCountSession::query()->create([
             'count_type' => PhysicalCountSession::TYPE_RPCI,
@@ -65,5 +68,17 @@ class InventoryPlanStartCountServiceTest extends TestCase
         $this->expectException(ValidationException::class);
 
         app(InventoryPlanStartCountService::class)->startCount($line->fresh(), $custodian);
+    }
+
+    public function test_rejects_start_when_line_is_overdue(): void
+    {
+        $custodian = User::factory()->create(['role' => User::ROLE_SUPPLY_CUSTODIAN]);
+        $line = PhysicalInventoryPlanLine::factory()->create([
+            'planned_date' => now()->subDays(2)->toDateString(),
+        ]);
+
+        $this->expectException(ValidationException::class);
+
+        app(InventoryPlanStartCountService::class)->startCount($line, $custodian);
     }
 }

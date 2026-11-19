@@ -24,7 +24,7 @@ class SendInventoryPlanRemindersCommandTest extends TestCase
 
         $line = PhysicalInventoryPlanLine::factory()->create([
             'planned_date' => $today->toDateString(),
-            'physical_inventory_plan_id' => PhysicalInventoryPlan::factory()->approved()->create()->id,
+            'physical_inventory_plan_id' => PhysicalInventoryPlan::factory()->create()->id,
         ]);
 
         $custodian = User::factory()->create([
@@ -53,7 +53,7 @@ class SendInventoryPlanRemindersCommandTest extends TestCase
 
         $line = PhysicalInventoryPlanLine::factory()->create([
             'planned_date' => $today->toDateString(),
-            'physical_inventory_plan_id' => PhysicalInventoryPlan::factory()->approved()->create()->id,
+            'physical_inventory_plan_id' => PhysicalInventoryPlan::factory()->create()->id,
         ]);
 
         $matchingCustodian = User::factory()->create([

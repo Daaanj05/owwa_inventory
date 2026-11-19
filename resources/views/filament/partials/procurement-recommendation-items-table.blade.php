@@ -4,6 +4,11 @@
     $slides = array_values($slides ?? ['reorders']);
     $showArrows = count($slides) > 1;
     $positionLabel = $positionLabel ?? '';
+    $hasAiNarrative = (bool) ($hasAiNarrative ?? false);
+    $aiNarrativeUnavailable = (bool) ($aiNarrativeUnavailable ?? false);
+    $consumableNarrative = trim((string) ($consumableNarrative ?? ''));
+    $replacementNarrative = trim((string) ($replacementNarrative ?? ''));
+    $showDoneButton = (bool) ($showDoneButton ?? false);
 @endphp
 
 <div
@@ -42,7 +47,16 @@
         >
             @if(in_array('reorders', $slides, true))
             <section class="owwa-pa-slide-panel" data-slide="reorders">
-                <h3 class="owwa-pa-summary-slide-title">Consumables to buy</h3>
+                @if($hasAiNarrative && $consumableNarrative !== '')
+                    <div class="owwa-pr-ai-narrative owwa-pa-ai-narrative-body">
+                        {!! Str::markdown($this->formatAiNarrativeMarkdown($consumableNarrative)) !!}
+                    </div>
+                @elseif($aiNarrativeUnavailable && $consumableNarrative !== '')
+                    <div class="owwa-pr-ai-narrative owwa-pa-ai-narrative-body">
+                        <p>{{ $consumableNarrative }}</p>
+                    </div>
+                @endif
+                <h3 class="owwa-pa-summary-slide-title">Consumables to Buy</h3>
                 @if($reorderRows->isEmpty())
                     <p class="owwa-pa-summary-empty">No consumables to reorder in this filter.</p>
                 @else
@@ -59,7 +73,7 @@
                             </thead>
                             <tbody>
                                 @foreach($reorderRows as $row)
-                                    <tr class="{{ $row->priority === 'High' ? 'owwa-row-low' : 'owwa-row-ok' }}">
+                                    <tr class="{{ $row->priority === 'High' ? 'owwa-row-low' : 'owwa-row-medium' }}">
                                         <td>
                                             @if($row->priority === 'High')
                                                 <span class="owwa-status-badge owwa-status-low">High</span>
@@ -93,7 +107,16 @@
             @endif
             @if(in_array('replacement', $slides, true))
                 <section class="owwa-pa-slide-panel" data-slide="replacement">
-                    <h3 class="owwa-pa-summary-slide-title">Semi-expendable replacement</h3>
+                    @if($hasAiNarrative && $replacementNarrative !== '')
+                        <div class="owwa-pr-ai-narrative owwa-pa-ai-narrative-body">
+                            {!! Str::markdown($this->formatAiNarrativeMarkdown($replacementNarrative)) !!}
+                        </div>
+                    @elseif(($hasAiNarrative || $aiNarrativeUnavailable) && $replacementNarrative !== '')
+                        <div class="owwa-pr-ai-narrative owwa-pa-ai-narrative-body">
+                            <p>{{ $replacementNarrative }}</p>
+                        </div>
+                    @endif
+                    <h3 class="owwa-pa-summary-slide-title">Recommendation - Semi-Expendable</h3>
                     @if($replacementRows->isEmpty())
                         <p class="owwa-pa-summary-empty">No semi-expendable units are due for replacement review.</p>
                     @else
@@ -124,12 +147,30 @@
             @endif
         </div>
     </div>
-    @if($showArrows)
-        <div class="owwa-pa-slide-footer">
-            <div class="owwa-pa-slide-nav" role="group" aria-label="Switch recommendation list">
-                <button type="button" class="owwa-pa-slide-btn" aria-label="Previous recommendation list" x-on:click="shift(-1)">←</button>
-                <span class="owwa-pa-slide-label" x-text="(Math.max(0, order.indexOf(slide)) + 1) + ' of ' + order.length">{{ $positionLabel }}</span>
-                <button type="button" class="owwa-pa-slide-btn" aria-label="Next recommendation list" x-on:click="shift(1)">→</button>
+    @if($showArrows || $showDoneButton)
+        <div class="owwa-pa-slide-footer {{ $showDoneButton ? 'owwa-pa-slide-footer--with-done' : '' }}">
+            <div class="owwa-pa-slide-footer-start" aria-hidden="true"></div>
+            <div class="owwa-pa-slide-footer-center">
+                @if($showArrows)
+                    <div class="owwa-pa-slide-nav" role="group" aria-label="Switch recommendation list">
+                        <button type="button" class="owwa-pa-slide-btn" aria-label="Previous recommendation list" x-on:click="shift(-1)">←</button>
+                        <span class="owwa-pa-slide-label" x-text="(Math.max(0, order.indexOf(slide)) + 1) + ' of ' + order.length">{{ $positionLabel }}</span>
+                        <button type="button" class="owwa-pa-slide-btn" aria-label="Next recommendation list" x-on:click="shift(1)">→</button>
+                    </div>
+                @endif
+            </div>
+            <div class="owwa-pa-slide-footer-end">
+                @if($showDoneButton)
+                    <button
+                        type="button"
+                        wire:click="dismissRecommendation"
+                        wire:loading.attr="disabled"
+                        wire:target="dismissRecommendation"
+                        class="owwa-pa-generate-btn owwa-pa-generate-btn--secondary owwa-pa-done-btn"
+                    >
+                        Done
+                    </button>
+                @endif
             </div>
         </div>
     @endif

@@ -254,7 +254,6 @@ class ItemBulkCreateTest extends TestCase
                 ],
             ])
             ->assertHasActionErrors()
-            ->assertNotified('Unable to create items')
             ->tap(function ($component): void {
                 $this->assertTrue(
                     collect($component->errors())

@@ -18,9 +18,11 @@ class OwwaMailLogo
      * Inline logo for email. Real sends use Laravel's embed() (CID). Previews
      * fall back to a data URI (Gmail blocks data URIs on real sends).
      *
-     * prepareForGmail() then rebuilds the MIME body: Gmail shows a part as a
-     * download when it has a filename, and it drops the header image when a
-     * quoted-printable soft break splits the cid URL.
+     * prepareForGmail() then rebuilds the MIME body. Gmail shows a part as a
+     * download, and leaves the header blank, when the image sits beside
+     * multipart/alternative or the part has a filename. The HTML and the
+     * logos have to share one multipart/related part, and the cid URL cannot
+     * be split by a quoted-printable soft break.
      */
     public static function src(?object $message, string $key): string
     {
@@ -77,16 +79,15 @@ class OwwaMailLogo
     private static function body(string $html, mixed $text, array $inline, array $attached): AbstractPart
     {
         $htmlPart = new TextPart($html, 'utf-8', 'html', 'base64');
+        $related = new RelatedPart($htmlPart, $inline[0], ...array_slice($inline, 1));
         $main = is_string($text) && $text !== ''
-            ? new AlternativePart(new TextPart($text), $htmlPart)
-            : $htmlPart;
-
-        $related = new RelatedPart($main, $inline[0], ...array_slice($inline, 1));
+            ? new AlternativePart(new TextPart($text), $related)
+            : $related;
 
         if ($attached === []) {
-            return $related;
+            return $main;
         }
 
-        return new MixedPart($related, ...$attached);
+        return new MixedPart($main, ...$attached);
     }
 }

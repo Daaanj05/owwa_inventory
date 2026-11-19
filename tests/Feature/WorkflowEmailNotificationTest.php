@@ -221,7 +221,7 @@ class WorkflowEmailNotificationTest extends TestCase
         ]);
 
         $plan = PhysicalInventoryPlan::factory()->create([
-            'status' => PhysicalInventoryPlan::STATUS_APPROVED,
+            'status' => PhysicalInventoryPlan::STATUS_DRAFT,
             'title' => 'FY 2026 Count',
         ]);
         PhysicalInventoryPlanLine::factory()->create([

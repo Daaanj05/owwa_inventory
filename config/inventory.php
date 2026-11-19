@@ -161,6 +161,12 @@ return [
 
     'login_decay_seconds' => (int) env('LOGIN_DECAY_SECONDS', 60),
 
+    'login_ip_max_attempts' => (int) env('LOGIN_IP_MAX_ATTEMPTS', 20),
+
+    'login_ip_decay_seconds' => (int) env('LOGIN_IP_DECAY_SECONDS', 600),
+
+    'one_time_code_max_attempts' => (int) env('ONE_TIME_CODE_MAX_ATTEMPTS', 5),
+
     'trusted_device_days' => (int) env('TRUSTED_DEVICE_DAYS', 30),
 
     /*

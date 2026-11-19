@@ -2,28 +2,21 @@
 
 namespace App\Filament\Pages;
 
-use App\Filament\Resources\Issuances\Actions\IssuanceViewActions;
-use App\Filament\Support\OwwaFormModalDefaults;
 use App\Jobs\GenerateAiProcurementRecommendationJob;
 use App\Models\AiProcurementRun;
-use App\Models\Issuance;
 use App\Services\AiProcurementRecommendationService;
-use App\Services\InventoryStockService;
 use App\Services\OllamaClient;
 use App\Services\ProcurementDecisionSupportService;
 use App\Services\SemiExpendableEulAnalyticsService;
 use App\Support\AiProcurementSummaryRestore;
 use App\Support\InventoryCategoryOptions;
 use App\Support\OwwaExportFilename;
-use App\Support\SemiExpendableUsefulLife;
+use App\Support\StockCoverPhrase;
 use BackedEnum;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
-use Filament\Actions\Action;
 use Filament\Facades\Filament;
-use Filament\Infolists\Components\TextEntry;
 use Filament\Pages\Page;
-use Filament\Schemas\Components\Section;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
@@ -65,6 +58,8 @@ class ProcurementAnalytics extends Page
 
     public ?string $recommendation = null;
 
+    public bool $aiNarrativeUnavailable = false;
+
     public bool $loading = false;
 
     public ?int $lastAiRunId = null;
@@ -84,8 +79,6 @@ class ProcurementAnalytics extends Page
 
     /** @var array<int, Collection<int, object>> */
     protected array $atRiskRowsCache = [];
-
-    public ?int $replacementIssuanceId = null;
 
     public function mount(): void
     {
@@ -167,23 +160,26 @@ class ProcurementAnalytics extends Page
             $this->lastAiRunId = $processing->id;
             $this->loading = true;
             $this->recommendation = null;
+            $this->aiNarrativeUnavailable = false;
 
             return;
         }
 
-        // One-shot only: completed runs hydrate once after off-page finish, then clear on refresh.
-        $pendingRunId = AiProcurementSummaryRestore::pull($userId);
-        if ($pendingRunId === null) {
+        // Keep the active completed run visible across refresh until the user clicks Done.
+        $activeRunId = AiProcurementSummaryRestore::active($userId);
+        if ($activeRunId === null) {
             return;
         }
 
         $latest = AiProcurementRun::query()
-            ->whereKey($pendingRunId)
+            ->whereKey($activeRunId)
             ->where('created_by', $userId)
             ->whereIn('status', ['pending', 'failed'])
             ->first();
 
         if ($latest === null) {
+            AiProcurementSummaryRestore::forget($userId);
+
             return;
         }
 
@@ -197,10 +193,12 @@ class ProcurementAnalytics extends Page
         $this->loading = false;
 
         if (Auth::id() !== null) {
+            AiProcurementSummaryRestore::remember((int) Auth::id(), (int) $run->id);
             AiProcurementSummaryRestore::markShown((int) Auth::id(), (int) $run->id);
         }
 
         if ($run->status === 'failed') {
+            $this->aiNarrativeUnavailable = false;
             $this->recommendation = $run->error_message
                 ?? 'AI recommendation failed. Check that the device worker is active on the operation device.';
 
@@ -268,9 +266,21 @@ class ProcurementAnalytics extends Page
     {
         $this->actionSummary = null;
         $this->recommendation = null;
+        $this->aiNarrativeUnavailable = false;
         $this->lastAiRunId = null;
         $this->processingRunId = null;
         $this->loading = false;
+
+        if (Auth::id() !== null) {
+            AiProcurementSummaryRestore::forget((int) Auth::id());
+        }
+    }
+
+    public function dismissRecommendation(): void
+    {
+        $this->clearGeneratedSummary();
+        $this->recommendationSlide = 'reorders';
+        $this->syncAnalyticsSlides();
     }
 
     /**
@@ -337,15 +347,15 @@ class ProcurementAnalytics extends Page
     public function analyticsSlideHeading(): string
     {
         return $this->analyticsSlide === 'replacement'
-            ? 'Replacement due — semi-expendable'
-            : 'Suggested reorders — consumables';
+            ? 'Replacement Due - Semi-Expendable Only'
+            : 'Suggested Reorders - Consumables Only';
     }
 
     public function recommendationSlideHeading(): string
     {
         return $this->recommendationSlide === 'replacement'
-            ? 'Semi-expendable replacement'
-            : 'Consumables to buy';
+            ? 'Recommendation - Semi-Expendable'
+            : 'Consumables to Buy';
     }
 
     protected function syncAnalyticsSlides(): void
@@ -475,14 +485,13 @@ class ProcurementAnalytics extends Page
 
         return ($run?->items ?? collect())
             ->sortBy([
-                fn ($row) => $row->section === 'replacement' ? 1 : 0,
-                fn ($row) => match ($row->priority) {
+                fn ($row): int => $row->section === 'replacement' ? 1 : 0,
+                fn ($row): int => match ($row->priority) {
                     'High' => 0,
                     'Medium' => 1,
                     default => 2,
                 },
-                fn ($row) => InventoryCategoryOptions::sortRankForCategory($row->item?->category),
-                fn ($row) => strtolower((string) ($row->item_name ?? '')),
+                fn ($row): string => strtolower((string) ($row->item_name ?? '')),
             ])
             ->values();
     }
@@ -546,6 +555,80 @@ class ProcurementAnalytics extends Page
         return 'Procurement Recommendation';
     }
 
+    /**
+     * @return array{consumables: string, replacement: string}
+     */
+    public function splitSlideNarratives(?string $narrative): array
+    {
+        $text = str_replace(["\r\n", "\r"], "\n", trim((string) $narrative));
+        if ($text === '') {
+            return ['consumables' => '', 'replacement' => ''];
+        }
+
+        if (preg_match('/\[\[CONSUMABLES\]\]\s*(.*?)\s*\[\[SEMI-EXPENDABLE\]\]\s*(.*)\z/is', $text, $matches) === 1) {
+            return [
+                'consumables' => trim($matches[1]),
+                'replacement' => trim($matches[2]),
+            ];
+        }
+
+        if (preg_match('/\[\[SEMI-EXPENDABLE\]\]\s*(.*?)\s*\[\[CONSUMABLES\]\]\s*(.*)\z/is', $text, $matches) === 1) {
+            return [
+                'consumables' => trim($matches[2]),
+                'replacement' => trim($matches[1]),
+            ];
+        }
+
+        $text = preg_replace('/\[\[(?:CONSUMABLES|SEMI-EXPENDABLE)\]\]/i', '', $text) ?? $text;
+
+        return [
+            'consumables' => trim($text),
+            'replacement' => '',
+        ];
+    }
+
+    public function recommendationNarrativeForSlide(string $slide): string
+    {
+        $parts = $this->splitSlideNarratives(
+            $this->splitRecommendation($this->recommendation)['narrative']
+        );
+
+        if ($slide === 'replacement') {
+            $text = $parts['replacement'] !== ''
+                ? $parts['replacement']
+                : $this->deterministicReplacementNarrative();
+
+            return StockCoverPhrase::rewriteDecimalMonthsInText($text);
+        }
+
+        $text = $parts['consumables'] !== ''
+            ? $parts['consumables']
+            : trim((string) $this->recommendation);
+
+        return StockCoverPhrase::rewriteDecimalMonthsInText($text);
+    }
+
+    public function deterministicReplacementNarrative(): string
+    {
+        $rows = $this->getRecommendationReplacementRows()->take(4);
+        if ($rows->isEmpty()) {
+            return 'No semi-expendable units are due for replacement review in this filter.';
+        }
+
+        $mentions = $rows->map(function (object $row): string {
+            $item = trim((string) ($row->item_name ?? 'Unit'));
+            $action = trim((string) ($row->reason ?? 'Awaiting review'));
+
+            return $action !== '' ? "{$item} ({$action})" : $item;
+        })->all();
+
+        $list = count($mentions) === 1
+            ? $mentions[0]
+            : implode(', ', array_slice($mentions, 0, -1)).', and '.$mentions[array_key_last($mentions)];
+
+        return "Kindly review these semi-expendable units due for replacement: {$list}.";
+    }
+
     public function formatAiNarrativeMarkdown(string $markdown): string
     {
         $markdown = str_replace(["\r\n", "\r"], "\n", trim($markdown));
@@ -554,6 +637,13 @@ class ProcurementAnalytics extends Page
         }
 
         $markdown = preg_replace('/\s+@\s+[^.,;]+/u', '', $markdown) ?? $markdown;
+        $markdown = preg_replace('/\[\[(?:CONSUMABLES|SEMI-EXPENDABLE)\]\]/i', '', $markdown) ?? $markdown;
+        $markdown = StockCoverPhrase::rewriteDecimalMonthsInText($markdown);
+        $markdown = preg_replace(
+            '/(?:^|\n)\s*["“”\']*\s*One opening line\s*:?\s*/iu',
+            "\n",
+            $markdown,
+        ) ?? $markdown;
 
         // Models sometimes echo prompt scaffolding, e.g. Sentence 2 must be: "..."
         $markdown = preg_replace(
@@ -676,80 +766,6 @@ class ProcurementAnalytics extends Page
             officeIds: $officeIds,
             limit: self::AT_RISK_LIMIT,
         );
-    }
-
-    public function openReplacementIssuance(int $issuanceId): void
-    {
-        $this->replacementIssuanceId = $this->replacementIssuanceForViewer($issuanceId)->id;
-
-        $this->mountAction('viewReplacementIssuance');
-    }
-
-    public function viewReplacementIssuanceAction(): Action
-    {
-        return Action::make('viewReplacementIssuance')
-            ->modalHeading(function (): string {
-                $issuance = $this->replacementIssuanceForViewer((int) $this->replacementIssuanceId);
-
-                return $issuance->item?->name ?? 'Replacement due';
-            })
-            ->modalWidth(OwwaFormModalDefaults::WIDTH_MEDIUM)
-            ->extraModalWindowAttributes(['class' => OwwaFormModalDefaults::MODAL_WINDOW_CLASS], merge: true)
-            ->closeModalByClickingAway(false)
-            ->closeModalByEscaping(false)
-            ->modalSubmitAction(false)
-            ->modalCancelActionLabel('Close')
-            ->record(fn (): Issuance => $this->replacementIssuanceForViewer((int) $this->replacementIssuanceId))
-            ->schema([
-                Section::make('Details')
-                    ->schema([
-                        TextEntry::make('property_number')->label('Property number')->placeholder('—'),
-                        TextEntry::make('issuedTo.name')->label('Issued to')->placeholder('—'),
-                        TextEntry::make('office.name')->label('Office')->placeholder('—'),
-                        TextEntry::make('department.name')->label('Department')->placeholder('—'),
-                        TextEntry::make('issuance_date')->label('Issued on')->date('M j, Y'),
-                        TextEntry::make('estimated_useful_life')->label('Estimated useful life')->placeholder('—'),
-                        TextEntry::make('eul_expires_at')->label('Expires')->date('M j, Y')->placeholder('—'),
-                        TextEntry::make('eul_status')
-                            ->label('Status')
-                            ->state(fn (Issuance $record): string => SemiExpendableUsefulLife::statusLabel(
-                                SemiExpendableUsefulLife::statusForIssuance($record)
-                            )),
-                        TextEntry::make('replacement_action')
-                            ->label('Action')
-                            ->state(function (Issuance $record): string {
-                                $officeId = $record->office_id !== null ? (int) $record->office_id : null;
-                                $unissuedStock = ($record->item_id && $officeId !== null)
-                                    ? app(InventoryStockService::class)->getActiveRestockStock((int) $record->item_id, $officeId)
-                                    : 0;
-                                [, $label] = app(SemiExpendableEulAnalyticsService::class)->replacementAction($record, $unissuedStock);
-
-                                return $label;
-                            }),
-                        TextEntry::make('remarks')->label('Remarks')->placeholder('—')->columnSpanFull(),
-                    ])
-                    ->columns(2)
-                    ->columnSpanFull(),
-            ])
-            ->extraModalFooterActions([
-                IssuanceViewActions::extendUsefulLifeAction(),
-            ]);
-    }
-
-    protected function replacementIssuanceForViewer(int $issuanceId): Issuance
-    {
-        $user = Filament::auth()->user();
-
-        $issuance = Issuance::query()
-            ->with(['item.category', 'office', 'department', 'issuedTo', 'requisition', 'batch'])
-            ->when($user?->office_id, fn ($query) => $query->where('office_id', (int) $user->office_id))
-            ->find($issuanceId);
-
-        if ($issuance === null) {
-            abort(404);
-        }
-
-        return $issuance;
     }
 
     /**
@@ -969,6 +985,7 @@ class ProcurementAnalytics extends Page
     {
         $this->loading = true;
         $this->recommendation = null;
+        $this->aiNarrativeUnavailable = false;
         $this->lastAiRunId = null;
         $this->processingRunId = null;
 
@@ -1003,8 +1020,17 @@ class ProcurementAnalytics extends Page
         } catch (\Throwable $e) {
             $this->recommendation = app(AiProcurementRecommendationService::class)
                 ->formatErrorMessage($e->getMessage());
+            $this->aiNarrativeUnavailable = false;
             $this->loading = false;
             $this->processingRunId = null;
+            $this->js(AiProcurementSummaryRestore::browserAnnounceScript([
+                'title' => 'AI recommendation failed',
+                'body' => $this->recommendation,
+                'danger' => true,
+                'seconds' => 10,
+                'actionLabel' => 'View the result',
+                'actionUrl' => '#procurement-summary',
+            ]));
         }
     }
 
@@ -1031,11 +1057,12 @@ class ProcurementAnalytics extends Page
         $this->lastAiRunId = $run->id;
 
         if (Auth::id() !== null) {
-            AiProcurementSummaryRestore::forget((int) Auth::id());
+            AiProcurementSummaryRestore::remember((int) Auth::id(), (int) $run->id);
             AiProcurementSummaryRestore::markShown((int) Auth::id(), (int) $run->id);
         }
 
         if ($run->status === 'failed') {
+            $this->aiNarrativeUnavailable = false;
             $this->recommendation = $run->error_message
                 ?? 'AI recommendation failed. Check that the device worker is active on the operation device.';
 
@@ -1055,11 +1082,10 @@ class ProcurementAnalytics extends Page
 
         $this->hydrateRecommendationFromRun($run);
 
-        if (! AiProcurementSummaryRestore::claimSessionToast($run->id)) {
-            return;
-        }
+        $shouldToast = AiProcurementSummaryRestore::claimSessionToast($run->id);
 
         $this->js(AiProcurementSummaryRestore::browserAnnounceScript([
+            'silent' => ! $shouldToast,
             'title' => 'AI recommendation ready',
             'body' => 'Your procurement recommendation is ready on this page.',
             'seconds' => 10,
@@ -1074,30 +1100,37 @@ class ProcurementAnalytics extends Page
         $narrative = $parts['narrative'];
 
         if (str_contains($narrative, 'Ollama is not available')) {
-            $this->recommendation = '__OLLAMA_UNAVAILABLE__';
+            $this->aiNarrativeUnavailable = true;
+            $summary = trim((string) ($run->summary ?? ''));
+            $this->recommendation = ($summary !== '' && ! str_contains($summary, 'Ollama is not available'))
+                ? $summary
+                : 'Deterministic recommendation ready from the consumable reorder and replacement-due lists.';
 
             return;
         }
 
+        $this->aiNarrativeUnavailable = false;
         $this->recommendation = $narrative !== '' ? $narrative : null;
     }
 
-    public function exportAtRiskPdf(): StreamedResponse
+    public function exportAtRiskPdf(?string $view = null): StreamedResponse
     {
         if ($this->analyticsSlide === 'replacement') {
             return $this->streamListPdf(
                 'reports.replacement-due',
-                'Replacement due — semi-expendable',
+                'Replacement Due - Semi-Expendable Only',
                 OwwaExportFilename::pdfExport('ReplacementDue'),
                 $this->getEulReviewRows(),
             );
         }
 
+        $exportView = in_array($view, ['all', 'stockouts'], true) ? $view : $this->atRiskView;
+
         return $this->streamListPdf(
             'reports.suggested-reorders',
-            'Suggested reorders — consumables',
+            'Suggested Reorders - Consumables Only',
             OwwaExportFilename::pdfExport('SuggestedReorders'),
-            $this->displayAtRiskRows($this->queryAtRiskRows()),
+            $this->displayAtRiskRows($this->queryAtRiskRows(), $exportView),
         );
     }
 

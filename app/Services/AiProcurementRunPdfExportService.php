@@ -39,7 +39,10 @@ class AiProcurementRunPdfExportService
             'run' => $run,
             'reference' => 'Run #'.$run->id,
             'statusLabel' => $this->statusLabel((string) $run->status),
-            'summary' => $this->plainSummary($run->summary, null),
+            'summary' => $this->plainSummary(
+                AiProcurementRunViewPresenter::fullRecommendationNarrative($run),
+                null,
+            ),
             'items' => $items,
             'generatedAt' => now(),
         ]);

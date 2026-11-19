@@ -31,7 +31,9 @@ Route::middleware(['web'])->group(function () {
     Route::get('session/csrf', [AuditSessionController::class, 'csrf'])
         ->middleware('throttle:60,1')
         ->name('session.csrf');
-    Route::get('session/recover', [AuditSessionController::class, 'recover'])->name('session.recover');
+    Route::get('session/recover', [AuditSessionController::class, 'recover'])
+        ->middleware('throttle:60,1')
+        ->name('session.recover');
     // POST-only action URL — GET/refresh must not show a raw 419 page.
     Route::get('audit/idle-logout', [AuditSessionController::class, 'recover']);
 });
@@ -56,6 +58,7 @@ Route::middleware(['auth', 'web'])->group(function () {
     Route::get('reports/coa/transfer', [CoaReportController::class, 'transferReport'])->name('reports.coa.transfer');
     Route::get('reports/coa/disposal', [CoaReportController::class, 'disposalReport'])->name('reports.coa.disposal');
     Route::middleware([
+        'throttle:owwa-exports',
         \App\Http\Middleware\SetOwwaExportDownloadCookie::class,
         \App\Http\Middleware\RaiseOwwaExportMemoryLimit::class,
     ])->group(function () {

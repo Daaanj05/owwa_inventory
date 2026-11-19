@@ -39,7 +39,7 @@
                         </thead>
                         <tbody>
                         @foreach($rows as $row)
-                            <tr class="owwa-data-table__row {{ $row->priority === 'High' ? 'owwa-row-low' : 'owwa-row-ok' }}">
+                            <tr class="owwa-data-table__row {{ $row->priority === 'High' ? 'owwa-row-low' : 'owwa-row-medium' }}">
                                 <td>
                                     @if($row->priority === 'High')
                                         <span class="owwa-status-badge owwa-status-low">High</span>

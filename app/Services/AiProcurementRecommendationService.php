@@ -57,9 +57,42 @@ class AiProcurementRecommendationService
             : collect();
 
         return [
-            'reorders' => $reorders,
-            'replacements' => $replacements,
+            'reorders' => $this->sortRecommendationRows($reorders),
+            'replacements' => $this->sortReplacementRows($replacements),
         ];
+    }
+
+    /**
+     * @param  Collection<int, object>  $rows
+     * @return Collection<int, object>
+     */
+    protected function sortRecommendationRows(Collection $rows): Collection
+    {
+        return $rows
+            ->sortBy([
+                fn (object $row): int => match ($row->priority ?? null) {
+                    'High' => 0,
+                    'Medium' => 1,
+                    default => 2,
+                },
+                fn (object $row): string => strtolower((string) ($row->item_name ?? '')),
+            ])
+            ->values();
+    }
+
+    /**
+     * @param  Collection<int, object>  $rows
+     * @return Collection<int, object>
+     */
+    protected function sortReplacementRows(Collection $rows): Collection
+    {
+        return $rows
+            ->sortBy([
+                fn (object $row): int => ($row->status ?? null) === 'expired'
+                    || ($row->priority ?? null) === 'High' ? 0 : 1,
+                fn (object $row): string => strtolower((string) ($row->item_name ?? '')),
+            ])
+            ->values();
     }
 
     /**
@@ -167,7 +200,8 @@ class AiProcurementRecommendationService
             $itemFacts = $rows->map(fn ($row) => [
                 'priority' => $row->priority,
                 'item' => $row->item_name,
-                'office' => $row->office_name,
+                'stock' => (int) $row->current_stock,
+                'reorder_level' => (int) $row->reorder_level,
                 'cover' => (float) ($row->months_cover ?? 0),
                 'forecast' => (float) $row->forecast_monthly_usage,
                 'suggested' => $row->suggested_reorder_qty ?? null,
@@ -182,7 +216,13 @@ class AiProcurementRecommendationService
                 ? 'Ollama is not available. Showing deterministic recommendations without AI narrative summary.'."\n\n".$table
                 : trim($summary)."\n\n".$table;
 
-            $this->finalizeRun($run, $rawForStorage, $rows, $replacementRows);
+            $this->finalizeRun(
+                $run,
+                $rawForStorage,
+                $rows,
+                $replacementRows,
+                $summary === null ? $this->deterministicSummaryFromFacts($facts) : null,
+            );
             $this->notifyCreatorOfCompletedRun($run->fresh());
         } catch (Throwable $exception) {
             $run->update([
@@ -213,8 +253,13 @@ class AiProcurementRecommendationService
      * @param  Collection<int, object>  $rows
      * @param  Collection<int, object>  $replacementRows
      */
-    public function finalizeRun(AiProcurementRun $run, string $rawResponse, Collection $rows, ?Collection $replacementRows = null): void
-    {
+    public function finalizeRun(
+        AiProcurementRun $run,
+        string $rawResponse,
+        Collection $rows,
+        ?Collection $replacementRows = null,
+        ?string $summaryOverride = null,
+    ): void {
         $clean = preg_replace('/<think>.*?<\/think>/s', '', $rawResponse);
         $clean = str_replace(["\r\n", "\r"], "\n", trim((string) $clean));
 
@@ -228,7 +273,7 @@ class AiProcurementRecommendationService
         }
 
         $run->update([
-            'summary' => $this->extractSummaryLine($clean),
+            'summary' => $summaryOverride ?? $this->extractSummaryLine($clean),
             'raw_response' => $clean,
             'status' => 'pending',
             'error_message' => null,
@@ -427,6 +472,36 @@ class AiProcurementRecommendationService
         return implode("\n", $lines);
     }
 
+    /**
+     * @param  array{
+     *   headline?: string,
+     *   replacement_count?: int
+     * }  $facts
+     */
+    public function deterministicSummaryFromFacts(array $facts): string
+    {
+        $parts = [];
+        $headline = trim((string) ($facts['headline'] ?? ''));
+        if ($headline !== '') {
+            $parts[] = $headline;
+        }
+
+        $replacementCount = (int) ($facts['replacement_count'] ?? 0);
+        if ($replacementCount > 0) {
+            $parts[] = sprintf(
+                '%d semi-expendable replacement review%s',
+                $replacementCount,
+                $replacementCount === 1 ? '' : 's',
+            );
+        }
+
+        if ($parts === []) {
+            return 'Deterministic recommendation ready from the consumable reorder and replacement-due lists.';
+        }
+
+        return Str::limit(implode(' · ', $parts), 500);
+    }
+
     protected function extractSummaryLine(string $clean): ?string
     {
         $lines = explode("\n", $clean);
@@ -434,20 +509,26 @@ class AiProcurementRecommendationService
         $summaryLines = [];
         foreach ($lines as $line) {
             $t = trim($line);
+            if (str_starts_with($t, '|')) {
+                break;
+            }
             if ($t === '') {
-                if ($summaryLines !== []) {
-                    break;
+                if ($summaryLines !== [] && end($summaryLines) !== '') {
+                    $summaryLines[] = '';
                 }
 
                 continue;
             }
-            if (str_starts_with($t, '|')) {
-                break;
+            if (preg_match('/^\[\[(?:CONSUMABLES|SEMI-EXPENDABLE)\]\]$/i', $t) === 1) {
+                continue;
+            }
+            if (str_contains($t, 'Ollama is not available')) {
+                continue;
             }
             $summaryLines[] = $t;
         }
 
-        $summary = Str::limit(implode(' ', $summaryLines), 500);
+        $summary = trim(implode("\n", $summaryLines));
 
         return $summary !== '' ? $summary : null;
     }

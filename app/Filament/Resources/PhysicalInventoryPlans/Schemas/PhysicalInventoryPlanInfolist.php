@@ -17,7 +17,6 @@ class PhysicalInventoryPlanInfolist
     {
         return [
             self::modalDetailsSection(),
-            self::modalCommitteeSection(),
         ];
     }
 
@@ -26,7 +25,6 @@ class PhysicalInventoryPlanInfolist
         return $schema
             ->components([
                 self::overviewSection(),
-                self::committeeSection(),
             ]);
     }
 
@@ -43,9 +41,8 @@ class PhysicalInventoryPlanInfolist
                     ->label('COA submitted')
                     ->date('M j, Y')
                     ->placeholder('—'),
-                TextEntry::make('approved_at')
-                    ->label('Approved')
-                    ->dateTime('M j, Y g:i A')
+                TextEntry::make('recordedBy.name')
+                    ->label('Prepared by')
                     ->placeholder('—'),
                 TextEntry::make('progress_summary')
                     ->label('Progress')
@@ -56,18 +53,6 @@ class PhysicalInventoryPlanInfolist
                         return "{$counts['completed']} of {$counts['total']} complete ({$percent}%)";
                     })())
                     ->columnSpan(2),
-            ]);
-    }
-
-    public static function modalCommitteeSection(): Section
-    {
-        return Section::make('Inventory Committee')
-            ->columnSpanFull()
-            ->columns(2)
-            ->compact()
-            ->schema([
-                TextEntry::make('committee_chair_name')->label('Chairperson')->placeholder('—'),
-                TextEntry::make('property_officer_name')->label('Supply/Property Officer')->placeholder('—'),
             ]);
     }
 
@@ -82,7 +67,6 @@ class PhysicalInventoryPlanInfolist
                     ->badge()
                     ->formatStateUsing(fn (?string $state): string => match ($state) {
                         PhysicalInventoryPlan::STATUS_DRAFT => 'Draft',
-                        PhysicalInventoryPlan::STATUS_APPROVED => 'Approved',
                         PhysicalInventoryPlan::STATUS_IN_PROGRESS => 'In progress',
                         PhysicalInventoryPlan::STATUS_COMPLETED => 'Completed',
                         PhysicalInventoryPlan::STATUS_CANCELLED => 'Cancelled',
@@ -91,6 +75,9 @@ class PhysicalInventoryPlanInfolist
                 TextEntry::make('title')->columnSpanFull(),
                 TextEntry::make('period_label')->label('Period')->placeholder('—'),
                 TextEntry::make('cut_off_date')->label('Cut-off')->date('M j, Y'),
+                TextEntry::make('recordedBy.name')
+                    ->label('Prepared by')
+                    ->placeholder('—'),
                 TextEntry::make('progress_summary')
                     ->label('Progress')
                     ->state(fn (PhysicalInventoryPlan $record): string => (function () use ($record): string {
@@ -103,21 +90,6 @@ class PhysicalInventoryPlanInfolist
                     ->label('COA submitted')
                     ->date('M j, Y')
                     ->placeholder('—'),
-                TextEntry::make('approved_at')
-                    ->label('Approved')
-                    ->dateTime('M j, Y g:i A')
-                    ->placeholder('—'),
-            ]);
-    }
-
-    public static function committeeSection(): Section
-    {
-        return Section::make('Inventory Committee')
-            ->columnSpanFull()
-            ->columns(2)
-            ->schema([
-                TextEntry::make('committee_chair_name')->label('Chairperson')->placeholder('—'),
-                TextEntry::make('property_officer_name')->label('Supply/Property Officer')->placeholder('—'),
             ]);
     }
 }

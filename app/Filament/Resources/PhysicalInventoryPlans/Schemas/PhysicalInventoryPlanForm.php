@@ -17,7 +17,6 @@ class PhysicalInventoryPlanForm
 {
     public static function configure(Schema $schema): Schema
     {
-        $scopeActive = fn ($query) => $query->active();
         $sessionCategoryId = SyncsActiveItemCategory::resolveCategoryIdFromContext();
         $today = now()->startOfDay();
 
@@ -25,7 +24,7 @@ class PhysicalInventoryPlanForm
             ->columns(1)
             ->components([
                 Section::make('Schedule details')
-                    ->description('Title and cut-off first. Add office count dates in Schedule below.')
+                    ->description('Title and cut-off first. Add count dates below. Every active office is included automatically.')
                     ->columnSpanFull()
                     ->columns(3)
                     ->compact()
@@ -57,25 +56,16 @@ class PhysicalInventoryPlanForm
                         ...self::itemCategoryFields($sessionCategoryId),
                     ]),
                 Section::make('Schedule')
-                    ->description('Add one row per office and count date.')
+                    ->description('Add one row per category and count date. All active offices are scheduled automatically.')
                     ->columnSpanFull()
                     ->compact()
                     ->schema([
-                        Repeater::make('lines')
-                            ->relationship()
-                            ->label('Schedule lines')
+                        Repeater::make('schedule_slots')
+                            ->label('Schedule dates')
                             ->compact()
-                            ->helperText('Add one row per office and count date.')
-                            ->hintIcon(Heroicon::QuestionMarkCircle, 'Each line becomes a separate physical count. Duplicate office + category in the same schedule is not allowed.')
+                            ->helperText('Each row covers every active office for that category and date.')
+                            ->hintIcon(Heroicon::QuestionMarkCircle, 'Supply custodian inventory includes all offices. Duplicate category in the same schedule is not allowed.')
                             ->schema([
-                                Select::make('office_id')
-                                    ->label('Office')
-                                    ->relationship('office', 'name', $scopeActive)
-                                    ->required()
-                                    ->placeholder('Select office')
-                                    ->selectablePlaceholder(false)
-                                    ->helperText('Active office that will perform the count.')
-                                    ->hintIcon(Heroicon::QuestionMarkCircle, 'Office included in this schedule.'),
                                 Select::make('item_category_id')
                                     ->label('Category')
                                     ->options(fn (): array => ItemCategory::query()
@@ -93,30 +83,13 @@ class PhysicalInventoryPlanForm
                                     ->label('Planned date')
                                     ->required()
                                     ->minDate($today)
-                                    ->helperText('Target date for this office\'s physical count.')
+                                    ->helperText('Target date for the physical count across all offices.')
                                     ->hintIcon(Heroicon::QuestionMarkCircle, 'Must be today or later and on or before the cut-off date.'),
                             ])
-                            ->columns(3)
+                            ->columns(2)
                             ->defaultItems(1)
-                            ->addActionLabel('Add schedule line')
+                            ->addActionLabel('Add schedule date')
                             ->columnSpanFull(),
-                    ]),
-                Section::make('Inventory Committee (optional)')
-                    ->description('Names printed on Inventory Committee signatory blocks when exported.')
-                    ->columnSpanFull()
-                    ->columns(2)
-                    ->compact()
-                    ->schema([
-                        TextInput::make('committee_chair_name')
-                            ->label('Chairperson')
-                            ->placeholder('Full name')
-                            ->maxLength(255)
-                            ->hintIcon(Heroicon::QuestionMarkCircle, 'Inventory Committee Chairperson for the physical count.'),
-                        TextInput::make('property_officer_name')
-                            ->label('Supply/Property Officer')
-                            ->placeholder('Full name')
-                            ->maxLength(255)
-                            ->hintIcon(Heroicon::QuestionMarkCircle, 'Supply/Property Officer signatory for the count.'),
                     ]),
             ]);
     }
@@ -144,8 +117,8 @@ class PhysicalInventoryPlanForm
                 ->placeholder('Select category')
                 ->selectablePlaceholder(false)
                 ->columnSpanFull()
-                ->helperText('Pre-fills category on new schedule lines.')
-                ->hintIcon(Heroicon::QuestionMarkCircle, 'When set, new lines inherit this category. You can still change category per line.'),
+                ->helperText('Pre-fills category on new schedule dates.')
+                ->hintIcon(Heroicon::QuestionMarkCircle, 'When set, new rows inherit this category. You can still change category per row.'),
         ];
     }
 }

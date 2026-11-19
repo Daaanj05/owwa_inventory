@@ -4,11 +4,13 @@
 
     $selectedRange = $this->getSelectedDateRange();
     $rangeKey = $selectedRange['from'].'_'.$selectedRange['to'];
-    $atRiskRows = $this->getAtRiskPreviewRows();
+    $atRiskAllRows = $this->queryAtRiskRows();
     $allAtRiskCount = $this->getAtRiskPreviewCount();
     $stockoutCount = $this->getStockoutPreviewCount();
     $hasSummaryOutput = $loading || filled($recommendation);
+    $aiNarrativeUnavailable = (bool) ($aiNarrativeUnavailable ?? false);
     $hasAiNarrative = filled($recommendation)
+        && ! $aiNarrativeUnavailable
         && $recommendation !== '__OLLAMA_UNAVAILABLE__'
         && ! str_starts_with($recommendation, 'Cannot connect')
         && ! str_starts_with($recommendation, 'An error occurred')
@@ -85,18 +87,18 @@
                 @if($this->shouldShowReorderSlide())
                     <section class="owwa-pa-slide-panel" data-slide="reorders" data-tour="reorders">
                         <div class="owwa-pa-slide-copy">
-                            <h2 class="fi-section-header-heading">Suggested reorders — consumables</h2>
+                            <h2 class="fi-section-header-heading">Suggested Reorders - Consumables Only</h2>
                             <p class="fi-section-header-description mt-1">Consumable stock compared with issuance pace and the reorder point.</p>
                         </div>
                         @include('filament.partials.at-risk-procurement-preview', [
-                            'rows' => $atRiskRows,
+                            'allRows' => $atRiskAllRows,
                             'atRiskView' => $atRiskView,
                             'sortColumn' => $sortColumn,
                             'sortDirection' => $sortDirection,
                             'allAtRiskCount' => $allAtRiskCount,
                             'stockoutCount' => $stockoutCount,
-                            'hasMoreAtRisk' => $this->hasMoreAtRiskRows(),
-                            'atRiskVisibleLimit' => $atRiskVisibleLimit,
+                            'pageSize' => 25,
+                            'stockoutWithinMonths' => 2.0,
                             'embedded' => true,
                         ])
                     </section>
@@ -104,7 +106,7 @@
                 @if($this->shouldShowEulPanel())
                     <section class="owwa-pa-slide-panel" data-slide="replacement" data-tour="useful-life">
                         <div class="owwa-pa-slide-copy">
-                            <h2 class="fi-section-header-heading">Replacement due — semi-expendable</h2>
+                            <h2 class="fi-section-header-heading">Replacement Due - Semi-Expendable Only</h2>
                             <p class="fi-section-header-description mt-1">Issued semi-expendable units nearing or past useful life. A date alone does not create a purchase.</p>
                         </div>
                         @include('filament.partials.semi-expendable-eul-preview', [
@@ -124,7 +126,12 @@
                     <button type="button" class="owwa-pa-slide-btn" aria-label="Next list" x-on:click="shift(1)">→</button>
                 </div>
             @endif
-            <button type="button" wire:click="exportAtRiskPdf" class="owwa-pa-export-btn" data-tour="export">Export PDF</button>
+            <button
+                type="button"
+                class="owwa-pa-export-btn"
+                data-tour="export"
+                x-on:click="$wire.exportAtRiskPdf(($store.paAtRisk && $store.paAtRisk.view) ? $store.paAtRisk.view : 'all')"
+            >Export PDF</button>
         </div>
     </div>
 
@@ -176,12 +183,17 @@
                                     </a>
                                 @endif
                             </div>
-                            <div class="owwa-pr-ai-narrative owwa-pa-ai-narrative-body">
-                                {!! Str::markdown($this->formatAiNarrativeMarkdown($this->splitRecommendation($recommendation)['narrative'])) !!}
+                        @elseif($aiNarrativeUnavailable)
+                            <div class="owwa-pa-ai-recommendation-head">
+                                <span class="owwa-pr-ai-pill owwa-pr-ai-pill--muted">Saved recommendation</span>
+                                @if($lastAiRunId)
+                                    <a href="{{ AiProcurementRunResource::getUrl('view', ['record' => $lastAiRunId]) }}" class="owwa-pa-ai-recommendation-meta-link">
+                                        View saved run #{{ $lastAiRunId }} →
+                                    </a>
+                                @endif
                             </div>
-                        @elseif($recommendation === '__OLLAMA_UNAVAILABLE__')
                             <p class="owwa-pa-ai-unavailable">
-                                AI recommendation unavailable. Review the lists above.
+                                AI narrative needs Ollama on this device. The lists below are the saved recommendation snapshot from the reorder and replacement-due lists, not a second Suggested Reorders panel.
                             </p>
                         @elseif(filled($recommendation))
                             <div class="owwa-pa-callout owwa-pa-callout--info" role="alert">
@@ -195,6 +207,11 @@
                             'slides' => $this->availableAnalyticsSlides(),
                             'recommendationSlide' => $recommendationSlide,
                             'positionLabel' => $this->recommendationSlidePositionLabel(),
+                            'hasAiNarrative' => $hasAiNarrative,
+                            'aiNarrativeUnavailable' => $aiNarrativeUnavailable,
+                            'consumableNarrative' => $this->recommendationNarrativeForSlide('reorders'),
+                            'replacementNarrative' => $this->recommendationNarrativeForSlide('replacement'),
+                            'showDoneButton' => true,
                         ])
                     </div>
                 @endif
@@ -208,6 +225,7 @@
             <button
                 type="button"
                 wire:click="generateAiRecommendation"
+                x-on:click="window.dispatchEvent(new CustomEvent('owwa-ai-busy-force-start'))"
                 wire:loading.attr="disabled"
                 wire:target="generateAiRecommendation"
                 class="owwa-pa-generate-btn owwa-pa-generate-btn--footer"
@@ -249,5 +267,177 @@
         </div>
     </template>
     </div>
+
+    @script
+    <script>
+        Alpine.data('atRiskPreviewTable', (config) => ({
+            allRows: config.rows || [],
+            view: config.view === 'stockouts' ? 'stockouts' : 'all',
+            sortColumn: config.sortColumn || 'category',
+            sortDirection: config.sortDirection || 'asc',
+            pageSize: config.pageSize || 25,
+            stockoutWithin: config.stockoutWithin || 2,
+            visibleLimit: { all: config.pageSize || 25, stockouts: config.pageSize || 25 },
+            pending: false,
+            init() {
+                if (typeof Alpine.store === 'function') {
+                    if (Alpine.store('paAtRisk') === undefined) {
+                        Alpine.store('paAtRisk', { view: this.view });
+                    } else {
+                        Alpine.store('paAtRisk').view = this.view;
+                    }
+                }
+            },
+            get allCount() {
+                return this.allRows.length;
+            },
+            get stockoutCount() {
+                return this.allRows.filter((row) => row.months_cover !== null && Number(row.months_cover) <= this.stockoutWithin).length;
+            },
+            setView(view) {
+                this.view = view === 'stockouts' ? 'stockouts' : 'all';
+                if (typeof Alpine.store === 'function' && Alpine.store('paAtRisk')) {
+                    Alpine.store('paAtRisk').view = this.view;
+                }
+            },
+            filteredRows() {
+                if (this.view !== 'stockouts') {
+                    return this.allRows.slice();
+                }
+
+                return this.allRows.filter((row) => row.months_cover !== null && Number(row.months_cover) <= this.stockoutWithin);
+            },
+            priorityRank(row) {
+                if (row.priority === 'High') {
+                    return 0;
+                }
+                if (row.priority === 'Medium') {
+                    return 1;
+                }
+
+                return 2;
+            },
+            byCategory(a, b) {
+                const left = [
+                    Number(a.category_sort_rank ?? 99),
+                    String(a.category_name || '').toLowerCase(),
+                    this.priorityRank(a),
+                    String(a.item_name || '').toLowerCase(),
+                ];
+                const right = [
+                    Number(b.category_sort_rank ?? 99),
+                    String(b.category_name || '').toLowerCase(),
+                    this.priorityRank(b),
+                    String(b.item_name || '').toLowerCase(),
+                ];
+
+                for (let i = 0; i < left.length; i++) {
+                    if (left[i] < right[i]) {
+                        return -1;
+                    }
+                    if (left[i] > right[i]) {
+                        return 1;
+                    }
+                }
+
+                return 0;
+            },
+            sortedRows() {
+                const rows = this.filteredRows();
+                const direction = this.sortDirection === 'desc' ? -1 : 1;
+
+                return rows.sort((a, b) => {
+                    if (this.sortColumn === 'cover') {
+                        const coverA = a.months_cover ?? (this.sortDirection === 'desc' ? -1 : 999);
+                        const coverB = b.months_cover ?? (this.sortDirection === 'desc' ? -1 : 999);
+                        const coverCmp = coverA === coverB ? 0 : (coverA < coverB ? -1 : 1) * direction;
+
+                        return coverCmp !== 0 ? coverCmp : this.byCategory(a, b);
+                    }
+
+                    if (this.sortColumn === 'stockout') {
+                        const stockoutA = a.projected_stockout_date || (this.sortDirection === 'desc' ? '0000-01-01' : '9999-12-31');
+                        const stockoutB = b.projected_stockout_date || (this.sortDirection === 'desc' ? '0000-01-01' : '9999-12-31');
+                        const stockoutCmp = stockoutA === stockoutB ? 0 : (stockoutA < stockoutB ? -1 : 1) * direction;
+
+                        return stockoutCmp !== 0 ? stockoutCmp : this.byCategory(a, b);
+                    }
+
+                    if (this.sortColumn === 'priority') {
+                        const priorityCmp = (this.priorityRank(a) - this.priorityRank(b)) * direction;
+
+                        return priorityCmp !== 0 ? priorityCmp : this.byCategory(a, b);
+                    }
+
+                    return this.byCategory(a, b);
+                });
+            },
+            visibleRows() {
+                const limit = this.visibleLimit[this.view] || this.pageSize;
+
+                return this.sortedRows().slice(0, limit);
+            },
+            hasMore() {
+                return this.visibleRows().length < this.sortedRows().length;
+            },
+            sortBy(column) {
+                if (! ['priority', 'cover', 'stockout'].includes(column)) {
+                    return;
+                }
+
+                if (this.sortColumn === column) {
+                    this.sortDirection = this.sortDirection === 'asc' ? 'desc' : 'asc';
+                } else {
+                    this.sortColumn = column;
+                    this.sortDirection = 'asc';
+                }
+
+                this.visibleLimit[this.view] = this.pageSize;
+            },
+            sortIndicator(column) {
+                if (this.sortColumn !== column) {
+                    return '';
+                }
+
+                return this.sortDirection === 'asc' ? ' ↑' : ' ↓';
+            },
+            onScroll(event) {
+                if (this.pending) {
+                    return;
+                }
+
+                const el = event.target;
+                if (el.scrollTop < 24) {
+                    return;
+                }
+
+                if ((el.scrollTop + el.clientHeight) < (el.scrollHeight - 80)) {
+                    return;
+                }
+
+                if (! this.hasMore()) {
+                    return;
+                }
+
+                this.pending = true;
+                const total = this.sortedRows().length;
+                this.visibleLimit[this.view] = Math.min(
+                    (this.visibleLimit[this.view] || this.pageSize) + this.pageSize,
+                    total,
+                );
+                this.pending = false;
+            },
+            formatInt(value) {
+                return Number(value || 0).toLocaleString();
+            },
+            formatFixed(value, digits) {
+                return Number(value || 0).toLocaleString(undefined, {
+                    minimumFractionDigits: digits,
+                    maximumFractionDigits: digits,
+                });
+            },
+        }));
+    </script>
+    @endscript
 </x-filament-panels::page>
 

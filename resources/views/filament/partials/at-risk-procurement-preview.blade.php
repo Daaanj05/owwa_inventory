@@ -1,28 +1,58 @@
 @php
-    use App\Filament\Pages\StockLevels;
-
     $heading = $heading ?? 'At-risk items';
     $intro = $intro ?? 'Deterministic reorder signals from consumption history and current stock.';
     $atRiskView = $atRiskView ?? 'all';
-    $sortColumn = $sortColumn ?? 'priority';
+    $sortColumn = $sortColumn ?? 'category';
     $sortDirection = $sortDirection ?? 'asc';
-    $allAtRiskCount = $allAtRiskCount ?? $rows->count();
-    $stockoutCount = $stockoutCount ?? 0;
+    $allRows = $allRows ?? collect($rows ?? []);
+    $allAtRiskCount = $allAtRiskCount ?? $allRows->count();
+    $stockoutCount = $stockoutCount ?? $allRows
+        ->filter(fn ($row): bool => ($row->months_cover ?? $row['months_cover'] ?? null) !== null
+            && (float) ($row->months_cover ?? $row['months_cover']) <= 2.0)
+        ->count();
     $embedded = (bool) ($embedded ?? false);
+    $pageSize = (int) ($pageSize ?? 25);
+    $stockoutWithinMonths = (float) ($stockoutWithinMonths ?? 2.0);
 
-    $sortIndicator = static function (string $column) use ($sortColumn, $sortDirection): string {
-        if ($sortColumn !== $column) {
-            return '';
-        }
+    $clientRows = $allRows
+        ->map(function ($row): array {
+            $row = (object) $row;
 
-        return $sortDirection === 'asc' ? ' ↑' : ' ↓';
-    };
+            return [
+                'item_id' => (int) $row->item_id,
+                'office_id' => (int) $row->office_id,
+                'item_name' => (string) $row->item_name,
+                'category_name' => (string) ($row->category_name ?? ''),
+                'category_sort_rank' => (int) ($row->category_sort_rank ?? 99),
+                'current_stock' => (int) $row->current_stock,
+                'reorder_level' => (int) $row->reorder_level,
+                'forecast_monthly_usage' => (float) $row->forecast_monthly_usage,
+                'months_cover' => $row->months_cover !== null ? (float) $row->months_cover : null,
+                'suggested_reorder_qty' => $row->suggested_reorder_qty !== null ? (int) $row->suggested_reorder_qty : null,
+                'projected_stockout_date' => $row->projected_stockout_date,
+                'latest_unit_cost' => $row->latest_unit_cost !== null ? (float) $row->latest_unit_cost : null,
+                'priority' => (string) $row->priority,
+            ];
+        })
+        ->values()
+        ->all();
 @endphp
 
 @if (! $embedded)
 <div class="owwa-pa-card fi-section rounded-xl bg-white shadow-sm ring-1 ring-gray-950/5 dark:bg-gray-900 dark:ring-white/10">
 @endif
-    <div class="{{ $embedded ? 'owwa-pa-slide-body' : 'fi-section-header-ctn px-5 py-3 border-b border-gray-200 dark:border-white/10' }}">
+    <div
+        class="{{ $embedded ? 'owwa-pa-slide-body' : 'fi-section-header-ctn px-5 py-3 border-b border-gray-200 dark:border-white/10' }}"
+        x-data="atRiskPreviewTable({
+            rows: @js($clientRows),
+            view: @js($atRiskView),
+            sortColumn: @js($sortColumn),
+            sortDirection: @js($sortDirection),
+            pageSize: {{ $pageSize }},
+            stockoutWithin: {{ $stockoutWithinMonths }},
+        })"
+        x-init="init()"
+    >
         @if (! $embedded)
         <div class="owwa-pa-table-header">
             <div>
@@ -30,7 +60,7 @@
                 <p class="fi-section-header-description mt-1">{{ $intro }}</p>
             </div>
             <div class="owwa-pa-table-actions">
-                <button type="button" wire:click="exportAtRiskPdf" class="owwa-pa-export-btn">
+                <button type="button" class="owwa-pa-export-btn" x-on:click="$wire.exportAtRiskPdf(view)">
                     Export PDF
                 </button>
             </div>
@@ -40,146 +70,141 @@
             <button
                 type="button"
                 role="tab"
-                wire:click="setAtRiskView('all')"
-                class="owwa-pa-view-tab {{ $atRiskView === 'all' ? 'is-active' : '' }}"
-                aria-selected="{{ $atRiskView === 'all' ? 'true' : 'false' }}"
+                x-on:click="setView('all')"
+                class="owwa-pa-view-tab"
+                x-bind:class="{ 'is-active': view === 'all' }"
+                x-bind:aria-selected="view === 'all' ? 'true' : 'false'"
             >
-                All at-risk ({{ $allAtRiskCount }})
+                <span x-text="'All at-risk (' + allCount + ')'">All at-risk ({{ $allAtRiskCount }})</span>
             </button>
             <button
                 type="button"
                 role="tab"
-                wire:click="setAtRiskView('stockouts')"
-                class="owwa-pa-view-tab {{ $atRiskView === 'stockouts' ? 'is-active' : '' }}"
-                aria-selected="{{ $atRiskView === 'stockouts' ? 'true' : 'false' }}"
+                x-on:click="setView('stockouts')"
+                class="owwa-pa-view-tab"
+                x-bind:class="{ 'is-active': view === 'stockouts' }"
+                x-bind:aria-selected="view === 'stockouts' ? 'true' : 'false'"
             >
-                Stocking out in ≤2 mo ({{ $stockoutCount }})
+                <span x-text="'Stocking out in ≤2 mo (' + stockoutCount + ')'">Stocking out in ≤2 mo ({{ $stockoutCount }})</span>
             </button>
         </div>
         <p class="owwa-pa-tab-helper">
             Stocking-out view includes items projected to run out within 2 months, based on the last 12 months of issuances from the supply office.
         </p>
-    </div>
-    <div class="owwa-pa-slide-table">
-        @if($rows->isEmpty())
-            <div class="owwa-empty-state">
-                <svg class="owwa-empty-state-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
-                          d="M12 6v6l4 2" />
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
-                          d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                <h3 class="owwa-empty-state-title">
-                    {{ $atRiskView === 'stockouts' ? 'No projected stockouts in this filter' : 'No at-risk items for this filter' }}
-                </h3>
-                <p class="owwa-empty-state-text">
-                    @if($atRiskView === 'stockouts')
-                        No items are projected to run out within 2 months at the current issuing pace.
-                        Forecast uses the last 12 months of issuances from the supply office; try All at-risk or a different category.
-                    @else
-                        Try another category or date range, or confirm issuance history exists for the selected period.
-                    @endif
-                </p>
+
+        <div class="owwa-pa-slide-table">
+            <div x-show="sortedRows().length === 0" x-cloak>
+                <div class="owwa-empty-state">
+                    <svg class="owwa-empty-state-icon" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round"
+                              d="M12 6v6l4 2" />
+                        <path stroke-linecap="round" stroke-linejoin="round"
+                              d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <h3 class="owwa-empty-state-title" x-text="view === 'stockouts' ? 'No projected stockouts in this filter' : 'No at-risk items for this filter'">
+                        {{ $atRiskView === 'stockouts' ? 'No projected stockouts in this filter' : 'No at-risk items for this filter' }}
+                    </h3>
+                    <p class="owwa-empty-state-text">
+                        <span x-show="view === 'stockouts'">
+                            No items are projected to run out within 2 months at the current issuing pace.
+                            Forecast uses the last 12 months of issuances from the supply office; try All at-risk or a different category.
+                        </span>
+                        <span x-show="view !== 'stockouts'">
+                            Try another category or date range, or confirm issuance history exists for the selected period.
+                        </span>
+                    </p>
+                </div>
             </div>
-        @else
+
             <div
+                x-show="sortedRows().length > 0"
                 class="owwa-table-wrap owwa-table-wrap--scroll owwa-pa-table-shell owwa-pa-table-scroll"
-                x-data="{ pending: false }"
-                x-on:scroll.debounce.200ms="
-                    if (pending || $el.scrollTop < 24) {
-                        return;
-                    }
-                    if (($el.scrollTop + $el.clientHeight) < ($el.scrollHeight - 80)) {
-                        return;
-                    }
-                    pending = true;
-                    $wire.loadMoreAtRiskRows().finally(() => { pending = false; });
-                "
+                x-on:scroll.debounce.200ms="onScroll($event)"
             >
-                <table class="owwa-data-table">
+                <table class="owwa-data-table owwa-pa-reorders-table">
                     <thead>
                     <tr>
                         <th style="width: 80px;">
-                            <button type="button" class="owwa-pa-sort-btn" wire:click="sortAtRiskBy('priority')">
-                                Priority{{ $sortIndicator('priority') }}
+                            <button type="button" class="owwa-pa-sort-btn" x-on:click="sortBy('priority')">
+                                Priority<span x-text="sortIndicator('priority')"></span>
                             </button>
                         </th>
-                        <th>Category</th>
                         <th>Item</th>
-                        <th>Office</th>
                         <th class="owwa-num">Stock</th>
                         <th class="owwa-num">Forecast/mo</th>
                         <th class="owwa-num">
-                            <button type="button" class="owwa-pa-sort-btn" wire:click="sortAtRiskBy('cover')">
-                                Cover{{ $sortIndicator('cover') }}
+                            <button type="button" class="owwa-pa-sort-btn" x-on:click="sortBy('cover')">
+                                Cover<span x-text="sortIndicator('cover')"></span>
                             </button>
                         </th>
                         <th class="owwa-num">
-                            <button type="button" class="owwa-pa-sort-btn" wire:click="sortAtRiskBy('stockout')">
-                                Stockout{{ $sortIndicator('stockout') }}
+                            <button type="button" class="owwa-pa-sort-btn" x-on:click="sortBy('stockout')">
+                                Stockout<span x-text="sortIndicator('stockout')"></span>
                             </button>
                         </th>
                         <th class="owwa-num">Unit cost</th>
                         <th class="owwa-num">Suggested</th>
-                        <th style="width: 72px;">Actions</th>
                     </tr>
                     </thead>
                     <tbody>
-                    @foreach($rows as $row)
-                        <tr wire:key="at-risk-{{ $row->item_id }}-{{ $row->office_id }}" class="owwa-data-table__row {{ $row->priority === 'High' ? 'owwa-row-low' : 'owwa-row-ok' }}">
+                    <template x-for="row in visibleRows()" :key="row.item_id + '-' + row.office_id">
+                        <tr class="owwa-data-table__row" x-bind:class="row.priority === 'High' ? 'owwa-row-low' : 'owwa-row-medium'">
                             <td>
-                                @if($row->priority === 'High')
-                                    <span class="owwa-status-badge owwa-status-low">High</span>
-                                @else
-                                    <span class="owwa-status-badge" style="background:#fff7ed;color:#9a3412;border:1px solid #fed7aa;">Medium</span>
-                                @endif
+                                <span
+                                    class="owwa-status-badge"
+                                    x-bind:class="row.priority === 'High' ? 'owwa-status-low' : 'owwa-status-medium'"
+                                    x-text="row.priority"
+                                ></span>
                             </td>
-                            <td class="owwa-cell-muted">{{ $row->category_name ?? '—' }}</td>
-                            <td class="owwa-cell-primary">
-                                {{ $row->item_name }}
-                            </td>
-                            <td class="owwa-cell-muted">{{ $row->office_name }}</td>
-                            <td class="owwa-num {{ $row->current_stock <= $row->reorder_level ? 'owwa-cell-danger' : 'owwa-cell-primary' }}">
-                                {{ number_format($row->current_stock) }}
-                            </td>
-                            <td class="owwa-num owwa-cell-muted">
-                                {{ number_format($row->forecast_monthly_usage, 1) }}
-                            </td>
+                            <td class="owwa-cell-primary" x-text="row.item_name"></td>
+                            <td
+                                class="owwa-num"
+                                x-bind:class="row.current_stock <= row.reorder_level ? 'owwa-cell-danger' : 'owwa-cell-primary'"
+                                x-text="formatInt(row.current_stock)"
+                            ></td>
+                            <td class="owwa-num owwa-cell-muted" x-text="formatFixed(row.forecast_monthly_usage, 1)"></td>
                             <td class="owwa-num owwa-cell-muted owwa-pa-cover-cell">
-                                @if($row->months_cover !== null)
-                                    <span class="owwa-pa-cover-bar-wrap" aria-hidden="true">
-                                        <span class="owwa-pa-cover-bar" style="width: {{ min(100, (float) $row->months_cover / 6 * 100) }}%;"></span>
+                                <template x-if="row.months_cover !== null">
+                                    <span>
+                                        <span class="owwa-pa-cover-bar-wrap" aria-hidden="true">
+                                            <span class="owwa-pa-cover-bar" x-bind:style="'width: ' + Math.min(100, row.months_cover / 6 * 100) + '%;'"></span>
+                                        </span>
+                                        <span class="owwa-pa-cover-val" x-text="formatFixed(row.months_cover, 1) + ' mo'"></span>
                                     </span>
-                                    <span class="owwa-pa-cover-val">{{ number_format($row->months_cover, 1) }} mo</span>
-                                @else
+                                </template>
+                                <template x-if="row.months_cover === null">
                                     <span class="owwa-pa-cover-val">—</span>
-                                @endif
+                                </template>
                             </td>
-                            <td class="owwa-num owwa-cell-muted">{{ $row->projected_stockout_date ?? '—' }}</td>
-                            <td class="owwa-num owwa-cell-muted">
-                                {{ $row->latest_unit_cost !== null ? '₱' . number_format($row->latest_unit_cost, 2) : '—' }}
-                            </td>
-                            <td class="owwa-num owwa-cell-primary">
-                                {{ $row->suggested_reorder_qty !== null ? number_format($row->suggested_reorder_qty) : '—' }}
-                            </td>
-                            <td>
-                                @if(isset($row->item_category_id))
-                                    <a
-                                        href="{{ StockLevels::getUrl(['category' => $row->item_category_id]) }}"
-                                        class="owwa-pa-row-link"
-                                        title="Stock levels"
-                                    >Stock</a>
-                                @endif
-                            </td>
+                            <td class="owwa-num owwa-cell-muted" x-text="row.projected_stockout_date || '—'"></td>
+                            <td class="owwa-num owwa-cell-muted" x-text="row.latest_unit_cost !== null ? ('₱' + formatFixed(row.latest_unit_cost, 2)) : '—'"></td>
+                            <td class="owwa-num owwa-cell-primary" x-text="row.suggested_reorder_qty !== null ? formatInt(row.suggested_reorder_qty) : '—'"></td>
                         </tr>
-                    @endforeach
+                    </template>
                     </tbody>
                 </table>
-                @if($hasMoreAtRisk ?? false)
-                    <div class="owwa-pa-load-more">Scroll to see more</div>
-                @endif
+                <div class="owwa-pa-load-more" x-show="hasMore()" x-cloak>Scroll to see more</div>
             </div>
-        @endif
+
+            {{-- SSR fallback for Livewire tests without Alpine --}}
+            <noscript>
+                @php
+                    $ssrRows = collect($clientRows)->take($pageSize);
+                @endphp
+                @if($ssrRows->isEmpty())
+                    <p>No at-risk items for this filter</p>
+                @else
+                    <ul>
+                        @foreach($ssrRows as $row)
+                            <li>{{ $row['item_name'] }}</li>
+                        @endforeach
+                    </ul>
+                    @if(count($clientRows) > $pageSize)
+                        <div class="owwa-pa-load-more">Scroll to see more</div>
+                    @endif
+                @endif
+            </noscript>
+        </div>
     </div>
 @if (! $embedded)
 </div>

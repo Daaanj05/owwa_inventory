@@ -114,7 +114,6 @@ class ItemsRelationManager extends RelationManager
                     ->wrap()
                     ->placeholder('—'),
             ])
-            ->defaultSort('priority')
             ->paginated(false)
             ->striped()
             ->headerActions([])

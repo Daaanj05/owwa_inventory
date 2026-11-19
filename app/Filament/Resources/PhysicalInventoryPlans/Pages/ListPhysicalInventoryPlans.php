@@ -9,17 +9,21 @@ use App\Filament\Resources\PhysicalCountSessions\PhysicalCountSessionResource;
 use App\Filament\Resources\PhysicalInventoryPlans\PhysicalInventoryPlanResource;
 use App\Filament\Support\OwwaFormModalDefaults;
 use App\Models\ItemCategory;
+use App\Models\PhysicalInventoryPlan;
 use App\Models\PhysicalInventoryPlanLine;
 use App\Models\User;
+use App\Services\InventoryPlanScheduleSyncService;
 use App\Services\InventoryPlanStartCountService;
 use App\Services\InventoryPlanValidator;
 use App\Support\CategoryWizardBreadcrumb;
 use Filament\Actions\CreateAction;
 use Filament\Facades\Filament;
+use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ListRecords;
 use Filament\Tables\Table;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Validation\ValidationException;
 use Livewire\Attributes\Url;
 
 class ListPhysicalInventoryPlans extends ListRecords
@@ -105,7 +109,17 @@ class ListPhysicalInventoryPlans extends ListRecords
 
         $line = PhysicalInventoryPlanLine::query()->findOrFail($lineId);
 
-        $session = app(InventoryPlanStartCountService::class)->startCount($line, $user);
+        try {
+            $session = app(InventoryPlanStartCountService::class)->startCount($line, $user);
+        } catch (ValidationException $exception) {
+            Notification::make()
+                ->title('Cannot start count')
+                ->body(collect($exception->errors())->flatten()->first() ?? 'This schedule line cannot be started.')
+                ->danger()
+                ->send();
+
+            return;
+        }
 
         $this->redirect(PhysicalCountSessionResource::getUrl('view', ['record' => $session]));
     }
@@ -165,12 +179,23 @@ class ListPhysicalInventoryPlans extends ListRecords
                 })
                 ->before(function (CreateAction $action): void {
                     $data = $action->getFormData();
+                    $expanded = app(InventoryPlanScheduleSyncService::class)
+                        ->expandSlotsToLines($data['schedule_slots'] ?? []);
 
                     app(InventoryPlanValidator::class)->validateForSave(
                         $data,
                         null,
-                        $data['lines'] ?? [],
+                        $expanded,
                     );
+                })
+                ->using(function (array $data): PhysicalInventoryPlan {
+                    $slots = array_values($data['schedule_slots'] ?? []);
+                    unset($data['schedule_slots'], $data['lines']);
+
+                    $plan = PhysicalInventoryPlan::query()->create($data);
+                    app(InventoryPlanScheduleSyncService::class)->syncPlanLines($plan, $slots);
+
+                    return $plan->refresh();
                 })
                 ->successRedirectUrl(fn ($record): string => PhysicalInventoryPlanResource::viewModalUrl($record))
                 ->visible(fn (): bool => ! $this->showingArchived),

@@ -10,6 +10,7 @@ use App\Services\TrustedDeviceService;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\RateLimiter;
 use Livewire\Livewire;
 use Tests\TestCase;
 
@@ -105,6 +106,143 @@ class TrustedDeviceLoginTest extends TestCase
             collect(\Illuminate\Support\Facades\Cookie::getQueuedCookies())
                 ->contains(fn ($cookie): bool => $cookie->getName() === TrustedDeviceService::COOKIE)
         );
+    }
+
+    public function test_wrong_password_does_not_open_the_verification_code_step(): void
+    {
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+
+        User::factory()->create([
+            'role' => User::ROLE_EMPLOYEE,
+            'email' => 'wrong.password@example.com',
+            'password' => 'password',
+            'email_verified_at' => now(),
+            'must_change_password' => false,
+            'has_email_authentication' => true,
+        ]);
+
+        Livewire::test(Login::class)
+            ->set('data', [
+                'email' => 'wrong.password@example.com',
+                'password' => 'not-the-password',
+                'remember' => false,
+            ])
+            ->call('authenticate')
+            ->assertHasFormErrors(['email'])
+            ->assertSet('userUndertakingMultiFactorAuthentication', null)
+            ->assertSee('The email or password you entered is incorrect.')
+            ->assertDontSee('Verify it is you');
+
+        $this->assertGuest();
+        $this->assertNull(session('owwa.login_pending_credentials'));
+    }
+
+    public function test_verification_code_step_keeps_a_verified_password_after_the_field_is_cleared(): void
+    {
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+
+        $user = User::factory()->create([
+            'role' => User::ROLE_EMPLOYEE,
+            'email' => 'keep.password@example.com',
+            'password' => 'password',
+            'email_verified_at' => now(),
+            'must_change_password' => false,
+            'has_email_authentication' => true,
+        ]);
+
+        $component = Livewire::test(Login::class)
+            ->set('data', [
+                'email' => 'keep.password@example.com',
+                'password' => 'password',
+                'remember' => false,
+            ])
+            ->call('authenticate');
+
+        $this->assertNotNull($component->get('userUndertakingMultiFactorAuthentication'));
+
+        $pending = session('owwa.login_pending_credentials');
+        $this->assertIsArray($pending);
+        $this->assertNotSame('password', $pending['password'] ?? null);
+
+        session()->put('filament_email_authentication_code', Hash::make('555555'));
+        session()->put('filament_email_authentication_code_expires_at', now()->addMinutes(4));
+
+        $component->instance()->form->fill([
+            'email' => 'keep.password@example.com',
+            'password' => null,
+            'remember' => false,
+        ]);
+
+        $component
+            ->set('data.email', 'keep.password@example.com')
+            ->set('data.password', null)
+            ->set('data.multiFactor', [
+                'email_code' => [
+                    'code' => '555555',
+                ],
+                'rememberDevice' => false,
+            ])
+            ->call('authenticate')
+            ->assertHasNoFormErrors()
+            ->assertDontSee('The email or password you entered is incorrect.');
+
+        $this->assertAuthenticatedAs($user);
+        $this->assertNull(session('owwa.login_pending_credentials'));
+    }
+
+    public function test_invalid_verification_code_stays_on_the_code_step(): void
+    {
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+
+        $email = 'bad.code@example.com';
+        $throttleKey = 'filament-login:'.sha1(strtolower($email).'|127.0.0.1');
+        RateLimiter::clear($throttleKey);
+
+        User::factory()->create([
+            'role' => User::ROLE_EMPLOYEE,
+            'email' => $email,
+            'password' => 'password',
+            'email_verified_at' => now(),
+            'must_change_password' => false,
+            'has_email_authentication' => true,
+        ]);
+
+        $component = Livewire::test(Login::class)
+            ->set('data', [
+                'email' => $email,
+                'password' => 'password',
+                'remember' => false,
+            ])
+            ->call('authenticate');
+
+        $this->assertNotNull($component->get('userUndertakingMultiFactorAuthentication'));
+
+        session()->put('filament_email_authentication_code', Hash::make('555555'));
+        session()->put('filament_email_authentication_code_expires_at', now()->addMinutes(4));
+
+        $component->instance()->form->fill([
+            'email' => $email,
+            'password' => null,
+            'remember' => false,
+        ]);
+
+        $component
+            ->set('data.email', $email)
+            ->set('data.password', null)
+            ->set('data.multiFactor', [
+                'email_code' => [
+                    'code' => '000000',
+                ],
+                'rememberDevice' => false,
+            ])
+            ->call('authenticate')
+            ->assertHasFormErrors(['multiFactor.email_code.code'])
+            ->assertSet('userUndertakingMultiFactorAuthentication', fn ($value) => filled($value))
+            ->assertSee('The code you entered is invalid.')
+            ->assertDontSee('The email or password you entered is incorrect.');
+
+        $this->assertGuest();
+        $this->assertSame(0, RateLimiter::attempts($throttleKey));
     }
 
     public function test_expired_trusted_device_still_requires_mfa(): void

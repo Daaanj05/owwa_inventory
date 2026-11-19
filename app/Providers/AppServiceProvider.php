@@ -26,10 +26,13 @@ use App\Support\RetryingFilesystem;
 use Filament\Actions\Action;
 use Filament\Support\View\Components\ModalComponent;
 use Filament\Tables\Table;
+use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Filesystem\Filesystem;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
@@ -56,6 +59,10 @@ class AppServiceProvider extends ServiceProvider
         if ($this->app->environment('production')) {
             URL::forceScheme('https');
         }
+
+        RateLimiter::for('owwa-exports', function (Request $request) {
+            return Limit::perMinute(10)->by($request->user()?->id ?: $request->ip());
+        });
 
         Password::defaults(fn (): Password => Password::min(8)
             ->letters()

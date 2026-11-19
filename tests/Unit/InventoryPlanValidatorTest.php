@@ -145,9 +145,9 @@ class InventoryPlanValidatorTest extends TestCase
 
     public function test_blocks_plan_completion_when_a_line_has_no_complete_session(): void
     {
-        $plan = PhysicalInventoryPlan::factory()
-            ->approved()
-            ->create();
+        $plan = PhysicalInventoryPlan::factory()->create([
+            'status' => PhysicalInventoryPlan::STATUS_IN_PROGRESS,
+        ]);
 
         $line = PhysicalInventoryPlanLine::factory()->create([
             'physical_inventory_plan_id' => $plan->id,

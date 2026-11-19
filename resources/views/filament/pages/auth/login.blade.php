@@ -140,10 +140,18 @@
                 </div>
             @endif
 
-            @if ($errors->any())
+            @if ($isMfaChallenge && $errors->any())
                 <div class="owwa-login-error" role="alert">
-                    <p class="owwa-login-error-title">Sign-in failed</p>
-                    <p class="owwa-login-error-text">The email or password you entered is incorrect. Please double-check your credentials and try again.</p>
+                    <p class="owwa-login-error-title">Verification code</p>
+                    <p class="owwa-login-error-text">{{ $errors->first() }}</p>
+                </div>
+            @elseif (! $isMfaChallenge && $errors->any())
+                @php
+                    $invalidEmail = $errors->first('data.email') === \App\Filament\Pages\Auth\Login::INVALID_EMAIL_MESSAGE;
+                @endphp
+                <div class="owwa-login-error" role="alert">
+                    <p class="owwa-login-error-title">{{ $invalidEmail ? 'Invalid email' : 'Sign-in failed' }}</p>
+                    <p class="owwa-login-error-text">{{ $invalidEmail ? \App\Filament\Pages\Auth\Login::INVALID_EMAIL_MESSAGE : 'The email or password you entered is incorrect. Please double-check your credentials and try again.' }}</p>
                 </div>
             @endif
 

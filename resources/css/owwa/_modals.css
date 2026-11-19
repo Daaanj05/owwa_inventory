@@ -3691,6 +3691,46 @@
     color: #64748b;
 }
 
+.owwa-ai-run-modal-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin: 0 0 0.75rem;
+}
+
+.owwa-ai-run-modal-tab {
+    border: 1px solid #e2e8f0;
+    background: #fff;
+    color: #64748b;
+    border-radius: 9999px;
+    padding: 0.35rem 0.75rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.owwa-ai-run-modal-tab.is-active {
+    border-color: #93c5fd;
+    background: #eff6ff;
+    color: #1d4ed8;
+}
+
+.dark .owwa-ai-run-modal-tab {
+    border-color: #374151;
+    background: #111827;
+    color: #9ca3af;
+}
+
+.dark .owwa-ai-run-modal-tab.is-active {
+    border-color: #1d4ed8;
+    background: #1e3a5f;
+    color: #bfdbfe;
+}
+
+.owwa-ai-run-modal-tab-panels {
+    min-height: 0;
+}
+
 .owwa-ai-run-modal-items-scroll {
     max-height: 35vh;
     overflow: auto;

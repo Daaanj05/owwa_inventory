@@ -30,14 +30,6 @@ class PhysicalInventoryPlanFactory extends Factory
         ];
     }
 
-    public function approved(): static
-    {
-        return $this->state(fn (): array => [
-            'status' => PhysicalInventoryPlan::STATUS_APPROVED,
-            'approved_at' => now(),
-        ]);
-    }
-
     /**
      * @param  array<int, array{office_id?: int, item_category_id?: int, planned_date?: string}>|null  $lines
      */

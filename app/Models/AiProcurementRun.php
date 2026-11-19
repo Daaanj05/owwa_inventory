@@ -35,7 +35,9 @@ class AiProcurementRun extends Model
 
     public function items(): HasMany
     {
-        return $this->hasMany(AiProcurementItem::class, 'run_id');
+        return $this->hasMany(AiProcurementItem::class, 'run_id')
+            ->orderByRaw("CASE priority WHEN 'High' THEN 0 WHEN 'Medium' THEN 1 ELSE 2 END")
+            ->orderBy('item_name');
     }
 
     public function creator(): BelongsTo

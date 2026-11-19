@@ -60,7 +60,7 @@ class LinesRelationManager extends RelationManager
                     ->label('Start count')
                     ->icon('heroicon-o-play')
                     ->color('primary')
-                    ->visible(fn (PhysicalInventoryPlanLine $record): bool => $record->physical_count_session_id === null)
+                    ->visible(fn (PhysicalInventoryPlanLine $record): bool => $record->canStartCount())
                     ->action(function (PhysicalInventoryPlanLine $record): void {
                         $user = Filament::auth()->user();
                         if ($user === null) {
@@ -89,6 +89,6 @@ class LinesRelationManager extends RelationManager
             ])
             ->headerActions([])
             ->emptyStateHeading('No schedule lines')
-            ->emptyStateDescription('Edit the schedule to add offices and planned dates.');
+            ->emptyStateDescription('Edit the schedule to add count dates for all offices.');
     }
 }

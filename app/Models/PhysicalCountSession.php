@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class PhysicalCountSession extends Model
 {
@@ -118,6 +119,11 @@ class PhysicalCountSession extends Model
     public function recordedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'recorded_by');
+    }
+
+    public function inventoryPlanLine(): HasOne
+    {
+        return $this->hasOne(PhysicalInventoryPlanLine::class, 'physical_count_session_id');
     }
 
     public function lines(): HasMany

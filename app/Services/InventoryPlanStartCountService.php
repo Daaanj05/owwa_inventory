@@ -20,6 +20,12 @@ class InventoryPlanStartCountService
             ]);
         }
 
+        if ($line->isOverdue()) {
+            throw ValidationException::withMessages([
+                'planned_date' => 'This schedule line is overdue and can no longer be started.',
+            ]);
+        }
+
         $line->loadMissing(['plan', 'office', 'itemCategory']);
 
         $category = $line->itemCategory ?? ItemCategory::query()->find($line->item_category_id);
@@ -47,17 +53,8 @@ class InventoryPlanStartCountService
 
         $plan = $line->plan;
 
-        if ($plan instanceof PhysicalInventoryPlan) {
-            if ($plan->status === PhysicalInventoryPlan::STATUS_APPROVED) {
-                $plan->update(['status' => PhysicalInventoryPlan::STATUS_IN_PROGRESS]);
-            }
-
-            if ($plan->status === PhysicalInventoryPlan::STATUS_DRAFT) {
-                $plan->update([
-                    'status' => PhysicalInventoryPlan::STATUS_IN_PROGRESS,
-                    'approved_at' => $plan->approved_at ?? now(),
-                ]);
-            }
+        if ($plan instanceof PhysicalInventoryPlan && $plan->status === PhysicalInventoryPlan::STATUS_DRAFT) {
+            $plan->update(['status' => PhysicalInventoryPlan::STATUS_IN_PROGRESS]);
         }
 
         return $session;

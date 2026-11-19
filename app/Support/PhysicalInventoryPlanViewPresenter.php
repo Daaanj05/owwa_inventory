@@ -16,7 +16,6 @@ class PhysicalInventoryPlanViewPresenter
 
         $statusLabel = match ($record->status) {
             PhysicalInventoryPlan::STATUS_DRAFT => 'Draft',
-            PhysicalInventoryPlan::STATUS_APPROVED => 'Approved',
             PhysicalInventoryPlan::STATUS_IN_PROGRESS => 'In progress',
             PhysicalInventoryPlan::STATUS_COMPLETED => 'Completed',
             PhysicalInventoryPlan::STATUS_CANCELLED => 'Cancelled',
@@ -26,7 +25,6 @@ class PhysicalInventoryPlanViewPresenter
         $statusClass = match ($record->status) {
             PhysicalInventoryPlan::STATUS_COMPLETED => 'owwa-pc-status-badge--complete',
             PhysicalInventoryPlan::STATUS_IN_PROGRESS => 'owwa-pc-status-badge--progress',
-            PhysicalInventoryPlan::STATUS_APPROVED => 'owwa-pc-status-badge--progress',
             default => 'owwa-pc-status-badge--pending',
         };
 

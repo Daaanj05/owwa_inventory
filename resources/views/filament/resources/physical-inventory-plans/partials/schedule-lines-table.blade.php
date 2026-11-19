@@ -62,7 +62,7 @@
                                 </span>
                             </td>
                             <td class="owwa-inventory-plan-schedule-actions whitespace-nowrap">
-                                @if ($line->physical_count_session_id === null)
+                                @if ($line->canStartCount())
                                     <button
                                         type="button"
                                         wire:click="startPlanLineCount({{ $line->id }})"
@@ -70,6 +70,10 @@
                                     >
                                         Start count
                                     </button>
+                                @elseif ($line->physical_count_session_id === null && $line->isOverdue())
+                                    <span class="owwa-inventory-plan-status owwa-inventory-plan-status--overdue">
+                                        Cannot start
+                                    </span>
                                 @elseif (! $line->physicalCountSession?->isComplete())
                                     <a
                                         href="{{ PhysicalCountSessionResource::getUrl('view', ['record' => $line->physical_count_session_id]) }}"

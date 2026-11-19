@@ -12,6 +12,7 @@ use App\Models\PhysicalCountLine;
 use App\Models\PhysicalCountSession;
 use App\Models\StockOpeningBalance;
 use App\Models\Transfer;
+use App\Models\User;
 use App\Support\AnnexA1BlockLayout;
 use App\Support\AnnexA4Layout;
 use App\Support\ConsumableInventoryType;
@@ -1737,14 +1738,20 @@ class OwwaItemReportService
      */
     public function buildRpciFastPage(PhysicalCountSession $session): array
     {
-        $session->loadMissing(['office', 'lines.item']);
+        $session->loadMissing(['office', 'lines.item', 'recordedBy', 'inventoryPlanLine.plan.recordedBy']);
 
         $header = $this->physicalCountHeaderData($session);
         $lines = $this->physicalCountFastLines($session, $session->lines);
         $minRows = PhysicalCountPageLayout::templateDetailRows('RPCI');
         $signatures = $this->physicalCountSignaturePairs($session);
 
-        return $this->physicalCountFastPage($header, $lines, $signatures, $minRows);
+        return $this->physicalCountFastPage(
+            $header,
+            $lines,
+            $signatures,
+            $minRows,
+            preparedBy: $this->physicalCountPreparedByName($session),
+        );
     }
 
     /**
@@ -1754,7 +1761,7 @@ class OwwaItemReportService
      */
     public function buildRpcppeFastPage(PhysicalCountSession $session): array
     {
-        $session->loadMissing(['office', 'lines.item']);
+        $session->loadMissing(['office', 'lines.item', 'recordedBy', 'inventoryPlanLine.plan.recordedBy']);
 
         $header = $this->physicalCountHeaderData($session, $session->ppe_type);
         $lines = $this->physicalCountFastLines($session, $session->lines);
@@ -1765,6 +1772,7 @@ class OwwaItemReportService
             $lines,
             $this->physicalCountSignaturePairs($session),
             $minRows,
+            preparedBy: $this->physicalCountPreparedByName($session),
         );
     }
 
@@ -1775,9 +1783,10 @@ class OwwaItemReportService
      */
     public function buildRpcspFastPages(PhysicalCountSession $session): array
     {
-        $session->loadMissing(['office', 'lines.item']);
+        $session->loadMissing(['office', 'lines.item', 'recordedBy', 'inventoryPlanLine.plan.recordedBy']);
 
         $signatures = $this->physicalCountSignaturePairs($session);
+        $preparedBy = $this->physicalCountPreparedByName($session);
         $minRows = PhysicalCountPageLayout::templateDetailRows('RPCSP');
         $pages = [];
 
@@ -1791,6 +1800,7 @@ class OwwaItemReportService
                 $signatures,
                 $minRows,
                 $lines === [],
+                $preparedBy,
             );
         }
 
@@ -1834,6 +1844,7 @@ class OwwaItemReportService
         array $signatures,
         int $minRows,
         bool $nothingToReport = false,
+        string $preparedBy = '',
     ): array {
         return [
             'inventory_type' => (string) ($header['inventory_type'] ?? ''),
@@ -1841,12 +1852,37 @@ class OwwaItemReportService
             'fund_cluster' => (string) ($header['fund_cluster'] ?? ''),
             'accountable_officer_clause' => (string) ($header['accountable_officer'] ?? ''),
             'lines' => $lines,
+            'prepared_by' => $preparedBy,
             'certified_by' => $signatures['certified_by'],
             'approved_by' => $signatures['approved_by'],
             'verified_by' => $signatures['verified_by'],
             'min_detail_rows' => max($minRows, count($lines)),
             'nothing_to_report' => $nothingToReport,
         ];
+    }
+
+    public function physicalCountPreparedByName(PhysicalCountSession $session): string
+    {
+        $session->loadMissing(['recordedBy', 'inventoryPlanLine.plan.recordedBy', 'office']);
+
+        $planPreparer = $session->inventoryPlanLine?->plan?->recordedBy?->name;
+        if (filled($planPreparer)) {
+            return (string) $planPreparer;
+        }
+
+        if (filled($session->recordedBy?->name)) {
+            return (string) $session->recordedBy->name;
+        }
+
+        if (filled($session->office?->supply_custodian_name)) {
+            return (string) $session->office->supply_custodian_name;
+        }
+
+        $user = auth()->user();
+
+        return $user instanceof User && $user->isSupplyCustodian()
+            ? (string) $user->name
+            : '';
     }
 
     /**

@@ -9,6 +9,7 @@ use App\Support\MailDelivery;
 use App\Support\MailDeliveryResult;
 use App\Support\OneTimeCode;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
 
 class EmailVerificationCodeService
@@ -17,6 +18,8 @@ class EmailVerificationCodeService
     {
         $code = OneTimeCode::generate();
         $expiresAt = now()->addMinutes((int) config('auth.verification.expire', 60));
+
+        RateLimiter::clear($this->codeThrottleKey($user->email));
 
         $user->forceFill([
             'email_verification_code_hash' => OneTimeCode::hash($code),
@@ -103,6 +106,8 @@ class EmailVerificationCodeService
                 'remember_token' => Str::random(60),
             ])->save();
 
+            RateLimiter::clear($this->codeThrottleKey($normalizedEmail));
+
             return $user->fresh();
         });
     }
@@ -135,12 +140,39 @@ class EmailVerificationCodeService
         $normalizedCode = trim($code);
 
         if (
-            $user->email_verification_code_expires_at === null
+            $user->email_verification_code_hash === null
+            || $user->email_verification_code_expires_at === null
             || $user->email_verification_code_expires_at->isPast()
         ) {
             return false;
         }
 
-        return OneTimeCode::matches($normalizedCode, $user->email_verification_code_hash);
+        if (OneTimeCode::matches($normalizedCode, $user->email_verification_code_hash)) {
+            return true;
+        }
+
+        $throttleKey = $this->codeThrottleKey($user->email);
+        RateLimiter::hit($throttleKey, $this->codeDecaySeconds());
+
+        if (RateLimiter::tooManyAttempts($throttleKey, $this->codeMaxAttempts())) {
+            $this->clear($user);
+        }
+
+        return false;
+    }
+
+    protected function codeThrottleKey(string $email): string
+    {
+        return 'email-verification-code:'.sha1(mb_strtolower(trim($email)));
+    }
+
+    protected function codeMaxAttempts(): int
+    {
+        return max(1, (int) config('inventory.one_time_code_max_attempts', 5));
+    }
+
+    protected function codeDecaySeconds(): int
+    {
+        return max(1, (int) config('auth.verification.expire', 60) * 60);
     }
 }

@@ -254,7 +254,16 @@ class ItemBulkCreateAction
                     ->placeholder('Select UACS object code'),
                 TextInput::make('estimated_useful_life')
                     ->hiddenLabel()
-                    ->placeholder('Months, e.g. 36'),
+                    ->placeholder('Months, e.g. 36')
+                    ->required(fn (Get $get): bool => filled($get('base_name'))
+                        || filled($get('unit'))
+                        || filled($get('property_class'))
+                        || filled($get('sub_item'))
+                        || filled($get('description'))
+                        || filled($get('uacs_object_code_id')))
+                    ->validationMessages([
+                        'required' => 'Estimated useful life is required.',
+                    ]),
                 TextInput::make('description')
                     ->hiddenLabel()
                     ->maxLength(500),

@@ -12,6 +12,7 @@ use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Notification;
+use Illuminate\Support\Facades\RateLimiter;
 use Livewire\Livewire;
 use Tests\TestCase;
 
@@ -107,5 +108,37 @@ class EmailVerificationCodeTest extends TestCase
             ->assertHasFormErrors(['code']);
 
         $this->assertNull($user->fresh()->email_verified_at);
+    }
+
+    public function test_verification_code_is_invalidated_after_too_many_wrong_guesses(): void
+    {
+        RateLimiter::clear('email-verification-code:'.sha1(strtolower('lock.verify@example.com')));
+
+        $office = Office::factory()->create();
+        $user = User::factory()->unverified()->create([
+            'role' => User::ROLE_EMPLOYEE,
+            'office_id' => $office->id,
+            'email' => 'lock.verify@example.com',
+        ]);
+
+        $code = '123456';
+        $user->forceFill([
+            'email_verification_code_hash' => OneTimeCode::hash($code),
+            'email_verification_code_expires_at' => now()->addHour(),
+        ])->save();
+
+        $service = app(EmailVerificationCodeService::class);
+
+        for ($i = 0; $i < 5; $i++) {
+            $this->assertFalse($service->codeIsValid('lock.verify@example.com', '000000'));
+        }
+
+        $user->refresh();
+        $this->assertNull($user->email_verification_code_hash);
+        $this->assertNull($user->email_verification_code_expires_at);
+        $this->assertFalse($service->codeIsValid('lock.verify@example.com', $code));
+
+        $newCode = $service->issue($user->fresh());
+        $this->assertTrue($service->codeIsValid('lock.verify@example.com', $newCode));
     }
 }

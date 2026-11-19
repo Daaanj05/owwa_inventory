@@ -15,8 +15,6 @@ class PhysicalInventoryPlan extends Model
 
     public const STATUS_DRAFT = 'draft';
 
-    public const STATUS_APPROVED = 'approved';
-
     public const STATUS_IN_PROGRESS = 'in_progress';
 
     public const STATUS_COMPLETED = 'completed';
@@ -94,11 +92,6 @@ class PhysicalInventoryPlan extends Model
         return $this->status === self::STATUS_DRAFT;
     }
 
-    public function isApproved(): bool
-    {
-        return $this->status === self::STATUS_APPROVED;
-    }
-
     public function isInProgress(): bool
     {
         return $this->status === self::STATUS_IN_PROGRESS;
@@ -107,6 +100,19 @@ class PhysicalInventoryPlan extends Model
     public function isCompleted(): bool
     {
         return $this->status === self::STATUS_COMPLETED;
+    }
+
+    public function isEditable(): bool
+    {
+        if ($this->isCompleted() || $this->status === self::STATUS_CANCELLED) {
+            return false;
+        }
+
+        $this->loadMissing('lines');
+
+        return $this->lines->every(
+            fn (PhysicalInventoryPlanLine $line): bool => $line->physical_count_session_id === null
+        );
     }
 
     /**

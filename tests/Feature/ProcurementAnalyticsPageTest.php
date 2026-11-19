@@ -198,9 +198,9 @@ class ProcurementAnalyticsPageTest extends TestCase
         $this->assertCount(1, $component->instance()->getAtRiskPreviewRows());
         $this->assertSame('Apple Tape', $component->instance()->getAtRiskPreviewRows()->first()->item_name);
         $component->assertSee('All at-risk (4)');
+        $component->assertSee('atRiskPreviewTable');
         $component->assertSee('Apple Tape');
-        $component->assertSee('Scroll to see more');
-        $component->assertDontSee('Mango Tape');
+        $component->assertDontSee('wire:click="setAtRiskView');
         $component->assertDontSee('wire:intersect="loadMoreAtRiskRows"');
 
         $component->call('loadMoreAtRiskRows');
@@ -284,7 +284,7 @@ class ProcurementAnalyticsPageTest extends TestCase
             ->test(ProcurementAnalytics::class)
             ->assertSet('recommendation', null)
             ->assertSee('Generate a recommendation from the consumable reorder list and the replacement-due list.')
-            ->assertDontSee('AI recommendation unavailable');
+            ->assertDontSee('AI narrative needs Ollama');
     }
 
     public function test_format_ai_narrative_strips_sentence_scaffolding_and_wrapping_quotes(): void
@@ -335,8 +335,12 @@ class ProcurementAnalyticsPageTest extends TestCase
         Livewire::actingAs($custodian)
             ->test(ProcurementAnalytics::class)
             ->call('generateAiRecommendation')
-            ->assertSee('AI recommendation unavailable')
-            ->assertSet('processingRunId', null);
+            ->assertSet('aiNarrativeUnavailable', true)
+            ->assertSet('processingRunId', null)
+            ->assertSee('AI narrative needs Ollama')
+            ->assertSee('Saved recommendation')
+            ->assertSee('Consumables to Buy')
+            ->assertDontSee('AI recommendation unavailable. Review the lists above.');
     }
 
     public function test_generate_dispatches_background_job_when_queue_is_database(): void
@@ -511,7 +515,7 @@ class ProcurementAnalyticsPageTest extends TestCase
             ->call('setAtRiskView', 'stockouts')
             ->assertSet('recommendation', null)
             ->assertSee('Generate a recommendation from the consumable reorder list and the replacement-due list.')
-            ->assertDontSee('AI recommendation unavailable');
+            ->assertDontSee('AI narrative needs Ollama');
     }
 
     public function test_default_scope_excludes_ppe_and_category_dropdown_omits_ppe(): void
@@ -613,23 +617,14 @@ class ProcurementAnalyticsPageTest extends TestCase
             ->withQueryParams(['analyticsSlide' => 'replacement'])
             ->test(ProcurementAnalytics::class)
             ->assertSet('analyticsSlide', 'replacement')
-            ->assertSee('Replacement due — semi-expendable');
+            ->assertSee('Replacement Due - Semi-Expendable Only');
 
         $component->call('setAnalyticsSlide', 'replacement');
-        $component->assertSee('Replacement due — semi-expendable');
+        $component->assertSee('Replacement Due - Semi-Expendable Only');
         $component->assertSee('Office Chair');
-        $component->assertSee('Awaiting review');
+        $component->assertSee('Nearing expiry');
+        $component->assertDontSee('Awaiting review');
         $component->assertDontSee('tableAction=view');
-
-        Filament::setCurrentPanel(Filament::getPanel('admin'));
-        $component->call('openReplacementIssuance', $eulRows->first()->issuance_id)
-            ->assertActionMounted('viewReplacementIssuance')
-            ->assertMountedActionModalSee('Office')
-            ->assertMountedActionModalSee('Department')
-            ->assertMountedActionModalSee('Property number')
-            ->assertMountedActionModalDontSee('Print QR label')
-            ->assertMountedActionModalDontSee('Export Excel')
-            ->assertMountedActionModalDontSee('Issued items');
 
         $this->assertTrue($component->instance()->shouldShowReorderSlide());
         $this->assertCount(1, $component->instance()->getEulReviewRows());
@@ -692,7 +687,7 @@ class ProcurementAnalyticsPageTest extends TestCase
             ->assertSee('Generate a recommendation from the consumable reorder list and the replacement-due list.');
     }
 
-    public function test_mount_restores_completed_draft_once_from_pending_flag(): void
+    public function test_mount_restores_completed_draft_until_done(): void
     {
         Filament::setCurrentPanel(Filament::getPanel('admin'));
 
@@ -720,7 +715,17 @@ class ProcurementAnalyticsPageTest extends TestCase
             ->assertSet('loading', false)
             ->assertSet('lastAiRunId', $run->id)
             ->assertSet('recommendation', 'Stock gaps need attention now.')
-            ->assertSee('Stock gaps need attention now.');
+            ->assertSee('Stock gaps need attention now.')
+            ->assertSee('Done');
+
+        Livewire::actingAs($custodian)
+            ->test(ProcurementAnalytics::class)
+            ->assertSet('lastAiRunId', $run->id)
+            ->assertSet('recommendation', 'Stock gaps need attention now.')
+            ->call('dismissRecommendation')
+            ->assertSet('lastAiRunId', null)
+            ->assertSet('recommendation', null)
+            ->assertSee('Generate a recommendation from the consumable reorder list and the replacement-due list.');
 
         Livewire::actingAs($custodian)
             ->test(ProcurementAnalytics::class)
@@ -729,7 +734,7 @@ class ProcurementAnalyticsPageTest extends TestCase
             ->assertSee('Generate a recommendation from the consumable reorder list and the replacement-due list.');
     }
 
-    public function test_mount_ignores_ai_run_query_and_uses_pending_cache_once(): void
+    public function test_mount_ignores_ai_run_query_and_keeps_active_cache_until_done(): void
     {
         Filament::setCurrentPanel(Filament::getPanel('admin'));
 
@@ -770,6 +775,9 @@ class ProcurementAnalyticsPageTest extends TestCase
         Livewire::actingAs($custodian)
             ->withQueryParams([])
             ->test(ProcurementAnalytics::class)
+            ->assertSet('lastAiRunId', $run->id)
+            ->assertSet('recommendation', 'View-result narrative ready.')
+            ->call('dismissRecommendation')
             ->assertSet('lastAiRunId', null)
             ->assertSet('recommendation', null)
             ->assertSee('Generate a recommendation from the consumable reorder list and the replacement-due list.');
@@ -800,6 +808,10 @@ class ProcurementAnalyticsPageTest extends TestCase
         $this->assertStringStartsWith('%PDF', $body);
         $this->assertStringContainsString('SuggestedReorders-', (string) $response->headers->get('content-disposition'));
 
+        $stockoutExport = $component->instance()->exportAtRiskPdf('stockouts');
+        $this->assertSame('application/pdf', $stockoutExport->headers->get('content-type'));
+        $this->assertStringContainsString('SuggestedReorders-', (string) $stockoutExport->headers->get('content-disposition'));
+
         $component->set('analyticsSlide', 'replacement');
         $replacement = $component->instance()->exportAtRiskPdf();
         $this->assertSame('application/pdf', $replacement->headers->get('content-type'));
@@ -810,6 +822,46 @@ class ProcurementAnalyticsPageTest extends TestCase
         $replacementBody = ob_get_clean();
 
         $this->assertStringStartsWith('%PDF', $replacementBody);
+    }
+
+    public function test_suggested_reorder_export_uses_requested_tab_view(): void
+    {
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+
+        $office = Office::factory()->create();
+        $category = ItemCategory::factory()->create();
+        $fastItem = Item::factory()->create(['item_category_id' => $category->id, 'reorder_level' => 2]);
+        $slowItem = Item::factory()->create(['item_category_id' => $category->id, 'reorder_level' => 2]);
+
+        $this->seedMonthlyIssuances($fastItem->id, $office->id, 20, 6);
+        $this->seedMonthlyIssuances($slowItem->id, $office->id, 5, 6);
+        $this->createAcquisition($fastItem->id, $office->id, 10 + 120);
+        $this->createAcquisition($slowItem->id, $office->id, 20 + 30);
+
+        $custodian = User::factory()->create([
+            'role' => User::ROLE_SUPPLY_CUSTODIAN,
+            'office_id' => $office->id,
+        ]);
+
+        $component = Livewire::actingAs($custodian)->test(ProcurementAnalytics::class);
+        $page = $component->instance();
+
+        $allRows = $page->queryAtRiskRows();
+        $this->assertTrue($allRows->contains(fn ($row): bool => (int) $row->item_id === (int) $slowItem->id));
+
+        $component->call('setAtRiskView', 'stockouts');
+        $stockoutRows = $component->instance()->getAtRiskPreviewRows();
+        $this->assertTrue($stockoutRows->every(
+            fn ($row): bool => $row->months_cover !== null && (float) $row->months_cover <= 2.0
+        ));
+        $this->assertTrue($stockoutRows->contains(fn ($row): bool => (int) $row->item_id === (int) $fastItem->id));
+        $this->assertFalse($stockoutRows->contains(fn ($row): bool => (int) $row->item_id === (int) $slowItem->id));
+
+        $response = $page->exportAtRiskPdf('stockouts');
+        $this->assertSame('application/pdf', $response->headers->get('content-type'));
+
+        $allExport = $page->exportAtRiskPdf('all');
+        $this->assertSame('application/pdf', $allExport->headers->get('content-type'));
     }
 
     public function test_how_this_works_is_a_spotlight_tour(): void

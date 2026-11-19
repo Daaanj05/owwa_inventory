@@ -22,6 +22,16 @@ class AiProcurementRunViewPresenterTest extends TestCase
         ]);
 
         $run->items()->create([
+            'section' => 'urgent',
+            'priority' => 'Medium',
+            'item_name' => 'Zebra Marker',
+            'office_name' => 'Main',
+            'suggested_qty_min' => 2,
+            'suggested_qty_max' => 2,
+            'reason' => 'Medium stock',
+        ]);
+        $run->items()->create([
+            'section' => 'urgent',
             'priority' => 'High',
             'item_name' => 'Bond Paper',
             'office_name' => 'Main',
@@ -29,16 +39,37 @@ class AiProcurementRunViewPresenterTest extends TestCase
             'suggested_qty_max' => 5,
             'reason' => 'Low stock',
         ]);
+        $run->items()->create([
+            'section' => 'urgent',
+            'priority' => 'High',
+            'item_name' => 'Alcohol',
+            'office_name' => 'Main',
+            'suggested_qty_min' => 3,
+            'suggested_qty_max' => 3,
+            'reason' => 'Critical',
+        ]);
+        $run->items()->create([
+            'section' => 'replacement',
+            'priority' => 'Medium',
+            'item_name' => 'Office Chair',
+            'suggested_qty_min' => null,
+            'suggested_qty_max' => null,
+            'reason' => 'Awaiting review',
+        ]);
 
         $data = AiProcurementRunViewPresenter::forRecord($run->fresh(['items', 'creator']));
 
         $this->assertSame('Run #'.$run->id, $data['reference']);
         $this->assertSame('Approved', $data['status']['label']);
         $this->assertCount(4, $data['meta']);
-        $this->assertSame('1 item', $data['meta'][3]['value']);
-        $this->assertCount(1, $data['items']);
-        $this->assertSame('Bond Paper', $data['items'][0]['item_name']);
-        $this->assertSame('1–5', $data['items'][0]['suggested_qty']);
+        $this->assertSame('4 items', $data['meta'][3]['value']);
+        $this->assertCount(4, $data['items']);
+        $this->assertCount(3, $data['consumableItems']);
+        $this->assertCount(1, $data['replacementItems']);
+        $this->assertSame(['Alcohol', 'Bond Paper', 'Zebra Marker'], array_column($data['consumableItems'], 'item_name'));
+        $this->assertSame(['High', 'High', 'Medium'], array_column($data['consumableItems'], 'priority'));
+        $this->assertSame('1–5', $data['consumableItems'][1]['suggested_qty']);
+        $this->assertSame('Office Chair', $data['replacementItems'][0]['item_name']);
         $this->assertArrayNotHasKey('workflowSteps', $data);
         $this->assertArrayNotHasKey('kpis', $data);
     }

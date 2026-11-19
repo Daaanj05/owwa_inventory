@@ -251,6 +251,7 @@
         $countDate = (string) ($page['count_date'] ?? '');
         $fundCluster = (string) ($page['fund_cluster'] ?? '');
         $accountableClause = (string) ($page['accountable_officer_clause'] ?? '');
+        $preparedBy = (string) ($page['prepared_by'] ?? '');
         $certifiedBy = (string) ($page['certified_by'] ?? '');
         $approvedBy = (string) ($page['approved_by'] ?? '');
         $verifiedBy = (string) ($page['verified_by'] ?? '');
@@ -346,6 +347,10 @@
                 </tr>
             @endfor
         </table>
+
+        <p class="prepared-by" style="margin: 10px 0 6px 0; font-size: 9px;">
+            Prepared By: {{ filled($preparedBy) ? $preparedBy : '________________' }}
+        </p>
 
         <table class="sig-wrap">
             <tr>

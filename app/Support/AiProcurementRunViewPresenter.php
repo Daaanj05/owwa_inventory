@@ -3,10 +3,32 @@
 namespace App\Support;
 
 use App\Models\AiProcurementRun;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 
 class AiProcurementRunViewPresenter
 {
+    public static function fullRecommendationNarrative(AiProcurementRun $record): string
+    {
+        $raw = str_replace(["\r\n", "\r"], "\n", trim((string) ($record->raw_response ?? '')));
+        $narrative = '';
+
+        if ($raw !== '') {
+            $headerPos = strpos($raw, '| Priority |');
+            $narrative = $headerPos === false
+                ? $raw
+                : trim(substr($raw, 0, $headerPos));
+        }
+
+        if ($narrative === '' || str_contains($narrative, 'Ollama is not available')) {
+            $narrative = trim((string) ($record->summary ?? ''));
+        }
+
+        $narrative = preg_replace('/\[\[(?:CONSUMABLES|SEMI-EXPENDABLE)\]\]/i', '', $narrative) ?? $narrative;
+
+        return StockCoverPhrase::rewriteDecimalMonthsInText(trim($narrative));
+    }
+
     /**
      * @return array<string, mixed>
      */
@@ -31,23 +53,66 @@ class AiProcurementRunViewPresenter
                 ['label' => 'Items', 'value' => $itemCount.' '.Str::plural('item', $itemCount)],
             ],
             'items' => self::itemsForRecord($record),
+            'consumableItems' => self::consumableItemsForRecord($record),
+            'replacementItems' => self::replacementItemsForRecord($record),
         ];
     }
 
     /**
-     * @return array<int, array{priority: ?string, item_name: ?string, office_name: ?string, suggested_qty: string, reason: ?string}>
+     * @return array<int, array{section: string, priority: ?string, item_name: ?string, office_name: ?string, suggested_qty: string, reason: ?string}>
      */
     public static function itemsForRecord(AiProcurementRun $record): array
     {
+        return self::mappedItems($record)->all();
+    }
+
+    /**
+     * @return array<int, array{section: string, priority: ?string, item_name: ?string, office_name: ?string, suggested_qty: string, reason: ?string}>
+     */
+    public static function consumableItemsForRecord(AiProcurementRun $record): array
+    {
+        return self::mappedItems($record)
+            ->reject(fn (array $item): bool => $item['section'] === 'replacement')
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @return array<int, array{section: string, priority: ?string, item_name: ?string, office_name: ?string, suggested_qty: string, reason: ?string}>
+     */
+    public static function replacementItemsForRecord(AiProcurementRun $record): array
+    {
+        return self::mappedItems($record)
+            ->filter(fn (array $item): bool => $item['section'] === 'replacement')
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @return Collection<int, array{section: string, priority: ?string, item_name: ?string, office_name: ?string, suggested_qty: string, reason: ?string}>
+     */
+    protected static function mappedItems(AiProcurementRun $record): Collection
+    {
         $record->loadMissing('items');
 
-        return $record->items->map(fn ($item): array => [
-            'priority' => $item->priority,
-            'item_name' => $item->item_name,
-            'office_name' => $item->office_name,
-            'suggested_qty' => self::formatSuggestedQty($item->suggested_qty_min, $item->suggested_qty_max),
-            'reason' => $item->reason,
-        ])->all();
+        return $record->items
+            ->sortBy([
+                fn ($item): int => match ($item->priority) {
+                    'High' => 0,
+                    'Medium' => 1,
+                    default => 2,
+                },
+                fn ($item): string => strtolower((string) ($item->item_name ?? '')),
+            ])
+            ->values()
+            ->map(fn ($item): array => [
+                'section' => (string) ($item->section ?: 'urgent'),
+                'priority' => $item->priority,
+                'item_name' => $item->item_name,
+                'office_name' => $item->office_name,
+                'suggested_qty' => self::formatSuggestedQty($item->suggested_qty_min, $item->suggested_qty_max),
+                'reason' => $item->reason,
+            ]);
     }
 
     public static function formatSuggestedQty(?int $min, ?int $max): string

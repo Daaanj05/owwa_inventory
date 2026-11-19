@@ -12,6 +12,7 @@ use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Notification;
+use Illuminate\Support\Facades\RateLimiter;
 use Livewire\Livewire;
 use Tests\TestCase;
 
@@ -76,5 +77,50 @@ class PasswordResetCodeTest extends TestCase
         $user->refresh();
         $this->assertFalse($user->mustChangePassword());
         $this->assertTrue(Hash::check('NewPass1', $user->password));
+    }
+
+    public function test_reset_code_is_invalidated_after_too_many_wrong_guesses(): void
+    {
+        RateLimiter::clear('password-reset-code:'.sha1(strtolower('lock.code@example.com')));
+
+        $user = User::factory()->mustChangePassword()->create([
+            'role' => User::ROLE_EMPLOYEE,
+            'email' => 'lock.code@example.com',
+        ]);
+
+        $code = '654321';
+        $request = PasswordResetRequest::query()->create([
+            'user_id' => $user->id,
+            'status' => PasswordResetRequest::STATUS_SENT,
+            'requested_at' => now(),
+            'handled_at' => now(),
+            'reset_code_hash' => OneTimeCode::hash($code),
+            'reset_code_expires_at' => now()->addHour(),
+        ]);
+
+        $service = app(PasswordResetCodeService::class);
+
+        for ($i = 0; $i < 5; $i++) {
+            $this->assertFalse($service->resetWithCode('lock.code@example.com', '000000', 'NewPass1!'));
+        }
+
+        $request->refresh();
+        $this->assertNull($request->reset_code_hash);
+        $this->assertNull($request->reset_code_expires_at);
+        $this->assertFalse($service->resetWithCode('lock.code@example.com', $code, 'NewPass1!'));
+
+        Notification::fake();
+        $service->issueAndSend($request->fresh());
+
+        $sentCode = null;
+        Notification::assertSentTo($user, PasswordResetCodeNotification::class, function (PasswordResetCodeNotification $notification) use (&$sentCode): bool {
+            $sentCode = $notification->code;
+
+            return true;
+        });
+
+        $this->assertNotNull($sentCode);
+        $this->assertTrue($service->resetWithCode('lock.code@example.com', $sentCode, 'NewPass1!'));
+        $this->assertTrue(Hash::check('NewPass1!', $user->fresh()->password));
     }
 }

@@ -51,7 +51,6 @@ class PhysicalInventoryPlansTable
                     ->badge()
                     ->formatStateUsing(fn (?string $state): string => match ($state) {
                         PhysicalInventoryPlan::STATUS_DRAFT => 'Draft',
-                        PhysicalInventoryPlan::STATUS_APPROVED => 'Approved',
                         PhysicalInventoryPlan::STATUS_IN_PROGRESS => 'In progress',
                         PhysicalInventoryPlan::STATUS_COMPLETED => 'Completed',
                         PhysicalInventoryPlan::STATUS_CANCELLED => 'Cancelled',
@@ -60,7 +59,6 @@ class PhysicalInventoryPlansTable
                     ->color(fn (?string $state): string => match ($state) {
                         PhysicalInventoryPlan::STATUS_COMPLETED => 'success',
                         PhysicalInventoryPlan::STATUS_IN_PROGRESS => 'warning',
-                        PhysicalInventoryPlan::STATUS_APPROVED => 'info',
                         PhysicalInventoryPlan::STATUS_CANCELLED => 'danger',
                         default => 'gray',
                     }),
@@ -87,6 +85,6 @@ class PhysicalInventoryPlansTable
             ->recordUrl(null)
             ->recordAction('view')
             ->emptyStateHeading('No inventory schedules yet')
-            ->emptyStateDescription('Create a schedule to plan year-end counts by office and date.');
+            ->emptyStateDescription('Create a schedule to plan year-end counts for all offices by date.');
     }
 }

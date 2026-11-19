@@ -282,15 +282,6 @@ class ItemForm
                                 if ($resolved !== null && $resolved !== $state) {
                                     $set('property_class', $resolved);
                                 }
-
-                                if ($resolved === null || filled($get('estimated_useful_life'))) {
-                                    return;
-                                }
-
-                                $default = SemiExpendableUsefulLife::defaultForPropertyClass($resolved);
-                                if ($default !== null) {
-                                    $set('estimated_useful_life', $default);
-                                }
                             })
                             ->rule(function (Get $get) {
                                 return function (string $attribute, mixed $value, \Closure $fail) use ($get): void {
@@ -376,9 +367,9 @@ class ItemForm
                             ->placeholder('e.g. 36')
                             ->numeric()
                             ->minValue(1)
-                            ->helperText('Months (e.g. 36 = 3 years). Must exceed 12 months for semi-expendable eligibility.')
-                            ->required(fn (Get $get): bool => self::isSemiExpendableCategory($get('item_category_id')))
-                            ->visible(fn (Get $get): bool => self::isSemiExpendableCategory($get('item_category_id')))
+                            ->helperText('Required. Enter months (e.g. 36 = 3 years). Must exceed 12 months.')
+                            ->required(fn (Get $get): bool => self::isSemiExpendableCategory(self::categoryIdFromForm($get)))
+                            ->visible(fn (Get $get): bool => self::isSemiExpendableCategory(self::categoryIdFromForm($get)))
                             ->columnSpanFull()
                             ->dehydrateStateUsing(fn ($state): ?string => SemiExpendableUsefulLife::storeFromMonths($state))
                             ->formatStateUsing(fn ($state): ?string => SemiExpendableUsefulLife::parseToMonths($state) !== null
@@ -386,7 +377,7 @@ class ItemForm
                                 : (filled($state) ? (string) $state : null))
                             ->rule(function (Get $get) {
                                 return function (string $attribute, $value, \Closure $fail) use ($get): void {
-                                    if (! self::isSemiExpendableCategory($get('item_category_id')) || blank($value)) {
+                                    if (! self::isSemiExpendableCategory(self::categoryIdFromForm($get)) || blank($value)) {
                                         return;
                                     }
 

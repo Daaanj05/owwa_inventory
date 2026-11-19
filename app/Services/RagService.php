@@ -28,14 +28,17 @@ class RagService
             return null;
         }
 
-        $systemPrompt = 'You are a procurement advisor for OWWA Regional Office IV-A. Use only the facts provided. Do not invent numbers. Prioritize High-risk items first. Never suggest deprioritizing High-risk items. Keep the summary to at most 2 sentences. Name items and quantities only; never append office or location after an item name, and never use "@".';
+        $systemPrompt = 'You are a procurement advisor for OWWA Regional Office IV-A. Use only the facts provided. Do not invent numbers or causes. Prioritize High-risk consumables first. Never suggest deprioritizing High-risk items. Write clear plain prose for supply custodians. Never append office or location after an item name, and never use "@". Never write decimal months such as 0.61 months; use only the provided cover phrases in days, weeks, or whole months.';
 
         $itemsText = collect($items)
             ->take(8)
             ->map(function (array $i): string {
                 $suggested = $i['suggested'] ?? 0;
+                $stock = $i['stock'] ?? '—';
+                $reorder = $i['reorder_level'] ?? '—';
+                $coverPhrase = \App\Support\StockCoverPhrase::fromMonths((float) ($i['cover'] ?? 0));
 
-                return "- {$i['priority']}: {$i['item']} (cover {$i['cover']} mo, forecast {$i['forecast']}/mo, suggested {$suggested})";
+                return "- {$i['priority']}: {$i['item']} (stock {$stock}, reorder point {$reorder}, cover {$coverPhrase}, forecast {$i['forecast']} units/mo, suggested buy {$suggested})";
             })
             ->implode("\n");
 
@@ -61,18 +64,26 @@ Period covered: {$facts['from']} to {$facts['to']}.
 {$headlineLine}
 Consumable reorder pairs: {$facts['pairs']} (High: {$facts['high']}, Medium: {$facts['medium']}).
 
-Consumable reorders (pre-computed). These are purchases. Use reorder point, forecast, and months of cover only for these rows:
+Consumable reorders (pre-computed purchases). Use stock, reorder point, forecast (units/mo), and the given cover phrase only for these rows:
 {$itemsText}
 
-Semi-expendable replacement reviews: {$replacementCount}. These are not reorders. Do not apply reorder point or months of cover to them. Do not turn "Issue from stock" or "Awaiting review" into a purchase quantity. A purchase applies only when the action is Purchase.
+Semi-expendable replacement reviews: {$replacementCount}. These are not reorders. Do not apply reorder point, forecast, or cover language to them. Do not turn "Issue from stock" or "Awaiting review" into a purchase quantity. A purchase applies only when the action is Purchase.
 {$replacementLines}
 {$retrievedText}
 
-Write at most 3 sentences of plain prose. Do not output a table.
-Do not number or label sentences. Never write scaffolding such as "Sentence 1", "Sentence 2", "must be", or similar.
-Do not wrap the answer in quotation marks.
-Start with decision-support framing in this spirit: The analysis below highlights consumable stock gaps and semi-expendable units due for replacement review. Kindly consider this result when preparing the next purchase request.
-Then name High-priority consumable items and suggested purchase quantities only. If a semi-expendable unit is listed, name the action already given (Issue from stock, Purchase, or Awaiting review) and do not invent a reorder quantity for it. Do not append office or location after each item. Never use "@".
+Return exactly two labeled blocks and nothing else. Do not output a table. Do not wrap the answer in quotation marks.
+Never echo instructions or scaffolding. Forbidden text includes: "One opening line", "Sentence 1", "Sentence pattern", "High:", "Medium:", "Low:".
+Never write decimal months (for example 0.61 months). Copy the cover phrase as given (days, weeks, or whole months).
+
+Format exactly:
+
+[[CONSUMABLES]]
+One short paragraph (2 to 3 sentences) about consumable stock gaps only. Open with decision support for the next purchase request. Explain High items with cause then action using the given cover phrase and/or stock versus reorder pace, forecast in units/mo, and suggested buy quantity. Mention Medium only briefly if space remains. Do not discuss semi-expendable units here.
+
+[[SEMI-EXPENDABLE]]
+One short paragraph (1 to 2 sentences) about semi-expendable replacement reviews only. Name the units that need attention and the given action only (Issue from stock, Purchase, or Awaiting review). Never invent a reorder quantity, and never use forecast, cover, or reorder language. If there are no semi-expendable units, write one sentence that none are due for replacement review.
+
+Never append office or location. Never use "@".
 TXT;
 
         return $this->ollama->chat($systemPrompt, $userMessage);

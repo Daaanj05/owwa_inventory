@@ -61,4 +61,17 @@ class PhysicalInventoryPlanLine extends Model
     {
         return app(InventoryPlanLineStatusService::class)->statusForLine($this);
     }
+
+    public function isOverdue(): bool
+    {
+        return $this->physical_count_session_id === null
+            && $this->planned_date !== null
+            && $this->planned_date->isPast()
+            && ! $this->planned_date->isToday();
+    }
+
+    public function canStartCount(): bool
+    {
+        return $this->physical_count_session_id === null && ! $this->isOverdue();
+    }
 }

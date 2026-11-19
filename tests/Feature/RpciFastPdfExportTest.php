@@ -36,9 +36,11 @@ class RpciFastPdfExportTest extends TestCase
         $this->assertSame(-2, $pages[0]['lines'][0]['shortage_qty']);
         $this->assertSame(-51.0, $pages[0]['lines'][0]['shortage_value']);
         $this->assertSame('Chair Person', $pages[0]['certified_by']);
+        $this->assertSame('SC Export Preparer', $pages[0]['prepared_by']);
         $this->assertSame(21, $pages[0]['min_detail_rows']);
 
         $this->assertStringContainsString('REPORT ON THE PHYSICAL COUNT OF INVENTORIES', $html);
+        $this->assertStringContainsString('Prepared By: SC Export Preparer', $html);
         $this->assertStringContainsString('Republic of the Philippines', $html);
         $this->assertStringContainsString('OVERSEAS WORKERS WELFARE ADMINISTRATION', $html);
         $this->assertStringContainsString('Office Supplies Inventory', $html);
@@ -339,6 +341,7 @@ class RpciFastPdfExportTest extends TestCase
         $custodian = User::factory()->create([
             'role' => User::ROLE_SUPPLY_CUSTODIAN,
             'office_id' => $office->id,
+            'name' => 'SC Export Preparer',
         ]);
 
         Acquisition::query()->create([
@@ -365,6 +368,7 @@ class RpciFastPdfExportTest extends TestCase
             'certified_by_printed_name' => 'Chair Person',
             'approved_by_printed_name' => 'Agency Head',
             'verified_by_printed_name' => 'COA Rep',
+            'recorded_by' => $custodian->id,
             'completed_at' => now(),
         ]);
 

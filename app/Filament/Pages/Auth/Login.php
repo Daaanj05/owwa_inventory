@@ -22,6 +22,7 @@ use Filament\Schemas\Schema;
 use Illuminate\Auth\SessionGuard;
 use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
+use Illuminate\Contracts\Encryption\DecryptException;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Arr;
@@ -32,10 +33,16 @@ use Illuminate\Validation\ValidationException;
 
 class Login extends BaseLogin
 {
+    public const INVALID_EMAIL_MESSAGE = 'Enter a valid email, for example name@gmail.com or name@owwa.gov.ph.';
+
+    private const PENDING_LOGIN_CREDENTIALS_SESSION_KEY = 'owwa.login_pending_credentials';
+
     protected string $view = 'filament.pages.auth.login';
 
     public function mount(): void
     {
+        $this->forgetPendingLoginCredentials();
+
         $this->redirectAwayFromCredentialQueryString();
 
         parent::mount();
@@ -109,7 +116,12 @@ class Login extends BaseLogin
         try {
             $response = $this->authenticateWithTrustedDeviceSupport();
         } catch (ValidationException $exception) {
-            RateLimiter::hit($this->throttleKey(), $this->loginDecaySeconds());
+            if ($this->validationIsCredentialFailure($exception)) {
+                $this->userUndertakingMultiFactorAuthentication = null;
+                $this->forgetPendingLoginCredentials();
+                RateLimiter::hit($this->throttleKey(), $this->loginDecaySeconds());
+                RateLimiter::hit($this->ipThrottleKey(), $this->loginIpDecaySeconds());
+            }
 
             throw $exception;
         }
@@ -173,6 +185,7 @@ class Login extends BaseLogin
                 }
 
                 $this->userUndertakingMultiFactorAuthentication = encrypt($user->getAuthIdentifier());
+                $this->rememberPendingLoginCredentials($user, $credentials);
 
                 if ($multiFactorAuthenticationProvider instanceof HasBeforeChallengeHook) {
                     $multiFactorAuthenticationProvider->beforeChallenge($user);
@@ -207,9 +220,120 @@ class Login extends BaseLogin
             $trustedDevices->trustCurrentDevice($user);
         }
 
+        $this->forgetPendingLoginCredentials();
+
         session()->regenerate();
 
         return app(LoginResponse::class);
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    protected function getCredentialsFromFormData(#[\SensitiveParameter] array $data): array
+    {
+        $credentials = [
+            'email' => $data['email'] ?? ($this->data['email'] ?? null),
+            'password' => $data['password'] ?? null,
+        ];
+
+        if (filled($credentials['password']) || blank($this->userUndertakingMultiFactorAuthentication)) {
+            return $credentials;
+        }
+
+        $pending = $this->pendingLoginCredentials();
+
+        if ($pending === null) {
+            return $credentials;
+        }
+
+        try {
+            $challengeUserId = decrypt($this->userUndertakingMultiFactorAuthentication);
+        } catch (DecryptException) {
+            $this->forgetPendingLoginCredentials();
+
+            return $credentials;
+        }
+
+        if (($pending['user_id'] ?? null) !== $challengeUserId) {
+            return $credentials;
+        }
+
+        $submittedEmail = Str::lower(trim((string) ($credentials['email'] ?? '')));
+        $pendingEmail = Str::lower(trim((string) ($pending['email'] ?? '')));
+
+        if ($submittedEmail !== '' && $submittedEmail !== $pendingEmail) {
+            return $credentials;
+        }
+
+        try {
+            $password = decrypt((string) ($pending['password'] ?? ''));
+        } catch (DecryptException) {
+            $this->forgetPendingLoginCredentials();
+
+            return $credentials;
+        }
+
+        if (blank($password)) {
+            return $credentials;
+        }
+
+        $credentials['password'] = $password;
+
+        if ($submittedEmail === '' && $pendingEmail !== '') {
+            $credentials['email'] = $pending['email'];
+        }
+
+        return $credentials;
+    }
+
+    /**
+     * @param  array<string, mixed>  $credentials
+     */
+    protected function rememberPendingLoginCredentials(Authenticatable $user, #[\SensitiveParameter] array $credentials): void
+    {
+        $password = (string) ($credentials['password'] ?? '');
+
+        if ($password === '') {
+            return;
+        }
+
+        session()->put(self::PENDING_LOGIN_CREDENTIALS_SESSION_KEY, [
+            'user_id' => $user->getAuthIdentifier(),
+            'email' => (string) ($credentials['email'] ?? ''),
+            'password' => encrypt($password),
+        ]);
+    }
+
+    /**
+     * @return array{user_id: mixed, email: string, password: string}|null
+     */
+    protected function pendingLoginCredentials(): ?array
+    {
+        $pending = session(self::PENDING_LOGIN_CREDENTIALS_SESSION_KEY);
+
+        if (! is_array($pending)) {
+            return null;
+        }
+
+        return $pending;
+    }
+
+    protected function forgetPendingLoginCredentials(): void
+    {
+        session()->forget(self::PENDING_LOGIN_CREDENTIALS_SESSION_KEY);
+    }
+
+    protected function validationIsCredentialFailure(ValidationException $exception): bool
+    {
+        foreach (array_keys($exception->errors()) as $key) {
+            if (in_array($key, ['data.email', 'data.password'], true)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public function defaultMultiFactorChallengeForm(Schema $schema): Schema
@@ -280,11 +404,17 @@ class Login extends BaseLogin
 
     protected function ensureIsNotRateLimited(): void
     {
-        if (! RateLimiter::tooManyAttempts($this->throttleKey(), $this->loginMaxAttempts())) {
+        $emailLimited = RateLimiter::tooManyAttempts($this->throttleKey(), $this->loginMaxAttempts());
+        $ipLimited = RateLimiter::tooManyAttempts($this->ipThrottleKey(), $this->loginIpMaxAttempts());
+
+        if (! $emailLimited && ! $ipLimited) {
             return;
         }
 
-        $seconds = RateLimiter::availableIn($this->throttleKey());
+        $seconds = max(
+            $emailLimited ? RateLimiter::availableIn($this->throttleKey()) : 0,
+            $ipLimited ? RateLimiter::availableIn($this->ipThrottleKey()) : 0,
+        );
 
         throw ValidationException::withMessages([
             'data.email' => __('auth.throttle', [
@@ -304,11 +434,26 @@ class Login extends BaseLogin
         return max(1, (int) config('inventory.login_decay_seconds', 60));
     }
 
+    protected function loginIpMaxAttempts(): int
+    {
+        return max(1, (int) config('inventory.login_ip_max_attempts', 20));
+    }
+
+    protected function loginIpDecaySeconds(): int
+    {
+        return max(1, (int) config('inventory.login_ip_decay_seconds', 600));
+    }
+
     protected function throttleKey(): string
     {
         $email = Str::lower((string) ($this->data['email'] ?? ''));
 
         return 'filament-login:'.sha1($email.'|'.request()->ip());
+    }
+
+    protected function ipThrottleKey(): string
+    {
+        return 'filament-login-ip:'.sha1((string) request()->ip());
     }
 
     protected function throwIfEmailUnverified(): void
@@ -340,7 +485,10 @@ class Login extends BaseLogin
             ->label(__('filament-panels::auth/pages/login.form.email.label'))
             ->placeholder("\u{200B}")
             ->email()
-            ->required()
+            ->validationMessages([
+                'email' => self::INVALID_EMAIL_MESSAGE,
+            ])
+            ->required(fn (): bool => blank($this->userUndertakingMultiFactorAuthentication))
             ->autocomplete()
             ->autofocus();
     }
@@ -354,6 +502,6 @@ class Login extends BaseLogin
             ->password()
             ->revealable(filament()->arePasswordsRevealable())
             ->autocomplete('current-password')
-            ->required();
+            ->required(fn (): bool => blank($this->userUndertakingMultiFactorAuthentication));
     }
 }

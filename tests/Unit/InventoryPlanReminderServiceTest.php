@@ -29,7 +29,7 @@ class InventoryPlanReminderServiceTest extends TestCase
         Notification::fake();
 
         $today = Carbon::parse('2026-06-01');
-        $line = $this->createApprovedLine($today->copy()->addDays(7)->toDateString());
+        $line = $this->createScheduledLine($today->copy()->addDays(7)->toDateString());
 
         $result = app(InventoryPlanReminderService::class)->sendDueReminders($today);
 
@@ -47,7 +47,7 @@ class InventoryPlanReminderServiceTest extends TestCase
         Notification::fake();
 
         $today = Carbon::parse('2026-06-15');
-        $this->createApprovedLine($today->toDateString());
+        $this->createScheduledLine($today->toDateString());
 
         $result = app(InventoryPlanReminderService::class)->sendDueReminders($today);
 
@@ -64,7 +64,7 @@ class InventoryPlanReminderServiceTest extends TestCase
         Notification::fake();
 
         $today = Carbon::parse('2026-06-20');
-        $this->createApprovedLine($today->copy()->subDays(2)->toDateString());
+        $this->createScheduledLine($today->copy()->subDays(2)->toDateString());
 
         $result = app(InventoryPlanReminderService::class)->sendDueReminders($today);
 
@@ -81,7 +81,7 @@ class InventoryPlanReminderServiceTest extends TestCase
         Notification::fake();
 
         $today = Carbon::parse('2026-06-15');
-        $line = $this->createApprovedLine($today->toDateString(), 'due');
+        $line = $this->createScheduledLine($today->toDateString(), 'due');
 
         $result = app(InventoryPlanReminderService::class)->sendDueReminders($today);
 
@@ -91,7 +91,7 @@ class InventoryPlanReminderServiceTest extends TestCase
         $this->assertSame('due', $line->fresh()->last_reminder_type);
     }
 
-    public function test_skips_lines_on_draft_plans(): void
+    public function test_skips_lines_on_completed_plans(): void
     {
         Notification::fake();
 
@@ -99,7 +99,7 @@ class InventoryPlanReminderServiceTest extends TestCase
         PhysicalInventoryPlanLine::factory()->create([
             'planned_date' => $today->toDateString(),
             'physical_inventory_plan_id' => PhysicalInventoryPlan::factory()->create([
-                'status' => PhysicalInventoryPlan::STATUS_DRAFT,
+                'status' => PhysicalInventoryPlan::STATUS_COMPLETED,
             ])->id,
         ]);
 
@@ -116,7 +116,7 @@ class InventoryPlanReminderServiceTest extends TestCase
         $today = Carbon::parse('2026-06-15');
         $line = PhysicalInventoryPlanLine::factory()->create([
             'planned_date' => $today->toDateString(),
-            'physical_inventory_plan_id' => PhysicalInventoryPlan::factory()->approved()->create()->id,
+            'physical_inventory_plan_id' => PhysicalInventoryPlan::factory()->create()->id,
         ]);
 
         $session = PhysicalCountSession::query()->create([
@@ -135,12 +135,12 @@ class InventoryPlanReminderServiceTest extends TestCase
         Notification::assertNothingSent();
     }
 
-    protected function createApprovedLine(string $plannedDate, ?string $lastReminderType = null): PhysicalInventoryPlanLine
+    protected function createScheduledLine(string $plannedDate, ?string $lastReminderType = null): PhysicalInventoryPlanLine
     {
         $line = PhysicalInventoryPlanLine::factory()->create([
             'planned_date' => $plannedDate,
             'last_reminder_type' => $lastReminderType,
-            'physical_inventory_plan_id' => PhysicalInventoryPlan::factory()->approved()->create()->id,
+            'physical_inventory_plan_id' => PhysicalInventoryPlan::factory()->create()->id,
         ]);
 
         User::query()

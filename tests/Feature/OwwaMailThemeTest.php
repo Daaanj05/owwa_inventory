@@ -108,6 +108,15 @@ class OwwaMailThemeTest extends TestCase
 
         $raw = $email->toString();
 
+        $this->assertMatchesRegularExpression(
+            '/Content-Type: multipart\/alternative;.*?Content-Type: multipart\/related;.*?Content-Type: text\/html;.*?Content-Type: image\/png/s',
+            $raw,
+        );
+        $this->assertDoesNotMatchRegularExpression(
+            '/Content-Type: multipart\/related;.*?Content-Type: multipart\/alternative;/s',
+            $raw,
+        );
+
         preg_match_all(
             '/Content-ID: <([^>\r\n]+)>\r\nContent-Type: image\/png\r\nContent-Transfer-Encoding: base64\r\nContent-Disposition: inline\r\n\r\n/',
             $raw,

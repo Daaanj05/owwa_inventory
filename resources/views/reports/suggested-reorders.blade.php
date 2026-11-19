@@ -21,7 +21,6 @@
             <tr>
                 <th>Priority</th>
                 <th>Item</th>
-                <th>Office</th>
                 <th class="num">Stock</th>
                 <th class="num">Reorder</th>
                 <th class="num">Forecast/mo</th>
@@ -36,7 +35,6 @@
                 <tr>
                     <td>{{ $row->priority }}</td>
                     <td>{{ $row->item_name }}</td>
-                    <td>{{ $row->office_name }}</td>
                     <td class="num">{{ number_format((int) $row->current_stock) }}</td>
                     <td class="num">{{ number_format((int) $row->reorder_level) }}</td>
                     <td class="num">{{ number_format((float) $row->forecast_monthly_usage, 1) }}</td>
@@ -47,7 +45,7 @@
                 </tr>
             @empty
                 <tr>
-                    <td colspan="10">No consumables to reorder in this filter.</td>
+                    <td colspan="9">No consumables to reorder in this filter.</td>
                 </tr>
             @endforelse
         </tbody>

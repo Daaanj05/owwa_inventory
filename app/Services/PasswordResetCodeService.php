@@ -11,6 +11,7 @@ use App\Support\OneTimeCode;
 use Filament\Facades\Filament;
 use Filament\Models\Contracts\FilamentUser;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
 
 class PasswordResetCodeService
@@ -56,6 +57,8 @@ class PasswordResetCodeService
 
         $code = OneTimeCode::generate();
         $expiresAt = now()->addMinutes((int) config('auth.passwords.users.expire', 60));
+
+        RateLimiter::clear($this->codeThrottleKey($user->email));
 
         $request->forceFill([
             'reset_code_hash' => OneTimeCode::hash($code),
@@ -111,13 +114,24 @@ class PasswordResetCodeService
             }
 
             if (
-                $request->reset_code_expires_at === null
+                $request->reset_code_hash === null
+                || $request->reset_code_expires_at === null
                 || $request->reset_code_expires_at->isPast()
             ) {
                 return false;
             }
 
             if (! OneTimeCode::matches($normalizedCode, $request->reset_code_hash)) {
+                $throttleKey = $this->codeThrottleKey($normalizedEmail);
+                RateLimiter::hit($throttleKey, $this->codeDecaySeconds());
+
+                if (RateLimiter::tooManyAttempts($throttleKey, $this->codeMaxAttempts())) {
+                    $request->forceFill([
+                        'reset_code_hash' => null,
+                        'reset_code_expires_at' => null,
+                    ])->save();
+                }
+
                 return false;
             }
 
@@ -133,6 +147,8 @@ class PasswordResetCodeService
                 'status' => PasswordResetRequest::STATUS_USED,
             ])->save();
 
+            RateLimiter::clear($this->codeThrottleKey($normalizedEmail));
+
             return true;
         });
     }
@@ -145,5 +161,20 @@ class PasswordResetCodeService
         return PasswordResetRequest::query()
             ->where('created_at', '<', $cutoff)
             ->delete();
+    }
+
+    protected function codeThrottleKey(string $email): string
+    {
+        return 'password-reset-code:'.sha1(mb_strtolower(trim($email)));
+    }
+
+    protected function codeMaxAttempts(): int
+    {
+        return max(1, (int) config('inventory.one_time_code_max_attempts', 5));
+    }
+
+    protected function codeDecaySeconds(): int
+    {
+        return max(1, (int) config('auth.passwords.users.expire', 60) * 60);
     }
 }
