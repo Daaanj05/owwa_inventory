@@ -26,7 +26,10 @@ class GenerateAiProcurementRecommendationJob implements ShouldQueue
         public ?int $categoryId,
         public array $officeIds,
         public array $categoryIds = [],
-    ) {}
+    ) {
+        // Laptop UAT worker only — Render processes `default`, not `ai` (local Ollama).
+        $this->onQueue('ai');
+    }
 
     public function handle(AiProcurementRecommendationService $service): void
     {

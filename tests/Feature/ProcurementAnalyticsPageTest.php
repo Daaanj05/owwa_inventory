@@ -411,7 +411,9 @@ TXT;
             ->assertSet('loading', true)
             ->assertNotSet('processingRunId', null);
 
-        Queue::assertPushed(GenerateAiProcurementRecommendationJob::class);
+        Queue::assertPushed(GenerateAiProcurementRecommendationJob::class, function (GenerateAiProcurementRecommendationJob $job): bool {
+            return $job->queue === 'ai';
+        });
 
         $run = AiProcurementRun::query()->latest('id')->first();
         $this->assertNotNull($run);

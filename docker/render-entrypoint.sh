@@ -63,8 +63,9 @@ php artisan tinker --execute="Illuminate\Support\Facades\DB::connection()->getPd
 export PORT="${PORT:-10000}"
 export SERVER_NAME=":${PORT}"
 
-# AI and stock-card jobs stay on the default queue.
-# Mail jobs use the "mail" queue and are sent by the laptop UAT worker (Gmail SMTP).
+# Stock-card / general jobs stay on the default queue (this container).
+# Mail → "mail" queue; AI Generate → "ai" queue — both processed by the laptop UAT worker
+# (Gmail SMTP + local Ollama). Do not listen to mail/ai here.
 echo "INFO: Starting default queue worker in background..."
 php artisan queue:work --queue=default --sleep=1 --tries=1 --timeout=600 --max-time=3600 &
 
