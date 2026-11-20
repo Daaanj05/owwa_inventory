@@ -784,6 +784,48 @@ TXT;
             ->assertSee('Generate a recommendation from the consumable reorder list and the replacement-due list.');
     }
 
+    public function test_regenerate_clears_visible_recommendation_before_loading(): void
+    {
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+
+        $office = Office::factory()->create();
+        $custodian = User::factory()->create([
+            'role' => User::ROLE_SUPPLY_CUSTODIAN,
+            'office_id' => $office->id,
+            'email_verified_at' => now(),
+        ]);
+
+        $run = AiProcurementRun::query()->create([
+            'ran_at' => now(),
+            'period_from' => now()->subMonths(11)->startOfMonth()->toDateString(),
+            'period_to' => now()->endOfMonth()->toDateString(),
+            'status' => 'pending',
+            'raw_response' => "Prioritize Alcohol first for this cycle.\n\n| Priority | Item |",
+            'created_by' => $custodian->id,
+        ]);
+
+        \App\Support\AiProcurementSummaryRestore::remember($custodian->id, $run->id);
+
+        config(['queue.default' => 'database']);
+        Queue::fake();
+
+        Livewire::actingAs($custodian)
+            ->test(ProcurementAnalytics::class)
+            ->assertSet('lastAiRunId', $run->id)
+            ->assertSet('recommendation', 'Prioritize Alcohol first for this cycle.')
+            ->assertSee('Done')
+            ->call('generateAiRecommendation')
+            ->assertSet('loading', true)
+            ->assertSet('recommendation', null)
+            ->assertSet('lastAiRunId', fn ($id): bool => $id !== null && (int) $id !== (int) $run->id)
+            ->assertSee('Generating recommendation…')
+            ->assertSeeHtml('pa-summary-loading-')
+            ->assertDontSeeHtml('owwa-pa-ai-recommendation');
+
+        Queue::assertPushed(GenerateAiProcurementRecommendationJob::class);
+        $this->assertNull(\App\Support\AiProcurementSummaryRestore::active($custodian->id));
+    }
+
     public function test_mount_ignores_ai_run_query_and_keeps_active_cache_until_done(): void
     {
         Filament::setCurrentPanel(Filament::getPanel('admin'));
@@ -804,7 +846,9 @@ TXT;
             'created_by' => $custodian->id,
         ]);
 
-        $this->assertStringNotContainsString('ai_run=', ProcurementAnalytics::resultUrl($run->id));
+        $resultUrl = ProcurementAnalytics::resultUrl($run->id);
+        $this->assertStringNotContainsString('ai_run=', $resultUrl);
+        $this->assertStringNotContainsString('#procurement-summary', $resultUrl);
 
         Livewire::actingAs($custodian)
             ->withQueryParams(['ai_run' => $run->id])

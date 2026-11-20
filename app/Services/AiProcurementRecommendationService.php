@@ -301,6 +301,10 @@ class AiProcurementRecommendationService
 
             $suggested = $row->suggested_reorder_qty ?? null;
 
+            $insightFlags = is_array($row->insight_flags ?? null)
+                ? array_values($row->insight_flags)
+                : [];
+
             AiProcurementItem::create([
                 'run_id' => $run->id,
                 'section' => 'urgent',
@@ -315,6 +319,8 @@ class AiProcurementRecommendationService
                 'suggested_qty_min' => $suggested,
                 'suggested_qty_max' => $suggested,
                 'reason' => $reason,
+                'insight_flags' => $insightFlags !== [] ? $insightFlags : null,
+                'spike_share' => isset($row->spike_share) ? $row->spike_share : null,
                 'include_in_request' => true,
             ]);
         }
@@ -348,6 +354,13 @@ class AiProcurementRecommendationService
         $run->refresh();
         $run->load('items');
         app(AiProcurementHelperService::class)->persistDeterministicHelpers($run);
+
+        $run->refresh();
+        $run->load('items');
+        $aiRecommendation = app(AiProcurementRecommenderService::class)->recommend($run);
+        $helpers = is_array($run->helpers) ? $run->helpers : [];
+        $helpers[AiProcurementRecommenderService::HELPER_KEY] = $aiRecommendation;
+        $run->update(['helpers' => $helpers]);
     }
 
     protected function notifyCreatorOfCompletedRun(?AiProcurementRun $run): void

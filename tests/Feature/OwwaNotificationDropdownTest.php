@@ -139,7 +139,7 @@ class OwwaNotificationDropdownTest extends TestCase
         ]);
 
         $legacyUrl = ProcurementAnalytics::getUrl(panel: 'admin').'?ai_run=18#procurement-summary';
-        $cleanUrl = ProcurementAnalytics::getUrl(panel: 'admin').'#procurement-summary';
+        $cleanUrl = ProcurementAnalytics::getUrl(panel: 'admin');
 
         $user->notifyNow(new class($legacyUrl) extends \Illuminate\Notifications\Notification
         {
@@ -172,9 +172,16 @@ class OwwaNotificationDropdownTest extends TestCase
 
         $this->actingAs($user);
 
-        Livewire::test(OwwaNotificationDropdown::class)
+        $component = Livewire::test(OwwaNotificationDropdown::class)
             ->call('openNotification', $notification->id)
             ->assertRedirect($cleanUrl);
+
+        $js = collect(data_get($component->effects, 'xjs', []))
+            ->merge(data_get($component->effects, 'scripts', []))
+            ->map(fn (mixed $line): string => is_string($line) ? $line : json_encode($line))
+            ->implode("\n");
+        $this->assertStringContainsString('owwaRequestProcurementSummaryFocus', $js);
+        $this->assertStringContainsString('owwaFocusProcurementSummary', $js);
 
         // SPA navigation may mount Procurement Analytics and consume the one-shot restore.
         // The important behavior here is stripping ai_run from the destination URL.
@@ -191,7 +198,7 @@ class OwwaNotificationDropdownTest extends TestCase
         ]);
 
         $legacyUrl = ProcurementAnalytics::getUrl(panel: 'admin').'?ai_run=18#procurement-summary';
-        $cleanUrl = ProcurementAnalytics::getUrl(panel: 'admin').'#procurement-summary';
+        $cleanUrl = ProcurementAnalytics::getUrl(panel: 'admin');
 
         $user->notifyNow(new class($legacyUrl) extends \Illuminate\Notifications\Notification
         {

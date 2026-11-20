@@ -9,6 +9,13 @@
     $pageSize = (int) ($pageSize ?? 25);
     $reorderTotal = (int) ($reorderTotal ?? $reorderRows->count());
     $replacementTotal = (int) ($replacementTotal ?? $replacementRows->count());
+    $aiNextAction = trim((string) ($aiNextAction ?? ''));
+    $aiRecommendationSource = (string) ($aiRecommendationSource ?? 'fallback');
+    $aiInsightSummaryParts = array_values(array_filter(
+        is_array($aiInsightSummaryParts ?? null) ? $aiInsightSummaryParts : [],
+        fn ($part): bool => is_string($part) && trim($part) !== '',
+    ));
+    $aiSemiNextAction = trim((string) ($aiSemiNextAction ?? ''));
 
     $reorderClient = $reorderRows->map(fn ($row) => (array) $row)->values()->all();
     $replacementClient = $replacementRows->map(fn ($row) => (array) $row)->values()->all();
@@ -28,6 +35,52 @@
         replacementTotal: {{ $replacementTotal }},
         pendingReorder: false,
         pendingReplacement: false,
+        openDetail: null,
+        detailLoading: false,
+        detailPrefetched: false,
+        async openDetailPanel(panel) {
+            if (this.openDetail === panel) {
+                this.openDetail = null;
+                this.detailLoading = false;
+                this.$nextTick(() => this.measure());
+                return;
+            }
+
+            this.openDetail = panel;
+
+            if (this.detailPrefetched || ! this.chunked || ! this.hasMoreReorder()) {
+                this.detailPrefetched = true;
+                this.detailLoading = false;
+                this.$nextTick(() => this.measure());
+                return;
+            }
+
+            this.detailLoading = true;
+            this.$nextTick(() => this.measure());
+
+            try {
+                await this.prefetchDetailRows();
+            } finally {
+                this.detailPrefetched = true;
+                this.detailLoading = false;
+                this.$nextTick(() => this.measure());
+            }
+        },
+        async prefetchDetailRows() {
+            if (! this.chunked || this.pendingReorder || ! this.hasMoreReorder()) {
+                return;
+            }
+
+            this.pendingReorder = true;
+            try {
+                const chunk = await this.$wire.ensureRecommendationDetailRows();
+                if (Array.isArray(chunk) && chunk.length) {
+                    this.reorderRows = this.reorderRows.concat(chunk);
+                }
+            } finally {
+                this.pendingReorder = false;
+            }
+        },
         shift(step) {
             if (this.order.length < 2) {
                 return;
@@ -105,6 +158,25 @@
         >
             @if(in_array('reorders', $slides, true))
             <section class="owwa-pa-slide-panel" data-slide="reorders">
+                @if($aiNextAction !== '')
+                    <div class="owwa-pa-rec-section owwa-pa-callout owwa-pa-callout--info owwa-pa-ai-next-action">
+                        <h3 class="owwa-pa-rec-section-title">AI recommendation</h3>
+                        <p class="owwa-pa-ai-next-action-body">{{ $aiNextAction }}</p>
+                        @if($aiInsightSummaryParts !== [])
+                            <div class="owwa-pa-insights" aria-label="Insights">
+                                <span class="owwa-pa-insights-label">Insights</span>
+                                <div class="owwa-pa-insights-pills" role="list">
+                                    @foreach($aiInsightSummaryParts as $insightPart)
+                                        <span class="owwa-pa-insights-pill" role="listitem">{{ $insightPart }}</span>
+                                    @endforeach
+                                </div>
+                            </div>
+                        @endif
+                        @if($aiRecommendationSource !== 'ai')
+                            <p class="owwa-pa-ai-model-status owwa-pa-ai-model-status--warn">AI Model unavailable — showing the saved template recommendation.</p>
+                        @endif
+                    </div>
+                @endif
                 <div class="owwa-pa-rec-section owwa-pa-callout owwa-pa-callout--info">
                     <h3 class="owwa-pa-rec-section-title">Consumable Summary</h3>
                     <template x-if="reorderRows.length === 0">
@@ -138,61 +210,111 @@
                     </div>
                 </div>
 
-                <div class="owwa-pa-rec-section owwa-pa-callout owwa-pa-callout--info">
-                    <h3 class="owwa-pa-rec-section-title">Why these are flagged</h3>
-                    <template x-if="highRows().length === 0">
-                        <p class="owwa-pa-summary-empty">No High-priority consumables are flagged.</p>
-                    </template>
-                    <div
-                        class="owwa-pa-rec-scroll"
+                <div class="owwa-pa-suggest-chips" role="group" aria-label="Recommendation details">
+                    <button
+                        type="button"
+                        class="owwa-pa-suggest-chip"
                         x-show="highRows().length > 0"
-                        x-on:scroll.debounce.200ms="onReorderScroll($event)"
-                    >
-                        <div class="owwa-pa-rec-grid owwa-pa-rec-grid--why" role="list">
-                            <template x-for="(row, index) in highRows()" :key="'why-' + index + '-' + row.item_name">
-                                <article class="owwa-pa-rec-card owwa-pa-rec-card--why" role="listitem">
-                                    <strong class="owwa-pa-rec-card-name" x-text="row.item_name"></strong>
-                                    <p class="owwa-pa-rec-card-explain" x-text="row.why_explanation || 'needs reorder attention'"></p>
-                                </article>
+                        x-cloak
+                        x-bind:class="{ 'is-active': openDetail === 'why' }"
+                        x-bind:aria-expanded="openDetail === 'why' ? 'true' : 'false'"
+                        aria-controls="owwa-pa-why-panel"
+                        x-on:click="openDetailPanel('why')"
+                    >Why Items Flagged as High</button>
+                    <button
+                        type="button"
+                        class="owwa-pa-suggest-chip"
+                        x-show="reorderRows.length > 0"
+                        x-cloak
+                        x-bind:class="{ 'is-active': openDetail === 'buy' }"
+                        x-bind:aria-expanded="openDetail === 'buy' ? 'true' : 'false'"
+                        aria-controls="owwa-pa-buy-panel"
+                        x-on:click="openDetailPanel('buy')"
+                    >What to Buy?</button>
+                </div>
+
+                <div
+                    id="owwa-pa-why-panel"
+                    class="owwa-pa-detail-shell"
+                    x-bind:class="{ 'is-open': openDetail === 'why' }"
+                    x-bind:aria-hidden="openDetail === 'why' ? 'false' : 'true'"
+                >
+                    <div class="owwa-pa-detail-shell-inner">
+                        <div class="owwa-pa-rec-section owwa-pa-callout owwa-pa-callout--info">
+                            <h3 class="owwa-pa-rec-section-title">Why these are flagged</h3>
+                            <p class="owwa-pa-detail-loading" x-show="detailLoading && openDetail === 'why'" x-cloak>Loading details…</p>
+                            <template x-if="! detailLoading && highRows().length === 0">
+                                <p class="owwa-pa-summary-empty">No High-priority consumables are flagged.</p>
                             </template>
+                            <div
+                                class="owwa-pa-rec-scroll"
+                                x-show="! detailLoading && highRows().length > 0"
+                                x-on:scroll.debounce.200ms="onReorderScroll($event)"
+                            >
+                                <div class="owwa-pa-rec-grid owwa-pa-rec-grid--why" role="list">
+                                    <template x-for="(row, index) in highRows()" :key="'why-' + index + '-' + row.item_name">
+                                        <article class="owwa-pa-rec-card owwa-pa-rec-card--why" role="listitem">
+                                            <strong class="owwa-pa-rec-card-name" x-text="row.item_name"></strong>
+                                            <template x-if="Array.isArray(row.insight_flag_labels) && row.insight_flag_labels.length > 0">
+                                                <div class="owwa-pa-insight-flags" role="list">
+                                                    <template x-for="(label, flagIndex) in row.insight_flag_labels" :key="'flag-' + index + '-' + flagIndex">
+                                                        <span class="owwa-pa-insight-flag" role="listitem" x-text="label"></span>
+                                                    </template>
+                                                </div>
+                                            </template>
+                                            <p class="owwa-pa-rec-card-explain" x-text="row.why_explanation || 'needs reorder attention'"></p>
+                                        </article>
+                                    </template>
+                                </div>
+                                <div class="owwa-pa-load-more" x-show="hasMoreReorder()" x-cloak>Scroll to see more</div>
+                            </div>
                         </div>
-                        <div class="owwa-pa-load-more" x-show="hasMoreReorder()" x-cloak>Scroll to see more</div>
                     </div>
                 </div>
 
-                <div class="owwa-pa-rec-section owwa-pa-callout owwa-pa-callout--info">
-                    <h3 class="owwa-pa-rec-section-title">What to buy next</h3>
-                    <template x-if="reorderRows.length === 0">
-                        <p class="owwa-pa-summary-empty">Nothing to buy in this recommendation.</p>
-                    </template>
-                    <div
-                        class="owwa-pa-rec-scroll"
-                        x-show="reorderRows.length > 0"
-                        x-on:scroll.debounce.200ms="onReorderScroll($event)"
-                    >
-                        <div class="owwa-pa-buy-table-shell" role="region" aria-label="What to buy next" tabindex="0">
-                            <table class="owwa-pa-buy-table">
-                                <thead>
-                                    <tr>
-                                        <th scope="col">Item</th>
-                                        <th scope="col">Current stock</th>
-                                        <th scope="col">Cover</th>
-                                        <th scope="col">Buy</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <template x-for="(row, index) in reorderRows" :key="'buy-' + index + '-' + row.item_name">
-                                        <tr>
-                                            <th scope="row" x-text="row.item_name"></th>
-                                            <td x-text="row.current_stock !== null ? Number(row.current_stock).toLocaleString() : '—'"></td>
-                                            <td x-text="row.cover_phrase || '—'"></td>
-                                            <td x-text="row.suggested_qty_min !== null ? Number(row.suggested_qty_min).toLocaleString() : '—'"></td>
-                                        </tr>
-                                    </template>
-                                </tbody>
-                            </table>
+                <div
+                    id="owwa-pa-buy-panel"
+                    class="owwa-pa-detail-shell"
+                    x-bind:class="{ 'is-open': openDetail === 'buy' }"
+                    x-bind:aria-hidden="openDetail === 'buy' ? 'false' : 'true'"
+                >
+                    <div class="owwa-pa-detail-shell-inner">
+                        <div class="owwa-pa-rec-section owwa-pa-callout owwa-pa-callout--info">
+                            <h3 class="owwa-pa-rec-section-title">What to buy next</h3>
+                            <p class="owwa-pa-detail-loading" x-show="detailLoading && openDetail === 'buy'" x-cloak>Loading details…</p>
+                            <template x-if="! detailLoading && reorderRows.length === 0">
+                                <p class="owwa-pa-summary-empty">Nothing to buy in this recommendation.</p>
+                            </template>
+                            <div
+                                class="owwa-pa-rec-scroll"
+                                x-show="! detailLoading && reorderRows.length > 0"
+                                x-on:scroll.debounce.200ms="onReorderScroll($event)"
+                            >
+                                <div class="owwa-pa-buy-table-shell" role="region" aria-label="What to buy next" tabindex="0">
+                                    <table class="owwa-pa-buy-table">
+                                        <thead>
+                                            <tr>
+                                                <th scope="col">Item</th>
+                                                <th scope="col">Current stock</th>
+                                                <th scope="col">Cover</th>
+                                                <th scope="col">Buy</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <template x-for="(row, index) in reorderRows" :key="'buy-' + index + '-' + row.item_name">
+                                                <tr>
+                                                    <th scope="row" x-text="row.item_name"></th>
+                                                    <td x-text="row.current_stock !== null ? Number(row.current_stock).toLocaleString() : '—'"></td>
+                                                    <td x-text="row.cover_phrase || '—'"></td>
+                                                    <td x-text="row.suggested_qty_min !== null ? Number(row.suggested_qty_min).toLocaleString() : '—'"></td>
+                                                </tr>
+                                            </template>
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <div class="owwa-pa-load-more" x-show="hasMoreReorder()" x-cloak>Scroll to see more</div>
+                            </div>
                         </div>
-                        <div class="owwa-pa-load-more" x-show="hasMoreReorder()" x-cloak>Scroll to see more</div>
                     </div>
                 </div>
             </section>
@@ -200,6 +322,15 @@
 
             @if(in_array('replacement', $slides, true))
                 <section class="owwa-pa-slide-panel" data-slide="replacement">
+                    @if($aiSemiNextAction !== '')
+                        <div class="owwa-pa-rec-section owwa-pa-callout owwa-pa-callout--info owwa-pa-ai-next-action">
+                            <h3 class="owwa-pa-rec-section-title">AI recommendation</h3>
+                            <p class="owwa-pa-ai-next-action-body">{{ $aiSemiNextAction }}</p>
+                            @if($aiRecommendationSource !== 'ai')
+                                <p class="owwa-pa-ai-model-status owwa-pa-ai-model-status--warn">AI Model unavailable — showing the saved template recommendation.</p>
+                            @endif
+                        </div>
+                    @endif
                     <div class="owwa-pa-rec-section owwa-pa-callout owwa-pa-callout--info">
                         <h3 class="owwa-pa-rec-section-title">Replace or Update Semi-Expendable Items</h3>
                         <template x-if="replacementRows.length === 0">

@@ -18,7 +18,215 @@
 @endphp
 
 @once
+    @php
+        $owwaProcurementSummaryUrl = \App\Filament\Pages\ProcurementAnalytics::resultUrl();
+    @endphp
     <script>
+        window.__owwaProcurementSummaryUrl = @js($owwaProcurementSummaryUrl);
+        window.__owwaProcurementSummaryFocusKey = 'owwa-focus-procurement-summary';
+
+        window.owwaCollapseProcurementRecommendationResult = function () {
+            const summary = document.getElementById('procurement-summary');
+            if (! summary) {
+                return;
+            }
+
+            summary.querySelectorAll('.owwa-pa-ai-recommendation').forEach((el) => {
+                el.remove();
+            });
+        };
+
+        window.owwaRequestProcurementSummaryFocus = function () {
+            try {
+                sessionStorage.setItem(window.__owwaProcurementSummaryFocusKey, '1');
+            } catch (error) {
+                // Private mode / blocked storage — scroll still works when already on-page.
+            }
+        };
+
+        window.owwaConsumeProcurementSummaryFocus = function () {
+            try {
+                if (sessionStorage.getItem(window.__owwaProcurementSummaryFocusKey) === '1') {
+                    sessionStorage.removeItem(window.__owwaProcurementSummaryFocusKey);
+
+                    return true;
+                }
+            } catch (error) {
+                return false;
+            }
+
+            return false;
+        };
+
+        window.owwaStripProcurementSummaryHash = function () {
+            if (window.location.hash !== '#procurement-summary') {
+                return;
+            }
+
+            try {
+                history.replaceState(null, '', window.location.pathname + window.location.search);
+            } catch (error) {
+                // Ignore history failures.
+            }
+        };
+
+        window.owwaScrollToProcurementSummary = function (options = {}) {
+            const el = document.getElementById('procurement-summary');
+            if (! el) {
+                return false;
+            }
+
+            const topbar = document.querySelector('.fi-topbar, .fi-topbar-ctn, header.fi-topbar');
+            const offset = Math.ceil((topbar ? topbar.getBoundingClientRect().height : 0) + 16);
+            const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+            const behavior = options.behavior
+                || (reduceMotion ? 'auto' : 'smooth');
+            const top = el.getBoundingClientRect().top + window.scrollY - offset;
+
+            window.scrollTo({
+                top: Math.max(0, top),
+                behavior,
+            });
+
+            window.owwaStripProcurementSummaryHash();
+
+            return true;
+        };
+
+        /**
+         * Defer scroll until after paint/layout so mid-load jumps do not overshoot.
+         * Coalesces repeated schedules from click + livewire:navigated.
+         */
+        window.owwaScheduleProcurementSummaryFocus = function () {
+            if (window.__owwaProcurementSummaryFocusTimer) {
+                clearTimeout(window.__owwaProcurementSummaryFocusTimer);
+                window.__owwaProcurementSummaryFocusTimer = null;
+            }
+
+            if (window.__owwaProcurementSummaryFocusCorrectTimer) {
+                clearTimeout(window.__owwaProcurementSummaryFocusCorrectTimer);
+                window.__owwaProcurementSummaryFocusCorrectTimer = null;
+            }
+
+            const run = () => {
+                if (! window.owwaScrollToProcurementSummary({ behavior: 'smooth' })) {
+                    return;
+                }
+
+                // Widgets/Alpine often reflow after first paint — one quiet correction.
+                window.__owwaProcurementSummaryFocusCorrectTimer = setTimeout(() => {
+                    window.__owwaProcurementSummaryFocusCorrectTimer = null;
+                    window.owwaScrollToProcurementSummary({ behavior: 'auto' });
+                }, 280);
+            };
+
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                    window.__owwaProcurementSummaryFocusTimer = setTimeout(() => {
+                        window.__owwaProcurementSummaryFocusTimer = null;
+                        run();
+                    }, 120);
+                });
+            });
+        };
+
+        window.owwaCleanProcurementSummaryUrl = function (url) {
+            if (! url) {
+                return url;
+            }
+
+            return String(url).split('#')[0];
+        };
+
+        window.owwaFocusProcurementSummary = function (detail = {}) {
+            const options = typeof detail === 'string'
+                ? { url: detail, navigate: true }
+                : (detail || {});
+            const url = window.owwaCleanProcurementSummaryUrl(
+                options.url || window.__owwaProcurementSummaryUrl || null,
+            );
+            const shouldNavigate = options.navigate !== false;
+
+            window.owwaRequestProcurementSummaryFocus();
+
+            // Never scroll synchronously on click — wait for layout to settle.
+            if (document.getElementById('procurement-summary')) {
+                window.owwaScheduleProcurementSummaryFocus();
+
+                return true;
+            }
+
+            if (! shouldNavigate || ! url) {
+                return false;
+            }
+
+            if (window.Livewire && typeof window.Livewire.navigate === 'function') {
+                window.Livewire.navigate(url);
+            } else {
+                window.location.assign(url);
+            }
+
+            return true;
+        };
+
+        window.owwaHandleProcurementSummaryFocus = function () {
+            const legacyHash = window.location.hash === '#procurement-summary';
+            const requested = window.owwaConsumeProcurementSummaryFocus();
+
+            if (! requested && ! legacyHash) {
+                return;
+            }
+
+            window.owwaScheduleProcurementSummaryFocus();
+        };
+
+        document.addEventListener('DOMContentLoaded', () => window.owwaHandleProcurementSummaryFocus());
+        document.addEventListener('livewire:navigated', () => window.owwaHandleProcurementSummaryFocus());
+        window.addEventListener('hashchange', () => {
+            if (window.location.hash === '#procurement-summary') {
+                window.owwaHandleProcurementSummaryFocus();
+            }
+        });
+
+        window.owwaResolveProcurementSummaryFocusUrl = function (payload) {
+            let url = window.__owwaProcurementSummaryUrl;
+
+            if (typeof payload === 'string') {
+                return payload;
+            }
+
+            if (Array.isArray(payload) && typeof payload[0] === 'string') {
+                return payload[0];
+            }
+
+            if (payload && typeof payload === 'object' && typeof payload.url === 'string') {
+                return payload.url;
+            }
+
+            return url;
+        };
+
+        // Alpine $dispatch from Filament toast actions bubbles here.
+        window.addEventListener('owwa-focus-procurement-summary', (event) => {
+            window.owwaFocusProcurementSummary({
+                url: window.owwaResolveProcurementSummaryFocusUrl(event.detail),
+                navigate: true,
+            });
+        });
+
+        document.addEventListener('livewire:init', () => {
+            if (! window.Livewire || typeof window.Livewire.on !== 'function') {
+                return;
+            }
+
+            window.Livewire.on('owwa-focus-procurement-summary', (...args) => {
+                window.owwaFocusProcurementSummary({
+                    url: window.owwaResolveProcurementSummaryFocusUrl(args[0]),
+                    navigate: true,
+                });
+            });
+        });
+
         window.owwaStartExportDownload = function (url, tokenQuery) {
             // Keep tokens cookie-safe and within the server-side length/charset checks.
             const token = ('owwa' + Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2))
@@ -215,6 +423,7 @@
                         }
                     }, 20000);
                     document.getElementById('procurement-summary')?.classList.remove('owwa-pa-summary-awaiting-reveal');
+                    window.owwaCollapseProcurementRecommendationResult?.();
                     this.minimized = false;
                     window.__owwaAiBusyMinimized = false;
                     this.busy = true;
@@ -714,14 +923,12 @@
                 }
 
                 if (detail.actionLabel && typeof window.FilamentNotificationAction === 'function') {
+                    const actionUrl = detail.actionUrl || window.__owwaProcurementSummaryUrl || null;
                     let action = new window.FilamentNotificationAction('viewResult')
                         .label(detail.actionLabel)
                         .button()
-                        .close();
-
-                    if (detail.actionUrl) {
-                        action = action.url(detail.actionUrl);
-                    }
+                        .close()
+                        .dispatch('owwa-focus-procurement-summary', actionUrl ? [actionUrl] : []);
 
                     notification = notification.actions([action]);
                 }

@@ -327,27 +327,25 @@ body > .fi-topbar-end {
     font-weight: 400 !important;
 }
 
-/* Procurement analytics & COA reports: title sits higher; keep bottom spacing for scroll/actions */
+/* Procurement analytics & COA reports: compact under topbar, but not flush/clipped */
 .fi-main:has(.owwa-pa-page),
 .fi-main:has(.owwa-coa-reports-page) {
-    padding-top: 0 !important;
+    padding-top: 0.35rem !important;
     padding-bottom: 0.75rem !important;
 }
 
 /*
  * Filament default: .fi-page-header-main-ctn { padding-block: spacing*8 ≈ 2rem }.
- * Must override padding-block (not only padding-top). DevTools confirmed 5.6px after
- * first fix; squeeze to 0 so the title sits flush under the topbar like a tight list page.
+ * Keep denser than default, with a little air so the title is not pinned under the topbar.
  */
 .fi-page.owwa-pa-page > .fi-page-header-main-ctn {
     display: flex !important;
     flex-direction: column !important;
-    gap: 0.15rem !important;
-    row-gap: 0.15rem !important;
-    padding: 0 !important;
-    padding-block: 0 !important;
-    /* Kill leftover half-leading / flex air under sticky topbar (DevTools: pad was already ~5.6px). */
-    margin-top: -0.35rem !important;
+    gap: 0.2rem !important;
+    row-gap: 0.2rem !important;
+    padding: 0.35rem 0 0 !important;
+    padding-block: 0.35rem 0 !important;
+    margin-top: 0 !important;
 }
 
 .fi-page.owwa-pa-page .fi-header {
@@ -5361,6 +5359,173 @@ select.owwa-search-bar {
     padding: 0.85rem 1rem;
 }
 
+.owwa-pa-ai-next-action-body {
+    margin: 0;
+    font-size: 0.875rem;
+    line-height: 1.5;
+    color: #1e3a5f;
+}
+
+.owwa-pa-ai-next-action-meta {
+    margin: 0.4rem 0 0;
+    font-size: 0.75rem;
+    color: #64748b;
+}
+
+.owwa-pa-insights {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 0.65rem;
+    margin: 0.65rem 0 0;
+    padding: 0.55rem 0.7rem;
+    border: 1px solid #93c5fd;
+    border-radius: 0.4rem;
+    background: #dbeafe;
+}
+
+.owwa-pa-insights-label {
+    font-size: 0.6875rem;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #1e3a8a;
+}
+
+.owwa-pa-insights-pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+}
+
+.owwa-pa-insights-pill {
+    display: inline-block;
+    padding: 0.2rem 0.55rem;
+    border-radius: 0.25rem;
+    border: 1px solid #60a5fa;
+    background: #fff;
+    color: #1e40af;
+    font-size: 0.75rem;
+    font-weight: 600;
+    line-height: 1.35;
+}
+
+.owwa-pa-ai-model-status {
+    margin: 0.55rem 0 0;
+    font-size: 0.75rem;
+    font-weight: 600;
+    line-height: 1.4;
+}
+
+.owwa-pa-ai-model-status--warn {
+    color: #9a3412;
+}
+
+.owwa-pa-ai-recommendation .owwa-pa-ai-disclaimer {
+    margin: 0.4rem 1.25rem 0;
+}
+
+.owwa-pa-suggest-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+    margin: 1rem 1.25rem 0.85rem;
+    padding-inline: 1rem;
+}
+
+.owwa-pa-suggest-chip {
+    appearance: none;
+    cursor: pointer;
+    margin: 0;
+    padding: 0.4rem 0.85rem;
+    border-radius: 999px;
+    border: 1px solid #93c5fd;
+    background: #fff;
+    color: #1e3a8a;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    line-height: 1.3;
+}
+
+.owwa-pa-suggest-chip:hover {
+    border-color: #60a5fa;
+    background: #eff6ff;
+}
+
+.owwa-pa-suggest-chip.is-active {
+    border-color: #2563eb;
+    background: #dbeafe;
+    color: #1e3a8a;
+}
+
+.owwa-pa-detail-shell {
+    display: grid;
+    grid-template-rows: 0fr;
+    margin-inline: 1.25rem;
+}
+
+.owwa-pa-detail-shell.is-open {
+    grid-template-rows: 1fr;
+}
+
+.owwa-pa-detail-shell:not(.is-open) {
+    pointer-events: none;
+}
+
+.owwa-pa-detail-shell-inner {
+    overflow: hidden;
+    min-block-size: 0;
+}
+
+.owwa-pa-ai-recommendation .owwa-pa-detail-shell .owwa-pa-rec-section.owwa-pa-callout {
+    margin-inline: 0;
+}
+
+.owwa-pa-detail-loading {
+    margin: 0 0 0.5rem;
+    font-size: 0.8125rem;
+    line-height: 1.4;
+    color: #64748b;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    .owwa-pa-detail-shell {
+        transition: grid-template-rows 0.28s ease;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .owwa-pa-detail-shell {
+        transition: none;
+    }
+}
+
+.owwa-pa-ai-disclaimer {
+    margin: 0.35rem 0 0;
+    font-size: 0.75rem;
+    line-height: 1.4;
+    color: #64748b;
+}
+
+.owwa-pa-insight-flags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    margin: 0.35rem 0 0.45rem;
+}
+
+.owwa-pa-insight-flag {
+    display: inline-block;
+    padding: 0.15rem 0.45rem;
+    border-radius: 0.25rem;
+    border: 1px solid #bfdbfe;
+    background: #eff6ff;
+    color: #1e40af;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    line-height: 1.3;
+}
+
 .owwa-pa-ai-recommendation h3.owwa-pa-rec-section-title,
 .owwa-pa-rec-section-title {
     margin: 0 0 0.55rem;
@@ -8116,6 +8281,11 @@ button.owwa-pagination-page:hover {
     background: #f1f5f9;
 }
 
+/* Prefer JS offset scroll; keep a safety margin if a legacy #hash lands here */
+#procurement-summary {
+    scroll-margin-top: 5.5rem;
+}
+
 /* AI done: hide result briefly so the chip can clear first, then reveal */
 #procurement-summary.owwa-pa-summary-awaiting-reveal .owwa-pa-summary-body > .owwa-pa-ai-recommendation,
 #procurement-summary.owwa-pa-summary-awaiting-reveal .owwa-pa-summary-body > .owwa-pr-ai-loading,
@@ -8132,6 +8302,11 @@ button.owwa-pagination-page:hover {
 
 body.owwa-busy-active {
     cursor: progress;
+}
+
+/* Hide the previous AI result while regenerating (modal covers progress). */
+body.owwa-busy-active #procurement-summary .owwa-pa-ai-recommendation {
+    display: none !important;
 }
 
 body.owwa-busy-active #procurement-summary .owwa-pr-ai-loading--inset {

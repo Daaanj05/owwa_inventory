@@ -80,9 +80,16 @@ class OwwaNotificationDropdown extends BaseDatabaseNotifications
             $notification->markAsRead();
         }
 
-        if (filled($url)) {
-            $this->redirect($url, navigate: FilamentView::hasSpaMode($url));
+        if (! filled($url)) {
+            return;
         }
+
+        if (AiProcurementSummaryRestore::isProcurementSummaryUrl($url)) {
+            // Flag + deferred schedule only — never scroll mid-request (avoids jump-to-bottom while loading).
+            $this->js(AiProcurementSummaryRestore::browserFocusSummaryScript($url, navigate: false));
+        }
+
+        $this->redirect($url, navigate: FilamentView::hasSpaMode($url));
     }
 
     public function markNotificationRead(string $id): void
@@ -182,7 +189,10 @@ class OwwaNotificationDropdown extends BaseDatabaseNotifications
         $userId ??= $this->getUser()?->getAuthIdentifier() ?? Auth::id();
 
         if (isset($query['ai_run']) && is_numeric($query['ai_run']) && $userId !== null) {
-            AiProcurementSummaryRestore::remember((int) $userId, (int) $query['ai_run']);
+            $runId = (int) $query['ai_run'];
+            if (! AiProcurementSummaryRestore::hasBeenShown((int) $userId, $runId)) {
+                AiProcurementSummaryRestore::remember((int) $userId, $runId);
+            }
         }
 
         unset($query['ai_run']);
@@ -203,7 +213,8 @@ class OwwaNotificationDropdown extends BaseDatabaseNotifications
             $rebuilt .= '?'.http_build_query($query);
         }
 
-        if (isset($parts['fragment'])) {
+        // Keep #procurement-summary out of the address bar; JS scrolls via session flag.
+        if (isset($parts['fragment']) && $parts['fragment'] !== 'procurement-summary') {
             $rebuilt .= '#'.$parts['fragment'];
         }
 

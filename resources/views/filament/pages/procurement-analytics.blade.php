@@ -148,7 +148,7 @@
                 <p class="fi-section-header-description mt-1">
                     Build a recommendation from the consumable reorder list and the semi-expendable replacement list.
                     Runs are saved under
-                    <a href="{{ AiProcurementRunResource::getUrl('index') }}" class="owwa-pa-section-desc-link">AI procurement runs</a>.
+                    <a href="{{ AiProcurementRunResource::getUrl('index') }}" class="owwa-pa-section-desc-link">Recommendation History</a>.
                 </p>
                 <div class="owwa-pa-summary-status" aria-live="polite">
                     <span class="owwa-pa-summary-status-scope">{{ $this->getFilterSummary() }}</span>
@@ -162,7 +162,12 @@
         <div class="px-5 py-3 owwa-pa-summary-body">
             @if($hasSummaryOutput)
                 @if($loading)
-                    <div class="owwa-pr-ai-loading owwa-pr-ai-loading--inset owwa-pr-ai-loading--accent" role="status" aria-live="polite">
+                    <div
+                        wire:key="pa-summary-loading-{{ $processingRunId ?? 'pending' }}"
+                        class="owwa-pr-ai-loading owwa-pr-ai-loading--inset owwa-pr-ai-loading--accent"
+                        role="status"
+                        aria-live="polite"
+                    >
                         <div class="owwa-pr-ai-spinner" aria-hidden="true"></div>
                         <div>
                             <p class="owwa-pr-ai-loading-title">Generating recommendation…</p>
@@ -174,7 +179,10 @@
                         </div>
                     </div>
                 @else
-                    <div class="owwa-pa-ai-recommendation owwa-pr-ai-result">
+                    <div
+                        wire:key="pa-summary-result-{{ $lastAiRunId ?? 'none' }}"
+                        class="owwa-pa-ai-recommendation owwa-pr-ai-result"
+                    >
                         @if($hasAiNarrative || $aiNarrativeUnavailable || filled($recommendation))
                             <div class="owwa-pa-ai-recommendation-head">
                                 @if($hasAiNarrative)
@@ -188,9 +196,12 @@
                                     </a>
                                 @endif
                             </div>
+                            @if($hasAiNarrative)
+                                <p class="owwa-pa-ai-disclaimer">AI can make mistakes. Check important numbers against the lists below.</p>
+                            @endif
                             @if($aiNarrativeUnavailable)
                                 <p class="owwa-pa-ai-unavailable">
-                                    AI narrative needs Ollama on this device. The lists below are the saved recommendation snapshot from the reorder and replacement-due lists, not a second Suggested Reorders panel.
+                                    AI narrative needs the AI Model on this device. The lists below are the saved recommendation snapshot from the reorder and replacement-due lists, not a second Suggested Reorders panel.
                                 </p>
                             @endif
                         @endif
@@ -220,6 +231,10 @@
                             'slides' => $this->availableAnalyticsSlides(),
                             'recommendationSlide' => $recommendationSlide,
                             'positionLabel' => $this->recommendationSlidePositionLabel(),
+                            'aiNextAction' => $this->getAiNextAction(),
+                            'aiRecommendationSource' => $this->getAiRecommendationSource(),
+                            'aiInsightSummaryParts' => $this->getAiInsightSummaryParts(),
+                            'aiSemiNextAction' => $this->getAiSemiNextAction(),
                             'showDoneButton' => true,
                         ])
                     </div>
@@ -234,7 +249,7 @@
             <button
                 type="button"
                 wire:click="generateAiRecommendation"
-                x-on:click="window.dispatchEvent(new CustomEvent('owwa-ai-busy-force-start'))"
+                x-on:click="window.owwaCollapseProcurementRecommendationResult?.(); window.dispatchEvent(new CustomEvent('owwa-ai-busy-force-start'))"
                 wire:loading.attr="disabled"
                 wire:target="generateAiRecommendation"
                 class="owwa-pa-generate-btn owwa-pa-generate-btn--footer"

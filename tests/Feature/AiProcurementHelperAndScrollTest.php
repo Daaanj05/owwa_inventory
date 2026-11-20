@@ -11,6 +11,7 @@ use App\Models\Office;
 use App\Models\User;
 use App\Services\AiProcurementHelperService;
 use App\Services\AiProcurementRecommendationService;
+use App\Services\AiProcurementRecommenderService;
 use App\Services\AiProcurementRunPdfExportService;
 use App\Services\RagService;
 use App\Support\InventoryCategoryOptions;
@@ -123,6 +124,8 @@ class AiProcurementHelperAndScrollTest extends TestCase
             'office_id' => $office->id,
         ]);
 
+        $alcoholItem = Item::factory()->create(['name' => 'Alcohol']);
+
         $run = AiProcurementRun::factory()->create([
             'status' => 'pending',
             'created_by' => $custodian->id,
@@ -141,6 +144,18 @@ class AiProcurementHelperAndScrollTest extends TestCase
                     'title' => 'Replace or Update Semi-Expendable Items',
                     'body' => '- **Desk Organizer**',
                 ],
+                AiProcurementRecommenderService::HELPER_KEY => [
+                    'next_action' => 'Prepare one PR for Alcohol this cycle.',
+                    'ranked_high_item_ids' => [$alcoholItem->id],
+                    'why_by_item_id' => [
+                        (string) $alcoholItem->id => 'AI why: stock is thin versus reorder pace.',
+                    ],
+                    'flags_by_item_id' => [
+                        (string) $alcoholItem->id => ['below_reorder', 'review_forecast', 'file_pr_soon'],
+                    ],
+                    'semi_next_action' => 'Prioritize Paper Cutter first. Follow Issue from stock for Desk Organizer next.',
+                    'source' => 'ai',
+                ],
             ],
         ]);
 
@@ -149,11 +164,14 @@ class AiProcurementHelperAndScrollTest extends TestCase
             'section' => 'urgent',
             'priority' => 'High',
             'item_name' => 'Alcohol',
+            'item_id' => $alcoholItem->id,
             'current_stock' => 4,
             'suggested_qty_min' => 16,
             'months_cover' => 0.6,
             'avg_monthly_usage' => 6.5,
             'reason' => 'Stock 4 (reorder 10), forecast 6.5/mo, cover 0.6 months.',
+            'insight_flags' => ['below_reorder', 'review_forecast', 'file_pr_soon'],
+            'spike_share' => 0.7,
             'include_in_request' => true,
         ]);
 
@@ -190,12 +208,27 @@ class AiProcurementHelperAndScrollTest extends TestCase
             ->set('lastAiRunId', $run->id)
             ->set('recommendation', (string) $run->raw_response)
             ->assertSee('Procurement Summary')
+            ->assertSee('Recommendation History')
+            ->assertSee('AI-generated')
+            ->assertSee('AI can make mistakes. Check important numbers against the lists below.')
+            ->assertSee('AI recommendation')
+            ->assertSee('Prepare one PR for Alcohol this cycle.')
+            ->assertDontSee('AI Model connected for this run.')
+            ->assertSee('1 item needs forecast review')
+            ->assertSee('1 item needs PR soon')
+            ->assertSeeHtml('owwa-pa-insights')
             ->assertSee('Consumable Summary')
+            ->assertSee('Why Items Flagged as High')
+            ->assertSee('What to Buy?')
+            ->assertSeeHtml('openDetailPanel(')
+            ->assertSeeHtml('detailPrefetched')
+            ->assertSeeHtml('owwa-pa-detail-shell')
+            ->assertSeeHtml('ensureRecommendationDetailRows')
             ->assertSee('Why these are flagged')
             ->assertSee('What to buy next')
             ->assertSee('1 of 2')
             ->assertSeeHtml('owwa-pa-rec-section owwa-pa-callout')
-            ->assertDontSee('Prepare what to buy next')
+            ->assertDontSee('Ollama')
             ->assertDontSee('Consumables to reorder')
             ->assertDontSee('Explain High items')
             ->assertDontSee('Replace now')
@@ -217,12 +250,27 @@ class AiProcurementHelperAndScrollTest extends TestCase
         $consumables = $component->instance()->getRecommendationReorderInitialRows();
         $alcohol = collect($consumables)->firstWhere('item_name', 'Alcohol');
         $why = (string) ($alcohol['why_explanation'] ?? '');
-        $this->assertStringStartsWith('Below reorder', $why);
-        $this->assertStringContainsString(' · ', $why);
-        $this->assertStringContainsString('of 6.5 units/month', $why);
-        $this->assertStringNotContainsString(' / ', $why);
+        $this->assertSame('AI why: stock is thin versus reorder pace.', $why);
+        $this->assertSame(['Review forecast', 'File PR soon'], $alcohol['insight_flag_labels'] ?? []);
+        $this->assertSame('ai', $component->instance()->getAiRecommendationSource());
+        $this->assertSame(
+            'Prepare one PR for Alcohol this cycle.',
+            $component->instance()->getAiNextAction(),
+        );
+        $this->assertSame(
+            [
+                '1 item needs forecast review',
+                '1 item needs PR soon',
+            ],
+            $component->instance()->getAiInsightSummaryParts(),
+        );
+        $this->assertSame(
+            'Insights: 1 item needs forecast review · 1 item needs PR soon',
+            $component->instance()->getAiInsightSummaryMeta(),
+        );
 
         $component->call('setRecommendationSlide', 'replacement')
+            ->assertSee('Prioritize Paper Cutter first. Follow Issue from stock for Desk Organizer next.')
             ->assertSee('Replace or Update Semi-Expendable Items')
             ->assertSee(AiProcurementHelperService::NEXT_STEP_AWAITING_UPDATE)
             ->assertSee('Issue from stock')
@@ -289,12 +337,13 @@ class AiProcurementHelperAndScrollTest extends TestCase
             collect($initialReorder)->pluck('item_name')->all(),
         );
 
-        $moreReorder = $component->instance()->loadMoreRecommendationReorderRows();
+        $moreReorder = $component->instance()->ensureRecommendationDetailRows();
         $this->assertCount(5, $moreReorder);
         $this->assertSame(
             $allReorder->slice(25)->pluck('item_name')->values()->all(),
             collect($moreReorder)->pluck('item_name')->all(),
         );
+        $this->assertSame([], $component->instance()->loadMoreRecommendationReorderRows());
 
         $allSemi = $component->instance()->getRecommendationReplacementRows();
         $this->assertCount(30, $allSemi);

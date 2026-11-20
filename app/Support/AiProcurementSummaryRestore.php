@@ -65,4 +65,28 @@ class AiProcurementSummaryRestore
     {
         return 'window.owwaAnnounceAiRecommendationDone('.json_encode($detail, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT | JSON_UNESCAPED_SLASHES).')';
     }
+
+    public static function isProcurementSummaryUrl(string $url): bool
+    {
+        if (str_contains($url, '#procurement-summary')) {
+            return true;
+        }
+
+        $path = (string) (parse_url($url, PHP_URL_PATH) ?? '');
+
+        return str_contains($path, 'procurement-analytics');
+    }
+
+    /**
+     * Queue a deferred scroll to Procurement Summary (no immediate jump; layout must settle).
+     */
+    public static function browserFocusSummaryScript(string $url, bool $navigate = false): string
+    {
+        $payload = json_encode([
+            'url' => $url,
+            'navigate' => $navigate,
+        ], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT | JSON_UNESCAPED_SLASHES);
+
+        return 'window.owwaRequestProcurementSummaryFocus?.(); window.owwaFocusProcurementSummary('.($payload === false ? 'null' : $payload).')';
+    }
 }

@@ -40,6 +40,13 @@ return [
         'embed_model' => env('OLLAMA_EMBED_MODEL', 'nomic-embed-text'),
         // Small instruct model: PA narrative only rephrases deterministic at-risk facts.
         'chat_model' => env('OLLAMA_CHAT_MODEL', 'qwen2.5:3b'),
+        // Mild temperature so next_action / Why wording can vary; numbers stay locked in PHP.
+        'chat_temperature' => (float) env('OLLAMA_CHAT_TEMPERATURE', 0.4),
+    ],
+
+    'procurement' => [
+        // Assumed admin lead-time buffer (days) for file_pr_soon insight; not PhilGEPS.
+        'buffer_days' => (int) env('PROCUREMENT_BUFFER_DAYS', 60),
     ],
 
     'rag' => [

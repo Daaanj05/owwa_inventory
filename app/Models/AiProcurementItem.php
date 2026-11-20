@@ -29,6 +29,8 @@ class AiProcurementItem extends Model
         'suggested_qty_min',
         'suggested_qty_max',
         'reason',
+        'insight_flags',
+        'spike_share',
         'include_in_request',
         'action_status',
         'action_updated_at',
@@ -39,6 +41,8 @@ class AiProcurementItem extends Model
         'include_in_request' => 'boolean',
         'avg_monthly_usage' => 'float',
         'months_cover' => 'float',
+        'spike_share' => 'float',
+        'insight_flags' => 'array',
         'eul_days_remaining' => 'integer',
         'action_updated_at' => 'datetime',
     ];

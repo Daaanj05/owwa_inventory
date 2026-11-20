@@ -48,18 +48,26 @@ class OllamaClient
 
     /**
      * Send a chat request and return the assistant message content.
+     *
+     * @param  array<string, mixed>  $options  Ollama chat options (e.g. temperature)
      */
-    public function chat(string $systemPrompt, string $userMessage): ?string
+    public function chat(string $systemPrompt, string $userMessage, array $options = []): ?string
     {
         try {
-            $response = Http::timeout(120)->post("{$this->baseUrl}/api/chat", [
+            $payload = [
                 'model' => $this->chatModel,
                 'messages' => [
                     ['role' => 'system', 'content' => $systemPrompt],
                     ['role' => 'user', 'content' => $userMessage],
                 ],
                 'stream' => false,
-            ]);
+            ];
+
+            if ($options !== []) {
+                $payload['options'] = $options;
+            }
+
+            $response = Http::timeout(120)->post("{$this->baseUrl}/api/chat", $payload);
 
             if (! $response->successful()) {
                 return null;

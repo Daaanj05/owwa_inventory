@@ -6,6 +6,7 @@ use App\Jobs\GenerateAiProcurementRecommendationJob;
 use App\Models\AiProcurementRun;
 use App\Services\AiProcurementHelperService;
 use App\Services\AiProcurementRecommendationService;
+use App\Services\AiProcurementRecommenderService;
 use App\Services\OllamaClient;
 use App\Services\ProcurementDecisionSupportService;
 use App\Services\SemiExpendableEulAnalyticsService;
@@ -216,7 +217,8 @@ class ProcurementAnalytics extends Page
 
     public static function resultUrl(?int $runId = null): string
     {
-        return static::getUrl(panel: 'admin').'#procurement-summary';
+        // Clean path only — focus uses sessionStorage + JS scroll (no visible #hash).
+        return static::getUrl(panel: 'admin');
     }
 
     /**
@@ -555,9 +557,122 @@ class ProcurementAnalytics extends Page
     /** @return \Illuminate\Support\Collection<int, \App\Models\AiProcurementItem> */
     public function getRecommendationReorderRows(): Collection
     {
-        return $this->getRecommendationTableRows()
+        $rows = $this->getRecommendationTableRows()
             ->filter(fn ($row): bool => $row->section !== 'replacement')
             ->values();
+
+        $rankedIds = $this->getAiRecommendation()['ranked_high_item_ids'] ?? [];
+        if (! is_array($rankedIds) || $rankedIds === []) {
+            return $rows;
+        }
+
+        $rank = [];
+        foreach (array_values($rankedIds) as $index => $id) {
+            $rank[(int) $id] = $index;
+        }
+
+        return $rows
+            ->sort(function ($a, $b) use ($rank): int {
+                $aHigh = (string) ($a->priority ?? '') === 'High';
+                $bHigh = (string) ($b->priority ?? '') === 'High';
+                if ($aHigh !== $bHigh) {
+                    return $aHigh ? -1 : 1;
+                }
+                if ($aHigh && $bHigh) {
+                    $aRank = $rank[(int) ($a->item_id ?? 0)] ?? 1000;
+                    $bRank = $rank[(int) ($b->item_id ?? 0)] ?? 1000;
+                    if ($aRank !== $bRank) {
+                        return $aRank <=> $bRank;
+                    }
+                }
+
+                return strtolower((string) ($a->item_name ?? '')) <=> strtolower((string) ($b->item_name ?? ''));
+            })
+            ->values();
+    }
+
+    /**
+     * @return array{next_action?: string, ranked_high_item_ids?: list<int>, why_by_item_id?: array<string, string>, flags_by_item_id?: array<string, list<string>>, source?: string}
+     */
+    public function getAiRecommendation(): array
+    {
+        if ($this->lastAiRunId === null) {
+            return [];
+        }
+
+        $run = AiProcurementRun::query()->find($this->lastAiRunId);
+        $helpers = is_array($run?->helpers) ? $run->helpers : [];
+        $rec = $helpers[AiProcurementRecommenderService::HELPER_KEY] ?? null;
+
+        return is_array($rec) ? $rec : [];
+    }
+
+    public function getAiNextAction(): string
+    {
+        return trim((string) ($this->getAiRecommendation()['next_action'] ?? ''));
+    }
+
+    public function getAiRecommendationSource(): string
+    {
+        return (string) ($this->getAiRecommendation()['source'] ?? 'fallback');
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function getAiInsightSummaryParts(): array
+    {
+        $flagsById = $this->getAiRecommendation()['flags_by_item_id'] ?? null;
+        if (! is_array($flagsById) || $flagsById === []) {
+            $flagsById = [];
+            foreach ($this->getRecommendationReorderRows()->where('priority', 'High') as $row) {
+                $id = $row->item_id !== null ? (int) $row->item_id : 0;
+                if ($id === 0) {
+                    continue;
+                }
+                $flagsById[(string) $id] = is_array($row->insight_flags) ? $row->insight_flags : [];
+            }
+        }
+
+        $review = 0;
+        $fileSoon = 0;
+        foreach ($flagsById as $flags) {
+            if (! is_array($flags)) {
+                continue;
+            }
+            if (in_array('review_forecast', $flags, true)) {
+                $review++;
+            }
+            if (in_array('file_pr_soon', $flags, true)) {
+                $fileSoon++;
+            }
+        }
+
+        $parts = [];
+        if ($review > 0) {
+            $parts[] = $review === 1
+                ? '1 item needs forecast review'
+                : "{$review} items need forecast review";
+        }
+        if ($fileSoon > 0) {
+            $parts[] = $fileSoon === 1
+                ? '1 item needs PR soon'
+                : "{$fileSoon} items need PR soon";
+        }
+
+        return $parts;
+    }
+
+    public function getAiInsightSummaryMeta(): string
+    {
+        $parts = $this->getAiInsightSummaryParts();
+
+        return $parts === [] ? '' : 'Insights: '.implode(' · ', $parts);
+    }
+
+    public function getAiSemiNextAction(): string
+    {
+        return trim((string) ($this->getAiRecommendation()['semi_next_action'] ?? ''));
     }
 
     /** @return \Illuminate\Support\Collection<int, \App\Models\AiProcurementItem> */
@@ -605,6 +720,16 @@ class ProcurementAnalytics extends Page
     }
 
     /**
+     * Lazy-fetch next reorder detail page when Why / What to buy opens (scales with large runs).
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function ensureRecommendationDetailRows(): array
+    {
+        return $this->loadMoreRecommendationReorderRows();
+    }
+
+    /**
      * @return list<array<string, mixed>>
      */
     public function loadMoreRecommendationReplacementRows(): array
@@ -627,8 +752,16 @@ class ProcurementAnalytics extends Page
     protected function mapRecommendationItemsForClient(Collection $rows): array
     {
         $helper = app(AiProcurementHelperService::class);
+        $aiWhy = $this->getAiRecommendation()['why_by_item_id'] ?? [];
+        if (! is_array($aiWhy)) {
+            $aiWhy = [];
+        }
+        $flagsById = $this->getAiRecommendation()['flags_by_item_id'] ?? [];
+        if (! is_array($flagsById)) {
+            $flagsById = [];
+        }
 
-        return $rows->map(function ($row) use ($helper): array {
+        return $rows->map(function ($row) use ($helper, $aiWhy, $flagsById): array {
             $usage = $row->avg_monthly_usage !== null ? (float) $row->avg_monthly_usage : null;
             $isReplacement = (string) ($row->section ?? '') === 'replacement';
             $daysRemaining = $row->eul_days_remaining !== null ? (int) $row->eul_days_remaining : null;
@@ -644,11 +777,35 @@ class ProcurementAnalytics extends Page
                     $lifeRemaining !== '' ? $lifeRemaining : null,
                 ])))
                 : '';
-            $explanation = (! $isReplacement && (string) ($row->priority ?? '') === 'High')
-                ? $helper->explainHighItem($row)
+            $itemId = $row->item_id !== null ? (int) $row->item_id : null;
+            $aiExplanation = ($itemId !== null && isset($aiWhy[(string) $itemId]))
+                ? trim((string) $aiWhy[(string) $itemId])
                 : '';
+            $explanation = '';
+            if (! $isReplacement && (string) ($row->priority ?? '') === 'High') {
+                $explanation = $aiExplanation !== '' ? $aiExplanation : $helper->explainHighItem($row);
+            }
+
+            $insightFlags = [];
+            if ($itemId !== null && isset($flagsById[(string) $itemId]) && is_array($flagsById[(string) $itemId])) {
+                $insightFlags = array_values($flagsById[(string) $itemId]);
+            } elseif (is_array($row->insight_flags ?? null)) {
+                $insightFlags = array_values($row->insight_flags);
+            }
+
+            $insightFlagLabels = [];
+            foreach ($insightFlags as $flag) {
+                if (! in_array($flag, AiProcurementRecommenderService::WHY_DISPLAY_FLAGS, true)) {
+                    continue;
+                }
+                $label = AiProcurementRecommenderService::FLAG_LABELS[$flag] ?? null;
+                if (is_string($label) && $label !== '') {
+                    $insightFlagLabels[] = $label;
+                }
+            }
 
             return [
+                'item_id' => $itemId,
                 'priority' => (string) ($row->priority ?? ''),
                 'item_name' => (string) ($row->item_name ?? ''),
                 'current_stock' => $row->current_stock !== null ? (int) $row->current_stock : null,
@@ -659,6 +816,8 @@ class ProcurementAnalytics extends Page
                     : '',
                 'usage_phrase' => $helper->usagePhrase($usage),
                 'why_explanation' => $explanation !== '' ? $explanation : 'Needs reorder attention',
+                'insight_flags' => $insightFlags,
+                'insight_flag_labels' => $insightFlagLabels,
                 'property_number' => $property,
                 'estimated_useful_life' => (string) ($row->estimated_useful_life ?? ''),
                 'eul_label' => $eulLabel,
@@ -1224,11 +1383,25 @@ class ProcurementAnalytics extends Page
 
     public function generateAiRecommendation(): void
     {
-        $this->loading = true;
+        // Close any visible prior result first (same as Done) so regenerate does not leave stale AI DOM.
+        $hadVisibleResult = filled($this->recommendation) || $this->lastAiRunId !== null;
+
+        $this->actionSummary = null;
         $this->recommendation = null;
         $this->aiNarrativeUnavailable = false;
         $this->lastAiRunId = null;
         $this->processingRunId = null;
+        $this->recommendationSlide = 'reorders';
+        $this->resetRecommendationOffsets();
+        $this->loading = true;
+
+        if (Auth::id() !== null) {
+            AiProcurementSummaryRestore::forget((int) Auth::id());
+        }
+
+        if ($hadVisibleResult) {
+            $this->js('window.owwaCollapseProcurementRecommendationResult?.()');
+        }
 
         try {
             ['from' => $from, 'to' => $to] = $this->resolveDateRange();
@@ -1269,7 +1442,7 @@ class ProcurementAnalytics extends Page
                 'danger' => true,
                 'seconds' => 10,
                 'actionLabel' => 'View the result',
-                'actionUrl' => '#procurement-summary',
+                'actionUrl' => static::resultUrl(),
             ]));
         }
     }
@@ -1313,7 +1486,7 @@ class ProcurementAnalytics extends Page
                     'danger' => true,
                     'seconds' => 10,
                     'actionLabel' => 'View the result',
-                    'actionUrl' => '#procurement-summary',
+                    'actionUrl' => static::resultUrl(),
                 ]));
             }
 
@@ -1330,7 +1503,7 @@ class ProcurementAnalytics extends Page
             'body' => 'Your procurement recommendation is ready on this page.',
             'seconds' => 10,
             'actionLabel' => 'View the result',
-            'actionUrl' => '#procurement-summary',
+            'actionUrl' => static::resultUrl(),
         ]));
     }
 

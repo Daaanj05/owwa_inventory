@@ -308,6 +308,36 @@ class ProcurementDecisionSupportServiceTest extends TestCase
         $this->assertNull($rows->first(fn ($row) => $row->item_id === $item->id));
     }
 
+    public function test_fresh_pair_without_acquisition_history_is_excluded(): void
+    {
+        $office = Office::factory()->create();
+        $category = ItemCategory::factory()->create();
+        $item = Item::factory()->create([
+            'item_category_id' => $category->id,
+            'reorder_level' => 2,
+        ]);
+
+        $this->seedMonthlyIssuances($item->id, $office->id, 10, 6);
+
+        $rows = $this->queryRows($office->id);
+
+        $this->assertNull($rows->first(fn ($row) => $row->item_id === $item->id));
+    }
+
+    public function test_stockout_with_issuance_and_acquisition_history_is_kept(): void
+    {
+        [$item, $office] = $this->seedAtRiskPair(monthlyQty: 10, stock: 0, reorderLevel: 2);
+
+        $rows = $this->queryRows($office->id);
+        $match = $rows->first(fn ($row) => $row->item_id === $item->id);
+
+        $this->assertNotNull($match);
+        $this->assertSame('High', $match->priority);
+        $this->assertSame(0, (int) $match->current_stock);
+        $this->assertSame(0.0, (float) $match->months_cover);
+        $this->assertGreaterThan(0, (float) $match->forecast_monthly_usage);
+    }
+
     public function test_forecast_includes_issuances_to_other_offices_from_supply_office(): void
     {
         $supplyOffice = Office::factory()->create(['name' => 'Regional Supply']);

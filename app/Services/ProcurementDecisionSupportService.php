@@ -44,7 +44,9 @@ class ProcurementDecisionSupportService
      *   projected_stockout_date:string|null,
      *   latest_unit_cost:float|null,
      *   item_category_id:int,
-     *   priority:string
+     *   priority:string,
+     *   insight_flags:list<string>,
+     *   spike_share:float|null
      * }>
      */
     /**
@@ -113,6 +115,7 @@ class ProcurementDecisionSupportService
         }
 
         $latestUnitCosts = $this->getLatestUnitCosts($itemIds);
+        $acquiredPairKeys = $this->acquisitionPairKeys($itemIds, $officeIdsUsed);
 
         $rows = collect();
 
@@ -122,6 +125,15 @@ class ProcurementDecisionSupportService
             $item = $items->get($itemId);
             $office = $offices->get($officeId);
             if (! $item || ! $office) {
+                continue;
+            }
+
+            // Truly fresh pairs: no positive issuance volume in lookback, or never received at office.
+            if (array_sum($values) <= 0.0) {
+                continue;
+            }
+
+            if (! isset($acquiredPairKeys[$key])) {
                 continue;
             }
 
@@ -151,6 +163,14 @@ class ProcurementDecisionSupportService
                 ? now()->addDays((int) round($monthsCover * 30))->toDateString()
                 : now()->toDateString();
 
+            $spikeShare = InventoryAlgorithms::usageSpikeShare($values);
+            $insightFlags = $this->insightFlagsFor(
+                currentStock: $currentStock,
+                reorderLevel: (int) $item->reorder_level,
+                monthsCover: $monthsCover,
+                spikeShare: $spikeShare,
+            );
+
             $rows->push($this->makeAtRiskRow(
                 item: $item,
                 office: $office,
@@ -162,6 +182,8 @@ class ProcurementDecisionSupportService
                 latestUnitCosts: $latestUnitCosts,
                 priority: $priority,
                 legacyOnHand: $legacyOnHand,
+                insightFlags: $insightFlags,
+                spikeShare: $spikeShare,
             ));
         }
 
@@ -322,6 +344,33 @@ class ProcurementDecisionSupportService
             ->all();
     }
 
+    /**
+     * Composite keys "itemId_officeId" that have at least one acquisition at the supply office.
+     *
+     * @param  list<int>  $itemIds
+     * @param  list<int>  $officeIds
+     * @return array<string, true>
+     */
+    protected function acquisitionPairKeys(array $itemIds, array $officeIds): array
+    {
+        if ($itemIds === [] || $officeIds === []) {
+            return [];
+        }
+
+        $keys = [];
+        Acquisition::query()
+            ->whereIn('item_id', $itemIds)
+            ->whereIn('office_id', $officeIds)
+            ->select('item_id', 'office_id')
+            ->distinct()
+            ->get()
+            ->each(function (Acquisition $row) use (&$keys): void {
+                $keys["{$row->item_id}_{$row->office_id}"] = true;
+            });
+
+        return $keys;
+    }
+
     protected function monthYearSqlExpression(string $column): \Illuminate\Contracts\Database\Query\Expression
     {
         $driver = DB::connection()->getDriverName();
@@ -369,6 +418,9 @@ class ProcurementDecisionSupportService
     /**
      * @param  array<int, float>  $latestUnitCosts
      */
+    /**
+     * @param  list<string>  $insightFlags
+     */
     protected function makeAtRiskRow(
         Item $item,
         Office $office,
@@ -380,6 +432,8 @@ class ProcurementDecisionSupportService
         array $latestUnitCosts,
         string $priority,
         int $legacyOnHand = 0,
+        array $insightFlags = [],
+        ?float $spikeShare = null,
     ): object {
         return (object) [
             'item_id' => (int) $item->id,
@@ -399,7 +453,37 @@ class ProcurementDecisionSupportService
             'projected_stockout_date' => $stockoutDate,
             'latest_unit_cost' => $latestUnitCosts[(int) $item->id] ?? null,
             'priority' => $priority,
+            'insight_flags' => array_values($insightFlags),
+            'spike_share' => $spikeShare,
         ];
+    }
+
+    /**
+     * @return list<string>
+     */
+    protected function insightFlagsFor(
+        int $currentStock,
+        int $reorderLevel,
+        ?float $monthsCover,
+        ?float $spikeShare,
+    ): array {
+        $flags = [];
+
+        if ($reorderLevel > 0 && $currentStock < $reorderLevel) {
+            $flags[] = 'below_reorder';
+        }
+
+        if ($spikeShare !== null) {
+            $flags[] = 'review_forecast';
+        }
+
+        $bufferDays = max(1, (int) config('services.procurement.buffer_days', 60));
+        $coverDays = $monthsCover !== null ? ((float) $monthsCover * 30.0) : 0.0;
+        if ($coverDays < $bufferDays) {
+            $flags[] = 'file_pr_soon';
+        }
+
+        return $flags;
     }
 
     /**
