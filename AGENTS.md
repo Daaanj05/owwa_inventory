@@ -366,3 +366,11 @@ Authenticate before testing panel functionality. Filament uses Livewire, so use 
 - `Grid`, `Section`, and `Fieldset` no longer span all columns by default.
 
 </laravel-boost-guidelines>
+
+## Modern Web Guidance
+
+This project's Baseline target is Baseline Widely available.
+
+For HTML/CSS and client-side JS UI work, use the installed `modern-web-guidance` skill (`.agents/skills/modern-web-guidance`, linked from `.cursor/skills`). Do not use it for Laravel/Filament/Livewire/PHP backend tasks—use Laravel Boost for those.
+
+Modern Web Guidance CLI telemetry is opted out via the user environment variable `DISABLE_TELEMETRY=1`.

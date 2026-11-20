@@ -65,13 +65,8 @@ class PhysicalInventoryPlanInfolist
                 TextEntry::make('reference_code')->label(OwwaReferenceLabels::inventoryPlan()),
                 TextEntry::make('status')
                     ->badge()
-                    ->formatStateUsing(fn (?string $state): string => match ($state) {
-                        PhysicalInventoryPlan::STATUS_DRAFT => 'Draft',
-                        PhysicalInventoryPlan::STATUS_IN_PROGRESS => 'In progress',
-                        PhysicalInventoryPlan::STATUS_COMPLETED => 'Completed',
-                        PhysicalInventoryPlan::STATUS_CANCELLED => 'Cancelled',
-                        default => ucfirst((string) $state),
-                    }),
+                    ->formatStateUsing(fn (PhysicalInventoryPlan $record): string => $record->statusLabel())
+                    ->color(fn (PhysicalInventoryPlan $record): string => $record->statusColor()),
                 TextEntry::make('title')->columnSpanFull(),
                 TextEntry::make('period_label')->label('Period')->placeholder('—'),
                 TextEntry::make('cut_off_date')->label('Cut-off')->date('M j, Y'),

@@ -29,6 +29,7 @@
                                 <th>Item</th>
                                 <th>Property / Ref</th>
                                 <th>Issued to</th>
+                                <th>Office</th>
                                 <th>EUL</th>
                                 <th>Expires</th>
                                 <th>Status</th>
@@ -42,6 +43,7 @@
                                         {{ $row->property_number ?? $row->reference_code ?? '—' }}
                                     </td>
                                     <td>{{ $row->issued_to_name ?? '—' }}</td>
+                                    <td>{{ $row->office_name ?? '—' }}</td>
                                     <td>{{ $row->estimated_useful_life ?? '—' }}</td>
                                     <td>{{ $row->eul_expires_at ?? '—' }}</td>
                                     <td>

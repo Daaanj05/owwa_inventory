@@ -11,6 +11,10 @@ class GenerateAiProcurementRecommendationJob implements ShouldQueue
 {
     use Queueable;
 
+    public int $timeout = 300;
+
+    public int $tries = 1;
+
     /**
      * @param  array<int>  $officeIds
      * @param  array<int>  $categoryIds

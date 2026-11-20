@@ -35,14 +35,17 @@ class AiProcurementRunPdfExportService
             ])
             ->all();
 
+        $memo = AiProcurementRunViewPresenter::fullRecommendationNarrative($run);
+        $prHelper = is_array($run->helpers) ? ($run->helpers['next_pr_package']['body'] ?? null) : null;
+
         $pdf = Pdf::loadView('reports.ai-procurement-run-pdf', [
             'run' => $run,
             'reference' => 'Run #'.$run->id,
             'statusLabel' => $this->statusLabel((string) $run->status),
-            'summary' => $this->plainSummary(
-                AiProcurementRunViewPresenter::fullRecommendationNarrative($run),
-                null,
-            ),
+            'summary' => $this->plainSummary($memo, null),
+            'memo' => $this->plainSummary($memo, null),
+            'prPackageHelper' => filled($prHelper) ? $this->plainSummary((string) $prHelper, null) : null,
+            'policySnippets' => is_array($run->policy_snippets) ? $run->policy_snippets : [],
             'items' => $items,
             'generatedAt' => now(),
         ]);

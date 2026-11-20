@@ -26,7 +26,7 @@ class InventoryPlanReminderService
             ->with(['plan', 'office', 'physicalCountSession'])
             ->whereHas('plan', function ($query): void {
                 $query->whereIn('status', [
-                    PhysicalInventoryPlan::STATUS_DRAFT,
+                    PhysicalInventoryPlan::STATUS_SCHEDULED,
                     PhysicalInventoryPlan::STATUS_IN_PROGRESS,
                 ]);
             })
@@ -46,7 +46,7 @@ class InventoryPlanReminderService
             $line->loadMissing(['plan', 'office', 'physicalCountSession']);
 
             if (! in_array($line->plan?->status, [
-                PhysicalInventoryPlan::STATUS_DRAFT,
+                PhysicalInventoryPlan::STATUS_SCHEDULED,
                 PhysicalInventoryPlan::STATUS_IN_PROGRESS,
             ], true)) {
                 $skipped++;

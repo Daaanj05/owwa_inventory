@@ -1,14 +1,17 @@
 @php
-    $reorderRows = $reorderRows ?? collect();
-    $replacementRows = $replacementRows ?? collect();
+    $reorderRows = collect($reorderRows ?? []);
+    $replacementRows = collect($replacementRows ?? []);
     $slides = array_values($slides ?? ['reorders']);
     $showArrows = count($slides) > 1;
     $positionLabel = $positionLabel ?? '';
-    $hasAiNarrative = (bool) ($hasAiNarrative ?? false);
-    $aiNarrativeUnavailable = (bool) ($aiNarrativeUnavailable ?? false);
-    $consumableNarrative = trim((string) ($consumableNarrative ?? ''));
-    $replacementNarrative = trim((string) ($replacementNarrative ?? ''));
     $showDoneButton = (bool) ($showDoneButton ?? false);
+    $chunked = (bool) ($chunked ?? false);
+    $pageSize = (int) ($pageSize ?? 25);
+    $reorderTotal = (int) ($reorderTotal ?? $reorderRows->count());
+    $replacementTotal = (int) ($replacementTotal ?? $replacementRows->count());
+
+    $reorderClient = $reorderRows->map(fn ($row) => (array) $row)->values()->all();
+    $replacementClient = $replacementRows->map(fn ($row) => (array) $row)->values()->all();
 @endphp
 
 <div
@@ -17,6 +20,14 @@
         slide: @entangle('recommendationSlide'),
         order: @js($slides),
         height: null,
+        pageSize: {{ $pageSize }},
+        chunked: {{ $chunked ? 'true' : 'false' }},
+        reorderRows: @js($reorderClient),
+        replacementRows: @js($replacementClient),
+        reorderTotal: {{ $reorderTotal }},
+        replacementTotal: {{ $replacementTotal }},
+        pendingReorder: false,
+        pendingReplacement: false,
         shift(step) {
             if (this.order.length < 2) {
                 return;
@@ -28,6 +39,53 @@
             const panel = this.$root.querySelector('.owwa-pa-slide-panel[data-slide=\'' + this.slide + '\']');
             if (panel) {
                 this.height = panel.offsetHeight;
+            }
+        },
+        highRows() {
+            return this.reorderRows.filter((row) => row.priority === 'High');
+        },
+        hasMoreReorder() {
+            return this.reorderRows.length < this.reorderTotal;
+        },
+        hasMoreReplacement() {
+            return this.replacementRows.length < this.replacementTotal;
+        },
+        async onReorderScroll(event) {
+            if (! this.chunked || this.pendingReorder || ! this.hasMoreReorder()) {
+                return;
+            }
+            const el = event.target;
+            if ((el.scrollTop + el.clientHeight) < (el.scrollHeight - 80)) {
+                return;
+            }
+            this.pendingReorder = true;
+            try {
+                const chunk = await this.$wire.loadMoreRecommendationReorderRows();
+                if (Array.isArray(chunk) && chunk.length) {
+                    this.reorderRows = this.reorderRows.concat(chunk);
+                    this.$nextTick(() => this.measure());
+                }
+            } finally {
+                this.pendingReorder = false;
+            }
+        },
+        async onReplacementScroll(event) {
+            if (! this.chunked || this.pendingReplacement || ! this.hasMoreReplacement()) {
+                return;
+            }
+            const el = event.target;
+            if ((el.scrollTop + el.clientHeight) < (el.scrollHeight - 80)) {
+                return;
+            }
+            this.pendingReplacement = true;
+            try {
+                const chunk = await this.$wire.loadMoreRecommendationReplacementRows();
+                if (Array.isArray(chunk) && chunk.length) {
+                    this.replacementRows = this.replacementRows.concat(chunk);
+                    this.$nextTick(() => this.measure());
+                }
+            } finally {
+                this.pendingReplacement = false;
             }
         },
         init() {
@@ -47,102 +105,127 @@
         >
             @if(in_array('reorders', $slides, true))
             <section class="owwa-pa-slide-panel" data-slide="reorders">
-                @if($hasAiNarrative && $consumableNarrative !== '')
-                    <div class="owwa-pr-ai-narrative owwa-pa-ai-narrative-body">
-                        {!! Str::markdown($this->formatAiNarrativeMarkdown($consumableNarrative)) !!}
-                    </div>
-                @elseif($aiNarrativeUnavailable && $consumableNarrative !== '')
-                    <div class="owwa-pr-ai-narrative owwa-pa-ai-narrative-body">
-                        <p>{{ $consumableNarrative }}</p>
-                    </div>
-                @endif
-                <h3 class="owwa-pa-summary-slide-title">Consumables to Buy</h3>
-                @if($reorderRows->isEmpty())
-                    <p class="owwa-pa-summary-empty">No consumables to reorder in this filter.</p>
-                @else
-                    <div class="owwa-pa-summary-table-wrap owwa-pa-table-scroll">
-                        <table class="owwa-pa-summary-table">
-                            <thead>
-                                <tr>
-                                    <th>Priority</th>
-                                    <th>Item</th>
-                                    <th>Stock</th>
-                                    <th>Suggested</th>
-                                    <th>Cover</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @foreach($reorderRows as $row)
-                                    <tr class="{{ $row->priority === 'High' ? 'owwa-row-low' : 'owwa-row-medium' }}">
-                                        <td>
-                                            @if($row->priority === 'High')
-                                                <span class="owwa-status-badge owwa-status-low">High</span>
-                                            @else
-                                                <span class="owwa-status-badge owwa-status-medium">Medium</span>
-                                            @endif
-                                        </td>
-                                        <td>{{ $row->item_name }}</td>
-                                        <td>{{ number_format($row->current_stock) }}</td>
-                                        <td>
-                                            @if($row->suggested_qty_min !== null)
-                                                {{ number_format($row->suggested_qty_min) }}
-                                            @else
-                                                —
-                                            @endif
-                                        </td>
-                                        <td>
-                                            @if($row->months_cover !== null)
-                                                {{ number_format($row->months_cover, 1) }} mo
-                                            @else
-                                                —
-                                            @endif
-                                        </td>
-                                    </tr>
-                                @endforeach
-                            </tbody>
-                        </table>
-                    </div>
-                @endif
-            </section>
-            @endif
-            @if(in_array('replacement', $slides, true))
-                <section class="owwa-pa-slide-panel" data-slide="replacement">
-                    @if($hasAiNarrative && $replacementNarrative !== '')
-                        <div class="owwa-pr-ai-narrative owwa-pa-ai-narrative-body">
-                            {!! Str::markdown($this->formatAiNarrativeMarkdown($replacementNarrative)) !!}
+                <div class="owwa-pa-rec-section owwa-pa-callout owwa-pa-callout--info">
+                    <h3 class="owwa-pa-rec-section-title">Consumable Summary</h3>
+                    <template x-if="reorderRows.length === 0">
+                        <p class="owwa-pa-summary-empty">No consumables are flagged in this recommendation.</p>
+                    </template>
+                    <div
+                        class="owwa-pa-rec-scroll"
+                        x-show="reorderRows.length > 0"
+                        x-on:scroll.debounce.200ms="onReorderScroll($event)"
+                    >
+                        <div class="owwa-pa-rec-grid owwa-pa-rec-grid--summary" role="list">
+                            <template x-for="(row, index) in reorderRows" :key="'summary-' + index + '-' + row.item_name">
+                                <article class="owwa-pa-rec-card" role="listitem">
+                                    <div class="owwa-pa-rec-card-head">
+                                        <span
+                                            class="owwa-status-badge"
+                                            x-bind:class="row.priority === 'High' ? 'owwa-status-low' : 'owwa-status-medium'"
+                                            x-text="row.priority || '—'"
+                                        ></span>
+                                        <strong class="owwa-pa-rec-card-name" x-text="row.item_name"></strong>
+                                    </div>
+                                    <p class="owwa-pa-rec-card-meta">
+                                        <span x-text="'Stock ' + (row.current_stock !== null ? Number(row.current_stock).toLocaleString() : '—')"></span>
+                                        <span aria-hidden="true">·</span>
+                                        <span x-text="row.cover_phrase || '—'"></span>
+                                    </p>
+                                </article>
+                            </template>
                         </div>
-                    @elseif(($hasAiNarrative || $aiNarrativeUnavailable) && $replacementNarrative !== '')
-                        <div class="owwa-pr-ai-narrative owwa-pa-ai-narrative-body">
-                            <p>{{ $replacementNarrative }}</p>
+                        <div class="owwa-pa-load-more" x-show="hasMoreReorder()" x-cloak>Scroll to see more</div>
+                    </div>
+                </div>
+
+                <div class="owwa-pa-rec-section owwa-pa-callout owwa-pa-callout--info">
+                    <h3 class="owwa-pa-rec-section-title">Why these are flagged</h3>
+                    <template x-if="highRows().length === 0">
+                        <p class="owwa-pa-summary-empty">No High-priority consumables are flagged.</p>
+                    </template>
+                    <div
+                        class="owwa-pa-rec-scroll"
+                        x-show="highRows().length > 0"
+                        x-on:scroll.debounce.200ms="onReorderScroll($event)"
+                    >
+                        <div class="owwa-pa-rec-grid owwa-pa-rec-grid--why" role="list">
+                            <template x-for="(row, index) in highRows()" :key="'why-' + index + '-' + row.item_name">
+                                <article class="owwa-pa-rec-card owwa-pa-rec-card--why" role="listitem">
+                                    <strong class="owwa-pa-rec-card-name" x-text="row.item_name"></strong>
+                                    <p class="owwa-pa-rec-card-explain" x-text="row.why_explanation || 'needs reorder attention'"></p>
+                                </article>
+                            </template>
                         </div>
-                    @endif
-                    <h3 class="owwa-pa-summary-slide-title">Recommendation - Semi-Expendable</h3>
-                    @if($replacementRows->isEmpty())
-                        <p class="owwa-pa-summary-empty">No semi-expendable units are due for replacement review.</p>
-                    @else
-                        <div class="owwa-pa-summary-table-wrap owwa-pa-table-scroll">
-                            <table class="owwa-pa-summary-table">
+                        <div class="owwa-pa-load-more" x-show="hasMoreReorder()" x-cloak>Scroll to see more</div>
+                    </div>
+                </div>
+
+                <div class="owwa-pa-rec-section owwa-pa-callout owwa-pa-callout--info">
+                    <h3 class="owwa-pa-rec-section-title">What to buy next</h3>
+                    <template x-if="reorderRows.length === 0">
+                        <p class="owwa-pa-summary-empty">Nothing to buy in this recommendation.</p>
+                    </template>
+                    <div
+                        class="owwa-pa-rec-scroll"
+                        x-show="reorderRows.length > 0"
+                        x-on:scroll.debounce.200ms="onReorderScroll($event)"
+                    >
+                        <div class="owwa-pa-buy-table-shell" role="region" aria-label="What to buy next" tabindex="0">
+                            <table class="owwa-pa-buy-table">
                                 <thead>
                                     <tr>
-                                        <th>Item</th>
-                                        <th>Property number</th>
-                                        <th>Status</th>
-                                        <th>Action</th>
+                                        <th scope="col">Item</th>
+                                        <th scope="col">Current stock</th>
+                                        <th scope="col">Cover</th>
+                                        <th scope="col">Buy</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    @foreach($replacementRows as $row)
+                                    <template x-for="(row, index) in reorderRows" :key="'buy-' + index + '-' + row.item_name">
                                         <tr>
-                                            <td>{{ $row->item_name }}</td>
-                                            <td>{{ $row->property_number ?? '—' }}</td>
-                                            <td>{{ $row->eul_status ?? '—' }}</td>
-                                            <td>{{ $row->reason ?? '—' }}</td>
+                                            <th scope="row" x-text="row.item_name"></th>
+                                            <td x-text="row.current_stock !== null ? Number(row.current_stock).toLocaleString() : '—'"></td>
+                                            <td x-text="row.cover_phrase || '—'"></td>
+                                            <td x-text="row.suggested_qty_min !== null ? Number(row.suggested_qty_min).toLocaleString() : '—'"></td>
                                         </tr>
-                                    @endforeach
+                                    </template>
                                 </tbody>
                             </table>
                         </div>
-                    @endif
+                        <div class="owwa-pa-load-more" x-show="hasMoreReorder()" x-cloak>Scroll to see more</div>
+                    </div>
+                </div>
+            </section>
+            @endif
+
+            @if(in_array('replacement', $slides, true))
+                <section class="owwa-pa-slide-panel" data-slide="replacement">
+                    <div class="owwa-pa-rec-section owwa-pa-callout owwa-pa-callout--info">
+                        <h3 class="owwa-pa-rec-section-title">Replace or Update Semi-Expendable Items</h3>
+                        <template x-if="replacementRows.length === 0">
+                            <p class="owwa-pa-summary-empty">No semi-expendable units need replacement or an update this cycle.</p>
+                        </template>
+                        <div
+                            class="owwa-pa-rec-scroll"
+                            x-show="replacementRows.length > 0"
+                            x-on:scroll.debounce.200ms="onReplacementScroll($event)"
+                        >
+                            <div class="owwa-pa-rec-grid owwa-pa-rec-grid--semi" role="list">
+                                <template x-for="(row, index) in replacementRows" :key="'semi-' + index + '-' + (row.property_number || row.item_name)">
+                                    <article class="owwa-pa-rec-card owwa-pa-rec-card--semi" role="listitem">
+                                        <strong class="owwa-pa-rec-card-name" x-text="row.item_name"></strong>
+                                        <p class="owwa-pa-rec-card-meta" x-text="row.semi_meta || '—'"></p>
+                                        <p class="owwa-pa-rec-card-action">
+                                            <span x-text="row.eul_status || '—'"></span>
+                                            <span aria-hidden="true">→</span>
+                                            <span x-text="row.next_step || ''"></span>
+                                        </p>
+                                    </article>
+                                </template>
+                            </div>
+                            <div class="owwa-pa-load-more" x-show="hasMoreReplacement()" x-cloak>Scroll to see more</div>
+                        </div>
+                    </div>
                 </section>
             @endif
         </div>
@@ -152,10 +235,10 @@
             <div class="owwa-pa-slide-footer-start" aria-hidden="true"></div>
             <div class="owwa-pa-slide-footer-center">
                 @if($showArrows)
-                    <div class="owwa-pa-slide-nav" role="group" aria-label="Switch recommendation list">
-                        <button type="button" class="owwa-pa-slide-btn" aria-label="Previous recommendation list" x-on:click="shift(-1)">←</button>
+                    <div class="owwa-pa-slide-nav" role="group" aria-label="Switch recommendation slide">
+                        <button type="button" class="owwa-pa-slide-btn" aria-label="Previous recommendation slide" x-on:click="shift(-1)">←</button>
                         <span class="owwa-pa-slide-label" x-text="(Math.max(0, order.indexOf(slide)) + 1) + ' of ' + order.length">{{ $positionLabel }}</span>
-                        <button type="button" class="owwa-pa-slide-btn" aria-label="Next recommendation list" x-on:click="shift(1)">→</button>
+                        <button type="button" class="owwa-pa-slide-btn" aria-label="Next recommendation slide" x-on:click="shift(1)">→</button>
                     </div>
                 @endif
             </div>

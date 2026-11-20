@@ -17,6 +17,8 @@ class AiProcurementItem extends Model
         'item_name',
         'property_number',
         'eul_status',
+        'estimated_useful_life',
+        'eul_days_remaining',
         'replacement_action',
         'item_id',
         'office_name',
@@ -37,6 +39,7 @@ class AiProcurementItem extends Model
         'include_in_request' => 'boolean',
         'avg_monthly_usage' => 'float',
         'months_cover' => 'float',
+        'eul_days_remaining' => 'integer',
         'action_updated_at' => 'datetime',
     ];
 

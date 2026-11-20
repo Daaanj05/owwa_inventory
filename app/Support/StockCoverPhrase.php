@@ -5,7 +5,7 @@ namespace App\Support;
 class StockCoverPhrase
 {
     /**
-     * Turn months-of-cover into a plain days/weeks/months phrase (no decimals).
+     * Turn months-of-cover into a plain days/weeks/months/years phrase (no decimals).
      */
     public static function fromMonths(float $months): string
     {
@@ -19,15 +19,40 @@ class StockCoverPhrase
             return $days === 1 ? '1 day' : "{$days} days";
         }
 
-        $weeks = (int) max(1, (int) round($days / 7));
+        if ($months < 1) {
+            $weeks = (int) max(1, (int) round($days / 7));
 
-        if ($weeks < 9) {
             return $weeks === 1 ? '1 week' : "{$weeks} weeks";
         }
 
-        $wholeMonths = (int) max(1, (int) round($months));
+        if ($months >= 12) {
+            $years = (int) floor($months / 12);
+            $remMonths = (int) round($months - ($years * 12));
 
-        return $wholeMonths === 1 ? '1 month' : "{$wholeMonths} months";
+            $yearPart = $years === 1 ? '1 year' : "{$years} years";
+            if ($remMonths <= 0) {
+                return $yearPart;
+            }
+
+            $monthPart = $remMonths === 1 ? '1 month' : "{$remMonths} months";
+
+            return "{$yearPart} and {$monthPart}";
+        }
+
+        $wholeMonths = (int) floor($months);
+        $remainderDays = (int) max(0, (int) round(($months - $wholeMonths) * 30));
+        $remWeeks = (int) round($remainderDays / 7);
+
+        if ($wholeMonths >= 1 && $remWeeks >= 1 && $remWeeks <= 3) {
+            $monthPart = $wholeMonths === 1 ? '1 month' : "{$wholeMonths} months";
+            $weekPart = $remWeeks === 1 ? '1 week' : "{$remWeeks} weeks";
+
+            return "{$monthPart} and {$weekPart}";
+        }
+
+        $roundedMonths = (int) max(1, (int) round($months));
+
+        return $roundedMonths === 1 ? '1 month' : "{$roundedMonths} months";
     }
 
     /**

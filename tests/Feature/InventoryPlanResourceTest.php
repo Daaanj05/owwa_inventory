@@ -64,7 +64,7 @@ class InventoryPlanResourceTest extends TestCase
 
         $this->assertDatabaseHas(PhysicalInventoryPlan::class, [
             'title' => 'Year-end inventory FY 2026',
-            'status' => PhysicalInventoryPlan::STATUS_DRAFT,
+            'status' => PhysicalInventoryPlan::STATUS_SCHEDULED,
             'recorded_by' => $custodian->id,
         ]);
 
@@ -83,10 +83,10 @@ class InventoryPlanResourceTest extends TestCase
         $this->assertSame(2, $plan->lines()->count());
     }
 
-    public function test_draft_schedule_stays_editable_until_count_starts(): void
+    public function test_schedule_stays_editable_until_count_starts(): void
     {
         $plan = PhysicalInventoryPlan::factory()->create([
-            'status' => PhysicalInventoryPlan::STATUS_DRAFT,
+            'status' => PhysicalInventoryPlan::STATUS_SCHEDULED,
         ]);
 
         PhysicalInventoryPlanLine::factory()->create([
@@ -95,6 +95,7 @@ class InventoryPlanResourceTest extends TestCase
         ]);
 
         $this->assertTrue($plan->fresh()->isEditable());
+        $this->assertSame('Scheduled', $plan->fresh()->statusLabel());
 
         $session = PhysicalCountSession::query()->create([
             'count_type' => PhysicalCountSession::TYPE_RPCI,
@@ -106,6 +107,22 @@ class InventoryPlanResourceTest extends TestCase
         $plan->lines()->first()->update(['physical_count_session_id' => $session->id]);
 
         $this->assertFalse($plan->fresh()->isEditable());
+    }
+
+    public function test_scheduled_plan_with_overdue_line_displays_overdue(): void
+    {
+        $plan = PhysicalInventoryPlan::factory()->create([
+            'status' => PhysicalInventoryPlan::STATUS_SCHEDULED,
+        ]);
+
+        PhysicalInventoryPlanLine::factory()->create([
+            'physical_inventory_plan_id' => $plan->id,
+            'planned_date' => now()->subDays(2)->toDateString(),
+        ]);
+
+        $this->assertSame(PhysicalInventoryPlan::DISPLAY_OVERDUE, $plan->fresh()->displayStatus());
+        $this->assertSame('Overdue', $plan->fresh()->statusLabel());
+        $this->assertTrue($plan->fresh()->isEditable());
     }
 
     public function test_start_count_action_links_session_and_redirects(): void
@@ -121,7 +138,7 @@ class InventoryPlanResourceTest extends TestCase
 
         $plan = PhysicalInventoryPlan::factory()->create([
             'item_category_id' => $category->id,
-            'status' => PhysicalInventoryPlan::STATUS_DRAFT,
+            'status' => PhysicalInventoryPlan::STATUS_SCHEDULED,
         ]);
 
         $line = PhysicalInventoryPlanLine::factory()->create([

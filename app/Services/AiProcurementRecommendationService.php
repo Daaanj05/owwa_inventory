@@ -18,7 +18,7 @@ use Throwable;
 
 class AiProcurementRecommendationService
 {
-    private const int AT_RISK_LIMIT = 25;
+    public const int SOURCE_ROW_LIMIT = 1000;
 
     public function __construct(
         protected ProcurementDecisionSupportService $decisionSupport,
@@ -48,12 +48,12 @@ class AiProcurementRecommendationService
             movingAverageMonths: 6,
             forecastHorizonMonths: 3,
             targetCoverMonths: 3,
-            limit: self::AT_RISK_LIMIT,
+            limit: self::SOURCE_ROW_LIMIT,
             categoryIds: $categoryIds,
         );
 
         $replacements = $this->includesSemiExpendable($categoryId, $categoryIds)
-            ? $this->eulAnalytics->getReviewRows($officeIds, self::AT_RISK_LIMIT)
+            ? $this->eulAnalytics->getReviewRows($officeIds, self::SOURCE_ROW_LIMIT)
             : collect();
 
         return [
@@ -174,7 +174,6 @@ class AiProcurementRecommendationService
                 : sprintf('%d consumable reorder pairs · %d High · %d Medium', $pairs, $high, $medium);
 
             $replacementLines = $replacementRows
-                ->take(8)
                 ->map(fn (object $row): string => sprintf(
                     '- %s (%s): %s, unissued stock %d, action %s',
                     $row->item_name,
@@ -207,21 +206,24 @@ class AiProcurementRecommendationService
                 'suggested' => $row->suggested_reorder_qty ?? null,
             ])->values()->all();
 
-            $summary = $this->rag->generateNarrativeSummary($facts, $itemFacts, [
+            $generated = $this->rag->generateNarrativeSummary($facts, $itemFacts, [
                 'category_id' => $categoryId,
             ]);
 
             $table = $this->buildDeterministicMarkdownTable($rows, $replacementRows);
-            $rawForStorage = $summary === null
+            $narrative = is_array($generated) ? trim((string) ($generated['narrative'] ?? '')) : null;
+            $policySnippets = is_array($generated) ? ($generated['policy_snippets'] ?? []) : [];
+            $rawForStorage = $narrative === null || $narrative === ''
                 ? 'Ollama is not available. Showing deterministic recommendations without AI narrative summary.'."\n\n".$table
-                : trim($summary)."\n\n".$table;
+                : $narrative."\n\n".$table;
 
             $this->finalizeRun(
                 $run,
                 $rawForStorage,
                 $rows,
                 $replacementRows,
-                $summary === null ? $this->deterministicSummaryFromFacts($facts) : null,
+                ($narrative === null || $narrative === '') ? $this->deterministicSummaryFromFacts($facts) : null,
+                is_array($policySnippets) ? $policySnippets : [],
             );
             $this->notifyCreatorOfCompletedRun($run->fresh());
         } catch (Throwable $exception) {
@@ -253,12 +255,16 @@ class AiProcurementRecommendationService
      * @param  Collection<int, object>  $rows
      * @param  Collection<int, object>  $replacementRows
      */
+    /**
+     * @param  list<array{source?: string, content?: string}>  $policySnippets
+     */
     public function finalizeRun(
         AiProcurementRun $run,
         string $rawResponse,
         Collection $rows,
         ?Collection $replacementRows = null,
         ?string $summaryOverride = null,
+        array $policySnippets = [],
     ): void {
         $clean = preg_replace('/<think>.*?<\/think>/s', '', $rawResponse);
         $clean = str_replace(["\r\n", "\r"], "\n", trim((string) $clean));
@@ -275,6 +281,7 @@ class AiProcurementRecommendationService
         $run->update([
             'summary' => $summaryOverride ?? $this->extractSummaryLine($clean),
             'raw_response' => $clean,
+            'policy_snippets' => $policySnippets !== [] ? array_values($policySnippets) : null,
             'status' => 'pending',
             'error_message' => null,
         ]);
@@ -320,9 +327,13 @@ class AiProcurementRecommendationService
                 'item_name' => $row->item_name,
                 'property_number' => $row->property_number,
                 'eul_status' => $row->status_label,
+                'estimated_useful_life' => $row->estimated_useful_life ?? null,
+                'eul_days_remaining' => isset($row->days_until_expiry) && $row->days_until_expiry !== null
+                    ? (int) $row->days_until_expiry
+                    : null,
                 'replacement_action' => $row->action,
                 'item_id' => $row->item_id,
-                'office_name' => null,
+                'office_name' => $row->office_name ?? null,
                 'office_id' => $row->office_id,
                 'current_stock' => (int) $row->unissued_stock,
                 'avg_monthly_usage' => null,
@@ -333,6 +344,10 @@ class AiProcurementRecommendationService
                 'include_in_request' => $row->action === SemiExpendableEulAnalyticsService::ACTION_PURCHASE,
             ]);
         }
+
+        $run->refresh();
+        $run->load('items');
+        app(AiProcurementHelperService::class)->persistDeterministicHelpers($run);
     }
 
     protected function notifyCreatorOfCompletedRun(?AiProcurementRun $run): void
@@ -456,7 +471,7 @@ class AiProcurementRecommendationService
 
         $lines = [];
         $lines[] = '### Semi-expendable replacement';
-        $lines[] = '| Item | Property number | Status | Action |';
+        $lines[] = '| Item | Property number | EUL | Status |';
         $lines[] = '| --- | --- | --- | --- |';
 
         foreach ($rows as $row) {
@@ -464,8 +479,8 @@ class AiProcurementRecommendationService
                 '| %s | %s | %s | %s |',
                 str_replace('|', '/', (string) $row->item_name),
                 str_replace('|', '/', (string) ($row->property_number ?? '—')),
+                str_replace('|', '/', (string) ($row->estimated_useful_life ?? '—')),
                 str_replace('|', '/', (string) $row->status_label),
-                str_replace('|', '/', (string) $row->action_label),
             );
         }
 
@@ -519,7 +534,7 @@ class AiProcurementRecommendationService
 
                 continue;
             }
-            if (preg_match('/^\[\[(?:CONSUMABLES|SEMI-EXPENDABLE)\]\]$/i', $t) === 1) {
+            if (preg_match('/^\[\[(?:NEXT ACTION|CONSUMABLES|SEMI-EXPENDABLE)\]\]$/i', $t) === 1) {
                 continue;
             }
             if (str_contains($t, 'Ollama is not available')) {

@@ -1074,11 +1074,11 @@ select.owwa-search-bar {
 .owwa-pa-summary-table th,
 .owwa-pa-summary-table td {
     width: calc(100% / 6);
-    padding: 0.55rem 0.65rem;
+    padding: 0.4rem 0.55rem;
     border-bottom: 1px solid #f1f5f9;
     text-align: left;
     vertical-align: middle;
-    line-height: 1.4;
+    line-height: 1.35;
     color: #334155;
 }
 
@@ -1112,6 +1112,14 @@ select.owwa-search-bar {
 .owwa-pa-eul-table th.owwa-status,
 .owwa-pa-eul-table td.owwa-status {
     text-align: left;
+}
+
+.owwa-pa-eul-table th {
+    padding-block: 0.5rem;
+}
+
+.owwa-pa-eul-table td {
+    padding-block: 0.5rem;
 }
 
 .owwa-pa-summary-table tbody tr:last-child td {
@@ -1228,22 +1236,22 @@ select.owwa-search-bar {
 }
 
 .owwa-pa-ai-narrative-body {
-    font-size: 0.9375rem;
-    line-height: 1.7;
-    text-align: justify;
+    font-size: 0.875rem;
+    line-height: 1.5;
+    text-align: start;
     hyphens: auto;
 }
 
 .owwa-pa-ai-narrative-body > p {
-    margin: 0 0 0.75rem;
-    text-align: justify;
+    margin: 0 0 0.5rem;
+    text-align: start;
 }
 
 .owwa-pa-ai-narrative-body > p:last-child {
     margin-bottom: 0;
 }
 
-.owwa-pa-ai-narrative-body > p:first-child::before {
+.owwa-pa-ai-narrative-body:not(:has(ul, ol)) > p:only-child::before {
     content: '\201C';
     color: #93c5fd;
     font-size: 1.125rem;
@@ -1251,7 +1259,7 @@ select.owwa-search-bar {
     margin-right: 0.15rem;
 }
 
-.owwa-pa-ai-narrative-body > p:last-child::after {
+.owwa-pa-ai-narrative-body:not(:has(ul, ol)) > p:only-child::after {
     content: '\201D';
     color: #93c5fd;
     font-size: 1.125rem;
@@ -1383,6 +1391,199 @@ select.owwa-search-bar {
     margin: 0;
     font-size: 0.8125rem;
     color: #64748b;
+}
+
+.owwa-pa-policy-used {
+    margin: 0.75rem 0 0;
+    padding: 0.65rem 0.75rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.5rem;
+    background: #f8fafc;
+}
+
+.owwa-pa-policy-used-title {
+    margin: 0 0 0.35rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #334155;
+}
+
+.owwa-pa-policy-used-list {
+    margin: 0;
+    padding-left: 1rem;
+    font-size: 0.75rem;
+    color: #475569;
+}
+
+.owwa-pa-policy-used-source {
+    font-weight: 600;
+    margin-right: 0.25rem;
+}
+
+.owwa-pa-helper-actions {
+    margin: 0.85rem 0 0.5rem;
+    padding-inline: 1.25rem;
+    display: grid;
+    gap: 0.65rem;
+}
+
+.owwa-pa-rec-section {
+    margin: 0 0 0.85rem;
+}
+
+.owwa-pa-rec-section:last-child {
+    margin-bottom: 0;
+}
+
+.owwa-pa-ai-recommendation .owwa-pa-rec-section.owwa-pa-callout {
+    margin-inline: 1.25rem;
+    padding: 0.85rem 1rem;
+}
+
+.owwa-pa-ai-recommendation h3.owwa-pa-rec-section-title,
+.owwa-pa-rec-section-title {
+    margin: 0 0 0.55rem;
+    font-size: 0.9375rem;
+    font-weight: 700;
+    color: #1e3a5f;
+}
+
+.owwa-pa-rec-scroll {
+    max-block-size: min(280px, 40vh);
+    overflow: auto;
+    overscroll-behavior: contain;
+    padding: 0.15rem;
+}
+
+.owwa-pa-rec-grid {
+    display: grid;
+    gap: 0.55rem;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 14rem), 1fr));
+}
+
+.owwa-pa-rec-grid--why {
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 16rem), 1fr));
+}
+
+.owwa-pa-rec-grid--semi {
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 15rem), 1fr));
+}
+
+.owwa-pa-rec-card {
+    border: 1px solid #e2e8f0;
+    border-radius: 0.65rem;
+    padding: 0.65rem 0.75rem;
+    background: #fff;
+}
+
+.owwa-pa-rec-card-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem 0.55rem;
+}
+
+.owwa-pa-rec-card-name {
+    font-size: 0.875rem;
+    color: #0f172a;
+    line-height: 1.3;
+}
+
+.owwa-pa-rec-card-meta,
+.owwa-pa-rec-card-action {
+    margin: 0.3rem 0 0;
+    font-size: 0.75rem;
+    color: #64748b;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem 0.4rem;
+    line-height: 1.35;
+}
+
+.owwa-pa-rec-card-explain {
+    margin: 0.35rem 0 0;
+    font-size: 0.8125rem;
+    color: #334155;
+    line-height: 1.4;
+}
+
+.owwa-pa-rec-card-action {
+    color: #1e3a5f;
+    font-weight: 600;
+}
+
+.owwa-pa-buy-table-shell {
+    overflow: auto;
+    max-inline-size: 100%;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.65rem;
+    background: #fff;
+}
+
+.owwa-pa-buy-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.8125rem;
+}
+
+.owwa-pa-buy-table th,
+.owwa-pa-buy-table td {
+    padding: 0.45rem 0.65rem;
+    text-align: left;
+    border-bottom: 1px solid #f1f5f9;
+    vertical-align: top;
+}
+
+.owwa-pa-buy-table thead th {
+    position: sticky;
+    inset-block-start: 0;
+    z-index: 1;
+    background: #f8fafc;
+    font-size: 0.6875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #64748b;
+}
+
+.owwa-pa-buy-table tbody th {
+    font-weight: 600;
+    color: #0f172a;
+}
+
+.owwa-pa-buy-table tbody tr:last-child th,
+.owwa-pa-buy-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.owwa-pa-helper-callout-title {
+    margin: 0 0 0.35rem;
+    font-size: 0.8125rem;
+    color: #1e3a5f;
+}
+
+.owwa-pa-helper-body {
+    font-size: 0.8125rem;
+    line-height: 1.45;
+}
+
+.owwa-pa-helper-body > :first-child {
+    margin-top: 0;
+}
+
+.owwa-pa-helper-body > :last-child {
+    margin-bottom: 0;
+}
+
+.owwa-pa-helper-body ul,
+.owwa-pa-ai-narrative-body ul {
+    margin: 0.35rem 0 0;
+    padding-inline-start: 1.15rem;
+}
+
+.owwa-pa-helper-body li,
+.owwa-pa-ai-narrative-body li {
+    margin: 0.15rem 0;
+    line-height: 1.4;
 }
 
 .owwa-pr-ai-loading--inset {

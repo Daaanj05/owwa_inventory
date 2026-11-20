@@ -13,13 +13,15 @@ class PhysicalInventoryPlan extends Model
 {
     use HasFactory, LogsUserActivity, SoftDeletes;
 
-    public const STATUS_DRAFT = 'draft';
+    public const STATUS_SCHEDULED = 'scheduled';
 
     public const STATUS_IN_PROGRESS = 'in_progress';
 
     public const STATUS_COMPLETED = 'completed';
 
     public const STATUS_CANCELLED = 'cancelled';
+
+    public const DISPLAY_OVERDUE = 'overdue';
 
     protected $fillable = [
         'reference_code',
@@ -62,7 +64,7 @@ class PhysicalInventoryPlan extends Model
             }
 
             if (blank($plan->status)) {
-                $plan->status = self::STATUS_DRAFT;
+                $plan->status = self::STATUS_SCHEDULED;
             }
         });
     }
@@ -87,9 +89,9 @@ class PhysicalInventoryPlan extends Model
         return $this->hasMany(WorkflowEmailNotification::class)->latest();
     }
 
-    public function isDraft(): bool
+    public function isScheduled(): bool
     {
-        return $this->status === self::STATUS_DRAFT;
+        return $this->status === self::STATUS_SCHEDULED;
     }
 
     public function isInProgress(): bool
@@ -113,6 +115,46 @@ class PhysicalInventoryPlan extends Model
         return $this->lines->every(
             fn (PhysicalInventoryPlanLine $line): bool => $line->physical_count_session_id === null
         );
+    }
+
+    public function hasOverdueLines(): bool
+    {
+        $this->loadMissing('lines');
+
+        return $this->lines->contains(
+            fn (PhysicalInventoryPlanLine $line): bool => $line->isOverdue()
+        );
+    }
+
+    public function displayStatus(): string
+    {
+        if ($this->isScheduled() && $this->hasOverdueLines()) {
+            return self::DISPLAY_OVERDUE;
+        }
+
+        return (string) $this->status;
+    }
+
+    public function statusLabel(?string $status = null): string
+    {
+        return match ($status ?? $this->displayStatus()) {
+            self::STATUS_SCHEDULED => 'Scheduled',
+            self::DISPLAY_OVERDUE => 'Overdue',
+            self::STATUS_IN_PROGRESS => 'In progress',
+            self::STATUS_COMPLETED => 'Completed',
+            self::STATUS_CANCELLED => 'Cancelled',
+            default => ucfirst((string) ($status ?? $this->status)),
+        };
+    }
+
+    public function statusColor(?string $status = null): string
+    {
+        return match ($status ?? $this->displayStatus()) {
+            self::STATUS_COMPLETED => 'success',
+            self::STATUS_IN_PROGRESS => 'warning',
+            self::DISPLAY_OVERDUE, self::STATUS_CANCELLED => 'danger',
+            default => 'gray',
+        };
     }
 
     /**

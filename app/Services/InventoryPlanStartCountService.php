@@ -53,7 +53,7 @@ class InventoryPlanStartCountService
 
         $plan = $line->plan;
 
-        if ($plan instanceof PhysicalInventoryPlan && $plan->status === PhysicalInventoryPlan::STATUS_DRAFT) {
+        if ($plan instanceof PhysicalInventoryPlan && $plan->status === PhysicalInventoryPlan::STATUS_SCHEDULED) {
             $plan->update(['status' => PhysicalInventoryPlan::STATUS_IN_PROGRESS]);
         }
 

@@ -4,6 +4,7 @@ namespace App\Filament\Pages;
 
 use App\Jobs\GenerateAiProcurementRecommendationJob;
 use App\Models\AiProcurementRun;
+use App\Services\AiProcurementHelperService;
 use App\Services\AiProcurementRecommendationService;
 use App\Services\OllamaClient;
 use App\Services\ProcurementDecisionSupportService;
@@ -28,8 +29,6 @@ use UnitEnum;
 
 class ProcurementAnalytics extends Page
 {
-    private const int AT_RISK_LIMIT = 25;
-
     private const int AT_RISK_PAGE_SIZE = 25;
 
     private const float STOCKOUT_WITHIN_MONTHS = 2.0;
@@ -77,6 +76,13 @@ class ProcurementAnalytics extends Page
 
     public int $atRiskVisibleLimit = self::AT_RISK_PAGE_SIZE;
 
+    public int $atRiskClientOffset = self::AT_RISK_PAGE_SIZE;
+
+    public int $recommendationReorderOffset = self::AT_RISK_PAGE_SIZE;
+
+    public int $recommendationReplacementOffset = self::AT_RISK_PAGE_SIZE;
+
+    /** @var array<string, mixed>|null */
     /** @var array<int, Collection<int, object>> */
     protected array $atRiskRowsCache = [];
 
@@ -270,6 +276,7 @@ class ProcurementAnalytics extends Page
         $this->lastAiRunId = null;
         $this->processingRunId = null;
         $this->loading = false;
+        $this->resetRecommendationOffsets();
 
         if (Auth::id() !== null) {
             AiProcurementSummaryRestore::forget((int) Auth::id());
@@ -281,6 +288,21 @@ class ProcurementAnalytics extends Page
         $this->clearGeneratedSummary();
         $this->recommendationSlide = 'reorders';
         $this->syncAnalyticsSlides();
+    }
+
+    /**
+     * @return list<array{source: string, content: string}>
+     */
+    public function getPolicySnippets(): array
+    {
+        if ($this->lastAiRunId === null) {
+            return [];
+        }
+
+        $run = AiProcurementRun::query()->find($this->lastAiRunId);
+        $snippets = $run?->policy_snippets;
+
+        return is_array($snippets) ? array_values($snippets) : [];
     }
 
     /**
@@ -403,6 +425,7 @@ class ProcurementAnalytics extends Page
     {
         $this->clearGeneratedSummary();
         $this->atRiskView = in_array($view, ['all', 'stockouts'], true) ? $view : 'all';
+        $this->resetAtRiskWindow();
     }
 
     public function sortAtRiskBy(string $column): void
@@ -421,29 +444,62 @@ class ProcurementAnalytics extends Page
         $this->resetAtRiskWindow();
     }
 
-    public function loadMoreAtRiskRows(): void
+    /**
+     * @return list<array<string, mixed>>
+     */
+    public function loadMoreAtRiskRows(): array
     {
-        $total = $this->currentAtRiskTotal();
+        $all = $this->displayAtRiskRows(
+            $this->queryAtRiskRows(AiProcurementRecommendationService::SOURCE_ROW_LIMIT)
+        );
+        $total = $all->count();
 
-        if ($this->atRiskVisibleLimit >= $total) {
-            return;
+        if ($this->atRiskClientOffset >= $total) {
+            return [];
         }
 
-        $this->atRiskVisibleLimit = min(
-            $this->atRiskVisibleLimit + self::AT_RISK_PAGE_SIZE,
-            $total,
-        );
+        $chunk = $all
+            ->slice($this->atRiskClientOffset, self::AT_RISK_PAGE_SIZE)
+            ->values();
+
+        $this->atRiskClientOffset += $chunk->count();
+        $this->atRiskVisibleLimit = $this->atRiskClientOffset;
+
+        return $chunk->map(fn (object $row): array => $this->mapAtRiskRowForClient($row))->all();
     }
 
     public function hasMoreAtRiskRows(): bool
     {
-        return $this->atRiskVisibleLimit < $this->currentAtRiskTotal();
+        return $this->atRiskClientOffset < $this->currentAtRiskTotal();
     }
 
     protected function resetAtRiskWindow(): void
     {
         $this->atRiskVisibleLimit = self::AT_RISK_PAGE_SIZE;
+        $this->atRiskClientOffset = self::AT_RISK_PAGE_SIZE;
         $this->atRiskRowsCache = [];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function mapAtRiskRowForClient(object $row): array
+    {
+        return [
+            'item_id' => (int) $row->item_id,
+            'office_id' => (int) $row->office_id,
+            'item_name' => (string) $row->item_name,
+            'category_name' => (string) ($row->category_name ?? ''),
+            'category_sort_rank' => (int) ($row->category_sort_rank ?? 99),
+            'current_stock' => (int) $row->current_stock,
+            'reorder_level' => (int) $row->reorder_level,
+            'forecast_monthly_usage' => (float) $row->forecast_monthly_usage,
+            'months_cover' => $row->months_cover !== null ? (float) $row->months_cover : null,
+            'suggested_reorder_qty' => $row->suggested_reorder_qty !== null ? (int) $row->suggested_reorder_qty : null,
+            'projected_stockout_date' => $row->projected_stockout_date,
+            'latest_unit_cost' => $row->latest_unit_cost !== null ? (float) $row->latest_unit_cost : null,
+            'priority' => (string) $row->priority,
+        ];
     }
 
     protected function currentAtRiskTotal(): int
@@ -512,6 +568,116 @@ class ProcurementAnalytics extends Page
             ->values();
     }
 
+    /**
+     * @return list<array<string, mixed>>
+     */
+    public function getRecommendationReorderInitialRows(): array
+    {
+        return $this->mapRecommendationItemsForClient(
+            $this->getRecommendationReorderRows()->take(self::AT_RISK_PAGE_SIZE)
+        );
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    public function getRecommendationReplacementInitialRows(): array
+    {
+        return $this->mapRecommendationItemsForClient(
+            $this->getRecommendationReplacementRows()->take(self::AT_RISK_PAGE_SIZE)
+        );
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    public function loadMoreRecommendationReorderRows(): array
+    {
+        $all = $this->getRecommendationReorderRows();
+        if ($this->recommendationReorderOffset >= $all->count()) {
+            return [];
+        }
+
+        $chunk = $all->slice($this->recommendationReorderOffset, self::AT_RISK_PAGE_SIZE)->values();
+        $this->recommendationReorderOffset += $chunk->count();
+
+        return $this->mapRecommendationItemsForClient($chunk);
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    public function loadMoreRecommendationReplacementRows(): array
+    {
+        $all = $this->getRecommendationReplacementRows();
+        if ($this->recommendationReplacementOffset >= $all->count()) {
+            return [];
+        }
+
+        $chunk = $all->slice($this->recommendationReplacementOffset, self::AT_RISK_PAGE_SIZE)->values();
+        $this->recommendationReplacementOffset += $chunk->count();
+
+        return $this->mapRecommendationItemsForClient($chunk);
+    }
+
+    /**
+     * @param  Collection<int, \App\Models\AiProcurementItem>  $rows
+     * @return list<array<string, mixed>>
+     */
+    protected function mapRecommendationItemsForClient(Collection $rows): array
+    {
+        $helper = app(AiProcurementHelperService::class);
+
+        return $rows->map(function ($row) use ($helper): array {
+            $usage = $row->avg_monthly_usage !== null ? (float) $row->avg_monthly_usage : null;
+            $isReplacement = (string) ($row->section ?? '') === 'replacement';
+            $daysRemaining = $row->eul_days_remaining !== null ? (int) $row->eul_days_remaining : null;
+            $lifeRemaining = $isReplacement ? $helper->lifeRemainingPhrase($daysRemaining) : '';
+            $eulLabel = filled($row->estimated_useful_life)
+                ? 'EUL '.(string) $row->estimated_useful_life
+                : '';
+            $property = (string) ($row->property_number ?? '');
+            $semiMeta = $isReplacement
+                ? implode(' · ', array_values(array_filter([
+                    $property !== '' ? $property : null,
+                    $eulLabel !== '' ? $eulLabel : null,
+                    $lifeRemaining !== '' ? $lifeRemaining : null,
+                ])))
+                : '';
+            $explanation = (! $isReplacement && (string) ($row->priority ?? '') === 'High')
+                ? $helper->explainHighItem($row)
+                : '';
+
+            return [
+                'priority' => (string) ($row->priority ?? ''),
+                'item_name' => (string) ($row->item_name ?? ''),
+                'current_stock' => $row->current_stock !== null ? (int) $row->current_stock : null,
+                'suggested_qty_min' => $row->suggested_qty_min !== null ? (int) $row->suggested_qty_min : null,
+                'months_cover' => $row->months_cover !== null ? (float) $row->months_cover : null,
+                'cover_phrase' => $row->months_cover !== null
+                    ? StockCoverPhrase::fromMonths((float) $row->months_cover)
+                    : '',
+                'usage_phrase' => $helper->usagePhrase($usage),
+                'why_explanation' => $explanation !== '' ? $explanation : 'Needs reorder attention',
+                'property_number' => $property,
+                'estimated_useful_life' => (string) ($row->estimated_useful_life ?? ''),
+                'eul_label' => $eulLabel,
+                'life_remaining_phrase' => $lifeRemaining,
+                'semi_meta' => $semiMeta !== '' ? $semiMeta : '—',
+                'eul_status' => (string) ($row->eul_status ?? ''),
+                'reason' => (string) ($row->reason ?? ''),
+                'next_step' => $isReplacement ? $helper->nextStepForReplacement($row) : '',
+                'section' => (string) ($row->section ?? ''),
+            ];
+        })->values()->all();
+    }
+
+    public function resetRecommendationOffsets(): void
+    {
+        $this->recommendationReorderOffset = self::AT_RISK_PAGE_SIZE;
+        $this->recommendationReplacementOffset = self::AT_RISK_PAGE_SIZE;
+    }
+
     public function getLastGeneratedLabel(): ?string
     {
         if ($this->lastAiRunId === null) {
@@ -565,25 +731,35 @@ class ProcurementAnalytics extends Page
             return ['consumables' => '', 'replacement' => ''];
         }
 
-        if (preg_match('/\[\[CONSUMABLES\]\]\s*(.*?)\s*\[\[SEMI-EXPENDABLE\]\]\s*(.*)\z/is', $text, $matches) === 1) {
+        $extract = function (string $label) use ($text): string {
+            $pattern = '/\[\[\s*'.preg_quote($label, '/').'\s*\]\]\s*(.*?)(?=\[\[\s*(?:NEXT ACTION|CONSUMABLES|SEMI-EXPENDABLE)\s*\]\]|\z)/is';
+            if (preg_match($pattern, $text, $matches) === 1) {
+                return trim($matches[1]);
+            }
+
+            return '';
+        };
+
+        $nextAction = $extract('NEXT ACTION');
+        $consumables = $extract('CONSUMABLES');
+        $replacement = $extract('SEMI-EXPENDABLE');
+
+        $hasMarkers = preg_match('/\[\[\s*(?:NEXT ACTION|CONSUMABLES|SEMI-EXPENDABLE)\s*\]\]/i', $text) === 1;
+
+        if (! $hasMarkers) {
             return [
-                'consumables' => trim($matches[1]),
-                'replacement' => trim($matches[2]),
+                'consumables' => trim($text),
+                'replacement' => '',
             ];
         }
 
-        if (preg_match('/\[\[SEMI-EXPENDABLE\]\]\s*(.*?)\s*\[\[CONSUMABLES\]\]\s*(.*)\z/is', $text, $matches) === 1) {
-            return [
-                'consumables' => trim($matches[2]),
-                'replacement' => trim($matches[1]),
-            ];
+        if ($nextAction !== '') {
+            $consumables = $nextAction.($consumables !== '' ? "\n\n".$consumables : '');
         }
-
-        $text = preg_replace('/\[\[(?:CONSUMABLES|SEMI-EXPENDABLE)\]\]/i', '', $text) ?? $text;
 
         return [
-            'consumables' => trim($text),
-            'replacement' => '',
+            'consumables' => $consumables,
+            'replacement' => $replacement,
         ];
     }
 
@@ -603,9 +779,28 @@ class ProcurementAnalytics extends Page
 
         $text = $parts['consumables'] !== ''
             ? $parts['consumables']
-            : trim((string) $this->recommendation);
+            : $this->deterministicConsumablesNarrative();
 
         return StockCoverPhrase::rewriteDecimalMonthsInText($text);
+    }
+
+    public function deterministicConsumablesNarrative(): string
+    {
+        $rows = $this->getRecommendationReorderRows()->take(5);
+        if ($rows->isEmpty()) {
+            return 'No consumables need reorder attention in this filter.';
+        }
+
+        $lines = $rows->map(function (object $row): string {
+            $item = trim((string) ($row->item_name ?? 'Item'));
+            $stock = $row->current_stock !== null ? (string) (int) $row->current_stock : '—';
+            $buy = $row->suggested_qty_min !== null ? (string) (int) $row->suggested_qty_min : '—';
+            $cover = StockCoverPhrase::fromMonths((float) ($row->months_cover ?? 0));
+
+            return "- {$item} — stock {$stock} → buy {$buy} · {$cover}";
+        })->all();
+
+        return "Consumables to reorder this cycle:\n".implode("\n", $lines);
     }
 
     public function deterministicReplacementNarrative(): string
@@ -615,18 +810,21 @@ class ProcurementAnalytics extends Page
             return 'No semi-expendable units are due for replacement review in this filter.';
         }
 
-        $mentions = $rows->map(function (object $row): string {
+        $lines = $rows->map(function (object $row): string {
             $item = trim((string) ($row->item_name ?? 'Unit'));
-            $action = trim((string) ($row->reason ?? 'Awaiting review'));
+            $status = trim((string) ($row->eul_status ?? '—'));
+            $actionCode = trim((string) ($row->replacement_action ?? ''));
+            $actionLabel = trim((string) ($row->reason ?? ''));
 
-            return $action !== '' ? "{$item} ({$action})" : $item;
+            $nextStep = app(AiProcurementHelperService::class)->nextStepForReplacement((object) [
+                'replacement_action' => $actionCode,
+                'reason' => $actionLabel,
+            ]);
+
+            return "- **{$item}** — {$status} → {$nextStep}";
         })->all();
 
-        $list = count($mentions) === 1
-            ? $mentions[0]
-            : implode(', ', array_slice($mentions, 0, -1)).', and '.$mentions[array_key_last($mentions)];
-
-        return "Kindly review these semi-expendable units due for replacement: {$list}.";
+        return "Semi-expendable units to review:\n".implode("\n", $lines);
     }
 
     public function formatAiNarrativeMarkdown(string $markdown): string
@@ -637,7 +835,7 @@ class ProcurementAnalytics extends Page
         }
 
         $markdown = preg_replace('/\s+@\s+[^.,;]+/u', '', $markdown) ?? $markdown;
-        $markdown = preg_replace('/\[\[(?:CONSUMABLES|SEMI-EXPENDABLE)\]\]/i', '', $markdown) ?? $markdown;
+        $markdown = preg_replace('/\[\[\s*(?:NEXT ACTION|CONSUMABLES|SEMI-EXPENDABLE)\s*\]\]/i', '', $markdown) ?? $markdown;
         $markdown = StockCoverPhrase::rewriteDecimalMonthsInText($markdown);
         $markdown = preg_replace(
             '/(?:^|\n)\s*["“”\']*\s*One opening line\s*:?\s*/iu',
@@ -660,6 +858,35 @@ class ProcurementAnalytics extends Page
         $markdown = $this->stripRedundantNarrativeQuotes(trim($markdown));
 
         $lines = explode("\n", $markdown);
+        $normalized = [];
+
+        foreach ($lines as $rawLine) {
+            $line = rtrim($rawLine);
+            $trimmed = trim($line);
+            if ($trimmed === '') {
+                $normalized[] = '';
+
+                continue;
+            }
+
+            $trimmed = preg_replace('/^["“”\']+|["“”\']+$/u', '', $trimmed) ?? $trimmed;
+            $trimmed = trim($trimmed);
+            if ($trimmed === '') {
+                continue;
+            }
+
+            if (preg_match('/^[•●◦–—]\s+/u', $trimmed) === 1) {
+                $trimmed = '- '.preg_replace('/^[•●◦–—]\s+/u', '', $trimmed);
+            } elseif (
+                ! preg_match('/^([-*] |\d+\.\s+)/', $trimmed)
+                && preg_match('/^.+\s+[—–→\-]+\s+.+/u', $trimmed) === 1
+            ) {
+                $trimmed = '- '.$trimmed;
+            }
+
+            $normalized[] = $trimmed;
+        }
+
         $out = [];
 
         $isBlockLine = static function (string $line): bool {
@@ -674,11 +901,11 @@ class ProcurementAnalytics extends Page
                 || str_starts_with($t, '```');
         };
 
-        for ($i = 0; $i < count($lines); $i++) {
-            $line = rtrim($lines[$i]);
+        for ($i = 0; $i < count($normalized); $i++) {
+            $line = $normalized[$i];
             $out[] = $line;
 
-            $next = $lines[$i + 1] ?? null;
+            $next = $normalized[$i + 1] ?? null;
             if ($next === null) {
                 continue;
             }
@@ -764,14 +991,14 @@ class ProcurementAnalytics extends Page
 
         return app(SemiExpendableEulAnalyticsService::class)->getReviewRows(
             officeIds: $officeIds,
-            limit: self::AT_RISK_LIMIT,
+            limit: self::AT_RISK_PAGE_SIZE,
         );
     }
 
     /**
      * @return Collection<int, object>
      */
-    public function queryAtRiskRows(int $limit = 5000): Collection
+    public function queryAtRiskRows(int $limit = AiProcurementRecommendationService::SOURCE_ROW_LIMIT): Collection
     {
         $user = Filament::auth()->user();
         $officeIds = $user?->office_id ? [(int) $user->office_id] : [];
@@ -801,9 +1028,21 @@ class ProcurementAnalytics extends Page
      */
     public function getAtRiskPreviewRows(): Collection
     {
-        return $this->displayAtRiskRows($this->queryAtRiskRows())
-            ->take($this->atRiskVisibleLimit)
+        return $this->displayAtRiskRows(
+            $this->queryAtRiskRows(AiProcurementRecommendationService::SOURCE_ROW_LIMIT)
+        )
+            ->take(self::AT_RISK_PAGE_SIZE)
             ->values();
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    public function getAtRiskInitialClientRows(): array
+    {
+        return $this->getAtRiskPreviewRows()
+            ->map(fn (object $row): array => $this->mapAtRiskRowForClient($row))
+            ->all();
     }
 
     public function getAtRiskPreviewCount(): int
@@ -873,7 +1112,9 @@ class ProcurementAnalytics extends Page
      */
     public function getActionSummaryRows(): Collection
     {
-        return $this->queryAtRiskRows(self::AT_RISK_LIMIT);
+        return $this->queryAtRiskRows(AiProcurementRecommendationService::SOURCE_ROW_LIMIT)
+            ->take(self::AT_RISK_PAGE_SIZE)
+            ->values();
     }
 
     /**
@@ -990,8 +1231,6 @@ class ProcurementAnalytics extends Page
         $this->processingRunId = null;
 
         try {
-            $rows = $this->queryAtRiskRows(self::AT_RISK_LIMIT);
-
             ['from' => $from, 'to' => $to] = $this->resolveDateRange();
             $scope = $this->resolveProcurementCategoryScope();
             $officeIds = Filament::auth()->user()?->office_id ? [(int) Filament::auth()->user()->office_id] : [];
@@ -1004,6 +1243,7 @@ class ProcurementAnalytics extends Page
 
             $this->processingRunId = $run->id;
             $this->lastAiRunId = $run->id;
+            $this->resetRecommendationOffsets();
 
             GenerateAiProcurementRecommendationJob::dispatch(
                 runId: $run->id,
@@ -1096,6 +1336,9 @@ class ProcurementAnalytics extends Page
 
     protected function hydrateRecommendationFromRun(AiProcurementRun $run): void
     {
+        $this->resetRecommendationOffsets();
+        $this->lastAiRunId = (int) $run->id;
+
         $parts = $this->splitRecommendation($run->raw_response);
         $narrative = $parts['narrative'];
 

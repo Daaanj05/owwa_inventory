@@ -11,27 +11,29 @@
             && (float) ($row->months_cover ?? $row['months_cover']) <= 2.0)
         ->count();
     $embedded = (bool) ($embedded ?? false);
+    $chunked = (bool) ($chunked ?? false);
     $pageSize = (int) ($pageSize ?? 25);
     $stockoutWithinMonths = (float) ($stockoutWithinMonths ?? 2.0);
+    $totalCount = (int) ($totalCount ?? $allAtRiskCount);
 
     $clientRows = $allRows
         ->map(function ($row): array {
             $row = (object) $row;
 
             return [
-                'item_id' => (int) $row->item_id,
-                'office_id' => (int) $row->office_id,
-                'item_name' => (string) $row->item_name,
+                'item_id' => (int) ($row->item_id ?? 0),
+                'office_id' => (int) ($row->office_id ?? 0),
+                'item_name' => (string) ($row->item_name ?? ''),
                 'category_name' => (string) ($row->category_name ?? ''),
                 'category_sort_rank' => (int) ($row->category_sort_rank ?? 99),
-                'current_stock' => (int) $row->current_stock,
-                'reorder_level' => (int) $row->reorder_level,
-                'forecast_monthly_usage' => (float) $row->forecast_monthly_usage,
-                'months_cover' => $row->months_cover !== null ? (float) $row->months_cover : null,
-                'suggested_reorder_qty' => $row->suggested_reorder_qty !== null ? (int) $row->suggested_reorder_qty : null,
-                'projected_stockout_date' => $row->projected_stockout_date,
-                'latest_unit_cost' => $row->latest_unit_cost !== null ? (float) $row->latest_unit_cost : null,
-                'priority' => (string) $row->priority,
+                'current_stock' => (int) ($row->current_stock ?? 0),
+                'reorder_level' => (int) ($row->reorder_level ?? 0),
+                'forecast_monthly_usage' => (float) ($row->forecast_monthly_usage ?? 0),
+                'months_cover' => isset($row->months_cover) && $row->months_cover !== null ? (float) $row->months_cover : null,
+                'suggested_reorder_qty' => isset($row->suggested_reorder_qty) && $row->suggested_reorder_qty !== null ? (int) $row->suggested_reorder_qty : null,
+                'projected_stockout_date' => $row->projected_stockout_date ?? null,
+                'latest_unit_cost' => isset($row->latest_unit_cost) && $row->latest_unit_cost !== null ? (float) $row->latest_unit_cost : null,
+                'priority' => (string) ($row->priority ?? ''),
             ];
         })
         ->values()
@@ -50,6 +52,9 @@
             sortDirection: @js($sortDirection),
             pageSize: {{ $pageSize }},
             stockoutWithin: {{ $stockoutWithinMonths }},
+            totalCount: {{ $totalCount }},
+            stockoutTotal: {{ (int) $stockoutCount }},
+            chunked: {{ $chunked ? 'true' : 'false' }},
         })"
         x-init="init()"
     >

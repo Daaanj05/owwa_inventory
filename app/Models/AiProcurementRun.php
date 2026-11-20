@@ -20,6 +20,8 @@ class AiProcurementRun extends Model
         'period_to',
         'summary',
         'raw_response',
+        'policy_snippets',
+        'helpers',
         'status',
         'archived_at',
         'error_message',
@@ -31,6 +33,8 @@ class AiProcurementRun extends Model
         'period_from' => 'date',
         'period_to' => 'date',
         'archived_at' => 'datetime',
+        'policy_snippets' => 'array',
+        'helpers' => 'array',
     ];
 
     public function items(): HasMany

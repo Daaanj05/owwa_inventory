@@ -24,7 +24,7 @@ class PhysicalInventoryPlanFactory extends Factory
             'title' => fake()->sentence(4),
             'period_label' => 'FY '.now()->year,
             'cut_off_date' => now()->addMonth()->endOfMonth()->toDateString(),
-            'status' => PhysicalInventoryPlan::STATUS_DRAFT,
+            'status' => PhysicalInventoryPlan::STATUS_SCHEDULED,
             'item_category_id' => ItemCategory::factory(),
             'recorded_by' => User::factory(),
         ];

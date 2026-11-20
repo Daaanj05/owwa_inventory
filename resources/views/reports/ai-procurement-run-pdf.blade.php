@@ -46,8 +46,20 @@
     </tr>
 </table>
 
-@if (filled($summary))
-    <p class="owwa-ai-summary"><strong>Summary:</strong> {{ $summary }}</p>
+@if (filled($memo ?? $summary ?? null))
+    <p class="owwa-ai-summary"><strong>Recommendation memo:</strong> {{ $memo ?? $summary }}</p>
+@endif
+
+@if (filled($prPackageHelper ?? null))
+    <p class="owwa-ai-summary"><strong>What to buy next:</strong> {{ $prPackageHelper }}</p>
+@endif
+
+@if (! empty($policySnippets ?? []))
+    <p class="owwa-ai-summary"><strong>Policy used:</strong>
+        @foreach ($policySnippets as $snippet)
+            [{{ $snippet['source'] ?? 'policy' }}] {{ \Illuminate\Support\Str::limit((string) ($snippet['content'] ?? ''), 120) }}@if (! $loop->last); @endif
+        @endforeach
+    </p>
 @endif
 
 <table class="owwa-form-ledger">

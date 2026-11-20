@@ -13,24 +13,18 @@ class PhysicalInventoryPlanViewPresenter
     {
         $counts = $record->progressCounts();
         $percent = $record->progressPercent();
+        $displayStatus = $record->displayStatus();
 
-        $statusLabel = match ($record->status) {
-            PhysicalInventoryPlan::STATUS_DRAFT => 'Draft',
-            PhysicalInventoryPlan::STATUS_IN_PROGRESS => 'In progress',
-            PhysicalInventoryPlan::STATUS_COMPLETED => 'Completed',
-            PhysicalInventoryPlan::STATUS_CANCELLED => 'Cancelled',
-            default => ucfirst((string) $record->status),
-        };
-
-        $statusClass = match ($record->status) {
+        $statusClass = match ($displayStatus) {
             PhysicalInventoryPlan::STATUS_COMPLETED => 'owwa-pc-status-badge--complete',
             PhysicalInventoryPlan::STATUS_IN_PROGRESS => 'owwa-pc-status-badge--progress',
+            PhysicalInventoryPlan::DISPLAY_OVERDUE => 'owwa-pc-status-badge--overdue',
             default => 'owwa-pc-status-badge--pending',
         };
 
         return OwwaRecordHeroData::make(
             reference: $record->reference_code ?? '—',
-            statusLabel: $statusLabel,
+            statusLabel: $record->statusLabel($displayStatus),
             statusClass: $statusClass,
             meta: [
                 ['label' => 'Title', 'value' => $record->title],

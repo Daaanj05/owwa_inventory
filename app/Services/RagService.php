@@ -17,30 +17,22 @@ class RagService
     ) {}
 
     /**
-     * Generate a short narrative summary for a deterministic, pre-computed recommendation set.
+     * Generate a decision-support narrative for a deterministic recommendation set.
      *
-     * @param  array{from:string,to:string,category:string|null,pairs:int,high:int,medium:int,headline?:string}  $facts
-     * @param  array<int, array{priority:string,item:string,office:string,cover:float,forecast:float,suggested:int|null}>  $items
+     * @param  array{from:string,to:string,category:string|null,pairs:int,high:int,medium:int,headline?:string,replacement_count?:int,replacement_lines?:string}  $facts
+     * @param  array<int, array{priority:string,item:string,cover:float,forecast:float,suggested:int|null,stock?:int|string,reorder_level?:int|string}>  $items
+     * @param  array{category_id?:int|null}  $filters
+     * @return array{narrative: string, policy_snippets: list<array{source: string, content: string}>}|null
      */
-    public function generateNarrativeSummary(array $facts, array $items, array $filters = []): ?string
+    public function generateNarrativeSummary(array $facts, array $items, array $filters = []): ?array
     {
         if (! $this->ollama->isAvailable()) {
             return null;
         }
 
-        $systemPrompt = 'You are a procurement advisor for OWWA Regional Office IV-A. Use only the facts provided. Do not invent numbers or causes. Prioritize High-risk consumables first. Never suggest deprioritizing High-risk items. Write clear plain prose for supply custodians. Never append office or location after an item name, and never use "@". Never write decimal months such as 0.61 months; use only the provided cover phrases in days, weeks, or whole months.';
+        $systemPrompt = 'You are a procurement advisor for OWWA Regional Office IV-A. Use only the facts provided. Do not invent numbers or causes. Prioritize High-risk consumables first. Never suggest deprioritizing High-risk items. Write clear plain prose for supply custodians. Never append office or location after an item name, and never use "@". Never write decimal months such as 0.61 months; use only the provided cover phrases in days, weeks, or whole months. Keep categories separate: consumables are stock reorders only and have no replacement or useful-life review; semi-expendable units are replacement or issue-from-stock reviews only. Never say consumables are due for replacement.';
 
-        $itemsText = collect($items)
-            ->take(8)
-            ->map(function (array $i): string {
-                $suggested = $i['suggested'] ?? 0;
-                $stock = $i['stock'] ?? '—';
-                $reorder = $i['reorder_level'] ?? '—';
-                $coverPhrase = \App\Support\StockCoverPhrase::fromMonths((float) ($i['cover'] ?? 0));
-
-                return "- {$i['priority']}: {$i['item']} (stock {$stock}, reorder point {$reorder}, cover {$coverPhrase}, forecast {$i['forecast']} units/mo, suggested buy {$suggested})";
-            })
-            ->implode("\n");
+        $itemsText = $this->formatItemLines($items);
 
         $categoryLine = $facts['category'] ? "Category scope: {$facts['category']}." : 'Category scope: All categories.';
         $headlineLine = filled($facts['headline'] ?? null) ? "Summary headline: {$facts['headline']}." : '';
@@ -54,8 +46,19 @@ class RagService
             candidateLimit: 400,
         );
 
-        $retrievedText = $retrieved->isNotEmpty()
-            ? ("\n\nRetrieved context snippets:\n".$retrieved->map(fn ($c) => "- ({$c['source']}) ".mb_substr($c['content'], 0, 180))->implode("\n"))
+        $policySnippets = $retrieved
+            ->map(fn (array $c): array => [
+                'source' => (string) ($c['source'] ?? 'policy'),
+                'content' => mb_substr((string) ($c['content'] ?? ''), 0, 220),
+            ])
+            ->filter(fn (array $c): bool => $c['content'] !== '')
+            ->values()
+            ->all();
+
+        $retrievedText = $policySnippets !== []
+            ? ("\n\nRetrieved policy/context snippets:\n".collect($policySnippets)
+                ->map(fn (array $c): string => "- ({$c['source']}) {$c['content']}")
+                ->implode("\n"))
             : '';
 
         $userMessage = <<<TXT
@@ -71,22 +74,54 @@ Semi-expendable replacement reviews: {$replacementCount}. These are not reorders
 {$replacementLines}
 {$retrievedText}
 
-Return exactly two labeled blocks and nothing else. Do not output a table. Do not wrap the answer in quotation marks.
+Return exactly three labeled blocks and nothing else. Do not output a table. Do not wrap the answer in quotation marks.
 Never echo instructions or scaffolding. Forbidden text includes: "One opening line", "Sentence 1", "Sentence pattern", "High:", "Medium:", "Low:".
 Never write decimal months (for example 0.61 months). Copy the cover phrase as given (days, weeks, or whole months).
 
 Format exactly:
 
+[[NEXT ACTION]]
+One short line naming the next operational step this cycle (for example prepare what to buy next, issue-from-stock first, or wait). Do not invent quantities.
+
 [[CONSUMABLES]]
-One short paragraph (2 to 3 sentences) about consumable stock gaps only. Open with decision support for the next purchase request. Explain High items with cause then action using the given cover phrase and/or stock versus reorder pace, forecast in units/mo, and suggested buy quantity. Mention Medium only briefly if space remains. Do not discuss semi-expendable units here.
+Markdown bullets only for consumable stock gaps. One bullet per item using this pattern: **Item** — stock N → buy N · cover phrase. Bold the item name. List High items first, then Medium if present. Do not write long paragraphs. Do not discuss semi-expendable units here. Never mention replacement, expiry, useful life, or "due for replacement" for consumables. If High consumable rows are listed above, you must include a bullet for each; do not claim that no High consumables need attention.
 
 [[SEMI-EXPENDABLE]]
-One short paragraph (1 to 2 sentences) about semi-expendable replacement reviews only. Name the units that need attention and the given action only (Issue from stock, Purchase, or Awaiting review). Never invent a reorder quantity, and never use forecast, cover, or reorder language. If there are no semi-expendable units, write one sentence that none are due for replacement review.
+Markdown bullets only for semi-expendable units. One bullet per unit using: **Item** (property) — EUL status → next step. Examples of next step: Issue from stock, Purchase, or Waiting for holder review. Never write "status: Awaiting review". Never invent a reorder quantity, and never use forecast, cover, or reorder language. Never use the word "consumables" in this block. Never write that consumables are due for replacement. If Semi-expendable replacement reviews is 0 or the list is none, write exactly: No semi-expendable units are due for replacement review this cycle. If units are listed, bullet them; do not claim that none are due.
+
+If policy/context snippets were provided, weave at most one short policy-aligned reason into [[NEXT ACTION]] without quoting the snippet verbatim at length.
 
 Never append office or location. Never use "@".
 TXT;
 
-        return $this->ollama->chat($systemPrompt, $userMessage);
+        $narrative = $this->ollama->chat($systemPrompt, $userMessage);
+
+        if (! filled($narrative)) {
+            return null;
+        }
+
+        return [
+            'narrative' => $narrative,
+            'policy_snippets' => $policySnippets,
+        ];
+    }
+
+    /**
+     * @param  array<int, array{priority:string,item:string,cover?:float,forecast?:float,suggested?:int|null,stock?:int|string,reorder_level?:int|string}>  $items
+     */
+    public function formatItemLines(array $items): string
+    {
+        return collect($items)
+            ->map(function (array $i): string {
+                $suggested = $i['suggested'] ?? 0;
+                $stock = $i['stock'] ?? '—';
+                $reorder = $i['reorder_level'] ?? '—';
+                $coverPhrase = \App\Support\StockCoverPhrase::fromMonths((float) ($i['cover'] ?? 0));
+                $forecast = $i['forecast'] ?? 0;
+
+                return "- {$i['priority']}: {$i['item']} (stock {$stock}, reorder point {$reorder}, cover {$coverPhrase}, forecast {$forecast} units/mo, suggested buy {$suggested})";
+            })
+            ->implode("\n");
     }
 
     /**

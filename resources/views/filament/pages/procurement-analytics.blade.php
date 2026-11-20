@@ -1,10 +1,9 @@
-﻿@php
+@php
     use App\Filament\Resources\AiProcurementRunResource;
     use Illuminate\Support\Str;
 
     $selectedRange = $this->getSelectedDateRange();
     $rangeKey = $selectedRange['from'].'_'.$selectedRange['to'];
-    $atRiskAllRows = $this->queryAtRiskRows();
     $allAtRiskCount = $this->getAtRiskPreviewCount();
     $stockoutCount = $this->getStockoutPreviewCount();
     $hasSummaryOutput = $loading || filled($recommendation);
@@ -91,7 +90,7 @@
                             <p class="fi-section-header-description mt-1">Consumable stock compared with issuance pace and the reorder point.</p>
                         </div>
                         @include('filament.partials.at-risk-procurement-preview', [
-                            'allRows' => $atRiskAllRows,
+                            'allRows' => collect($this->getAtRiskInitialClientRows()),
                             'atRiskView' => $atRiskView,
                             'sortColumn' => $sortColumn,
                             'sortDirection' => $sortDirection,
@@ -99,6 +98,8 @@
                             'stockoutCount' => $stockoutCount,
                             'pageSize' => 25,
                             'stockoutWithinMonths' => 2.0,
+                            'totalCount' => $atRiskView === 'stockouts' ? $stockoutCount : $allAtRiskCount,
+                            'chunked' => true,
                             'embedded' => true,
                         ])
                     </section>
@@ -143,7 +144,7 @@
     >
         <div class="fi-section-header-ctn px-5 py-3 border-b border-gray-200 dark:border-white/10">
             <div class="owwa-pa-summary-intro">
-                <h2 class="fi-section-header-heading">Procurement summary</h2>
+                <h2 class="fi-section-header-heading">Procurement Summary</h2>
                 <p class="fi-section-header-description mt-1">
                     Build a recommendation from the consumable reorder list and the semi-expendable replacement list.
                     Runs are saved under
@@ -174,43 +175,51 @@
                     </div>
                 @else
                     <div class="owwa-pa-ai-recommendation owwa-pr-ai-result">
-                        @if($hasAiNarrative)
+                        @if($hasAiNarrative || $aiNarrativeUnavailable || filled($recommendation))
                             <div class="owwa-pa-ai-recommendation-head">
-                                <span class="owwa-pr-ai-pill">AI-generated</span>
+                                @if($hasAiNarrative)
+                                    <span class="owwa-pr-ai-pill">AI-generated</span>
+                                @else
+                                    <span class="owwa-pr-ai-pill owwa-pr-ai-pill--muted">Saved recommendation</span>
+                                @endif
                                 @if($lastAiRunId)
                                     <a href="{{ AiProcurementRunResource::getUrl('view', ['record' => $lastAiRunId]) }}" class="owwa-pa-ai-recommendation-meta-link">
                                         View saved run #{{ $lastAiRunId }} →
                                     </a>
                                 @endif
                             </div>
-                        @elseif($aiNarrativeUnavailable)
-                            <div class="owwa-pa-ai-recommendation-head">
-                                <span class="owwa-pr-ai-pill owwa-pr-ai-pill--muted">Saved recommendation</span>
-                                @if($lastAiRunId)
-                                    <a href="{{ AiProcurementRunResource::getUrl('view', ['record' => $lastAiRunId]) }}" class="owwa-pa-ai-recommendation-meta-link">
-                                        View saved run #{{ $lastAiRunId }} →
-                                    </a>
-                                @endif
-                            </div>
-                            <p class="owwa-pa-ai-unavailable">
-                                AI narrative needs Ollama on this device. The lists below are the saved recommendation snapshot from the reorder and replacement-due lists, not a second Suggested Reorders panel.
-                            </p>
-                        @elseif(filled($recommendation))
-                            <div class="owwa-pa-callout owwa-pa-callout--info" role="alert">
-                                <p class="owwa-pa-callout-body">{{ $recommendation }}</p>
+                            @if($aiNarrativeUnavailable)
+                                <p class="owwa-pa-ai-unavailable">
+                                    AI narrative needs Ollama on this device. The lists below are the saved recommendation snapshot from the reorder and replacement-due lists, not a second Suggested Reorders panel.
+                                </p>
+                            @endif
+                        @endif
+
+                        @php $policySnippets = $this->getPolicySnippets(); @endphp
+                        @if($policySnippets !== [])
+                            <div class="owwa-pa-policy-used">
+                                <p class="owwa-pa-policy-used-title">Policy used</p>
+                                <ul class="owwa-pa-policy-used-list">
+                                    @foreach($policySnippets as $snippet)
+                                        <li>
+                                            <span class="owwa-pa-policy-used-source">{{ $snippet['source'] ?? 'policy' }}</span>
+                                            {{ \Illuminate\Support\Str::limit((string) ($snippet['content'] ?? ''), 160) }}
+                                        </li>
+                                    @endforeach
+                                </ul>
                             </div>
                         @endif
 
                         @include('filament.partials.procurement-recommendation-items-table', [
-                            'reorderRows' => $this->getRecommendationReorderRows(),
-                            'replacementRows' => $this->getRecommendationReplacementRows(),
+                            'reorderRows' => collect($this->getRecommendationReorderInitialRows()),
+                            'replacementRows' => collect($this->getRecommendationReplacementInitialRows()),
+                            'reorderTotal' => $this->getRecommendationReorderRows()->count(),
+                            'replacementTotal' => $this->getRecommendationReplacementRows()->count(),
+                            'pageSize' => 25,
+                            'chunked' => true,
                             'slides' => $this->availableAnalyticsSlides(),
                             'recommendationSlide' => $recommendationSlide,
                             'positionLabel' => $this->recommendationSlidePositionLabel(),
-                            'hasAiNarrative' => $hasAiNarrative,
-                            'aiNarrativeUnavailable' => $aiNarrativeUnavailable,
-                            'consumableNarrative' => $this->recommendationNarrativeForSlide('reorders'),
-                            'replacementNarrative' => $this->recommendationNarrativeForSlide('replacement'),
                             'showDoneButton' => true,
                         ])
                     </div>
@@ -277,6 +286,9 @@
             sortDirection: config.sortDirection || 'asc',
             pageSize: config.pageSize || 25,
             stockoutWithin: config.stockoutWithin || 2,
+            totalCount: Number(config.totalCount || (config.rows || []).length),
+            stockoutTotal: Number(config.stockoutTotal || 0),
+            chunked: Boolean(config.chunked),
             visibleLimit: { all: config.pageSize || 25, stockouts: config.pageSize || 25 },
             pending: false,
             init() {
@@ -289,15 +301,22 @@
                 }
             },
             get allCount() {
-                return this.allRows.length;
+                return this.chunked ? this.totalCount : this.allRows.length;
             },
             get stockoutCount() {
+                if (this.chunked) {
+                    return this.stockoutTotal;
+                }
+
                 return this.allRows.filter((row) => row.months_cover !== null && Number(row.months_cover) <= this.stockoutWithin).length;
             },
             setView(view) {
                 this.view = view === 'stockouts' ? 'stockouts' : 'all';
                 if (typeof Alpine.store === 'function' && Alpine.store('paAtRisk')) {
                     Alpine.store('paAtRisk').view = this.view;
+                }
+                if (this.chunked && this.$wire) {
+                    this.$wire.setAtRiskView(this.view);
                 }
             },
             filteredRows() {
@@ -378,6 +397,10 @@
                 return this.sortedRows().slice(0, limit);
             },
             hasMore() {
+                if (this.chunked) {
+                    return this.allRows.length < this.totalCount;
+                }
+
                 return this.visibleRows().length < this.sortedRows().length;
             },
             sortBy(column) {
@@ -393,6 +416,9 @@
                 }
 
                 this.visibleLimit[this.view] = this.pageSize;
+                if (this.chunked && this.$wire) {
+                    this.$wire.sortAtRiskBy(column);
+                }
             },
             sortIndicator(column) {
                 if (this.sortColumn !== column) {
@@ -401,7 +427,7 @@
 
                 return this.sortDirection === 'asc' ? ' ↑' : ' ↓';
             },
-            onScroll(event) {
+            async onScroll(event) {
                 if (this.pending) {
                     return;
                 }
@@ -420,12 +446,23 @@
                 }
 
                 this.pending = true;
-                const total = this.sortedRows().length;
-                this.visibleLimit[this.view] = Math.min(
-                    (this.visibleLimit[this.view] || this.pageSize) + this.pageSize,
-                    total,
-                );
-                this.pending = false;
+
+                try {
+                    if (this.chunked && this.$wire) {
+                        const chunk = await this.$wire.loadMoreAtRiskRows();
+                        if (Array.isArray(chunk) && chunk.length) {
+                            this.allRows = this.allRows.concat(chunk);
+                        }
+                    } else {
+                        const total = this.sortedRows().length;
+                        this.visibleLimit[this.view] = Math.min(
+                            (this.visibleLimit[this.view] || this.pageSize) + this.pageSize,
+                            total,
+                        );
+                    }
+                } finally {
+                    this.pending = false;
+                }
             },
             formatInt(value) {
                 return Number(value || 0).toLocaleString();

@@ -72,6 +72,7 @@ class SemiExpendableEulAnalyticsService
      *   property_number:string|null,
      *   reference_code:string|null,
      *   issued_to_name:string|null,
+     *   office_name:string|null,
      *   estimated_useful_life:string|null,
      *   eul_expires_at:string|null,
      *   status:string,
@@ -108,6 +109,7 @@ class SemiExpendableEulAnalyticsService
                     'issuance_id' => (int) $issuance->id,
                     'item_id' => $itemId,
                     'office_id' => $officeId,
+                    'office_name' => filled($issuance->office?->name) ? (string) $issuance->office->name : null,
                     'item_name' => (string) ($issuance->item?->name ?? 'Item'),
                     'property_number' => filled($issuance->property_number) ? (string) $issuance->property_number : null,
                     'reference_code' => filled($issuance->reference_code) ? (string) $issuance->reference_code : null,
@@ -175,7 +177,7 @@ class SemiExpendableEulAnalyticsService
         }
 
         return Issuance::query()
-            ->with(['item.category', 'issuedTo'])
+            ->with(['item.category', 'issuedTo', 'office'])
             ->whereNotNull('eul_expires_at')
             ->when($officeIds !== [], fn ($q) => $q->whereIn('office_id', $officeIds))
             ->whereHas('item', fn ($q) => $q->whereIn('item_category_id', $semiCategoryIds))

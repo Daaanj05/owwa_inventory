@@ -312,6 +312,49 @@ class ProcurementAnalyticsPageTest extends TestCase
         $this->assertDoesNotMatchRegularExpression('/["”]$/', $formatted);
     }
 
+    public function test_split_slide_narratives_does_not_leak_markers_when_consumables_empty(): void
+    {
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+
+        $custodian = User::factory()->create([
+            'role' => User::ROLE_SUPPLY_CUSTODIAN,
+            'email_verified_at' => now(),
+        ]);
+
+        $raw = <<<'TXT'
+[[NEXT ACTION]]
+Issue from stock first.
+
+[[CONSUMABLES]]
+
+[[SEMI-EXPENDABLE]]
+Paper Cutter (SPH-002) — Expired
+TXT;
+
+        $page = Livewire::actingAs($custodian)
+            ->test(ProcurementAnalytics::class)
+            ->instance();
+
+        $parts = $page->splitSlideNarratives($raw);
+        $this->assertSame('Issue from stock first.', $parts['consumables']);
+        $this->assertStringContainsString('Paper Cutter', $parts['replacement']);
+        $this->assertStringNotContainsString('[[CONSUMABLES]]', $parts['consumables']);
+        $this->assertStringNotContainsString('[[SEMI-EXPENDABLE]]', $parts['replacement']);
+
+        $page->recommendation = $raw."\n\n### table";
+        $reorders = $page->recommendationNarrativeForSlide('reorders');
+        $this->assertStringNotContainsString('[[', $reorders);
+        $this->assertStringNotContainsString('Paper Cutter', $reorders);
+        $this->assertStringContainsString('Issue from stock first.', $reorders);
+
+        $formatted = $page->formatAiNarrativeMarkdown(
+            "\" Issue from stock\n\n[[CONSUMABLES]]\nAlcohol 70% → buy 16 — 3 weeks"
+        );
+        $this->assertStringNotContainsString('[[CONSUMABLES]]', $formatted);
+        $this->assertStringContainsString('- Alcohol 70% → buy 16 — 3 weeks', $formatted);
+        $this->assertDoesNotMatchRegularExpression('/^["“]/', $formatted);
+    }
+
     public function test_procurement_summary_shown_after_generate(): void
     {
         Filament::setCurrentPanel(Filament::getPanel('admin'));
@@ -392,7 +435,10 @@ class ProcurementAnalyticsPageTest extends TestCase
         ]);
 
         $this->mock(RagService::class, function ($mock): void {
-            $mock->shouldReceive('generateNarrativeSummary')->once()->andReturn('Reorder high-priority toner immediately.');
+            $mock->shouldReceive('generateNarrativeSummary')->once()->andReturn([
+                'narrative' => 'Reorder high-priority toner immediately.',
+                'policy_snippets' => [],
+            ]);
         });
 
         $run = AiProcurementRun::create([
@@ -613,6 +659,7 @@ class ProcurementAnalyticsPageTest extends TestCase
         $this->assertCount(1, $eulRows);
         $this->assertSame('Office Chair', $eulRows->first()->item_name);
         $this->assertSame('nearing', $eulRows->first()->status);
+        $this->assertSame($office->name, $eulRows->first()->office_name);
         Livewire::actingAs($custodian)
             ->withQueryParams(['analyticsSlide' => 'replacement'])
             ->test(ProcurementAnalytics::class)
@@ -622,6 +669,7 @@ class ProcurementAnalyticsPageTest extends TestCase
         $component->call('setAnalyticsSlide', 'replacement');
         $component->assertSee('Replacement Due - Semi-Expendable Only');
         $component->assertSee('Office Chair');
+        $component->assertSee($office->name);
         $component->assertSee('Nearing expiry');
         $component->assertDontSee('Awaiting review');
         $component->assertDontSee('tableAction=view');
@@ -770,7 +818,9 @@ class ProcurementAnalyticsPageTest extends TestCase
             ->test(ProcurementAnalytics::class)
             ->assertSet('lastAiRunId', $run->id)
             ->assertSet('recommendation', 'View-result narrative ready.')
-            ->assertSee('View-result narrative ready.');
+            ->assertSee('Procurement Summary')
+            ->assertDontSee('View-result narrative ready.')
+            ->assertSeeHtml('owwa-pa-rec-section owwa-pa-callout');
 
         Livewire::actingAs($custodian)
             ->withQueryParams([])

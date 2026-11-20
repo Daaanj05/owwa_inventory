@@ -9,7 +9,7 @@ use Tests\TestCase;
 class StockCoverPhraseTest extends TestCase
 {
     #[DataProvider('coverProvider')]
-    public function test_from_months_uses_days_weeks_or_whole_months(float $months, string $expected): void
+    public function test_from_months_uses_days_weeks_months_or_years(float $months, string $expected): void
     {
         $this->assertSame($expected, StockCoverPhrase::fromMonths($months));
     }
@@ -22,8 +22,9 @@ class StockCoverPhraseTest extends TestCase
         return [
             'critical weeks' => [0.61, '3 weeks'],
             'under two weeks' => [0.3, '9 days'],
-            'weeks' => [1.8, '8 weeks'],
-            'whole months' => [3.2, '3 months'],
+            'compound month weeks' => [1.8, '1 month and 3 weeks'],
+            'months with week remainder' => [3.2, '3 months and 1 week'],
+            'year and months' => [14.0, '1 year and 2 months'],
             'zero' => [0.0, 'less than 1 day'],
         ];
     }

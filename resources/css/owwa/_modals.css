@@ -1343,6 +1343,11 @@
     color: var(--warning-800, #92400e);
 }
 
+.owwa-pc-status-badge--overdue {
+    background: var(--danger-100, #fee2e2);
+    color: var(--danger-800, #991b1b);
+}
+
 .owwa-pc-status-badge--complete {
     background: var(--success-100, #dcfce7);
     color: var(--success-800, #166534);

@@ -28,7 +28,7 @@ class InventoryPlanStartCountServiceTest extends TestCase
 
         $plan = PhysicalInventoryPlan::factory()->create([
             'item_category_id' => $category->id,
-            'status' => PhysicalInventoryPlan::STATUS_DRAFT,
+            'status' => PhysicalInventoryPlan::STATUS_SCHEDULED,
         ]);
 
         $line = PhysicalInventoryPlanLine::factory()->create([

@@ -49,19 +49,8 @@ class PhysicalInventoryPlansTable
                     ->html(),
                 TextColumn::make('status')
                     ->badge()
-                    ->formatStateUsing(fn (?string $state): string => match ($state) {
-                        PhysicalInventoryPlan::STATUS_DRAFT => 'Draft',
-                        PhysicalInventoryPlan::STATUS_IN_PROGRESS => 'In progress',
-                        PhysicalInventoryPlan::STATUS_COMPLETED => 'Completed',
-                        PhysicalInventoryPlan::STATUS_CANCELLED => 'Cancelled',
-                        default => ucfirst((string) $state),
-                    })
-                    ->color(fn (?string $state): string => match ($state) {
-                        PhysicalInventoryPlan::STATUS_COMPLETED => 'success',
-                        PhysicalInventoryPlan::STATUS_IN_PROGRESS => 'warning',
-                        PhysicalInventoryPlan::STATUS_CANCELLED => 'danger',
-                        default => 'gray',
-                    }),
+                    ->formatStateUsing(fn (PhysicalInventoryPlan $record): string => $record->statusLabel())
+                    ->color(fn (PhysicalInventoryPlan $record): string => $record->statusColor()),
             ])
             ->defaultSort('created_at', 'desc')
             ->recordActions([
